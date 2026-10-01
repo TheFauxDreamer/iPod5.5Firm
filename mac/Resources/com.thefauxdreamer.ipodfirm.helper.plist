@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.thefauxdreamer.ipodfirm.helper</string>
+    <key>BundleProgram</key><string>Contents/MacOS/ipodfw-helper</string>
+    <key>ProgramArguments</key>
+    <array><string>Contents/MacOS/ipodfw-helper</string><string>--daemon</string></array>
+    <key>MachServices</key>
+    <dict><key>com.thefauxdreamer.ipodfirm.helper</key><true/></dict>
+    <key>AssociatedBundleIdentifiers</key>
+    <array><string>com.thefauxdreamer.ipodfirm</string></array>
+</dict>
+</plist>

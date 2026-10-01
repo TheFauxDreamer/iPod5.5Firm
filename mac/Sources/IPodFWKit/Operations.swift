@@ -68,12 +68,14 @@ public enum Backups {
 
 /// Result reported by the privileged helper (one JSON object on stdout).
 public struct HelperResult: Codable {
+    public static let fullDiskAccess = "full-disk-access"
     public var ok: Bool
     public var message: String
+    public var code: String?
     public var ranges: [FirmwareFlasher.WriteRange]?
     public var backup: BackupInfo?
-    public init(ok: Bool, message: String, ranges: [FirmwareFlasher.WriteRange]? = nil, backup: BackupInfo? = nil) {
-        self.ok = ok; self.message = message; self.ranges = ranges; self.backup = backup
+    public init(ok: Bool, message: String, code: String? = nil, ranges: [FirmwareFlasher.WriteRange]? = nil, backup: BackupInfo? = nil) {
+        self.ok = ok; self.message = message; self.code = code; self.ranges = ranges; self.backup = backup
     }
 }
 
@@ -99,6 +101,7 @@ public enum Operations {
         guard newBytes.count <= currentBytes.count else {
             throw FirmwareError("The image (\(newBytes.count) bytes) is larger than the iPod's firmware partition (\(currentBytes.count)).")
         }
+        try FirmwareFlasher.preserveHibernation(new: &newBytes, current: current)
         let new = try FirmwarePartition(data: newBytes)
         try FirmwareFlasher.checkCompatible(current: current, new: new, label: "New firmware")
 

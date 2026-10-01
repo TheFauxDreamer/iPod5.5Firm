@@ -14,7 +14,7 @@ import struct
 import subprocess
 from dataclasses import dataclass
 
-from .partition import FirmwareError, FirmwarePartition
+from .partition import ENTRY_SIZE, FirmwareError, FirmwarePartition
 
 
 @dataclass
@@ -137,13 +137,28 @@ def check_compatible(current: FirmwarePartition, new: FirmwarePartition, label: 
     for c, n in zip(current.entries, new.entries):
         if (c.type, c.dev_offset) != (n.type, n.dev_offset):
             raise FirmwareError(f"{label}: image {c.name} is at a different position than on the iPod")
-        if c.name not in ("osos", "rsrc") and c.pack() != n.pack():
+        if c.name not in ("osos", "rsrc", "hibe") and c.pack() != n.pack():
             raise FirmwareError(f"{label}: directory entry for {c.name} differs from the iPod's")
     for name in ("osos", "rsrc"):
         if new.has(name) and not new.checksum_ok(name):
             raise FirmwareError(f"{label}: {name} checksum does not verify")
     if current.has("aupd") and current.image("aupd") != new.image("aupd"):
         raise FirmwareError(f"{label}: aupd (NOR flash updater) differs from the iPod's; refusing")
+
+
+def preserve_hibernation(new: bytes, current: FirmwarePartition) -> bytes:
+    """Keep the iPod's own hibernation snapshot (hibe): copy its current entry and data into new."""
+    if not current.has("hibe"):
+        return new
+    e = current.entry("hibe")
+    buf = bytearray(new)
+    at = current.dir_offset + e.index * ENTRY_SIZE
+    buf[at:at + ENTRY_SIZE] = current.data[at:at + ENTRY_SIZE]
+    lo, hi = current.image_range("hibe")
+    hi = min(hi, len(buf))
+    if lo < hi:
+        buf[lo:hi] = current.data[lo:hi]
+    return bytes(buf)
 
 
 def plan_writes(current: bytes, new: bytes, bs: int, protected: tuple[int, int]) -> list[tuple[int, int]]:
@@ -171,6 +186,7 @@ def flash(ipod: IPodDisk, new_bytes: bytes, backup_bytes: bytes, dry_run: bool) 
         raise FirmwareError(f"image ({len(new_bytes)} bytes) is larger than the firmware partition ({part_size})")
 
     current = FirmwarePartition(current_bytes)
+    new_bytes = preserve_hibernation(new_bytes, current)
     new = FirmwarePartition(new_bytes)
     backup = FirmwarePartition(backup_bytes)
     check_compatible(current, backup, "backup")

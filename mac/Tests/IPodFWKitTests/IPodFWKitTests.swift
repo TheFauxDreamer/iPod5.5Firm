@@ -33,6 +33,25 @@ final class FlasherTests: XCTestCase {
         XCTAssertEqual(r.start, 63 * 512); XCTAssertEqual(r.size, 1000 * 512)
     }
 
+    func testHibernationImageIsPreserved() throws {
+        guard let path = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        var stock = try IPSW.extractFirmware(URL(fileURLWithPath: path)).data
+        // add a hibe entry + data like a real iPod's partition
+        let dir = 0x4200 + 3 * 40, hibeOff = 0xd43800, hibeLen = 4096
+        stock += [UInt8](repeating: 0, count: 2048 + hibeOff + hibeLen - stock.count)
+        stock.replaceSubrange(dir..<dir + 8, with: Array("!ATAebih".utf8))
+        put32(&stock, dir + 12, UInt32(hibeOff)); put32(&stock, dir + 16, UInt32(hibeLen))
+        var onIPod = stock
+        onIPod.replaceSubrange(2048 + hibeOff..<2048 + hibeOff + 16, with: [UInt8](repeating: 0xAB, count: 16))  // iPod slept since backup
+        put32(&onIPod, dir + 28, 0x1234)
+        let current = try FirmwarePartition(data: onIPod)
+        var new = stock
+        try FirmwareFlasher.preserveHibernation(new: &new, current: current)
+        XCTAssertEqual(try FirmwarePartition(data: new).image("hibe"), try current.image("hibe"))
+        try FirmwareFlasher.checkCompatible(current: current, new: FirmwarePartition(data: new), label: "t")
+        XCTAssertEqual(try FirmwareFlasher.planWrites(current: onIPod, new: new, blockSize: 2048, protected: 0..<0), [])
+    }
+
     func testRejectsNonFirmware() {
         XCTAssertThrowsError(try FirmwarePartition(data: [UInt8](repeating: 0, count: 8192)))
     }

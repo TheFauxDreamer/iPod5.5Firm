@@ -27,6 +27,14 @@ public enum IPSW {
         return (name, [UInt8](try Data(contentsOf: dir.appendingPathComponent(name))))
     }
 
+    /// Apple's firmware from `original` with its osos swapped for `osos` (e.g. the edited OS from a
+    /// device backup). Gives a clean .ipsw layout whatever the edited firmware was opened from.
+    public static func firmware(original: URL, withOSOS osos: [UInt8]) throws -> [UInt8] {
+        let fw = try FirmwarePartition(data: extractFirmware(original).data)
+        try fw.replaceImage("osos", with: osos)
+        return fw.data
+    }
+
     /// Copy an ipsw with its firmware payload replaced (for the emulator or a manual restore).
     public static func repack(original: URL, firmware: [UInt8], to output: URL) throws {
         let (dir, name) = try unpack(original)

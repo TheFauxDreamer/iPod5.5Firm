@@ -2,7 +2,13 @@
 
 [siggifly/ipod-emulator](https://github.com/siggifly/ipod-emulator) boots Apple's retail Video firmware from the reset vector. It has an LCD, a click wheel and ATA, but no audio or USB, and runs at about ¼ speed. Use it to check that a customised `osos` boots and shows your changes **before** flashing a real iPod.
 
-## Easiest: the app
+## Easiest: iPodFirm's Emulator pane
+
+1. **Install Emulator** builds [siggifly/ipod-emulator](https://github.com/siggifly/ipod-emulator) from source and installs `/Applications/ipod-emulator.app`. It installs Rust into your home folder if needed. The prebuilt v0.4.0 release can't be used, because it requires a dump of your iPod's boot ROM, while the current source synthesises one.
+2. **Run in Emulator** puts your edited OS into Apple's 1.3 firmware, writes an `.ipsw`, and opens the emulator.
+3. Drag the file tile from iPodFirm onto the emulator window. The emulator only accepts files dropped on it or chosen in its own picker.
+
+## Manually: the emulator app
 
 1. Download a [release](https://github.com/siggifly/ipod-emulator/releases) and open `ipod-emulator.app`. It isn't code-signed, so allow it under System Settings → Privacy & Security.
 2. Build a custom `.ipsw`:

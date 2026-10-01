@@ -6,11 +6,13 @@ import SwiftUI
 struct IPodFirmApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var model = AppModel()
+    @StateObject private var emulator = EmulatorManager()
 
     var body: some Scene {
         WindowGroup("iPodFirm") {
             ContentView()
                 .environmentObject(model)
+                .environmentObject(emulator)
                 .frame(minWidth: 980, minHeight: 640)
         }
         .commands {
@@ -76,6 +78,7 @@ struct ContentView: View {
         .overlay { if let busy = model.busy { BusyOverlay(text: busy) } }
         .alert(item: $model.alert) { a in Alert(title: Text(a.title), message: Text(a.message)) }
         .sheet(item: $model.flashPlan) { plan in FlashConfirmSheet(plan: plan) }
+        .sheet(isPresented: $model.showFullDiskAccessHelp) { FullDiskAccessSheet() }
         .task { await model.refreshIPods() }
     }
 

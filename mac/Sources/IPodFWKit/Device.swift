@@ -69,7 +69,13 @@ public final class RawDisk: BlockReader {
     public init(path: String, blockSize: Int, writable: Bool = false) throws {
         self.blockSize = blockSize
         fd = open(path, writable ? O_RDWR : O_RDONLY)
-        guard fd >= 0 else { throw FirmwareError("Cannot open \(path): \(String(cString: strerror(errno)))") }
+        guard fd >= 0 else {
+            if errno == EPERM {
+                throw FirmwareError("macOS blocked access to \(path). iPodFirm needs Full Disk Access to read and write the iPod's firmware partition.",
+                                    code: HelperResult.fullDiskAccess)
+            }
+            throw FirmwareError("Cannot open \(path): \(String(cString: strerror(errno)))")
+        }
     }
 
     deinit { close(fd) }
@@ -142,7 +148,7 @@ public enum FirmwareFlasher {
             guard c.type == n.type, c.devOffset == n.devOffset else {
                 throw FirmwareError("\(label): image \(c.name) is at a different position than on the iPod.")
             }
-            if !["osos", "rsrc"].contains(c.name), c.packed != n.packed {
+            if !["osos", "rsrc", "hibe"].contains(c.name), c.packed != n.packed {
                 throw FirmwareError("\(label): directory entry for \(c.name) differs from the iPod's.")
             }
         }
@@ -152,6 +158,20 @@ public enum FirmwareFlasher {
         if current.has("aupd"), try current.image("aupd") != new.image("aupd") {
             throw FirmwareError("\(label): aupd (boot-flash updater) differs from the iPod's; refusing.")
         }
+    }
+
+    /// The hibernation image (hibe) is RAM state the iPod writes to itself while asleep. It belongs to
+    /// the iPod, not to the firmware: copy the iPod's current hibe entry and data into the image being
+    /// flashed so it is never written (and never rolled back to a stale snapshot).
+    public static func preserveHibernation(new: inout [UInt8], current: FirmwarePartition) throws {
+        guard current.has("hibe") else { return }
+        let e = try current.entry("hibe")
+        let at = current.dirOffset + e.index * 40
+        guard at + 40 <= new.count else { return }
+        new.replaceSubrange(at..<at + 40, with: current.data[at..<at + 40])
+        let r = try current.imageRange("hibe")
+        let lo = min(r.lowerBound, new.count), hi = min(r.upperBound, new.count, current.data.count)
+        if lo < hi { new.replaceSubrange(lo..<hi, with: current.data[lo..<hi]) }
     }
 
     public struct WriteRange: Codable, Equatable {

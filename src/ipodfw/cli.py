@@ -45,6 +45,8 @@ def cmd_info(args) -> None:
     for e in fw.entries:
         if e.name == "aupd":
             state = "not checked (encrypted; never modified)"
+        elif e.name == "hibe":
+            state = "not checked (iPod's own hibernation snapshot; left untouched)"
         else:
             state = "OK" if fw.checksum_ok(e.name) else "BAD"
         print(f"{e.name:6} {e.dev_offset:#10x} {e.length:#10x} {e.addr:#10x} {e.entry_offset:#9x} "

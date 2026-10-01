@@ -19,6 +19,9 @@ APP=build/iPodFirm.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/iPodFirm" "$BIN/ipodfw-helper" "$APP/Contents/MacOS/"
+mkdir -p "$APP/Contents/Library/LaunchDaemons"
+cp Resources/com.thefauxdreamer.ipodfirm.helper.plist "$APP/Contents/Library/LaunchDaemons/"
+cp Resources/install-emulator.sh "$APP/Contents/Resources/"
 
 if [ ! -f build/AppIcon.icns ]; then
     swift scripts/make-icon.swift build/AppIcon.iconset
@@ -56,7 +59,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --deep --sign - "$APP"
+# Sign with a stable identity so macOS keeps Full Disk Access across rebuilds
+# (an ad-hoc signature changes every build and silently loses the permission).
+IDENTITY="${CODESIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development|Developer ID Application/ {print $2; exit}')}"
+if [ -z "$IDENTITY" ]; then
+    echo "warning: no signing identity found; ad-hoc signing (Full Disk Access must be re-granted after each build)"
+    IDENTITY="-"
+fi
+codesign --force --sign "$IDENTITY" --identifier com.thefauxdreamer.ipodfirm.helper "$APP/Contents/MacOS/ipodfw-helper"
+codesign --force --sign "$IDENTITY" "$APP"
+codesign --verify --strict "$APP"
 
 # Only record the new numbers once the build has succeeded.
 printf 'MARKETING_VERSION=%s\nBUILD_NUMBER=%s\n' "$MARKETING_VERSION" "$BUILD_NUMBER" > version.env

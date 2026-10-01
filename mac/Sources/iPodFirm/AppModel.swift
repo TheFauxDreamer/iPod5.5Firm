@@ -2,6 +2,7 @@ import AppKit
 import CryptoKit
 import Foundation
 import IPodFWKit
+import ServiceManagement
 import SwiftUI
 
 enum Pane: String, CaseIterable, Identifiable {
@@ -33,6 +34,11 @@ final class AppModel: ObservableObject {
     @Published var selectedIPod: String?
     @Published var backups: [BackupInfo] = []
     @Published var flashPlan: FlashPlan?
+    @Published var hasFullDiskAccess = AppModel.checkFullDiskAccess()
+    @Published var helperStatus: SMAppService.Status = HelperClient.service.status
+    @Published var helperSetupError: String?
+    @AppStorage("requireTouchID") var requireTouchID = true
+    @Published var showFullDiskAccessHelp = false
 
     struct AlertInfo: Identifiable { let id = UUID(); let title: String; let message: String }
     struct FlashPlan: Identifiable {
@@ -61,7 +67,72 @@ final class AppModel: ObservableObject {
     // MARK: helpers
 
     func fail(_ title: String, _ error: Error) {
+        if (error as? FirmwareError)?.code == HelperResult.fullDiskAccess {
+            hasFullDiskAccess = false
+            showFullDiskAccessHelp = true
+            return
+        }
         alert = AlertInfo(title: title, message: error.localizedDescription)
+    }
+
+    /// Reading the system TCC database is only possible with Full Disk Access.
+    nonisolated static func checkFullDiskAccess() -> Bool {
+        let probe = "/Library/Application Support/com.apple.TCC/TCC.db"
+        guard let h = FileHandle(forReadingAtPath: probe) else { return false }
+        try? h.close()
+        return true
+    }
+
+    func recheckFullDiskAccess() {
+        hasFullDiskAccess = Self.checkFullDiskAccess()
+        helperStatus = HelperClient.service.status
+        guard helperStatus == .enabled else { return }
+        Task {
+            // The helper does the disk access, so its own permission is what counts.
+            if let s = try? await HelperClient.status() { hasFullDiskAccess = s.hasFullDiskAccess }
+        }
+    }
+
+    /// Register the Touch ID helper; macOS then asks for approval in Login Items once.
+    func setUpHelper() {
+        do {
+            try HelperClient.register()
+            helperSetupError = nil
+        } catch {
+            helperSetupError = error.localizedDescription
+        }
+        helperStatus = HelperClient.service.status
+        if helperStatus == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
+        recheckFullDiskAccess()
+    }
+
+    func removeHelper() {
+        Task {
+            try? await HelperClient.unregister()
+            helperStatus = HelperClient.service.status
+        }
+    }
+
+    // Route privileged work through the daemon (Touch ID) when enabled, else the password prompt.
+    private func runBackup(_ ipod: IPodDisk) async throws -> HelperResult {
+        if HelperClient.isEnabled { return try await HelperClient.backup(disk: ipod.disk, backupDir: Self.backupDir) }
+        return try await Privileged.run(helperArgs("backup", ipod))
+    }
+
+    private func runFlash(_ ipod: IPodDisk, image: URL, reason: String, dryRun: Bool) async throws -> HelperResult {
+        if HelperClient.isEnabled {
+            if !dryRun && requireTouchID {
+                try await HelperClient.authenticate(reason == "restore" ? "restore a backup to your iPod" : "write new firmware to your iPod")
+            }
+            return try await HelperClient.flash(disk: ipod.disk, image: image, backupDir: Self.backupDir, reason: reason, dryRun: dryRun)
+        }
+        return try await Privileged.run(helperArgs("flash", ipod) + ["--image", image.path, "--reason", reason] + (dryRun ? ["--dry-run"] : []))
+    }
+
+    func openFullDiskAccessSettings() {
+        let urls = ["x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles",
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"]
+        for u in urls where NSWorkspace.shared.open(URL(string: u)!) { return }
     }
 
     func work<T>(_ label: String, _ body: @escaping () throws -> T) async throws -> T {
@@ -132,8 +203,25 @@ final class AppModel: ObservableObject {
         } catch { fail("Couldn't save", error) }
     }
 
+    static let cachedAppleIPSW = supportDir.appendingPathComponent("Firmware/iPod_25.1.3.ipsw")
+
+    nonisolated static func sha256(of url: URL) -> String? {
+        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
     func downloadAppleFirmware() async {
-        let dest = Self.supportDir.appendingPathComponent("Firmware/iPod_25.1.3.ipsw")
+        do { await open(try await ensureAppleIPSW()) } catch { fail("Download failed", error) }
+    }
+
+    /// Apple's 1.3 .ipsw: the one this firmware came from, else a verified cached download.
+    func ensureAppleIPSW() async throws -> URL {
+        // Only Apple's genuine file will do: an .ipsw opened earlier may itself be a custom export.
+        if let sourceIPSW, Self.sha256(of: sourceIPSW) == Self.appleFirmwareSHA256 { return sourceIPSW }
+        let dest = Self.cachedAppleIPSW
+        if FileManager.default.fileExists(atPath: dest.path), Self.sha256(of: dest) != Self.appleFirmwareSHA256 {
+            try? FileManager.default.removeItem(at: dest)
+        }
         do {
             if !FileManager.default.fileExists(atPath: dest.path) {
                 busy = "Downloading Apple firmware 1.3…"
@@ -145,8 +233,8 @@ final class AppModel: ObservableObject {
                 try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try data.write(to: dest)
             }
-            await open(dest)
-        } catch { fail("Download failed", error) }
+            return dest
+        }
     }
 
     // MARK: pictures
@@ -249,8 +337,8 @@ final class AppModel: ObservableObject {
         busy = "Backing up the iPod's firmware partition…"
         defer { busy = nil; refreshBackups() }
         do {
-            let r = try await Privileged.run(helperArgs("backup", ipod))
-            guard r.ok else { throw FirmwareError(r.message) }
+            let r = try await runBackup(ipod)
+            guard r.ok else { throw FirmwareError(r.message, code: r.code) }
             alert = AlertInfo(title: "Backup saved", message: "\(r.message)\n\n\(r.backup?.file ?? "")")
         } catch { fail("Backup failed", error) }
     }
@@ -261,8 +349,8 @@ final class AppModel: ObservableObject {
         busy = "Checking the iPod (nothing is written yet)…"
         defer { busy = nil }
         do {
-            let r = try await Privileged.run(helperArgs("flash", ipod) + ["--image", image.path, "--reason", reason, "--dry-run"])
-            guard r.ok else { throw FirmwareError(r.message) }
+            let r = try await runFlash(ipod, image: image, reason: reason, dryRun: true)
+            guard r.ok else { throw FirmwareError(r.message, code: r.code) }
             if r.ranges?.isEmpty ?? true {
                 alert = AlertInfo(title: "Nothing to do", message: r.message)
             } else {
@@ -277,8 +365,8 @@ final class AppModel: ObservableObject {
         busy = "Backing up, writing and verifying… don't disconnect the iPod."
         defer { busy = nil; refreshBackups() }
         do {
-            let r = try await Privileged.run(helperArgs("flash", plan.ipod) + ["--image", plan.image.path, "--reason", plan.reason])
-            guard r.ok else { throw FirmwareError(r.message) }
+            let r = try await runFlash(plan.ipod, image: plan.image, reason: plan.reason, dryRun: false)
+            guard r.ok else { throw FirmwareError(r.message, code: r.code) }
             if plan.reason == "flash" { isDirty = false }
             alert = AlertInfo(title: plan.reason == "restore" ? "Restored" : "Flashed",
                               message: "\(r.message)\nBackup taken first: \(r.backup?.file ?? "-")\n\nEject the iPod. If it doesn't start, reset it (hold Menu+Select), then hold Select+Play for disk mode and restore a backup here.")
@@ -301,24 +389,32 @@ final class AppModel: ObservableObject {
 
     func exportIPSW() {
         guard let editor else { return }
-        var original = sourceIPSW
-        let cached = Self.supportDir.appendingPathComponent("Firmware/iPod_25.1.3.ipsw")
-        if original == nil, FileManager.default.fileExists(atPath: cached.path) { original = cached }
-        if original == nil {
-            let p = NSOpenPanel()
-            p.message = "Choose Apple's iPod_25.1.3.ipsw (or use Download Apple Firmware first)"
-            guard p.runModal() == .OK, let url = p.url else { return }
-            original = url
-        }
         let s = NSSavePanel()
         s.nameFieldStringValue = "custom-iPod_25.1.3.ipsw"
-        guard s.runModal() == .OK, let out = s.url, let original else { return }
-        let data = editor.partition.data
+        guard s.runModal() == .OK, let out = s.url else { return }
+        let osos = editor.osos
         Task {
             do {
-                try await work("Writing .ipsw…") { try IPSW.repack(original: original, firmware: data, to: out) }
+                let original = try await ensureAppleIPSW()
+                try await work("Writing .ipsw…") {
+                    try IPSW.repack(original: original, firmware: IPSW.firmware(original: original, withOSOS: osos), to: out)
+                }
                 NSWorkspace.shared.activateFileViewerSelecting([out])
             } catch { fail("Couldn't write .ipsw", error) }
+        }
+    }
+
+    func runInEmulator(_ emu: EmulatorManager) {
+        guard let editor else { return }
+        let osos = editor.osos
+        Task {
+            do {
+                let original = try await ensureAppleIPSW()
+                busy = "Preparing firmware for the emulator…"
+                defer { busy = nil }
+                let fw = try await Task.detached { try IPSW.firmware(original: original, withOSOS: osos) }.value
+                try await emu.run(firmware: fw, originalIPSW: original)
+            } catch { fail("Couldn't start the emulator", error) }
         }
     }
 }

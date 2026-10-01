@@ -1,7 +1,9 @@
 import Foundation
 import IPodFWKit
 
-// Privileged helper: the app runs it with administrator rights for raw disk access.
+// Privileged helper. Two modes:
+//   --daemon : launchd daemon (SMAppService) serving XPC to the signed app; Touch ID is checked in the app
+//   CLI      : run via "do shell script ... with administrator privileges" (password fallback)
 //   ipodfw-helper backup --disk diskN --backup-dir DIR [--owner UID]
 //   ipodfw-helper flash  --disk diskN --image FILE --backup-dir DIR --reason TEXT [--dry-run] [--owner UID]
 // Prints one HelperResult JSON object on stdout.
@@ -12,6 +14,8 @@ func emit(_ r: HelperResult) -> Never {
     FileHandle.standardOutput.write((try? enc.encode(r)) ?? Data("{\"ok\":false,\"message\":\"encode failed\"}".utf8))
     exit(0)   // "do shell script" only returns stdout on success; ok=false carries errors
 }
+
+if CommandLine.arguments.contains("--daemon") { runDaemon() }
 
 var args = Array(CommandLine.arguments.dropFirst())
 guard let command = args.first else { emit(HelperResult(ok: false, message: "usage: ipodfw-helper backup|flash ...")) }
@@ -45,5 +49,5 @@ do {
         throw FirmwareError("unknown command \(command)")
     }
 } catch {
-    emit(HelperResult(ok: false, message: error.localizedDescription))
+    emit(HelperResult(ok: false, message: error.localizedDescription, code: (error as? FirmwareError)?.code))
 }

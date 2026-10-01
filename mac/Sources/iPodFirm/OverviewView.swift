@@ -47,6 +47,8 @@ struct OverviewView: View {
     @ViewBuilder func checksum(_ name: String, _ fw: FirmwarePartition) -> some View {
         if name == "aupd" {
             Label("never modified", systemImage: "lock.fill").foregroundStyle(.secondary)
+        } else if name == "hibe" {
+            Label("not checked", systemImage: "moon.zzz.fill").foregroundStyle(.secondary)
         } else if fw.checksumOK(name) {
             Label("OK", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
         } else {
@@ -59,6 +61,7 @@ struct OverviewView: View {
         case "osos": "Apple OS: code, pictures and text (edited here)"
         case "rsrc": "Video chip firmware and fonts"
         case "aupd": "Boot-flash updater (protected)"
+        case "hibe": "Hibernation snapshot written by the iPod itself (left untouched)"
         default: ""
         }
     }
