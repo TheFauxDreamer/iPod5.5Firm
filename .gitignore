@@ -1,0 +1,14 @@
+# Apple firmware and device dumps are copyrighted / personal: never commit them.
+*.ipsw
+Firmware-*
+*.bin
+*.img
+backups/
+work/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+dist/
