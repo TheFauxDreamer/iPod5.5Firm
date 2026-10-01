@@ -213,3 +213,53 @@ def flash(ipod: IPodDisk, new_bytes: bytes, backup_bytes: bytes, dry_run: bool) 
             if disk.read(part_start + off, length) != new_bytes[off:off + length]:
                 raise FirmwareError(f"verification failed at partition offset 0x{off:x}; restore from your backup")
     return ranges
+
+
+def rescue_restore(ipod: IPodDisk, backup_bytes: bytes, reference_bytes: bytes,
+                   dry_run: bool) -> tuple[list[tuple[int, int]], bytes]:
+    """Restore a backup when the iPod's firmware partition no longer parses (an interrupted write).
+
+    flash() compares the new image with the iPod's current firmware. Here the reference backup
+    (the first backup of this iPod) takes that role. Returns the planned ranges and the damaged bytes.
+    """
+    with RawDisk(ipod) as disk:
+        part_start, part_size = locate_firmware_partition(disk)
+        current_bytes = disk.read(part_start, part_size)
+    try:
+        FirmwarePartition(current_bytes)
+    except FirmwareError:
+        pass
+    else:
+        raise FirmwareError("the firmware on the iPod is not damaged; use 'ipodfw restore' without --rescue")
+    reference = FirmwarePartition(reference_bytes)
+    if len(reference_bytes) != part_size:
+        raise FirmwareError("the reference backup is not from this iPod (the partition size is different)")
+    if len(backup_bytes) > part_size:
+        raise FirmwareError(f"backup ({len(backup_bytes)} bytes) is larger than the firmware partition ({part_size})")
+    try:
+        new = FirmwarePartition(backup_bytes)
+    except FirmwareError as e:
+        raise FirmwareError(f"the backup is damaged too ({e})") from e
+    check_compatible(reference, new, "backup")
+
+    bs = ipod.block_size
+    protected = new.image_range("aupd") if new.has("aupd") else (0, 0)
+    tail = len(backup_bytes) % bs
+    if tail:
+        backup_bytes = backup_bytes + current_bytes[len(backup_bytes):len(backup_bytes) + bs - tail]
+    try:
+        ranges = plan_writes(current_bytes, backup_bytes, bs, protected)
+    except FirmwareError as e:
+        raise FirmwareError("the damage includes the aupd area, which ipodfw never writes; restore the iPod with Finder") from e
+    if dry_run or not ranges:
+        return ranges, current_bytes
+
+    unmount(ipod)
+    with RawDisk(ipod, writable=True) as disk:
+        for off, length in ranges:
+            disk.write_aligned(part_start + off, backup_bytes[off:off + length])
+        os.fsync(disk.fd)
+        for off, length in ranges:
+            if disk.read(part_start + off, length) != backup_bytes[off:off + length]:
+                raise FirmwareError(f"verification failed at partition offset 0x{off:x}; try the rescue again or restore with Finder")
+    return ranges, current_bytes

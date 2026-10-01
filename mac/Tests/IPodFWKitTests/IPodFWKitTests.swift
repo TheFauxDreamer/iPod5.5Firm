@@ -179,6 +179,39 @@ final class DiskImageFlashTests: XCTestCase {
         XCTAssertEqual(try raw.read(s, stock.count), stock)
         XCTAssertEqual(Backups.list(in: backups).count, 3)   // the restore backed up the edited state too
         XCTAssertEqual(try Data(contentsOf: backups.appendingPathComponent(Backups.originalName)), original)  // never overwritten
+
+        // 6. an interrupted write: the STOP banner and the directory are gone
+        let w = try RawDisk(path: "/dev/r\(disk)", blockSize: 512, writable: true)
+        try w.writeAligned(s, [UInt8](repeating: 0, count: 4096)[...])
+        w.sync()
+        XCTAssertThrowsError(try Operations.flash(ipod, image: backups.appendingPathComponent(Backups.originalName), backupDir: backups,
+                                                  reason: "restore", dryRun: true, owner: nil)) {
+            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.firmwareUnreadable)
+        }
+
+        // 7. a rescue with a changed aupd is refused; a backup that is itself damaged is refused
+        XCTAssertThrowsError(try Operations.rescueRestore(ipod, image: badURL, backupDir: backups, dryRun: false, owner: nil))
+        let zeroURL = tmp.appendingPathComponent("zero.bin")
+        try Data(count: stock.count).write(to: zeroURL)
+        XCTAssertThrowsError(try Operations.rescueRestore(ipod, image: zeroURL, backupDir: backups, dryRun: false, owner: nil))
+
+        // 8. the rescue writes only the damaged blocks (never aupd), keeps the damaged state, and the iPod is stock again
+        let rescueDry = try Operations.rescueRestore(ipod, image: backups.appendingPathComponent(Backups.originalName),
+                                                     backupDir: backups, dryRun: true, owner: nil)
+        let aupdRange = try FirmwarePartition(data: stock).imageRange("aupd")
+        XCTAssertFalse(rescueDry.ranges!.isEmpty)
+        XCTAssertTrue(rescueDry.ranges!.allSatisfy { $0.offset + $0.length <= 4096 })   // only zeroed blocks that differ
+        XCTAssertFalse(rescueDry.ranges!.contains { $0.offset < aupdRange.upperBound && $0.offset + $0.length > aupdRange.lowerBound })
+        let rescued = try Operations.rescueRestore(ipod, image: backups.appendingPathComponent(Backups.originalName),
+                                                   backupDir: backups, dryRun: false, owner: nil)
+        XCTAssertTrue(rescued.ok)
+        XCTAssertEqual(rescued.backup?.model, Backups.damagedModel)
+        XCTAssertEqual(try raw.read(s, stock.count), stock)
+        XCTAssertEqual(try Data(contentsOf: backups.appendingPathComponent(Backups.originalName)), original)
+
+        // 9. the firmware is valid again, so a second rescue is refused
+        XCTAssertThrowsError(try Operations.rescueRestore(ipod, image: backups.appendingPathComponent(Backups.originalName),
+                                                          backupDir: backups, dryRun: true, owner: nil))
     }
 }
 

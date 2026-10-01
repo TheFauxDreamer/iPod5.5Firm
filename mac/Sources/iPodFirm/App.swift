@@ -85,6 +85,7 @@ struct ContentView: View {
         .alert(item: $model.alert) { a in Alert(title: Text(a.title), message: Text(a.message)) }
         .sheet(item: $model.flashPlan) { plan in FlashConfirmSheet(plan: plan) }
         .sheet(isPresented: $model.showFullDiskAccessHelp) { FullDiskAccessSheet() }
+        .sheet(isPresented: $model.showFinderRestoreHelp) { FinderRestoreSheet() }
         .task { await model.refreshIPods() }
     }
 

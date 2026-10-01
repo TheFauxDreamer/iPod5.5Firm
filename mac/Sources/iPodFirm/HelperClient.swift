@@ -71,4 +71,10 @@ enum HelperClient {
             p.flash(disk: disk, image: image.path, backupDir: backupDir.path, reason: reason, dryRun: dryRun, reply: reply)
         })
     }
+
+    static func rescueRestore(disk: String, image: URL, backupDir: URL, dryRun: Bool) async throws -> HelperResult {
+        try HelperJSON.decode(HelperResult.self, try await call { p, reply in
+            p.rescueRestore(disk: disk, image: image.path, backupDir: backupDir.path, dryRun: dryRun, reply: reply)
+        })
+    }
 }

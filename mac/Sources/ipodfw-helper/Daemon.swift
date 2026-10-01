@@ -46,6 +46,13 @@ final class HelperService: NSObject, HelperXPCProtocol {
                                  reason: reason, dryRun: dryRun, owner: uid)
         }
     }
+
+    func rescueRestore(disk: String, image: String, backupDir: String, dryRun: Bool, reply: @escaping (Data) -> Void) {
+        respond(reply) {
+            try Operations.rescueRestore(ipod(disk), image: URL(fileURLWithPath: image), backupDir: checkedBackupDir(backupDir),
+                                         dryRun: dryRun, owner: uid)
+        }
+    }
 }
 
 final class ListenerDelegate: NSObject, NSXPCListenerDelegate {

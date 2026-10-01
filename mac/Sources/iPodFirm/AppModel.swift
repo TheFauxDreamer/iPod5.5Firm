@@ -45,6 +45,7 @@ final class AppModel: ObservableObject {
     @Published var helperSetupError: String?
     @AppStorage("requireTouchID") var requireTouchID = true
     @Published var showFullDiskAccessHelp = false
+    @Published var showFinderRestoreHelp = false
 
     struct AlertInfo: Identifiable { let id = UUID(); let title: String; let message: String }
     struct FlashPlan: Identifiable {
@@ -126,14 +127,21 @@ final class AppModel: ObservableObject {
         return try await Privileged.run(helperArgs("backup", ipod))
     }
 
+    /// reason is "flash", "restore", or "rescue" (a restore onto a damaged firmware partition).
     private func runFlash(_ ipod: IPodDisk, image: URL, reason: String, dryRun: Bool) async throws -> HelperResult {
+        let rescue = reason == "rescue"
         if HelperClient.isEnabled {
             if !dryRun && requireTouchID {
-                try await HelperClient.authenticate(reason == "restore" ? "restore a backup to your iPod" : "write new firmware to your iPod")
+                try await HelperClient.authenticate(reason == "flash" ? "write new firmware to your iPod" : "restore a backup to your iPod")
+            }
+            if rescue {
+                return try await HelperClient.rescueRestore(disk: ipod.disk, image: image, backupDir: Self.backupDir, dryRun: dryRun)
             }
             return try await HelperClient.flash(disk: ipod.disk, image: image, backupDir: Self.backupDir, reason: reason, dryRun: dryRun)
         }
-        return try await Privileged.run(helperArgs("flash", ipod) + ["--image", image.path, "--reason", reason] + (dryRun ? ["--dry-run"] : []))
+        let args = rescue ? helperArgs("rescue", ipod) + ["--image", image.path]
+                          : helperArgs("flash", ipod) + ["--image", image.path, "--reason", reason]
+        return try await Privileged.run(args + (dryRun ? ["--dry-run"] : []))
     }
 
     func openFullDiskAccessSettings() {
@@ -397,7 +405,13 @@ final class AppModel: ObservableObject {
         busy = "Checking the iPod (nothing is written yet)…"
         defer { busy = nil }
         do {
-            let r = try await runFlash(ipod, image: image, reason: reason, dryRun: true)
+            var reason = reason
+            var r = try await runFlash(ipod, image: image, reason: reason, dryRun: true)
+            if !r.ok, r.code == HelperResult.firmwareUnreadable, reason == "restore" {
+                // An interrupted write left the iPod's firmware unreadable: the normal restore cannot compare with it.
+                reason = "rescue"
+                r = try await runFlash(ipod, image: image, reason: reason, dryRun: true)
+            }
             guard r.ok else { throw FirmwareError(r.message, code: r.code) }
             if r.ranges?.isEmpty ?? true {
                 alert = AlertInfo(title: "Nothing to do", message: r.message)
@@ -416,7 +430,7 @@ final class AppModel: ObservableObject {
             let r = try await runFlash(plan.ipod, image: plan.image, reason: plan.reason, dryRun: false)
             guard r.ok else { throw FirmwareError(r.message, code: r.code) }
             if plan.reason == "flash" { isDirty = false }
-            alert = AlertInfo(title: plan.reason == "restore" ? "Restored" : "Flashed",
+            alert = AlertInfo(title: plan.reason == "flash" ? "Flashed" : "Restored",
                               message: "\(r.message)\nBackup taken first: \(r.backup?.file ?? "-")\n\nEject the iPod. If it doesn't start, reset it (hold Menu+Select), then hold Select+Play for disk mode and restore a backup here.")
         } catch { fail("Flash failed", error) }
     }
@@ -432,6 +446,15 @@ final class AppModel: ObservableObject {
     }
 
     func restore(_ b: BackupInfo) async { await prepareFlash(image: backupURL(b), reason: "restore") }
+
+    /// Last resort, e.g. for a damaged partition table: Finder rewrites the whole iPod from Apple's .ipsw.
+    func restoreWithFinder() async {
+        do {
+            let ipsw = try await ensureAppleIPSW()
+            NSWorkspace.shared.activateFileViewerSelecting([ipsw])
+            showFinderRestoreHelp = true
+        } catch { fail("Can't get the Apple firmware", error) }
+    }
 
     // MARK: emulator
 

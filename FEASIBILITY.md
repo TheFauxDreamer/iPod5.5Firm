@@ -42,7 +42,8 @@ Yes, and several independent ways:
 
 1. **Disk mode can't be broken by `ipodfw`.** The boot loader, disk mode and diagnostics are in the NOR flash chip, not on the disk. To reach disk mode: reset (hold Menu+Select), then hold Select+Play as the Apple logo appears.
 2. **`ipodfw restore`** writes your pre-flash backup back byte for byte. `flash` refuses to run until a backup exists.
-3. **Finder → Restore iPod** rewrites the entire firmware partition with stock 1.3. This is the same safety net iPodWizard users relied on.
+3. **Rescue restore.** An interrupted write can damage the firmware header or directory. Then the normal restore cannot compare the backup with the iPod. The rescue restore compares the backup with the first backup ("Original") instead. It still does not write the `aupd` area. In iPodFirm, "Restore…" starts the rescue automatically. In the tool, use `ipodfw restore --rescue`.
+4. **Finder → Restore iPod** rewrites the entire firmware partition with stock 1.3. It also repairs a damaged partition table. This is the same safety net iPodWizard users relied on.
 
 The one way to genuinely brick a 5.5G is a bad write to the NOR flash. Only the `aupd` image does that. `ipodfw` never modifies `aupd`. It refuses to flash if `aupd` would differ in any way, and it refuses any write that overlaps it.
 

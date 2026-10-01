@@ -26,7 +26,8 @@ The app has these functions:
 - Show and change the text in the firmware. A gauge shows the bytes that are free in each language.
 - Make a backup of the firmware partition of the iPod.
 - Write the changed firmware to the iPod.
-- Restore a backup to the iPod.
+- Restore a backup to the iPod. If the firmware on the iPod is damaged, the app does a rescue restore.
+- Show the recovery steps, and get the Apple firmware for a restore with Finder.
 - Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
 - Put a music library on the emulated iPod: a test library, or songs from a folder.
 - Switch code patches on or off (Patches pane). The patches are in [patches/](patches/).
@@ -81,14 +82,31 @@ The app keeps backups in `~/Library/Application Support/iPodFirm/Backups/`.
 
 ### Recovery
 
+A firmware write cannot damage disk mode. The boot loader and disk mode are in the NOR flash chip of the iPod, not on the disk. The app and the tool do not write to the NOR flash.
+
+CAUTION: Charge the iPod before a recovery. An iPod with an empty battery does not show disk mode.
+
 If the iPod does not start after a write, do these steps:
 
 1. Push and hold Menu and Select until the iPod restarts.
-2. Push and hold Select and Play until the iPod shows disk mode.
+2. When the Apple logo shows, push and hold Select and Play until the iPod shows disk mode.
 3. Connect the iPod to the Mac.
-4. In iPodFirm, restore a backup.
+4. In iPodFirm, open the iPod pane and click "Restore…" on a backup.
 
-You can also restore the iPod with Finder. This installs the Apple firmware again.
+An interrupted write can damage the firmware on the iPod. Then iPodFirm does a rescue restore. The rescue restore compares the backup with the first backup ("Original"), not with the iPod. It keeps a copy of the damaged firmware as a backup. You cannot restore that copy.
+
+If iPodFirm cannot restore a backup, use Finder:
+
+1. In the Recovery section of the iPod pane, click "Restore with Finder…".
+2. In Finder, select the iPod.
+3. Push and hold the Option key, then click "Restore iPod".
+4. Select the file `iPod_25.1.3.ipsw`.
+
+CAUTION: A restore with Finder erases the music on the iPod.
+
+Finder installs the Apple firmware again and repairs a damaged partition table. After that, you can restore a backup in iPodFirm.
+
+If the iPod does not show disk mode, charge it for one hour and try again. Diagnostic mode can test the disk: push and hold Menu and Select, then push and hold Select and Previous.
 
 ## The ipodfw tool
 
@@ -143,6 +161,13 @@ CAUTION: The commands that read or write the iPod need administrator rights. Use
 
 To restore the backup, enter `sudo .venv/bin/ipodfw restore backups/firmware-backup.bin`.
 
+If the firmware on the iPod is damaged, the normal restore stops. Then use the rescue restore. Use the first backup of the iPod as the reference:
+
+```sh
+sudo .venv/bin/ipodfw restore backups/firmware-backup.bin --rescue --reference backups/firmware-backup.bin --dry-run
+sudo .venv/bin/ipodfw restore backups/firmware-backup.bin --rescue --reference backups/firmware-backup.bin
+```
+
 ### Commands
 
 | Command | Function |
@@ -155,6 +180,7 @@ To restore the backup, enter `sudo .venv/bin/ipodfw restore backups/firmware-bac
 | `pack-ipsw IPSW FILE -o OUT` | Puts a changed firmware into a copy of an `.ipsw` file. |
 | `make-library -o DIR` | Makes a music library for tests in the emulator. |
 | `devices`, `backup`, `flash`, `restore` | Operate on the iPod. These commands need `sudo`. |
+| `restore --rescue [--reference FILE]` | Restores a backup to an iPod that has damaged firmware. This command needs `sudo`. |
 
 ## Patches
 
@@ -176,6 +202,7 @@ The patch tool compiles C code with the Xcode compiler and links it at a fixed a
 - The firmware tools have tests with the Apple firmware 1.3.
 - A backup of a real iPod was made and examined.
 - The write to the iPod has tests on a disk image. The write was not done on a real iPod.
+- The rescue restore has tests on a disk image with a damaged firmware partition. It was not done on a real iPod.
 - The `album-art` patch has tests in the emulator. It was not done on a real iPod.
 
 ## Credits

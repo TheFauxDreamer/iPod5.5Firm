@@ -7,12 +7,13 @@ public let helperMachService = "com.thefauxdreamer.ipodfirm.helper"
 public let helperPlistName = "com.thefauxdreamer.ipodfirm.helper.plist"
 public let appBundleIdentifier = "com.thefauxdreamer.ipodfirm"
 /// Bump when the XPC protocol changes.
-public let helperProtocolVersion = 1
+public let helperProtocolVersion = 2
 
 @objc public protocol HelperXPCProtocol {
     func status(reply: @escaping (Data) -> Void)
     func backup(disk: String, backupDir: String, reply: @escaping (Data) -> Void)
     func flash(disk: String, image: String, backupDir: String, reason: String, dryRun: Bool, reply: @escaping (Data) -> Void)
+    func rescueRestore(disk: String, image: String, backupDir: String, dryRun: Bool, reply: @escaping (Data) -> Void)
 }
 
 public struct HelperStatus: Codable {

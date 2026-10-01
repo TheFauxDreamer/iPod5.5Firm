@@ -6,6 +6,7 @@ import IPodFWKit
 //   CLI      : run via "do shell script ... with administrator privileges" (password fallback)
 //   ipodfw-helper backup --disk diskN --backup-dir DIR [--owner UID]
 //   ipodfw-helper flash  --disk diskN --image FILE --backup-dir DIR --reason TEXT [--dry-run] [--owner UID]
+//   ipodfw-helper rescue --disk diskN --image FILE --backup-dir DIR [--dry-run] [--owner UID]
 // Prints one HelperResult JSON object on stdout.
 
 func emit(_ r: HelperResult) -> Never {
@@ -18,7 +19,7 @@ func emit(_ r: HelperResult) -> Never {
 if CommandLine.arguments.contains("--daemon") { runDaemon() }
 
 var args = Array(CommandLine.arguments.dropFirst())
-guard let command = args.first else { emit(HelperResult(ok: false, message: "usage: ipodfw-helper backup|flash ...")) }
+guard let command = args.first else { emit(HelperResult(ok: false, message: "usage: ipodfw-helper backup|flash|rescue ...")) }
 args.removeFirst()
 var opts: [String: String] = [:]
 var flags: Set<String> = []
@@ -45,6 +46,10 @@ do {
         guard let image = opts["image"] else { throw FirmwareError("--image is required.") }
         emit(try Operations.flash(ipod, image: URL(fileURLWithPath: image), backupDir: backupDir,
                                   reason: opts["reason"] ?? "flash", dryRun: flags.contains("dry-run"), owner: owner))
+    case "rescue":
+        guard let image = opts["image"] else { throw FirmwareError("--image is required.") }
+        emit(try Operations.rescueRestore(ipod, image: URL(fileURLWithPath: image), backupDir: backupDir,
+                                          dryRun: flags.contains("dry-run"), owner: owner))
     default:
         throw FirmwareError("unknown command \(command)")
     }

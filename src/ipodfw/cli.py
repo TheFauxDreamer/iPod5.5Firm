@@ -155,7 +155,31 @@ def cmd_flash(args) -> None:
 
 
 def cmd_restore(args) -> None:
-    _flash(args.backup, args.backup, args.disk, args.dry_run, "Restored")
+    if args.rescue:
+        _rescue(args)
+    else:
+        _flash(args.backup, args.backup, args.disk, args.dry_run, "Restored")
+
+
+def _rescue(args) -> None:
+    """Restore onto a firmware partition that no longer parses; the reference backup replaces the iPod's firmware in the checks."""
+    require_root()
+    reference = args.reference or args.backup
+    for path in (args.backup, reference):
+        if not Path(path).exists():
+            sys.exit(f"Backup {path} not found.")
+    ipod = device.pick_ipod(args.disk)
+    ranges, damaged = device.rescue_restore(ipod, Path(args.backup).read_bytes(), Path(reference).read_bytes(), args.dry_run)
+    total = sum(n for _o, n in ranges)
+    if not ranges:
+        print("The iPod already has this firmware; nothing to write.")
+    elif args.dry_run:
+        print(f"Dry run: rescue would write {total} bytes in {len(ranges)} range(s) to /dev/{ipod.disk}.")
+    else:
+        keep = Path(args.backup).with_name(f"damaged-{datetime.datetime.now():%Y%m%d-%H%M%S}.bin")
+        keep.write_bytes(damaged)
+        print(f"Rescued: wrote and verified {total} bytes in {len(ranges)} range(s).")
+        print(f"The damaged partition is in {keep}. Do not restore that file.")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -219,6 +243,9 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("backup", nargs="?", default="backups/firmware-backup.bin")
     s.add_argument("--disk")
     s.add_argument("--dry-run", action="store_true")
+    s.add_argument("--rescue", action="store_true",
+                   help="the firmware on the iPod is damaged: compare the backup with --reference instead")
+    s.add_argument("--reference", help="first backup of this iPod (default: the backup itself)")
     s.set_defaults(func=cmd_restore)
 
     args = p.parse_args(argv)
