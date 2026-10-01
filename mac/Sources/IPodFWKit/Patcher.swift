@@ -57,16 +57,22 @@ public enum Patcher {
         sha256(osos) == patch.spec.osos_sha256
     }
 
-    /// Apply several patches. Each patch must be for the original osos; their code areas must not overlap.
-    public static func apply(_ patches: [PatchInfo], to osos: [UInt8]) throws -> [UInt8] {
+    /// Apply several patches to `osos`. `originalSHA256` is the SHA-256 of the osos before any change
+    /// (picture and text changes are allowed: the hooks and the code area are examined byte by byte).
+    public static func apply(_ patches: [PatchInfo], to osos: [UInt8], originalSHA256: String? = nil) throws -> [UInt8] {
+        let original = originalSHA256 ?? sha256(osos)
         var out = osos
-        for p in patches { out = try apply(p, to: out, original: osos) }
+        for p in patches { out = try apply(p, to: out, originalSHA256: original) }
         return out
     }
 
-    static func apply(_ patch: PatchInfo, to current: [UInt8], original: [UInt8]) throws -> [UInt8] {
+    public static func isCompatible(_ patch: PatchInfo, originalSHA256: String) -> Bool {
+        originalSHA256 == patch.spec.osos_sha256
+    }
+
+    static func apply(_ patch: PatchInfo, to current: [UInt8], originalSHA256: String) throws -> [UInt8] {
         let spec = patch.spec
-        guard sha256(original) == spec.osos_sha256 else {
+        guard originalSHA256 == spec.osos_sha256 else {
             throw PatchError("The patch \"\(spec.name)\" is for a different firmware version.")
         }
         let base = try hex(spec.load_address)

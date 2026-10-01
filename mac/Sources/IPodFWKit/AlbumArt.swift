@@ -60,52 +60,71 @@ public struct MP4Tags {
     public var cover: Data?
 
     /// Read the iTunes tags and the cover of an MP4/M4A file. The file is only read.
+    /// The top-level atoms are found with small reads; then the "moov" atom is read into memory once.
     public static func read(_ url: URL) throws -> MP4Tags {
         let fh = try FileHandle(forReadingFrom: url)
         defer { try? fh.close() }
         let size = Int(try fh.seekToEnd())
-        func bytes(_ at: Int, _ n: Int) throws -> [UInt8] {
-            try fh.seek(toOffset: UInt64(at))
-            return [UInt8](try fh.read(upToCount: n) ?? Data())
+        var moov: [UInt8]?
+        var pos = 0
+        while pos + 8 <= size {
+            try fh.seek(toOffset: UInt64(pos))
+            let h = [UInt8](try fh.read(upToCount: 16) ?? Data())
+            guard h.count >= 8 else { break }
+            var len = Int(be32(h, 0)), hlen = 8
+            if len == 1, h.count >= 16 { len = Int(UInt64(be32(h, 8)) << 32 | UInt64(be32(h, 12))); hlen = 16 }
+            if len == 0 { len = size - pos }
+            if len < hlen { break }
+            if h[4] == 0x6D, h[5] == 0x6F, h[6] == 0x6F, h[7] == 0x76 {          // "moov"
+                try fh.seek(toOffset: UInt64(pos + hlen))
+                moov = [UInt8](try fh.read(upToCount: len - hlen) ?? Data())
+                break
+            }
+            pos += len
         }
-        func atoms(_ start: Int, _ end: Int) throws -> [(String, Int, Int)] {
+        guard let m = moov else { return MP4Tags() }
+        return parse(moov: m)
+    }
+
+    /// Parse the body of a "moov" atom.
+    static func parse(moov m: [UInt8]) -> MP4Tags {
+        func atoms(_ start: Int, _ end: Int) -> [(String, Int, Int)] {
             var out: [(String, Int, Int)] = []
             var pos = start
             while pos + 8 <= end {
-                let h = try bytes(pos, 16)
-                guard h.count >= 8 else { break }
-                var len = Int(be32(h, 0)), hlen = 8
-                let kind = String(decoding: h[4..<8], as: UTF8.self)
-                if len == 1, h.count >= 16 { len = Int(UInt64(be32(h, 8)) << 32 | UInt64(be32(h, 12))); hlen = 16 }
+                var len = Int(be32(m, pos)), hlen = 8
+                if len == 1, pos + 16 <= end { len = Int(UInt64(be32(m, pos + 8)) << 32 | UInt64(be32(m, pos + 12))); hlen = 16 }
                 if len == 0 { len = end - pos }
-                if len < hlen { break }
-                out.append((kind, pos + hlen, pos + len))
+                if len < hlen || pos + len > end { break }
+                // Latin-1: tag names such as "\u{A9}nam" start with the byte 0xA9, which is not valid UTF-8.
+                out.append((String(bytes: m[pos + 4..<pos + 8], encoding: .isoLatin1) ?? "", pos + hlen, pos + len))
                 pos += len
             }
             return out
         }
-        func find(_ start: Int, _ end: Int, _ path: [String]) throws -> (Int, Int)? {
-            for (kind, body, stop) in try atoms(start, end) where kind == path[0] {
+        func find(_ start: Int, _ end: Int, _ path: [String]) -> (Int, Int)? {
+            for (kind, body, stop) in atoms(start, end) where kind == path[0] {
                 if path.count == 1 { return (body, stop) }
-                if let r = try find(kind == "meta" ? body + 4 : body, stop, Array(path.dropFirst())) { return r }
+                if let r = find(kind == "meta" ? body + 4 : body, stop, Array(path.dropFirst())) { return r }
             }
             return nil
         }
         var t = MP4Tags()
-        if let (body, _) = try find(0, size, ["moov", "mvhd"]) {
-            let v = try bytes(body, 1)
-            let isV0 = v.first == 0
-            let b = try bytes(body + (isV0 ? 12 : 20), 12)
-            if b.count >= 12 {
-                let scale = Int(be32(b, 0))
-                let dur = isV0 ? Int(be32(b, 4)) : Int(UInt64(be32(b, 4)) << 32 | UInt64(be32(b, 8)))
-                if scale > 0 { t.lengthMS = dur * 1000 / scale }
-            }
+        if let (body, stop) = find(0, m.count, ["mvhd"]), stop - body >= 32 {
+            let isV0 = m[body] == 0
+            let o = body + (isV0 ? 12 : 20)
+            let scale = Int(be32(m, o))
+            let dur = isV0 ? Int(be32(m, o + 4)) : Int(UInt64(be32(m, o + 4)) << 32 | UInt64(be32(m, o + 8)))
+            if scale > 0 { t.lengthMS = dur * 1000 / scale }
         }
-        guard let ilst = try find(0, size, ["moov", "udta", "meta", "ilst"]) else { return t }
-        for (kind, body, stop) in try atoms(ilst.0, ilst.1) {
-            guard let d = try find(body, stop, ["data"]), d.1 - d.0 > 8 else { continue }
-            let value = try bytes(d.0 + 8, d.1 - d.0 - 8)
+        guard let ilst = find(0, m.count, ["udta", "meta", "ilst"]) else { return t }
+        for (kind, body, stop) in atoms(ilst.0, ilst.1) {
+            guard let d = find(body, stop, ["data"]), d.1 - d.0 > 8 else { continue }
+            if kind == "covr" {
+                if t.cover == nil { t.cover = Data(m[(d.0 + 8)..<d.1]) }
+                continue
+            }
+            let value = Array(m[(d.0 + 8)..<d.1])
             let text = String(decoding: value, as: UTF8.self)
             switch kind {
             case "\u{A9}nam": t.title = text
@@ -116,7 +135,6 @@ public struct MP4Tags {
             case "\u{A9}day": t.year = Int(text.prefix(4)) ?? 0
             case "trkn" where value.count >= 6: t.track = Int(be16(value, 2)); t.tracks = Int(be16(value, 4))
             case "disk" where value.count >= 4: t.disc = Int(be16(value, 2))
-            case "covr" where t.cover == nil: t.cover = Data(value)
             default: break
             }
         }

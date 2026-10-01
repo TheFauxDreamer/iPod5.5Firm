@@ -6,13 +6,14 @@ import ServiceManagement
 import SwiftUI
 
 enum Pane: String, CaseIterable, Identifiable {
-    case overview = "Firmware", pictures = "Pictures", strings = "Text", ipod = "iPod", emulator = "Emulator"
+    case overview = "Firmware", pictures = "Pictures", strings = "Text", patches = "Patches", ipod = "iPod", emulator = "Emulator"
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .overview: "cpu"
         case .pictures: "photo.on.rectangle"
         case .strings: "textformat"
+        case .patches: "puzzlepiece.extension"
         case .ipod: "externaldrive.connected.to.line.below"
         case .emulator: "play.display"
         }
@@ -36,6 +37,11 @@ final class AppModel: ObservableObject {
     @Published var flashPlan: FlashPlan?
     @Published var hasFullDiskAccess = AppModel.checkFullDiskAccess()
     @Published var helperStatus: SMAppService.Status = HelperClient.service.status
+    @Published var patches: [PatchInfo] = Patcher.list(in: AppModel.patchesDir)
+    @Published var enabledPatches: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "enabledPatches") ?? []) {
+        didSet { UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches") }
+    }
+    @Published var thumbnailStatus: String?
     @Published var helperSetupError: String?
     @AppStorage("requireTouchID") var requireTouchID = true
     @Published var showFullDiskAccessHelp = false
@@ -55,6 +61,7 @@ final class AppModel: ObservableObject {
         return dir
     }()
     static let backupDir = supportDir.appendingPathComponent("Backups")
+    static var patchesDir: URL { Bundle.main.resourceURL!.appendingPathComponent("patches") }
     static let appleFirmwareSHA256 = "840b2480ad5b692c098cb772c3d2bf8f58bf37557788782b596ac01c27ecdc32"
 
     var version: String {
@@ -198,7 +205,7 @@ final class AppModel: ObservableObject {
             return
         }
         do {
-            try Data(editor.partition.data).write(to: url, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches)).write(to: url, options: .atomic)
             isDirty = false
         } catch { fail("Couldn't save", error) }
     }
@@ -235,6 +242,47 @@ final class AppModel: ObservableObject {
             }
             return dest
         }
+    }
+
+    // MARK: patches
+
+    var activePatches: [PatchInfo] {
+        patches.filter { enabledPatches.contains($0.spec.name) }
+    }
+
+    func isCompatible(_ p: PatchInfo) -> Bool {
+        guard let editor else { return false }
+        return Patcher.isCompatible(p, originalSHA256: editor.originalOSOSHash)
+    }
+
+    /// The osos with the switched-on patches applied (the edits stay as they are).
+    nonisolated static func outputOSOS(_ editor: FirmwareEditor, _ patches: [PatchInfo]) throws -> [UInt8] {
+        patches.isEmpty ? editor.osos : try Patcher.apply(patches, to: editor.osos, originalSHA256: editor.originalOSOSHash)
+    }
+
+    /// The firmware partition to save or flash: the edits plus the switched-on patches.
+    nonisolated static func outputPartition(_ editor: FirmwareEditor, _ patches: [PatchInfo]) throws -> [UInt8] {
+        let fw = try FirmwarePartition(data: editor.partition.data)
+        try fw.replaceImage("osos", with: outputOSOS(editor, patches))
+        return fw.data
+    }
+
+    /// iPod_Control/iTunes/iPodFirmAlbumArt on the mounted iPod, from its own library.
+    func writeThumbnails() async {
+        guard let ipod = currentIPod else { return }
+        let volume = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: [.volumeNameKey], options: [])?
+            .first { url in
+                (try? url.resourceValues(forKeys: [.volumeNameKey]).volumeName) == ipod.volumeName &&
+                FileManager.default.fileExists(atPath: url.appendingPathComponent("iPod_Control/iTunes/iTunesDB").path)
+            }
+        guard let volume else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder, then try again.")
+            return
+        }
+        do {
+            let r = try await work("Making album thumbnails from the music on the iPod…") { try MusicImport.writeThumbnails(volume: volume) }
+            thumbnailStatus = "\(r.covers) of \(r.albums) albums have a thumbnail (\(Date().formatted(date: .abbreviated, time: .shortened)))."
+        } catch { fail("Couldn't write the thumbnails", error) }
     }
 
     // MARK: pictures
@@ -378,7 +426,7 @@ final class AppModel: ObservableObject {
         let staging = Self.supportDir.appendingPathComponent("Staging/flash.bin")
         do {
             try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(editor.partition.data).write(to: staging, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches)).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
         } catch { fail("Can't flash", error) }
     }
@@ -392,11 +440,12 @@ final class AppModel: ObservableObject {
         let s = NSSavePanel()
         s.nameFieldStringValue = "custom-iPod_25.1.3.ipsw"
         guard s.runModal() == .OK, let out = s.url else { return }
-        let osos = editor.osos
+        let patches = activePatches
         Task {
             do {
                 let original = try await ensureAppleIPSW()
                 try await work("Writing .ipsw…") {
+                    let osos = try Self.outputOSOS(editor, patches)
                     try IPSW.repack(original: original, firmware: IPSW.firmware(original: original, withOSOS: osos), to: out)
                 }
                 NSWorkspace.shared.activateFileViewerSelecting([out])
@@ -407,13 +456,16 @@ final class AppModel: ObservableObject {
     /// Build the emulator drive from the current edits and boot it in the in-app preview.
     func runInEmulator(_ emu: EmulatorManager, _ session: EmulatorSession) {
         guard let editor else { return }
-        let osos = editor.osos
+        let patches = activePatches
+        let library = EmulatorManager.Library.current
         session.start { [weak self] in
             guard let self else { return }
             let original = try await self.ensureAppleIPSW()
-            let fw = try await Task.detached { try IPSW.firmware(original: original, withOSOS: osos) }.value
-            try await emu.prepare(firmware: fw, originalIPSW: original,
-                                  testLibrary: UserDefaults.standard.object(forKey: "emulatorTestLibrary") as? Bool ?? true)
+            let (fw, ososLength) = try await Task.detached { () -> ([UInt8], Int) in
+                let osos = try Self.outputOSOS(editor, patches)
+                return (try IPSW.firmware(original: original, withOSOS: osos), osos.count)
+            }.value
+            try await emu.prepare(firmware: fw, ososLength: ososLength, originalIPSW: original, library: library)
         }
     }
 }

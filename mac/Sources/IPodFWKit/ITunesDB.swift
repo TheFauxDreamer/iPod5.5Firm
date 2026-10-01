@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 // Swift port of src/ipodfw/itunesdb.py: a minimal iTunesDB writer.
@@ -23,6 +24,15 @@ public struct DBTrack {
         self.title = title; self.artist = artist; self.album = album; self.path = path; self.size = size
         self.lengthMS = lengthMS; self.trackNumber = trackNumber; self.trackCount = trackCount
         self.year = year; self.genre = genre; self.albumArtist = albumArtist; self.disc = disc
+    }
+}
+
+enum NSColorLike {
+    /// A saturated colour for a hue from 0 to 1.
+    static func rgb(hue: CGFloat) -> (UInt8, UInt8, UInt8) {
+        let h = hue * 6, x = 1 - abs(h.truncatingRemainder(dividingBy: 2) - 1)
+        let (r, g, b): (CGFloat, CGFloat, CGFloat) = h < 1 ? (1, x, 0) : h < 2 ? (x, 1, 0) : h < 3 ? (0, 1, x) : h < 4 ? (0, x, 1) : h < 5 ? (x, 0, 1) : (1, 0, x)
+        return (UInt8(r * 220 + 20), UInt8(g * 220 + 20), UInt8(b * 220 + 20))
     }
 }
 
@@ -157,6 +167,18 @@ public enum ITunesDB {
                            trackNumber: UInt32(n % 10 + 1), trackCount: 10, year: 2006, genre: "Test")
         }
         try Data(build(list)).write(to: itunes.appendingPathComponent("iTunesDB"))
+        // A plain-colour cover for each test album, so that the album-art patch has artwork to show.
+        var covers = [String: Data]()
+        for album in Set(list.map(\.album)) {
+            let n = Int(album.split(separator: " ").last ?? "1") ?? 1
+            let hue = CGFloat((n * 47) % 360) / 360
+            let c = NSColorLike.rgb(hue: hue)
+            let px: [UInt8] = (0..<(8 * 8)).flatMap { _ -> [UInt8] in [c.0, c.1, c.2, 255] }
+            if let img = ImageCodec.cgImage(rgba: px, width: 8, height: 8, alpha: false), let png = ImageCodec.pngData(img) {
+                covers[album] = png
+            }
+        }
+        try Data(AlbumArt.build(covers)).write(to: itunes.appendingPathComponent(AlbumArt.fileName))
     }
 
     /// Read (album, path) of each track in an iTunesDB. `path` is the iPod path with colons.

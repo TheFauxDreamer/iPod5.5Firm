@@ -23,6 +23,13 @@ mkdir -p "$APP/Contents/Library/LaunchDaemons"
 cp Resources/com.thefauxdreamer.ipodfirm.helper.plist "$APP/Contents/Library/LaunchDaemons/"
 cp Resources/install-emulator.sh "$APP/Contents/Resources/"
 cp -R Resources/emulator-patches "$APP/Contents/Resources/"
+mkdir -p "$APP/Contents/Resources/patches"
+for p in ../patches/*/; do
+    n=$(basename "$p")
+    [ "$n" = "row-marker" ] && continue          # test patch only
+    mkdir -p "$APP/Contents/Resources/patches/$n"
+    cp "$p"patch.json "$p"*.c "$APP/Contents/Resources/patches/$n/"
+done
 
 if [ ! -f build/AppIcon.icns ]; then
     swift scripts/make-icon.swift build/AppIcon.iconset

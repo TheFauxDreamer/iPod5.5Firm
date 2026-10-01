@@ -62,6 +62,7 @@ struct ContentView: View {
                 case .overview: model.editor == nil ? AnyView(WelcomeView()) : AnyView(OverviewView())
                 case .pictures: model.editor == nil ? AnyView(WelcomeView()) : AnyView(PicturesView())
                 case .strings: model.editor == nil ? AnyView(WelcomeView()) : AnyView(StringsView())
+                case .patches: AnyView(PatchesView())
                 case .ipod: AnyView(IPodView())
                 case .emulator: AnyView(EmulatorView())
                 }

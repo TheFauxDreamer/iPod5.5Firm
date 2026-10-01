@@ -6,7 +6,9 @@ struct EmulatorView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var emu: EmulatorManager
     @EnvironmentObject var session: EmulatorSession
-    @AppStorage("emulatorTestLibrary") var testLibrary = true
+    @AppStorage("emulatorLibrary") var library = "test"
+    @AppStorage("emulatorMusicFolder") var musicFolder = ""
+    @AppStorage("emulatorSongCount") var songCount = 200
 
     var body: some View {
         HSplitView {
@@ -19,11 +21,34 @@ struct EmulatorView: View {
                             model.runInEmulator(emu, session)
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(model.editor == nil || !emu.toolsReady)
+                        .disabled(model.editor == nil || !emu.toolsReady || (library == "folder" && musicFolder.isEmpty))
                         Button("Stop") { session.stop() }.disabled(!session.isActive)
                     }
                     if model.editor == nil { Text("Open a firmware first.").foregroundStyle(.secondary) }
-                    Toggle("Include a test music library (60 songs in 6 albums)", isOn: $testLibrary)
+                    Picker("Music on the test iPod", selection: $library) {
+                        Text("None").tag("none")
+                        Text("Test library (60 songs, 6 albums)").tag("test")
+                        Text("Songs from a folder").tag("folder")
+                    }
+                    if library == "folder" {
+                        HStack {
+                            Text(musicFolder.isEmpty ? "No folder chosen" : (musicFolder as NSString).abbreviatingWithTildeInPath)
+                                .lineLimit(1).truncationMode(.middle).foregroundStyle(musicFolder.isEmpty ? .secondary : .primary)
+                            Spacer()
+                            Button("Choose…") {
+                                let p = NSOpenPanel()
+                                p.canChooseDirectories = true
+                                p.canChooseFiles = false
+                                p.message = "Choose a folder of .m4a music files. The files are only read."
+                                if p.runModal() == .OK, let url = p.url { musicFolder = url.path }
+                            }
+                        }
+                        Stepper("Songs: \(songCount) (maximum 8 from each album; the audio is copied)", value: $songCount, in: 20...1000, step: 20)
+                    }
+                    if model.enabledPatches.isEmpty == false {
+                        Label("Patches included: \(model.activePatches.map(\.spec.name).joined(separator: ", "))", systemImage: "puzzlepiece.extension")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Text("Builds a drive from your current edits and boots it from cold, right here. It's a separate test iPod — your own emulator devices are left alone. Re-run after every change.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Button("Open Test iPod in the Emulator Window") {

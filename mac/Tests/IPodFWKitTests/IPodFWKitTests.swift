@@ -211,3 +211,91 @@ final class LibraryOutputTests: XCTestCase {
         try ITunesDB.makeLibrary(at: URL(fileURLWithPath: out))
     }
 }
+
+final class PatchAndArtTests: XCTestCase {
+    static let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+
+    /// The Swift patcher must give the same bytes as the Python patcher (IPODFW_PATCHED_OSOS).
+    func testPatcherAgreesWithPython() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let ipsw = env["IPODFW_IPSW"], let expected = env["IPODFW_PATCHED_OSOS"] else {
+            throw XCTSkip("set IPODFW_IPSW and IPODFW_PATCHED_OSOS")
+        }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        let patches = Patcher.list(in: Self.repo.appendingPathComponent("patches")).filter { $0.spec.name == "album-art" }
+        XCTAssertEqual(patches.count, 1)
+        XCTAssertTrue(Patcher.isCompatible(patches[0], osos: osos))
+        let out = try Patcher.apply(patches, to: osos)
+        XCTAssertEqual(out, [UInt8](try Data(contentsOf: URL(fileURLWithPath: expected))))
+    }
+
+    func testReadTracksRoundTrip() {
+        let tracks = (0..<5).map { DBTrack(title: "Song \($0)", artist: "A", album: "Album \($0 / 2)", path: ":iPod_Control:Music:F00:T\($0).m4a", size: 1, lengthMS: 1) }
+        let read = ITunesDB.readTracks(ITunesDB.build(tracks))
+        XCTAssertEqual(read.map(\.album), tracks.map(\.album))
+        XCTAssertEqual(read.map(\.path), tracks.map(\.path))
+    }
+
+    func testAlbumArtFile() throws {
+        // a 2x2 PNG, red
+        let img = ImageCodec.cgImage(rgba: [255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255], width: 2, height: 2)!
+        let png = ImageCodec.pngData(img)!
+        let f = AlbumArt.build(["Charm": png, "Burials": png], size: 4)
+        XCTAssertEqual(Array(f[0..<4]), Array("IFAT".utf8))
+        XCTAssertEqual(le16(f, 6), 4)
+        XCTAssertEqual(le32(f, 8), 2)
+        let h0 = le32(f, 16), h1 = le32(f, 24)
+        XCTAssertLessThan(h0, h1)
+        XCTAssertEqual(Set([h0, h1]), Set([AlbumArt.fnv1a("Charm"), AlbumArt.fnv1a("Burials")]))
+        XCTAssertEqual(AlbumArt.fnv1a("Charm"), 0x07df43f0)    // same value as the Python version
+        let first = Int(le32(f, 20))
+        XCTAssertEqual(le16(f, first), 0xF800)          // pure red in RGB565
+        XCTAssertEqual(f.count, 16 + 16 + 2 * 4 * 4 * 2)
+    }
+}
+
+final class EmulatorDriveTests: XCTestCase {
+    func testFixOSOSLength() throws {
+        // MBR, firmware partition at sector 1; directory at partition + 0x4200; osos at devOffset 0x4E00 (base 0x200)
+        var img = [UInt8](repeating: 0, count: 0x10000)
+        img[510] = 0x55; img[511] = 0xAA
+        put32(&img, 0x1BE + 8, 1)
+        let part = 512
+        put32(&img, part + 0x104, 0x4000)
+        let dir = part + 0x4200
+        img.replaceSubrange(dir..<dir + 8, with: Array("!ATAsoso".utf8))
+        put32(&img, dir + 12, 0x4E00)
+        put32(&img, dir + 16, 0x100)                    // too short
+        let data = part + 0x200 + 0x4E00
+        for i in 0..<0x300 { img[data + i] = UInt8(i & 0xFF) }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("drive-\(UUID()).img")
+        try Data(img).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertTrue(try EmulatorDrive.fixOSOSLength(drive: url, ososLength: 0x300))
+        let out = [UInt8](try Data(contentsOf: url))
+        XCTAssertEqual(le32(out, dir + 16), 0x300)
+        XCTAssertEqual(le32(out, dir + 28), byteSum(out[data..<data + 0x300]))
+        XCTAssertFalse(try EmulatorDrive.fixOSOSLength(drive: url, ososLength: 0x300))   // already correct
+    }
+}
+
+/// Reads real music files from IPODFW_MUSIC and compares with the values in IPODFW_MUSIC_EXPECT
+/// (JSON lines from the Python reader: path, title, album, artist, track).
+final class MP4TagsTests: XCTestCase {
+    func testAgreesWithPythonReader() throws {
+        guard let expect = ProcessInfo.processInfo.environment["IPODFW_MUSIC_EXPECT"] else { throw XCTSkip("set IPODFW_MUSIC_EXPECT") }
+        let lines = try String(contentsOfFile: expect, encoding: .utf8).split(separator: "\n")
+        XCTAssertFalse(lines.isEmpty)
+        for line in lines {
+            let j = try JSONSerialization.jsonObject(with: Data(line.utf8)) as! [String: Any]
+            let t = try MP4Tags.read(URL(fileURLWithPath: j["path"] as! String))
+            XCTAssertEqual(t.title, j["title"] as? String)
+            XCTAssertEqual(t.album, j["album"] as? String)
+            XCTAssertEqual(t.artist, j["artist"] as? String)
+            XCTAssertEqual(t.track, j["track"] as? Int)
+            XCTAssertEqual(t.lengthMS, j["length_ms"] as? Int)
+            XCTAssertEqual(t.cover != nil, j["cover"] as? Bool)
+        }
+    }
+}

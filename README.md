@@ -28,6 +28,9 @@ The app has these functions:
 - Write the changed firmware to the iPod.
 - Restore a backup to the iPod.
 - Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
+- Put a music library on the emulated iPod: a test library, or songs from a folder.
+- Switch code patches on or off (Patches pane). The patches are in [patches/](patches/).
+- Write the album thumbnail file to the iPod for the `album-art` patch.
 
 ### Build and install the app
 
@@ -153,6 +156,16 @@ To restore the backup, enter `sudo .venv/bin/ipodfw restore backups/firmware-bac
 | `make-library -o DIR` | Makes a music library for tests in the emulator. |
 | `devices`, `backup`, `flash`, `restore` | Operate on the iPod. These commands need `sudo`. |
 
+## Patches
+
+| Patch | Function | Status |
+|---|---|---|
+| `album-art` | Shows a 20 × 20 thumbnail of the album artwork at the left of each album in the lists. | Tested in the emulator with 200 real songs in 28 albums. Not tested on a real iPod. |
+
+The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums.
+
+The patch tool compiles C code with the Xcode compiler and links it at a fixed address in the free space after the osos image (maximum 3.9 KB in firmware 1.3).
+
 ## Limits
 
 - Text cannot use more bytes than the language uses in the Apple firmware. To make one text longer, make other text shorter.
@@ -163,6 +176,7 @@ To restore the backup, enter `sudo .venv/bin/ipodfw restore backups/firmware-bac
 - The firmware tools have tests with the Apple firmware 1.3.
 - A backup of a real iPod was made and examined.
 - The write to the iPod has tests on a disk image. The write was not done on a real iPod.
+- The `album-art` patch has tests in the emulator. It was not done on a real iPod.
 
 ## Credits
 

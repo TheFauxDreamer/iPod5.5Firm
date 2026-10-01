@@ -94,3 +94,25 @@ The rsrc image contains a FAT16 file system at offset 0x600. `ipodfw.fat16` read
 2. Find the names of the native functions that the scripts call. These are the interface between the scripts and the native code.
 3. Find the native code that draws one row of a list. Use the histogram of a list that has many rows.
 4. Find the function that reads album artwork for the Now Playing screen.
+
+## Result: the album-art patch
+
+The patch is in [patches/album-art/](../patches/album-art/). It is complete and has tests in the emulator.
+
+### How it operates
+
+1. Two vtable entries are replaced:
+   - `0x66e470` (draw method `0x1bb260` of the list-row label, type 0x3180);
+   - `0x677a14` (draw method `0x244924` of the general label, type 0x1580).
+2. The wrapper calculates the FNV-1a hash of the text and finds it in the thumbnail file.
+3. The wrapper moves the left edge of the label (view + 0x5c) 24 pixels to the right, calls the original method, and restores the edge.
+4. The wrapper prepares the graphics context again (`0x21a27c`) and draws the thumbnail as runs of filled rectangles (`0x211a00`).
+
+### Facts found during the work
+
+- A rectangle is {top, left, bottom, right}. A colour is four bytes R, G, B, A.
+- In the graphics context, +0x2c is the x origin and +0x30 is the y origin.
+- File functions: open `0x8f38c` (mode `'data'`), read `0x8f464`, seek `0x8f5c4` (64-bit position in r2:r3), close `0x8f184`. Paths use backslashes.
+- Memory allocation: `0x25a974`.
+- Some draws of a highlighted row with a long title pass a structure in place of the text. The first byte of the structure is less than 0x20. The patch then uses the album from the last draw of the same view.
+- The emulator `make-disk` command makes the osos length 0x600 bytes too short. `ipodfw.emudrive` and `EmulatorDrive` correct this.

@@ -79,7 +79,26 @@ final class EmulatorManager: ObservableObject {
     static let romSeed = "5500550055005500"
 
     /// Build the test drive from `firmware` (an Apple-layout firmware partition) and write the profile.
-    func prepare(firmware: [UInt8], originalIPSW: URL, testLibrary: Bool) async throws {
+    /// The music library on the emulator drive.
+    enum Library: Equatable {
+        case none
+        case test
+        case folder(URL, songs: Int)
+
+        static var current: Library {
+            let d = UserDefaults.standard
+            switch d.string(forKey: "emulatorLibrary") ?? "test" {
+            case "none": return .none
+            case "folder":
+                guard let path = d.string(forKey: "emulatorMusicFolder") else { return .test }
+                let n = d.integer(forKey: "emulatorSongCount")
+                return .folder(URL(fileURLWithPath: path), songs: n > 0 ? n : 200)
+            default: return .test
+            }
+        }
+    }
+
+    func prepare(firmware: [UInt8], ososLength: Int, originalIPSW: URL, library: Library) async throws {
         guard toolsReady else { throw FirmwareError("Install the emulator first (Emulator pane).") }
         try await quitEmulator()
         let ipsw = Self.workDir.appendingPathComponent("iPodFirm custom.ipsw")
@@ -92,10 +111,24 @@ final class EmulatorManager: ObservableObject {
             try IPSW.repack(original: originalIPSW, firmware: firmware, to: ipsw)
             try? fm.removeItem(at: drive)
             try Self.runTool(tool, ["make-disk", ipsw.path, drive.path])
-            if testLibrary {
+            // make-disk makes the osos length too short for a patched image (see EmulatorDrive).
+            try EmulatorDrive.fixOSOSLength(drive: drive, ososLength: ososLength)
+            var lib: URL?
+            switch library {
+            case .none:
+                break
+            case .test:
                 // 60 tracks in 6 albums. The audio files are made one time and kept.
-                let lib = Self.workDir.appendingPathComponent("TestLibrary")
-                try ITunesDB.makeLibrary(at: lib)
+                lib = Self.workDir.appendingPathComponent("TestLibrary")
+                try ITunesDB.makeLibrary(at: lib!)
+            case .folder(let folder, let count):
+                lib = Self.workDir.appendingPathComponent("FolderLibrary")
+                try? fm.removeItem(at: lib!)
+                let songs = MusicImport.pick(MusicImport.scan(folder), limit: count, perAlbum: 8)
+                guard !songs.isEmpty else { throw FirmwareError("The folder has no .m4a music files.") }
+                try MusicImport.makeLibrary(from: songs, to: lib!, copyAudio: true)
+            }
+            if let lib {
                 try Self.runTool(tool, ["put-files", drive.path, lib.appendingPathComponent("iPod_Control").path, "/iPod_Control"])
             }
             // a restore point from an earlier run would resume the old firmware
