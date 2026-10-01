@@ -13,8 +13,11 @@ if [ ! -x "$CARGO" ]; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal
 fi
 
+PATCHES="$(cd "$(dirname "$0")" && pwd)/emulator-patches"
+
 if [ -d "$SRC/.git" ]; then
     echo "==> Updating emulator source…"
+    git -C "$SRC" checkout -- .     # remove the iPodFirm patches; they are applied again below
     git -C "$SRC" pull --ff-only
 else
     echo "==> Downloading emulator source…"
@@ -22,6 +25,12 @@ else
     git clone "$REPO" "$SRC"
 fi
 cd "$SRC"
+if [ -d "$PATCHES" ]; then
+    for p in "$PATCHES"/*.patch; do
+        echo "==> Applying $(basename "$p")"
+        git apply "$p"
+    done
+fi
 echo "==> Source at $(git log -1 --format='%h (%cd)' --date=short)"
 
 echo "==> Compiling (this takes a few minutes the first time)…"

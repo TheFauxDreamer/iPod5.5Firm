@@ -1,0 +1,96 @@
+# Album artwork in the Albums list: research notes
+
+This document records the research for the album artwork feature. The firmware is Apple RetailOS 1.3 for the iPod Video.
+
+## Tools
+
+| Tool | Location | Function |
+|---|---|---|
+| Ghidra 12.1.4 | `~/Library/Application Support/iPodFirm/tools/` | Disassembler and decompiler. |
+| Java (Temurin JDK 21) | `~/Library/Application Support/iPodFirm/tools/` | Runtime for Ghidra. |
+| Ghidra project | `~/Library/Application Support/iPodFirm/re/ghidra-project/` | The analyzed osos (base address 0x0). |
+| `re/ghidra-scripts/DecompileAt.java` | This repository | Writes the C code, the callers and the callees of the functions at given addresses. |
+| `re/ghidra-scripts/SetArmOptions.java` | This repository | Pre-script. Turns on the "ARM Aggressive Instruction Finder". |
+| Emulator patch `0001-ipodfirm-instrumentation.patch` | `mac/Resources/emulator-patches/` | Adds the `hist` and `regs` commands. `hist` gives the count of instructions in each 64-byte block of code. `regs` gives the registers at the address in `IPODFW_REGS_AT`. |
+| `ipodfw.emucontrol` | `src/ipodfw/emucontrol.py` | Python control of the emulator. |
+
+The Ghidra download does not include the native decompiler for Apple silicon. Build it with `support/gradle/gradlew buildNatives`. Then copy `build/os/mac_arm_64/*` to `os/mac_arm_64/` in each module.
+
+## How to run Ghidra without a window
+
+Use these commands to decompile functions:
+
+```sh
+T="$HOME/Library/Application Support/iPodFirm/tools"
+R="$HOME/Library/Application Support/iPodFirm/re"
+JAVA_HOME="$T/jdk-21.0.12.1+1/Contents/Home" \
+  "$T/ghidra_12.1.4_PUBLIC/support/analyzeHeadless" "$R/ghidra-project" osos13 \
+  -process osos-1.3.bin -noanalysis -readOnly \
+  -scriptPath re/ghidra-scripts -postScript DecompileAt.java OUT.c 135b2c 223420
+```
+
+## Facts
+
+### Memory addresses
+
+The code runs at addresses that are equal to the offsets in the osos image. The base address in Ghidra is 0x0.
+
+### Code that runs when a list scrolls
+
+The emulator recorded the code that ran in three conditions:
+
+1. The Albums list was shown, and no button was pushed.
+2. The Albums list scrolled one row.
+3. The Music menu scrolled one row.
+
+Results:
+
+- 515 blocks of 64 bytes ran when either list scrolled. This is the general list code.
+- 53 blocks ran only when the Albums list scrolled. Most of them are near 0x223000.
+
+### Functions that are identified
+
+| Address | Function | Evidence |
+|---|---|---|
+| `0x2234dc` | Reads one UTF-8 character and returns a UTF-16 value. | The code examines the high bits 0x80, 0xC0 and 0xE0. |
+| `0x223420` | Converts a UTF-8 string to a new UTF-16 string. | Calls `0x224414` (length), `0x25a944` (memory allocation) and `0x224278` (next character). |
+| `0x224190` | Text function for the database strings. | Calls the same text functions. It runs only for the Albums list. |
+| `0x135b2c` | **Bytecode interpreter.** | Reads one opcode byte, uses an opcode table at `DAT_00136a6c`, then executes a `switch` with stack, logic, shift and compare operations. |
+| `0x122b28` | Calls the interpreter. | It is in the general list code. |
+
+### The bytecode interpreter is a JavaScript engine
+
+The interpreter at `0x135b2c` is a version of Mozilla SpiderMonkey (JavaScript 1.5). The evidence:
+
+- The value `0x80000001` is `JSVAL_VOID`.
+- The masks `0x3ffffffe` and `0xc0000001` agree with the SpiderMonkey tagged values.
+- The opcode numbers agree with the SpiderMonkey 1.5 opcode table. Examples: 0x06 `GOTO`, 0x07 `IFEQ`, 0x0F `BITOR`, 0x18 `LSH`, 0x35 `GETPROP`, 0x39 `PUSHOBJ`, 0x3A `CALL`, 0x3B `NAME`.
+- The opcode table (`JSCodeSpec`) is at RAM address `0x1083de9c`.
+
+The firmware does not contain JavaScript source text or the names "SpiderMonkey" or "Mozilla".
+
+### The location of the scripts
+
+The emulator recorded the bytecode address at each opcode (instruction `0x135b84`, register r0). One scroll of the Albums list ran 96 opcodes. All of them were in osos offsets `0x4b5f6a` to `0x4c4757`.
+
+These offsets are in the **`TCmd` resource, ID 9088, 91,662 bytes**, in the main resource block (osos offset `0x4b441c`). Thus `TCmd` contains the compiled JavaScript of the user interface. iPodWizard did not decode this resource.
+
+### The rsrc image
+
+The rsrc image contains a FAT16 file system at offset 0x600. `ipodfw.fat16` reads it. It contains only these files:
+
+- `/Resources/Fonts/*.ttf`: the fonts of the user interface, for example `PodiumSans18.ttf`.
+- `/Resources/VideoCore/`: programs for the Broadcom video processor.
+
+## Conclusion at this time
+
+1. The user interface has two parts. Native ARM code draws the screen. Compiled JavaScript in the `TCmd` resource controls the behavior.
+2. One scroll runs only 96 opcodes. Thus native code draws the rows of the list.
+3. A change to the `TCmd` bytecode can change the behavior of the interface without an ARM patch.
+
+## Next tasks
+
+1. Decode the structure of the `TCmd` resource: the scripts, the atoms (names) and the functions.
+2. Find the names of the native functions that the scripts call. These are the interface between the scripts and the native code.
+3. Find the native code that draws one row of a list. Use the histogram of a list that has many rows.
+4. Find the function that reads album artwork for the Now Playing screen.

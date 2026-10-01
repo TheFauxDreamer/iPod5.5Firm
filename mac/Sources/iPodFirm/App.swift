@@ -7,12 +7,17 @@ struct IPodFirmApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var model = AppModel()
     @StateObject private var emulator = EmulatorManager()
+    @StateObject private var session = EmulatorSession()
 
     var body: some Scene {
         WindowGroup("iPodFirm") {
             ContentView()
                 .environmentObject(model)
                 .environmentObject(emulator)
+                .environmentObject(session)
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    session.stop()
+                }
                 .frame(minWidth: 980, minHeight: 640)
         }
         .commands {

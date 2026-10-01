@@ -1,0 +1,125 @@
+diff --git a/tools/ipod-gui/src/control.rs b/tools/ipod-gui/src/control.rs
+index f96afc1..3db6e6f 100644
+--- a/tools/ipod-gui/src/control.rs
++++ b/tools/ipod-gui/src/control.rs
+@@ -64,6 +64,10 @@ use std::sync::{Arc, Mutex};
+ /// with one place that answers questions, rather than two that can drift apart.
+ pub const UNMAPPED_SENTINEL: u32 = 0xFFFF_FFFF;
+ pub const TRACE_SENTINEL: u32 = 0xFFFF_FFFE;
++/// iPodFirm local patch: hand over the PC histogram (64-byte buckets) and clear it.
++pub const HIST_SENTINEL: u32 = 0xFFFF_FF0A;
++/// iPodFirm local patch: hand over the registers recorded at IPODFW_REGS_AT, and clear them.
++pub const REGS_SENTINEL: u32 = 0xFFFF_FF0B;
+ /// Ask the run loop for the PMU's per-register write census. Same request/answer route as the
+ /// others, because `Pcf50605` lives on the emulator thread and cannot be borrowed from this one.
+ pub const PMU_SENTINEL: u32 = 0xFFFF_FFFD;
+@@ -341,6 +345,30 @@ fn command(line: &str, link: Option<&Arc<Link>>) -> String {
+                 std::thread::sleep(std::time::Duration::from_millis(10));
+             }
+         }
++        // iPodFirm local patch: the PC histogram since the last `hist`, as `bucket:count` pairs.
++        // Enabled with IPODFW_PROFILE=1 in the environment.
++        "hist" => {
++            link.peek_req.lock().unwrap().push(HIST_SENTINEL);
++            std::thread::sleep(std::time::Duration::from_millis(150));
++            let _ = link.peek_ans.lock().unwrap().pop();
++            let out = link.out.lock().unwrap();
++            let pairs: Vec<String> = out.pc_trace.iter().map(|(b, n)| format!("{b:x}:{n}")).collect();
++            format!("ok hist {} {}", pairs.len(), pairs.join(" "))
++        }
++        // iPodFirm local patch: the registers recorded at IPODFW_REGS_AT=ADDR,COUNT since the last
++        // `regs`, one record per line: `instructions r0 r1 ... r15` in hexadecimal.
++        "regs" => {
++            link.peek_req.lock().unwrap().push(REGS_SENTINEL);
++            std::thread::sleep(std::time::Duration::from_millis(150));
++            let _ = link.peek_ans.lock().unwrap().pop();
++            let out = link.out.lock().unwrap();
++            let lines: Vec<String> = out
++                .regs_seen
++                .iter()
++                .map(|(at, r)| format!("{at:x} {}", r.iter().map(|v| format!("{v:x}")).collect::<Vec<_>>().join(" ")))
++                .collect();
++            format!("ok regs {}\n{}\nend", lines.len(), lines.join("\n"))
++        }
+         // Hand over the execution trace, newest run first, and clear it.
+         "trace" => {
+             link.peek_req.lock().unwrap().push(TRACE_SENTINEL);
+diff --git a/tools/ipod-gui/src/emu.rs b/tools/ipod-gui/src/emu.rs
+index d8fe22a..a7f9bab 100644
+--- a/tools/ipod-gui/src/emu.rs
++++ b/tools/ipod-gui/src/emu.rs
+@@ -507,6 +507,8 @@ pub struct Out {
+     pub unmapped_pages: Vec<u32>,
+     /// The most recent PC trace handed over by the run loop.
+     pub pc_trace: Vec<(u32, u64)>,
++    /// iPodFirm local patch: registers recorded at IPODFW_REGS_AT.
++    pub regs_seen: Vec<(u64, [u32; 16])>,
+     /// The PMU's write census, `(register, writes, last value)`, handed over on request.
+     ///
+     /// Carried through `Out` rather than read directly because `Pcf50605` lives on the emulator
+@@ -948,6 +950,7 @@ impl Link {
+                 fb_addr: FB_FRONT,
+                 unmapped_pages: Vec::new(),
+                 pc_trace: Vec::new(),
++                regs_seen: Vec::new(),
+                 pmu_written: Vec::new(),
+                 watched_writes: Vec::new(),
+                 bus_log: Vec::new(),
+@@ -1617,9 +1620,21 @@ pub fn build(cfg: &Config, first: bool) -> Result<Machine, String> {
+     // 8 MB of low address space at 64 bytes a bucket.
+     m.mem.regs_at = cfg.regs_at;
+     m.mem.watch_range = cfg.watch_writes;
+-    if cfg.profile {
++    if cfg.profile || std::env::var_os("IPODFW_PROFILE").is_some() {
+         m.mem.pc_hist = Some(vec![0u64; (8 << 20) >> 6]);
+     }
++    if let Some(r) = std::env::var("IPODFW_REGS_AT").ok().and_then(|v| {
++        let (a, n) = v.split_once(',')?;
++        Some((u32::from_str_radix(a.trim_start_matches("0x"), 16).ok()?, n.parse::<usize>().ok()?))
++    }) {
++        m.mem.regs_at = Some(r);
++    }
++    if let Some(r) = std::env::var("IPODFW_TRACE_PC").ok().and_then(|v| {
++        let (a, b) = v.split_once('-')?;
++        Some((u32::from_str_radix(a.trim_start_matches("0x"), 16).ok()?, u32::from_str_radix(b.trim_start_matches("0x"), 16).ok()?))
++    }) {
++        m.mem.trace_pc = Some(r);
++    }
+     // Through `set_clock` even here, where the machine has executed nothing and a bare assignment
+     // would do: one way to move the divisor is a rule that can be checked, and two is a rule
+     // nobody remembers which half of. On a machine at instruction zero the correction it computes
+@@ -2701,6 +2716,22 @@ fn session(cfg: &Config, link: &Arc<Link>, first: bool, deaths: &mut Deaths) ->
+                             .map(|p| p.written.iter().map(|(r, (n, v))| (*r, *n, *v)).collect())
+                             .unwrap_or_default();
+                         Some(out.pmu_written.len() as u32)
++                    } else if a == crate::control::REGS_SENTINEL {
++                        let mut out = link.out.lock().unwrap();
++                        out.regs_seen = std::mem::take(&mut m.mem.regs_seen);
++                        Some(out.regs_seen.len() as u32)
++                    } else if a == crate::control::HIST_SENTINEL {
++                        let mut out = link.out.lock().unwrap();
++                        out.pc_trace.clear();
++                        if let Some(h) = m.mem.pc_hist.as_mut() {
++                            for (i, n) in h.iter_mut().enumerate() {
++                                if *n > 0 {
++                                    out.pc_trace.push(((i as u32) << 6, *n));
++                                    *n = 0;
++                                }
++                            }
++                        }
++                        Some(out.pc_trace.len() as u32)
+                     } else if a == crate::control::TRACE_SENTINEL {
+                         // Hand the trace over and clear it, so a second dump shows what happened
+                         // since the first rather than repeating it.
+diff --git a/tools/ipod-gui/src/machine.rs b/tools/ipod-gui/src/machine.rs
+index 614f566..095d3c5 100644
+--- a/tools/ipod-gui/src/machine.rs
++++ b/tools/ipod-gui/src/machine.rs
+@@ -1466,6 +1466,7 @@ mod tests {
+             stalled_secs: 0.0,
+             unmapped_pages: Vec::new(),
+             pc_trace: Vec::new(),
++            regs_seen: Vec::new(),
+             pmu_written: Vec::new(),
+             watched_writes: Vec::new(),
+             bus_log: Vec::new(),

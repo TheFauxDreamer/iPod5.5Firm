@@ -1,0 +1,36 @@
+{
+  "name": "album-art",
+  "description": "Shows a thumbnail of the album artwork at the left of each album in the lists. The thumbnails come from the file iPod_Control\\iTunes\\iPodFirmAlbumArt, which iPodFirm writes.",
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "load_address": "0x735900",
+  "symbols": {
+    "label_draw": "0x244924",
+    "view_bounds": "0x255ac4",
+    "gc_set_color": "0x2106e4",
+    "gc_set_mode": "0x210290",
+    "gc_fill_rect": "0x211a00",
+    "fw_alloc": "0x25a974",
+    "fw_memset0": "0x07ccd0",
+    "fw_strcpy": "0x07cd6c",
+    "file_open": "0x08f38c",
+    "file_read": "0x08f464",
+    "file_seek": "0x08f5c4",
+    "file_close": "0x08f184",
+    "gc_prepare": "0x21a27c",
+    "row_label_draw": "0x1bb260"
+  },
+  "hooks": [
+    {
+      "kind": "word",
+      "at": "0x66e470",
+      "expect": "0x001bb260",
+      "to": "hook_row_label_draw"
+    },
+    {
+      "kind": "word",
+      "at": "0x677a14",
+      "expect": "0x00244924",
+      "to": "hook_label_draw"
+    }
+  ]
+}

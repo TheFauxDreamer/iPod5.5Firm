@@ -4,9 +4,17 @@
 
 ## Easiest: iPodFirm's Emulator pane
 
-1. **Install Emulator** builds [siggifly/ipod-emulator](https://github.com/siggifly/ipod-emulator) from source and installs `/Applications/ipod-emulator.app`. It installs Rust into your home folder if needed. The prebuilt v0.4.0 release can't be used, because it requires a dump of your iPod's boot ROM, while the current source synthesises one.
-2. **Run in Emulator** puts your edited OS into Apple's 1.3 firmware, writes an `.ipsw`, and opens the emulator.
-3. Drag the file tile from iPodFirm onto the emulator window. The emulator only accepts files dropped on it or chosen in its own picker.
+1. **Install Emulator** builds [siggifly/ipod-emulator](https://github.com/siggifly/ipod-emulator) from source and installs `/Applications/ipod-emulator.app`. It installs Rust into your home folder if needed. The prebuilt v0.4.0 release can't be used, because it needs a dump of your iPod's boot ROM, while the current source synthesises one.
+2. **Run in Emulator** does three things:
+   - puts your edited OS into Apple's 1.3 firmware and builds a drive with the emulator's own `ipod-boot make-disk`;
+   - boots it from cold in a **private profile** (`IPOD_EMULATOR_DATA=~/Library/Application Support/iPodFirm/EmulatorProfile`), so your own emulator devices are never touched;
+   - runs it **headless with `--control=SOCKET`**, so iPodFirm can show the live screen (`shot`) and drive the buttons and wheel (`press`, `wheel`).
+3. **Open Test iPod in the Emulator Window** opens the same test device in the emulator's own window, if you prefer that.
+
+Notes from testing RetailOS 1.3:
+- A fresh drive boots to the Language screen first.
+- About six wheel detents move the highlight one row.
+- String −4 ("iPod") is the main menu title.
 
 ## Manually: the emulator app
 

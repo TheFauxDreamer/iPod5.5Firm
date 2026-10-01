@@ -1,0 +1,17 @@
+{
+  "name": "row-marker",
+  "description": "Test patch. Draws a coloured bar at the left of each label in a list.",
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "load_address": "0x735900",
+  "symbols": {
+    "label_draw": "0x244924",
+    "view_bounds": "0x255ac4",
+    "gc_set_color": "0x2106e4",
+    "gc_set_mode": "0x210290",
+    "gc_fill_rect": "0x211a00"
+  },
+  "hooks": [
+    { "kind": "bl",   "at": "0x1bb434", "expect": "0xeb02253a", "to": "hook_label_draw" },
+    { "kind": "word", "at": "0x677a14", "expect": "0x00244924", "to": "hook_label_draw" }
+  ]
+}

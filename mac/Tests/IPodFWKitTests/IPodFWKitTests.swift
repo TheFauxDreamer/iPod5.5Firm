@@ -181,3 +181,33 @@ final class DiskImageFlashTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: backups.appendingPathComponent(Backups.originalName)), original)  // never overwritten
     }
 }
+
+final class ITunesDBTests: XCTestCase {
+    func testChunkSizesAreConsistent() throws {
+        let tracks = (0..<3).map { DBTrack(title: "Song \($0)", artist: "A", album: "B", path: ":x:T\($0).m4a", size: 100, lengthMS: 1000) }
+        let db = ITunesDB.build(tracks)
+        XCTAssertEqual(Array(db[0..<4]), Array("mhbd".utf8))
+        XCTAssertEqual(le32(db, 4), 244)
+        XCTAssertEqual(Int(le32(db, 8)), db.count)
+        var p = 244 + 96 + 92
+        for _ in 0..<3 {
+            XCTAssertEqual(Array(db[p..<p + 4]), Array("mhit".utf8))
+            var q = p + Int(le32(db, p + 4))
+            for _ in 0..<Int(le32(db, p + 12)) {
+                XCTAssertEqual(Array(db[q..<q + 4]), Array("mhod".utf8))
+                q += Int(le32(db, q + 8))
+            }
+            XCTAssertEqual(q, p + Int(le32(db, p + 8)))
+            p = q
+        }
+        XCTAssertEqual(Array(db[p..<p + 4]), Array("mhsd".utf8))
+    }
+}
+
+/// Writes a test library to IPODFW_LIBRARY_OUT, for an emulator check of the Swift writer.
+final class LibraryOutputTests: XCTestCase {
+    func testWriteLibrary() throws {
+        guard let out = ProcessInfo.processInfo.environment["IPODFW_LIBRARY_OUT"] else { throw XCTSkip("set IPODFW_LIBRARY_OUT") }
+        try ITunesDB.makeLibrary(at: URL(fileURLWithPath: out))
+    }
+}

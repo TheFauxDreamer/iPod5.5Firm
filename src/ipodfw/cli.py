@@ -34,6 +34,12 @@ def cmd_pack_ipsw(args) -> None:
     print(f"Wrote {args.output} ({name} replaced with {args.firmware})")
 
 
+def cmd_make_library(args) -> None:
+    from .itunesdb import make_library
+    r = make_library(args.output, songs=args.songs, total_tracks=args.tracks)
+    print(f"Wrote {r['tracks']} tracks ({r['songs']} audio files) under {r['path']}/iPod_Control")
+
+
 def cmd_info(args) -> None:
     fw = load(args.firmware)
     print(f"Model:            {fw.model}")
@@ -166,6 +172,12 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("firmware")
     s.add_argument("-o", "--output", required=True)
     s.set_defaults(func=cmd_pack_ipsw)
+
+    s = sub.add_parser("make-library", help="write a test music library (iPod_Control) for an emulated iPod")
+    s.add_argument("-o", "--output", required=True)
+    s.add_argument("--songs", type=int, default=6, help="distinct audio files")
+    s.add_argument("--tracks", type=int, help="total tracks (simulate a big library)")
+    s.set_defaults(func=cmd_make_library)
 
     s = sub.add_parser("info", help="show the firmware directory and checksums")
     s.add_argument("firmware")

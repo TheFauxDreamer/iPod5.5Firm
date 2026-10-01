@@ -73,32 +73,46 @@ final class EmulatorManager: ObservableObject {
 
     // MARK: run
 
-    /// Boot `firmware` (an Apple-layout firmware partition) in the emulator, from cold.
-    func run(firmware: [UInt8], originalIPSW: URL) async throws {
+    /// iPodFirm runs the emulator on its own data folder (IPOD_EMULATOR_DATA), so the test device
+    /// can't be confused with the user's own emulator devices, and theirs are never touched.
+    static let profile = AppModel.supportDir.appendingPathComponent("EmulatorProfile")
+    static let romSeed = "5500550055005500"
+
+    /// Build the test drive from `firmware` (an Apple-layout firmware partition) and write the profile.
+    func prepare(firmware: [UInt8], originalIPSW: URL, testLibrary: Bool) async throws {
         guard toolsReady else { throw FirmwareError("Install the emulator first (Emulator pane).") }
         try await quitEmulator()
         let ipsw = Self.workDir.appendingPathComponent("iPodFirm custom.ipsw")
-        let drives = Self.emuData.appendingPathComponent("drives")
-        let drive = drives.appendingPathComponent("\(Self.diskName).img")
+        let drive = Self.profile.appendingPathComponent("drives/\(Self.diskName).img")
         let tool = Self.ipodBoot
         try await Task.detached {
             let fm = FileManager.default
             try fm.createDirectory(at: Self.workDir, withIntermediateDirectories: true)
-            try fm.createDirectory(at: drives, withIntermediateDirectories: true)
+            try fm.createDirectory(at: drive.deletingLastPathComponent(), withIntermediateDirectories: true)
             try IPSW.repack(original: originalIPSW, firmware: firmware, to: ipsw)
             try? fm.removeItem(at: drive)
             try Self.runTool(tool, ["make-disk", ipsw.path, drive.path])
-            // a restore point from an earlier boot would resume the old firmware
-            let snaps = Self.emuData.appendingPathComponent("cache/snapshots")
-            for f in (try? fm.contentsOfDirectory(atPath: snaps.path)) ?? [] where f.hasPrefix(Self.diskName + ".") {
-                try? fm.removeItem(at: snaps.appendingPathComponent(f))
+            if testLibrary {
+                // 60 tracks in 6 albums. The audio files are made one time and kept.
+                let lib = Self.workDir.appendingPathComponent("TestLibrary")
+                try ITunesDB.makeLibrary(at: lib)
+                try Self.runTool(tool, ["put-files", drive.path, lib.appendingPathComponent("iPod_Control").path, "/iPod_Control"])
             }
-            try Self.selectDevice(drive: drive)
+            // a restore point from an earlier run would resume the old firmware
+            try? fm.removeItem(at: Self.profile.appendingPathComponent("cache/snapshots"))
+            try Self.writeProfile(drive: drive)
         }.value
+        lastRun = Date()
+    }
+
+    /// Open the prepared test device in the emulator's own window.
+    func openWindow() async throws {
+        try await quitEmulator()
         let config = NSWorkspace.OpenConfiguration()
         config.arguments = ["--cold"]
+        config.environment = ["IPOD_EMULATOR_DATA": Self.profile.path]
+        config.createsNewApplicationInstance = true
         try await NSWorkspace.shared.openApplication(at: Self.appURL, configuration: config)
-        lastRun = Date()
     }
 
     func quitEmulator() async throws {
@@ -128,54 +142,44 @@ final class EmulatorManager: ObservableObject {
         }
     }
 
-    /// Add (or update) a drive and an "iPodFirm Test" device in the emulator's settings.txt and make it current.
-    nonisolated static func selectDevice(drive: URL) throws {
-        let url = emuData.appendingPathComponent("settings.txt")
-        var lines = ((try? String(contentsOf: url, encoding: .utf8)) ?? "").components(separatedBy: "\n")
-        func value(_ key: String) -> String? {
-            lines.first { $0.hasPrefix(key + " =") }.map { String($0.dropFirst(key.count + 2)).trimmingCharacters(in: .whitespaces) }
-        }
-        func set(_ key: String, _ v: String) {
-            if let i = lines.firstIndex(where: { $0.hasPrefix(key + " =") }) { lines[i] = "\(key) = \(v)" } else { lines.append("\(key) = \(v)") }
-        }
-        func index(_ prefix: String, named name: String) -> Int {
-            var n = 0
-            while let existing = value("\(prefix).\(n).name") {
-                if existing == name { return n }
-                n += 1
-            }
-            return n
-        }
-        // Boot ROM: the one the current device uses, else any synthesised firmware resource.
-        let current = value("current")
-        var firmware: String?
-        var n = 0
-        while let name = value("device.\(n).name") {
-            if name == current, let fw = value("device.\(n).firmware") { firmware = fw }
-            n += 1
-        }
-        if firmware == nil {
-            var r = 0
-            while let name = value("res.\(r).name") {
-                if value("res.\(r).kind") == "firmware" { firmware = name; break }
-                r += 1
-            }
-        }
-        guard let firmware else {
-            throw FirmwareError("Open ipod-emulator once and finish its first-run setup, then try again.")
-        }
-        let d = index("disk", named: diskName)
-        set("disk.\(d).name", diskName)
-        set("disk.\(d).path", drive.path)
-        set("disk.\(d).built_from", "iPodFirm custom")
-        set("disk.\(d).installed", "Apple's software")
-        let v = index("device", named: deviceName)
-        set("device.\(v).name", deviceName)
-        set("device.\(v).firmware", firmware)
-        set("device.\(v).disk", diskName)
-        set("device.\(v).chassis", value("chassis") ?? "white")
-        set("current", deviceName)
-        set("disk", drive.path)
-        try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+    /// The whole profile: one synthesised 5.5G, one drive, one device, selected. Written in the form
+    /// the emulator itself saves. Keeps the emulator's measured speed from the previous run.
+    nonisolated static func writeProfile(drive: URL) throws {
+        let url = profile.appendingPathComponent("settings.txt")
+        let old = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        let clock = old.components(separatedBy: "\n").first { $0.hasPrefix("sustained_clock =") }
+        let text = """
+        # Written by iPodFirm for its "Run in Emulator" test device. Rewritten on every run.
+        chassis = white
+        nor_model = A444
+        nor_seed = \(romSeed)
+        disk = \(drive.path)
+        check_updates_on_start = false
+        developer = false
+        welcomed = true
+        work_on_copy = false
+        \(clock ?? "")
+        library_seeded = true
+
+        res.0.name = iPodFirm test iPod
+        res.0.kind = firmware
+        res.0.nor_model = A444
+        res.0.nor_seed = \(romSeed)
+
+        disk.0.name = \(diskName)
+        disk.0.path = \(drive.path)
+        disk.0.built_from = iPodFirm custom
+        disk.0.installed = Apple's software
+
+        current = \(deviceName)
+
+        device.0.name = \(deviceName)
+        device.0.firmware = iPodFirm test iPod
+        device.0.disk = \(drive.path)
+        device.0.chassis = white
+        device.0.work_on_copy = false
+
+        """
+        try text.write(to: url, atomically: true, encoding: .utf8)
     }
 }

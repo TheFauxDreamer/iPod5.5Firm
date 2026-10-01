@@ -404,17 +404,16 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func runInEmulator(_ emu: EmulatorManager) {
+    /// Build the emulator drive from the current edits and boot it in the in-app preview.
+    func runInEmulator(_ emu: EmulatorManager, _ session: EmulatorSession) {
         guard let editor else { return }
         let osos = editor.osos
-        Task {
-            do {
-                let original = try await ensureAppleIPSW()
-                busy = "Preparing firmware for the emulator…"
-                defer { busy = nil }
-                let fw = try await Task.detached { try IPSW.firmware(original: original, withOSOS: osos) }.value
-                try await emu.run(firmware: fw, originalIPSW: original)
-            } catch { fail("Couldn't start the emulator", error) }
+        session.start { [weak self] in
+            guard let self else { return }
+            let original = try await self.ensureAppleIPSW()
+            let fw = try await Task.detached { try IPSW.firmware(original: original, withOSOS: osos) }.value
+            try await emu.prepare(firmware: fw, originalIPSW: original,
+                                  testLibrary: UserDefaults.standard.object(forKey: "emulatorTestLibrary") as? Bool ?? true)
         }
     }
 }

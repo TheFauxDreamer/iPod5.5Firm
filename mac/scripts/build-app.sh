@@ -22,6 +22,7 @@ cp "$BIN/iPodFirm" "$BIN/ipodfw-helper" "$APP/Contents/MacOS/"
 mkdir -p "$APP/Contents/Library/LaunchDaemons"
 cp Resources/com.thefauxdreamer.ipodfirm.helper.plist "$APP/Contents/Library/LaunchDaemons/"
 cp Resources/install-emulator.sh "$APP/Contents/Resources/"
+cp -R Resources/emulator-patches "$APP/Contents/Resources/"
 
 if [ ! -f build/AppIcon.icns ]; then
     swift scripts/make-icon.swift build/AppIcon.iconset

@@ -222,3 +222,11 @@ struct HelperRow: View {
         }
     }
 }
+
+struct Step: View {
+    let n: Int
+    let text: String
+    var body: some View {
+        Label { Text(text).fixedSize(horizontal: false, vertical: true) } icon: { Image(systemName: "\(n).circle.fill") }
+    }
+}

@@ -1,81 +1,169 @@
 # iPod5.5Firm
 
-Customise **Apple's stock firmware** on an iPod Video 5G/5.5G from a Mac, like iPodWizard did. The customised OS replaces the stock one in place, and you can always restore.
+This project changes the stock Apple firmware of an iPod Video (5th generation and 5.5th generation). It operates on a Mac with Apple silicon.
 
-The research, risks and roadmap (themes → faster Play → album art in lists) are in **[FEASIBILITY.md](FEASIBILITY.md)**.
+The changed firmware replaces the Apple firmware on the iPod. This is the same procedure that iPodWizard used. You can restore the Apple firmware at any time.
 
-## The app: iPodFirm
+For the research, the risks and the plan, refer to [FEASIBILITY.md](FEASIBILITY.md).
 
-A native SwiftUI app in [mac/](mac/) covers everything. Open or download firmware, edit pictures (drag in PNGs) and text (with a live space budget), back up, flash and restore the iPod, and export an `.ipsw` for the emulator. Raw disk access goes through a bundled helper, using the standard macOS administrator prompt.
+## Contents of the project
+
+| Part | Location | Function |
+|---|---|---|
+| iPodFirm app | [mac/](mac/) | A macOS app. It does all the tasks in this project. |
+| `ipodfw` tool | [src/ipodfw/](src/ipodfw/) | A command-line tool in Python. It uses the same file formats as the app. |
+| Research notes | [re/](re/) | Notes for the emulator and for Ghidra. |
+
+## The iPodFirm app
+
+### Functions
+
+The app has these functions:
+
+- Open an Apple `.ipsw` file, a firmware file or a backup of the iPod.
+- Download the Apple firmware 1.3. The app examines the SHA-256 value of the download.
+- Show and replace the pictures in the firmware. Use PNG files that have the same size.
+- Show and change the text in the firmware. A gauge shows the bytes that are free in each language.
+- Make a backup of the firmware partition of the iPod.
+- Write the changed firmware to the iPod.
+- Restore a backup to the iPod.
+- Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
+
+### Build and install the app
+
+1. Open Terminal.
+2. Go to the project folder.
+3. Enter this command:
+
+   ```sh
+   mac/scripts/build-app.sh
+   ```
+
+The script increases the version number and the build number. Then it builds the app and installs it in `/Applications/iPodFirm.app`.
+
+To do the tests, enter these commands:
 
 ```sh
-mac/scripts/build-app.sh      # bumps version + build number, builds, installs /Applications/iPodFirm.app
-cd mac && swift test          # IPODFW_IPSW=… adds real-firmware tests; IPODFW_DISK_TEST=1 adds a flash test on a disk image
+cd mac
+swift test
 ```
 
-Backups go to `~/Library/Application Support/iPodFirm/Backups/`. One is taken automatically before every flash or restore, and the first is kept permanently as "Original (first backup).bin".
+Two environment variables add more tests:
 
-The Python `ipodfw` CLI below uses the same formats, and its exported folders can be imported in the app.
+- `IPODFW_IPSW=<path to iPod_25.1.3.ipsw>` adds tests with the Apple firmware.
+- `IPODFW_DISK_TEST=1` adds a test that writes firmware to a disk image.
 
-## CLI setup (macOS, Apple Silicon)
+### Permissions
 
-```sh
-uv sync                     # Python 3.12 + Pillow into .venv
-uv run pytest               # optional: IPODFW_IPSW=path/to/iPod_25.1.3.ipsw also tests Apple's real file
-```
+The app must read and write the disk of the iPod directly. Thus, the app needs these permissions:
 
-Get Apple's firmware 1.3 for the Video:
+1. Full Disk Access. Open System Settings > Privacy & Security > Full Disk Access. Then turn on iPodFirm.
+2. The Touch ID helper (optional). In the iPod pane, click "Set Up Touch ID". Then approve iPodFirm in System Settings > General > Login Items.
+
+If you do not set up the Touch ID helper, the app asks for your administrator password.
+
+## Protection of the iPod
+
+The app and the tool protect the iPod in these ways:
+
+- They make a backup of the firmware partition before each write or restore. They do not overwrite a backup.
+- They keep the first backup as "Original (first backup).bin".
+- They do not change the `aupd` image. This image updates the boot flash memory. A bad boot flash can make the iPod unserviceable.
+- They do not write the `hibe` image. The iPod writes this image when it goes into deep sleep.
+- They examine the checksums and the partition layout before they write.
+- They show the bytes that they will write. You must confirm before the write starts.
+- They write only the blocks that changed. Then they read each block again to make sure that it is correct.
+
+The app keeps backups in `~/Library/Application Support/iPodFirm/Backups/`.
+
+### Recovery
+
+If the iPod does not start after a write, do these steps:
+
+1. Push and hold Menu and Select until the iPod restarts.
+2. Push and hold Select and Play until the iPod shows disk mode.
+3. Connect the iPod to the Mac.
+4. In iPodFirm, restore a backup.
+
+You can also restore the iPod with Finder. This installs the Apple firmware again.
+
+## The ipodfw tool
+
+### Install the tool
+
+1. Install `uv`.
+2. In the project folder, enter `uv sync`.
+3. To do the tests, enter `uv run pytest`.
+
+To get the Apple firmware 1.3, use this URL:
+
 `http://appldnld.apple.com.edgesuite.net/content.info.apple.com/iPod/SBML/osx/bundles/061-2967.20080313.Cnvkg/iPod_25.1.3.ipsw`
 
-Firmware files and dumps are git-ignored. Don't commit them.
+CAUTION: Do not commit firmware files or backups to Git. The `.gitignore` file excludes them.
 
-## Workflow
+### Change the firmware with the tool
 
-```sh
-# 1. Back up the iPod's firmware partition (raw disk access needs sudo)
-sudo .venv/bin/ipodfw devices
-sudo .venv/bin/ipodfw backup -o backups/firmware-backup.bin
+CAUTION: The commands that read or write the iPod need administrator rights. Use `sudo` for these commands.
 
-# 2. Unpack, edit, repack
-uv run ipodfw unpack backups/firmware-backup.bin -o work
-#    edit work/pictures/*.png (same size) and work/strings/*.json
-uv run ipodfw repack backups/firmware-backup.bin work -o custom.bin
-uv run ipodfw verify custom.bin
+1. Make a backup of the firmware partition:
 
-# 3. (optional) try it in the emulator first
-uv run ipodfw pack-ipsw iPod_25.1.3.ipsw custom.bin -o custom.ipsw   # see re/emulator.md
+   ```sh
+   sudo .venv/bin/ipodfw backup -o backups/firmware-backup.bin
+   ```
 
-# 4. Flash: only changed blocks are written, then read back and verified
-sudo .venv/bin/ipodfw flash custom.bin --dry-run
-sudo .venv/bin/ipodfw flash custom.bin
+2. Export the pictures and the text:
 
-# Undo
-sudo .venv/bin/ipodfw restore backups/firmware-backup.bin
-```
+   ```sh
+   uv run ipodfw unpack backups/firmware-backup.bin -o work
+   ```
 
-If your iPod runs stock 1.3, the osos in your backup is identical to the one in the `.ipsw`. That means a single `work/` folder can be repacked onto either file.
+3. Change the PNG files in `work/pictures/`. Do not change the size of a picture.
+4. Change the text in the JSON files in `work/strings/`.
+5. Put the changes into a new firmware file:
 
-## Commands
+   ```sh
+   uv run ipodfw repack backups/firmware-backup.bin work -o custom.bin
+   uv run ipodfw verify custom.bin
+   ```
 
-| Command | What it does |
+6. Show the blocks that the tool will write. This step does not write to the iPod:
+
+   ```sh
+   sudo .venv/bin/ipodfw flash custom.bin --dry-run
+   ```
+
+7. Write the firmware to the iPod:
+
+   ```sh
+   sudo .venv/bin/ipodfw flash custom.bin
+   ```
+
+To restore the backup, enter `sudo .venv/bin/ipodfw restore backups/firmware-backup.bin`.
+
+### Commands
+
+| Command | Function |
 |---|---|
-| `extract IPSW` | Pull the firmware partition image out of an Apple `.ipsw` |
-| `info FILE [-r]` | Directory, image checksums, model; `-r` lists resource blocks |
-| `verify FILE` | Check checksums and that resources parse |
-| `unpack FILE -o DIR` | Export pictures (PNG) and strings (JSON per language block) |
-| `repack FILE DIR -o OUT` | Apply edits and fix the checksum |
-| `pack-ipsw IPSW FILE -o OUT` | Wrap a customised firmware back into an `.ipsw` |
-| `devices` / `backup` / `flash` / `restore` | Device side (sudo) |
+| `extract IPSW` | Copies the firmware partition image from an Apple `.ipsw` file. |
+| `info FILE [-r]` | Shows the images, the checksums and the model. `-r` also shows the resource blocks. |
+| `verify FILE` | Examines the checksums and the resources. |
+| `unpack FILE -o DIR` | Exports the pictures (PNG) and the text (JSON). |
+| `repack FILE DIR -o OUT` | Puts the changes into a new file and calculates the checksum. |
+| `pack-ipsw IPSW FILE -o OUT` | Puts a changed firmware into a copy of an `.ipsw` file. |
+| `make-library -o DIR` | Makes a music library for tests in the emulator. |
+| `devices`, `backup`, `flash`, `restore` | Operate on the iPod. These commands need `sudo`. |
 
-## Safety rules built into `flash`
+## Limits
 
-- It needs a backup, and refuses unless the backup and the new image have the same layout as the iPod's current partition.
-- **`aupd` (the boot-flash updater) is never modified.** Flashing is refused if `aupd` would differ, or if any write would overlap it.
-- Only changed blocks are written, then each one is read back and verified.
-- If the iPod won't boot afterwards: reset (Menu+Select), hold Select+Play for disk mode, then run `ipodfw restore`. Restoring in Finder also returns it to stock.
+- Text cannot use more bytes than the language uses in the Apple firmware. To make one text longer, make other text shorter.
+- The emulator does not have audio. Thus, the iPod in the emulator does not play music.
 
-> **Status:** the firmware-file tooling is tested against Apple's real 1.3 firmware. The device commands have not yet been run on a physical iPod, so start with `--dry-run`.
+## Status
+
+- The firmware tools have tests with the Apple firmware 1.3.
+- A backup of a real iPod was made and examined.
+- The write to the iPod has tests on a disk image. The write was not done on a real iPod.
 
 ## Credits
 
-Formats ported from [iPodWizard](https://sourceforge.net/projects/ipodwizard/) and Rockbox [`ipodpatcher`](https://github.com/Rockbox/rockbox/tree/master/utils/ipodpatcher), both GPLv2. This project is therefore GPL-2.0-or-later.
+The file formats come from [iPodWizard](https://sourceforge.net/projects/ipodwizard/) and from the Rockbox tool [`ipodpatcher`](https://github.com/Rockbox/rockbox/tree/master/utils/ipodpatcher). Both use the GPLv2 license. Thus, this project uses the GPL-2.0-or-later license.
