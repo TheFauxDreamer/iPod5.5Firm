@@ -141,3 +141,42 @@ The album-art patch loaded the thumbnail file one time. New albums showed only a
 - Test on a real iPod. The emulator makes its own boot ROM, and it does not test `aupd`.
 - 23 Views have some fields that do not agree with 1.3. The import report lists them.
 - Timed appearance: find the function that gives the current time. Then write a patch that changes between the light and the dark resources in RAM.
+
+## The Dark Mode item in Settings
+
+### Why the iPod must restart
+
+- The theme can switch in RAM: osos runs at the same addresses as in the file, and a table of "old XOR new" switches it in both directions. Pictures and text colours (`Type`) change at once.
+- The screens do not change. RetailOS makes its main screens one time at the start. The views copy the positions, the heights and the highlight colours of their elements when the firmware makes them (`FUN_0021a4f4`, children from `FUN_0017def4`).
+- Method 0xd0 of a view applies a layout again, but only the text styles (`FUN_002445d4` → `FUN_00243f60`).
+- A language change does not make the screens again. The event `FUN_001d32e0(0x60000005)` after a language change does not do it either.
+- Thus the patch applies the table at the start, before the first View is read, and the item restarts the iPod.
+
+### Functions (firmware 1.3)
+
+| Address | Function |
+|---|---|
+| 0x21f254 | General resource lookup (provider, type, id). All resource and string lookups pass here, also virtual calls. The patch replaces its first instruction (`push {r3-r7, lr}`) with a branch. |
+| 0x21f3dc, 0x21f408, 0x21f418 | Lookups of a type (any, 'BMap', 'Str '). They continue in 0x21f254. |
+| 0x190b00, 0x1919d8 | Get and set a property of the settings object (vtable 0x66c94c, 0x66c950). Operations are four-character codes: 'prID' (the ID of the value text), 'Str ', 'Ui32'. |
+| 0x08f3f8 | Open a file for reading and writing (access 3). It makes the file if it does not exist. |
+| 0x08f6f4 | Write to a file. 0x08f184 (close) writes the buffer to the disk. |
+| 0x1ee8b8 | Save the settings and the database (as before a sleep). The application object is at 0x1081da18. |
+| 0x094e08, 0x001630 | Prepare a restart; restart (writes 4 to DEV_RS, 0x60006004). |
+
+### Settings menu
+
+- Menu 24598: a u32 count and items of 40 bytes. +0x18: the label ID; +0x1c: the key (for example 0x600060b7, Sound Check).
+- The build adds an item after Clicker: a copy of the Sound Check item with the key 0x600060e0 and the label ID 0x7e00. The patch returns "Dark Mode" for this label ID, and "On" (0x602e) or "Off" (0x602f) for the key.
+
+### Results in the emulator
+
+- Light at the start; select the item: the iPod restarts dark; select it again: light. The iPod did not ask for the language after the restart (the settings were saved).
+- The same result without the file `iPodFirmDarkMode` on the iPod: the open function makes it.
+- The Swift and the Python builds give the same osos.
+
+### Open items
+
+- Test on a real iPod.
+- The Settings list keeps a blue highlight in dark mode. The built-in dark theme has the same problem, so it is a limit of the theme import (the layouts of the Settings list).
+- The first screen after a start shows "Press Center to dismiss" in the title bar. This comes from the theme: the original theme on 1.2.1 has it too.

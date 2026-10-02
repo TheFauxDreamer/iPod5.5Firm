@@ -33,7 +33,7 @@ The app has these functions:
 - Put a music library on the emulated iPod: a test library, or songs from a folder. A library from a folder includes the artwork database (`ArtworkDB`), so Now Playing shows the album artwork.
 - Switch code patches on or off (Patches pane). The patches are in [patches/](patches/).
 - Write the album thumbnail file to the iPod for the `album-art` patch.
-- Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light or Dark (Patches pane).
+- Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane).
 
 ### Build and install the app
 
@@ -193,7 +193,7 @@ sudo .venv/bin/ipodfw restore backups/firmware-backup.bin --rescue --reference b
 | `pack-ipsw IPSW FILE -o OUT` | Puts a changed firmware into a copy of an `.ipsw` file. |
 | `make-library -o DIR` | Makes a music library for tests in the emulator. |
 | `import-theme THEME BASE TARGET -o OUT` | Makes an iPodFirm theme file from an iPodWizard theme. BASE is the Apple firmware of the theme. TARGET is the Apple firmware 1.3. |
-| `apply-theme FILE THEME -o OUT` | Applies an iPodFirm theme file to a firmware image. It moves `rsrc` if necessary. |
+| `apply-theme FILE THEME -o OUT [--switch]` | Applies an iPodFirm theme file to a firmware image. It moves `rsrc` if necessary. `--switch` makes the light firmware with a "Dark Mode" item in Settings. |
 | `devices`, `backup`, `flash`, `restore` | Operate on the iPod. These commands need `sudo`. |
 | `restore --rescue [--reference FILE]` | Restores a backup to an iPod that has damaged firmware. This command needs `sudo`. |
 
@@ -211,7 +211,7 @@ CAUTION: The theme files contain Apple code. Do not commit them to Git.
 4. Select the theme file.
 5. Select `iPod_25.1.2.1.ipsw`.
 6. Read the import report.
-7. In the Patches pane, under "iPod Appearance", click Dark.
+7. In the Patches pane, under "iPod Appearance", click Dark or Switch on iPod.
 
 iPodFirm applies the theme when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.
 
@@ -222,7 +222,19 @@ iPodFirm applies the theme when you save, flash, export an .ipsw or run the emul
 - The import does not apply changes to the program code. The tested theme removes a signature check; iPodFirm does not copy that change.
 - The theme has a full-screen background picture. The picture makes osos 38 KB larger. Thus iPodFirm moves the `rsrc` image (fonts and video firmware) to free space in the firmware partition. It does not move or change `aupd` or `hibe`.
 
-The "Timed" appearance (dark at set hours) is not available yet. It needs a code patch that reads the clock of the iPod. For the research, refer to [re/dark-theme.md](re/dark-theme.md).
+### Switch on iPod
+
+With this appearance, the firmware starts light, and Settings on the iPod has a "Dark Mode" item (On/Off).
+
+1. On the iPod, open Settings.
+2. Select "Dark Mode".
+3. Wait while the iPod restarts. This takes some seconds.
+
+The iPod saves its settings before it restarts. It keeps the choice in the file `iPod_Control/iTunes/iPodFirmDarkMode` (one byte: `0` light, `1` dark). If the file does not exist, the iPod starts light.
+
+The iPod must restart because RetailOS makes its screens one time, at the start. For the research, refer to [re/dark-theme.md](re/dark-theme.md).
+
+NOTE: In the emulator, the restart operates only with the iPodFirm emulator patch of this version. In the Emulator pane, click "Update Emulator" one time.
 
 ## Patches
 
@@ -249,6 +261,7 @@ The patch tool compiles C code with the Xcode compiler and links it at a fixed a
 - The rescue restore has tests on a disk image with a damaged firmware partition. It was not done on a real iPod.
 - The `album-art` patch has tests in the emulator. It was not done on a real iPod.
 - The dark theme, with the `album-art` patch, operates on a real iPod 5.5G. This includes the move of `rsrc`.
+- The "Dark Mode" item in Settings has tests in the emulator (light, dark and light again, also without the setting file). It was not done on a real iPod.
 
 ## Credits
 
