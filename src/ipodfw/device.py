@@ -129,21 +129,55 @@ def unmount(ipod: IPodDisk) -> None:
 # -- safety checks + flashing ----------------------------------------------
 
 def check_compatible(current: FirmwarePartition, new: FirmwarePartition, label: str) -> None:
-    """new may only differ from current in the osos/rsrc length and checksum."""
+    """new may only differ from current in the osos/rsrc length and checksum, and in the rsrc position.
+
+    rsrc can move (to make room for a larger osos), but it must not overlap osos, aupd or hibe.
+    """
     if (current.image_base, current.dir_offset) != (new.image_base, new.dir_offset):
         raise FirmwareError(f"{label}: partition layout differs from the iPod's (image base / directory)")
     if len(current.entries) != len(new.entries):
         raise FirmwareError(f"{label}: different number of firmware images than the iPod")
     for c, n in zip(current.entries, new.entries):
-        if (c.type, c.dev_offset) != (n.type, n.dev_offset):
+        if c.type != n.type or (c.dev_offset != n.dev_offset and c.name != "rsrc"):
             raise FirmwareError(f"{label}: image {c.name} is at a different position than on the iPod")
         if c.name not in ("osos", "rsrc", "hibe") and c.pack() != n.pack():
             raise FirmwareError(f"{label}: directory entry for {c.name} differs from the iPod's")
+    if new.has("rsrc"):
+        r0, r1 = new.image_range("rsrc")
+        if r1 > len(new.data):
+            raise FirmwareError(f"{label}: rsrc runs past the end of the image")
+        for fw, name in ((new, "osos"), (new, "aupd"), (current, "hibe")):
+            if fw.has(name):
+                a, b = fw.image_range(name)
+                if r0 < b and r1 > a:
+                    raise FirmwareError(f"{label}: rsrc overlaps {name}; refusing")
     for name in ("osos", "rsrc"):
         if new.has(name) and not new.checksum_ok(name):
             raise FirmwareError(f"{label}: {name} checksum does not verify")
     if current.has("aupd") and current.image("aupd") != new.image("aupd"):
         raise FirmwareError(f"{label}: aupd (NOR flash updater) differs from the iPod's; refusing")
+
+
+def fit_layout(new_bytes: bytes, current: FirmwarePartition) -> bytes:
+    """Put the osos and rsrc of a firmware file into the iPod's own layout.
+
+    A firmware file that has a larger osos has rsrc and aupd moved forward (see make_room). On
+    the iPod, aupd must stay where it is. For such a file, the result is the iPod's partition
+    with the new osos and rsrc. A partition from an iPod (with hibe), or an image with aupd at
+    the iPod's position, does not change: a restore writes the layout of the backup.
+    """
+    new = FirmwarePartition(new_bytes)
+    if new.has("hibe") or not current.has("aupd") or not new.has("aupd"):
+        return new_bytes
+    if new.entry("aupd").dev_offset == current.entry("aupd").dev_offset:
+        return new_bytes
+    out = FirmwarePartition(current.data)
+    osos = new.image("osos")
+    out.make_room(len(osos))
+    out.replace_image("osos", osos)
+    if new.has("rsrc") and out.has("rsrc"):
+        out.replace_image("rsrc", new.image("rsrc"))
+    return out.to_bytes()
 
 
 def preserve_hibernation(new: bytes, current: FirmwarePartition) -> bytes:
@@ -186,6 +220,7 @@ def flash(ipod: IPodDisk, new_bytes: bytes, backup_bytes: bytes, dry_run: bool) 
         raise FirmwareError(f"image ({len(new_bytes)} bytes) is larger than the firmware partition ({part_size})")
 
     current = FirmwarePartition(current_bytes)
+    new_bytes = fit_layout(new_bytes, current)
     new_bytes = preserve_hibernation(new_bytes, current)
     new = FirmwarePartition(new_bytes)
     backup = FirmwarePartition(backup_bytes)

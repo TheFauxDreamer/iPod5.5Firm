@@ -136,7 +136,9 @@ public enum FirmwareFlasher {
         throw FirmwareError("Unrecognised partition table.")
     }
 
-    /// new may differ from current only in the osos/rsrc length and checksum; aupd must be identical.
+    /// new may differ from current only in the osos/rsrc length and checksum, and in the rsrc
+    /// position; aupd must be identical. rsrc can move (to make room for a larger osos), but it
+    /// must not overlap osos, aupd or hibe.
     public static func checkCompatible(current: FirmwarePartition, new: FirmwarePartition, label: String) throws {
         guard current.imageBase == new.imageBase, current.dirOffset == new.dirOffset else {
             throw FirmwareError("\(label): partition layout differs from the iPod's.")
@@ -145,11 +147,18 @@ public enum FirmwareFlasher {
             throw FirmwareError("\(label): different number of firmware images than the iPod.")
         }
         for (c, n) in zip(current.entries, new.entries) {
-            guard c.type == n.type, c.devOffset == n.devOffset else {
+            guard c.type == n.type, c.devOffset == n.devOffset || c.name == "rsrc" else {
                 throw FirmwareError("\(label): image \(c.name) is at a different position than on the iPod.")
             }
             if !["osos", "rsrc", "hibe"].contains(c.name), c.packed != n.packed {
                 throw FirmwareError("\(label): directory entry for \(c.name) differs from the iPod's.")
+            }
+        }
+        if new.has("rsrc") {
+            let r = try new.imageRange("rsrc")
+            guard r.upperBound <= new.data.count else { throw FirmwareError("\(label): rsrc runs past the end of the image.") }
+            for (fw, name) in [(new, "osos"), (new, "aupd"), (current, "hibe")] where fw.has(name) {
+                if try fw.imageRange(name).overlaps(r) { throw FirmwareError("\(label): rsrc overlaps \(name); refusing.") }
             }
         }
         for name in ["osos", "rsrc"] where new.has(name) && !new.checksumOK(name) {
@@ -158,6 +167,24 @@ public enum FirmwareFlasher {
         if current.has("aupd"), try current.image("aupd") != new.image("aupd") {
             throw FirmwareError("\(label): aupd (boot-flash updater) differs from the iPod's; refusing.")
         }
+    }
+
+    /// Put the osos and rsrc of a firmware file into the iPod's own layout.
+    ///
+    /// A firmware file that has a larger osos has rsrc and aupd moved forward (see makeRoom). On the
+    /// iPod, aupd must stay where it is. For such a file, the result is the iPod's partition with the
+    /// new osos and rsrc. A partition from an iPod (with hibe), or an image with aupd at the iPod's
+    /// position, does not change: a restore writes the layout of the backup.
+    public static func fitLayout(new newBytes: [UInt8], current: FirmwarePartition) throws -> [UInt8] {
+        let new = try FirmwarePartition(data: newBytes)
+        guard !new.has("hibe"), current.has("aupd"), new.has("aupd"),
+              try new.entry("aupd").devOffset != current.entry("aupd").devOffset else { return newBytes }
+        let out = try FirmwarePartition(data: current.data)
+        let osos = try new.image("osos")
+        try out.makeRoom(ososLength: osos.count)
+        try out.replaceImage("osos", with: osos)
+        if new.has("rsrc"), out.has("rsrc") { try out.replaceImage("rsrc", with: new.image("rsrc")) }
+        return out.data
     }
 
     /// The hibernation image (hibe) is RAM state the iPod writes to itself while asleep. It belongs to

@@ -32,6 +32,7 @@ The app has these functions:
 - Put a music library on the emulated iPod: a test library, or songs from a folder.
 - Switch code patches on or off (Patches pane). The patches are in [patches/](patches/).
 - Write the album thumbnail file to the iPod for the `album-art` patch.
+- Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light or Dark (Patches pane).
 
 ### Build and install the app
 
@@ -179,8 +180,36 @@ sudo .venv/bin/ipodfw restore backups/firmware-backup.bin --rescue --reference b
 | `repack FILE DIR -o OUT` | Puts the changes into a new file and calculates the checksum. |
 | `pack-ipsw IPSW FILE -o OUT` | Puts a changed firmware into a copy of an `.ipsw` file. |
 | `make-library -o DIR` | Makes a music library for tests in the emulator. |
+| `import-theme THEME BASE TARGET -o OUT` | Makes an iPodFirm theme file from an iPodWizard theme. BASE is the Apple firmware of the theme. TARGET is the Apple firmware 1.3. |
+| `apply-theme FILE THEME -o OUT` | Applies an iPodFirm theme file to a firmware image. It moves `rsrc` if necessary. |
 | `devices`, `backup`, `flash`, `restore` | Operate on the iPod. These commands need `sudo`. |
 | `restore --rescue [--reference FILE]` | Restores a backup to an iPod that has damaged firmware. This command needs `sudo`. |
+
+## Dark theme
+
+iPodFirm can import a dark theme from iPodWizard into firmware 1.3. The tested theme is "Dark Gray (04_12_20)" for the 5.5G (by Matthew98 and Milli5410). It is in the [iPod Wizard Themes](https://archive.org/details/b5ad5489368ba5f0fe19935e983faf2b) collection on the Internet Archive.
+
+CAUTION: The theme files contain Apple code. Do not commit them to Git.
+
+### Import the theme
+
+1. Download the theme file from `3. Themes/5.5 gen/1. Tested _ Working/1. Dark Mode (Other Colors Inside)/`.
+2. Download the Apple firmware 1.2.1 from `1. iTunes Restore Firmware (recommend first step)/5.5 gen/iPod_25.1.2.1.ipsw`.
+3. In iPodFirm, select File > Import iPodWizard Theme.
+4. Select the theme file.
+5. Select `iPod_25.1.2.1.ipsw`.
+6. Read the import report.
+7. In the Patches pane, under "iPod Appearance", click Dark.
+
+iPodFirm applies the theme when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.
+
+### How the import operates
+
+- The import compares the theme with Apple firmware 1.2.1. Then it applies the changed pictures, colours and layouts to firmware 1.3.
+- The import does not apply changes to the program code. The tested theme removes a signature check; iPodFirm does not copy that change.
+- The theme has a full-screen background picture. The picture makes osos 38 KB larger. Thus iPodFirm moves the `rsrc` image (fonts and video firmware) to free space in the firmware partition. It does not move or change `aupd` or `hibe`.
+
+The "Timed" appearance (dark at set hours) is not available yet. It needs a code patch that reads the clock of the iPod. For the research, refer to [re/dark-theme.md](re/dark-theme.md).
 
 ## Patches
 
@@ -204,7 +233,10 @@ The patch tool compiles C code with the Xcode compiler and links it at a fixed a
 - The write to the iPod has tests on a disk image. The write was not done on a real iPod.
 - The rescue restore has tests on a disk image with a damaged firmware partition. It was not done on a real iPod.
 - The `album-art` patch has tests in the emulator. It was not done on a real iPod.
+- The dark theme has tests in the emulator, also with the `album-art` patch. The move of `rsrc` has tests on a disk image. Neither was done on a real iPod.
 
 ## Credits
 
 The file formats come from [iPodWizard](https://sourceforge.net/projects/ipodwizard/) and from the Rockbox tool [`ipodpatcher`](https://github.com/Rockbox/rockbox/tree/master/utils/ipodpatcher). Both use the GPLv2 license. Thus, this project uses the GPL-2.0-or-later license.
+
+The dark theme comes from the iPodWizard community: "5.5G Ultimate Background Hack" by Matthew98, dark mode by Milli5410.

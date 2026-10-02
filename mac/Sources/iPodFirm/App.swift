@@ -33,6 +33,8 @@ struct IPodFirmApp: App {
                 Divider()
                 Button("Export Pictures & Text…") { model.exportFolder() }.disabled(model.editor == nil)
                 Button("Import Pictures & Text…") { model.importFolder() }.disabled(model.editor == nil)
+                Divider()
+                Button("Import iPodWizard Theme…") { model.importTheme() }
             }
         }
     }
@@ -84,6 +86,7 @@ struct ContentView: View {
         .overlay { if let busy = model.busy { BusyOverlay(text: busy) } }
         .alert(item: $model.alert) { a in Alert(title: Text(a.title), message: Text(a.message)) }
         .sheet(item: $model.flashPlan) { plan in FlashConfirmSheet(plan: plan) }
+        .sheet(item: $model.themeReport) { t in ThemeReportSheet(theme: t) }
         .sheet(isPresented: $model.showFullDiskAccessHelp) { FullDiskAccessSheet() }
         .sheet(isPresented: $model.showFinderRestoreHelp) { FinderRestoreSheet() }
         .task { await model.refreshIPods() }

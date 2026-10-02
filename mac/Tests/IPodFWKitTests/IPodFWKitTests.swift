@@ -180,6 +180,27 @@ final class DiskImageFlashTests: XCTestCase {
         XCTAssertEqual(Backups.list(in: backups).count, 3)   // the restore backed up the edited state too
         XCTAssertEqual(try Data(contentsOf: backups.appendingPathComponent(Backups.originalName)), original)  // never overwritten
 
+        // 5a. a larger osos (as with a dark theme), in the layout of a firmware file: rsrc and aupd moved forward
+        let file = try FirmwarePartition(data: stock)
+        let larger = try file.image("osos") + [UInt8](repeating: 1, count: 40_000)
+        try file.makeRoom(ososLength: larger.count)
+        try file.replaceImage("osos", with: larger)
+        XCTAssertNotEqual(try file.entry("aupd").devOffset, try FirmwarePartition(data: stock).entry("aupd").devOffset)
+        let largerURL = tmp.appendingPathComponent("larger.bin")
+        try Data(file.data).write(to: largerURL)
+        let flashed = try Operations.flash(ipod, image: largerURL, backupDir: backups, reason: "flash", dryRun: false, owner: nil)
+        XCTAssertTrue(flashed.ok)
+        let onDisk = try FirmwarePartition(data: raw.read(s, size))
+        XCTAssertEqual(try onDisk.image("osos"), larger)
+        XCTAssertEqual(try onDisk.entry("aupd").devOffset, try FirmwarePartition(data: stock).entry("aupd").devOffset)
+        XCTAssertEqual(try onDisk.image("aupd"), try FirmwarePartition(data: stock).image("aupd"))
+        XCTAssertEqual(try onDisk.image("rsrc"), try FirmwarePartition(data: stock).image("rsrc"))
+        XCTAssertGreaterThan(try onDisk.entry("rsrc").devOffset, try onDisk.entry("aupd").devOffset)
+        // ... and the restore of the original backup gives the original partition again, also the moved rsrc area
+        _ = try Operations.flash(ipod, image: backups.appendingPathComponent(Backups.originalName), backupDir: backups,
+                                 reason: "restore", dryRun: false, owner: nil)
+        XCTAssertEqual(try raw.read(s, size), Array(original))
+
         // 6. an interrupted write: the STOP banner and the directory are gone
         let w = try RawDisk(path: "/dev/r\(disk)", blockSize: 512, writable: true)
         try w.writeAligned(s, [UInt8](repeating: 0, count: 4096)[...])
@@ -330,5 +351,130 @@ final class MP4TagsTests: XCTestCase {
             XCTAssertEqual(t.lengthMS, j["length_ms"] as? Int)
             XCTAssertEqual(t.cover != nil, j["cover"] as? Bool)
         }
+    }
+}
+
+/// makeRoom, the flash rules for a moved rsrc, and the theme import. Needs IPODFW_IPSW (1.3).
+final class ThemeTests: XCTestCase {
+    var stock: [UInt8] = []
+
+    override func setUpWithError() throws {
+        guard let path = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        stock = try IPSW.extractFirmware(URL(fileURLWithPath: path)).data
+    }
+
+    /// Apple's file with a hibe image after aupd and 32 MB of free space (as on the iPod).
+    func ipodLayout() -> [UInt8] {
+        var d = stock
+        let dir = 0x4200 + 3 * 40, hibeOff = 0xd43800, hibeLen = 0x4000
+        d += [UInt8](repeating: 0, count: 2048 + hibeOff + hibeLen + 0x2000000 - d.count)
+        d.replaceSubrange(dir..<dir + 8, with: Array("!ATAebih".utf8))
+        put32(&d, dir + 12, UInt32(hibeOff)); put32(&d, dir + 16, UInt32(hibeLen))
+        d.replaceSubrange(2048 + hibeOff..<2048 + hibeOff + hibeLen, with: [UInt8](repeating: 0x55, count: hibeLen))
+        return d
+    }
+
+    func larger(_ fw: FirmwarePartition) throws -> [UInt8] {
+        let osos = try fw.image("osos") + [UInt8](repeating: 1, count: 40_000)
+        try fw.makeRoom(ososLength: osos.count)
+        try fw.replaceImage("osos", with: osos)
+        return osos
+    }
+
+    func testMakeRoomInAFileMovesRsrcAndAupd() throws {
+        let fw = try FirmwarePartition(data: stock)
+        let rsrc = try fw.image("rsrc"), aupd = try fw.image("aupd")
+        let osos = try larger(fw)
+        let again = try FirmwarePartition(data: fw.data)
+        XCTAssertEqual(try again.image("osos"), osos)
+        XCTAssertTrue(again.checksumOK("osos") && again.checksumOK("rsrc"))
+        XCTAssertEqual(try again.image("rsrc"), rsrc)
+        XCTAssertEqual(try again.image("aupd"), aupd)
+        XCTAssertLessThan(again.data.count, 16 << 20)           // the emulator limit
+    }
+
+    func testMakeRoomOnAnIPodMovesOnlyRsrc() throws {
+        let data = ipodLayout()
+        let current = try FirmwarePartition(data: data)
+        let fw = try FirmwarePartition(data: data)
+        _ = try larger(fw)
+        XCTAssertEqual(fw.data.count, data.count)
+        XCTAssertEqual(try fw.entry("aupd").devOffset, try current.entry("aupd").devOffset)
+        XCTAssertGreaterThan(try fw.entry("rsrc").devOffset, try current.entry("hibe").devOffset)
+        XCTAssertEqual(try fw.image("rsrc"), try current.image("rsrc"))
+        try FirmwareFlasher.checkCompatible(current: current, new: FirmwarePartition(data: fw.data), label: "t")
+        let protected = try current.imageRange("aupd")
+        XCTAssertNoThrow(try FirmwareFlasher.planWrites(current: data, new: fw.data, blockSize: 2048, protected: protected))
+    }
+
+    func testCheckCompatibleRefusesRsrcOverHibe() throws {
+        let current = try FirmwarePartition(data: ipodLayout())
+        let new = try FirmwarePartition(data: current.data)
+        var e = try new.entry("rsrc")
+        e.devOffset = try current.entry("hibe").devOffset
+        new.writeEntry(e)
+        XCTAssertThrowsError(try FirmwareFlasher.checkCompatible(current: current, new: FirmwarePartition(data: new.data), label: "t"))
+    }
+
+    func testFitLayoutPutsAFileIntoTheIPodLayout() throws {
+        let current = try FirmwarePartition(data: ipodLayout())
+        let file = try FirmwarePartition(data: stock)
+        let osos = try larger(file)
+        let fitted = try FirmwarePartition(data: FirmwareFlasher.fitLayout(new: file.data, current: current))
+        XCTAssertEqual(try fitted.image("osos"), osos)
+        XCTAssertEqual(try fitted.entry("aupd").devOffset, try current.entry("aupd").devOffset)
+        XCTAssertEqual(try fitted.entry("hibe").devOffset, try current.entry("hibe").devOffset)
+        try FirmwareFlasher.checkCompatible(current: current, new: fitted, label: "t")
+        XCTAssertEqual(try FirmwareFlasher.fitLayout(new: current.data, current: current), current.data)   // a restore
+    }
+
+    func testMergeWords() {
+        func w(_ v: [UInt32]) -> [UInt8] { ThemeImport.bytes(v) }
+        let (out, lost) = ThemeImport.mergeWords(base: w([1, 2, 3, 4]), theme: w([1, 9, 3, 8]), target: w([1, 2, 7, 3, 5]))
+        XCTAssertEqual(ThemeImport.words(out), [1, 9, 7, 3, 5])
+        XCTAssertEqual(lost, 1)
+    }
+
+    /// The Swift import must give the same theme as `ipodfw import-theme` (IPODFW_THEME_EXPECT).
+    func testImportAgreesWithPython() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let themePath = env["IPODFW_THEME"], let basePath = env["IPODFW_THEME_BASE"], let expect = env["IPODFW_THEME_EXPECT"] else {
+            throw XCTSkip("set IPODFW_THEME, IPODFW_THEME_BASE and IPODFW_THEME_EXPECT")
+        }
+        let python = try ImportedTheme.load(URL(fileURLWithPath: expect))
+        let themeBytes = [UInt8](try Data(contentsOf: URL(fileURLWithPath: themePath)))
+        let base = try IPSW.extractFirmware(URL(fileURLWithPath: basePath)).data
+        let theme = try ThemeImport.make(theme: FirmwarePartition(data: themeBytes), base: FirmwarePartition(data: base),
+                                         target: FirmwarePartition(data: stock), name: python.name,
+                                         sourceSHA256: ThemeImport.sha256(themeBytes))
+        XCTAssertEqual(theme.skipped, python.skipped)
+        XCTAssertEqual(theme.imported, python.imported)
+        XCTAssertEqual(theme.changes.count, python.changes.count)
+        XCTAssertEqual(theme, python)
+        var osos = try FirmwarePartition(data: stock).image("osos")
+        let r = try theme.apply(to: &osos, originalSHA256: theme.osos_sha256)
+        XCTAssertEqual(r.conflicts, 0)
+    }
+
+    /// Writes the dark theme plus the album-art patch, built as "Run in Emulator" builds it, to
+    /// IPODFW_THEMED_OUT (for a check in the emulator).
+    func testWriteThemedFirmware() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let out = env["IPODFW_THEMED_OUT"], let themeFile = env["IPODFW_THEME_EXPECT"], let ipsw = env["IPODFW_IPSW"] else {
+            throw XCTSkip("set IPODFW_THEMED_OUT, IPODFW_THEME_EXPECT and IPODFW_IPSW")
+        }
+        let theme = try ImportedTheme.load(URL(fileURLWithPath: themeFile))
+        let fw = try FirmwarePartition(data: stock)
+        var osos = try fw.image("osos")
+        let original = ThemeImport.sha256(osos)
+        XCTAssertEqual(try theme.apply(to: &osos, originalSHA256: original).conflicts, 0)
+        let patchesDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../patches").standardized
+        let patches = Patcher.list(in: patchesDir).filter { $0.spec.name == "album-art" }
+        XCTAssertEqual(patches.count, 1)
+        osos = try Patcher.apply(patches, to: osos, originalSHA256: original)
+        let firmware = try IPSW.firmware(original: URL(fileURLWithPath: ipsw), withOSOS: osos)
+        let check = try FirmwarePartition(data: firmware)
+        XCTAssertTrue(check.checksumOK("osos") && check.checksumOK("rsrc"))
+        try Data(firmware).write(to: URL(fileURLWithPath: out))
     }
 }

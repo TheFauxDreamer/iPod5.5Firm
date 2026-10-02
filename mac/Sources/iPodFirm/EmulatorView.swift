@@ -49,6 +49,10 @@ struct EmulatorView: View {
                         Label("Patches included: \(model.activePatches.map(\.spec.name).joined(separator: ", "))", systemImage: "puzzlepiece.extension")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    if model.appearance == .dark, let t = model.selectedTheme {
+                        Label("Dark theme included: \(t.name)", systemImage: "moon.fill")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Text("Builds a drive from your current edits and boots it from cold, right here. It's a separate test iPod — your own emulator devices are left alone. Re-run after every change.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Button("Open Test iPod in the Emulator Window") {

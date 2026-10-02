@@ -150,6 +150,64 @@ public final class FirmwarePartition {
         return Int(e.entryOffset != 0 ? e.entryOffset : e.length)
     }
 
+    /// Images start at a multiple of 2048 bytes, as in Apple's files.
+    static let imageAlign = 0x800
+
+    /// Move rsrc if an osos of `ososLength` bytes does not fit before it.
+    ///
+    /// An iPod partition has free space after its last image: rsrc goes there, and aupd and hibe
+    /// stay where they are. A firmware file has no free space: rsrc and the images after it move
+    /// forward together and the file becomes longer. The content of the images does not change.
+    /// The OS finds each image through the directory.
+    public func makeRoom(ososLength: Int) throws {
+        let align = Self.imageAlign
+        let osos = try entry("osos")
+        let need = Int(osos.devOffset) + ososLength
+        let later = entries.filter { $0.devOffset > osos.devOffset }.sorted { $0.devOffset < $1.devOffset }
+        guard let first = later.first, Int(first.devOffset) < need else { return }
+        guard first.name == "rsrc" else { throw FirmwareError("The image after osos is \(first.name); only rsrc can move.") }
+        var rsrc = first
+        let rsrcData = try image("rsrc")
+        let lastEnd = (entries.map { Int($0.devOffset) + Int($0.length) }.max()! + align - 1) / align * align
+        if imageBase + lastEnd + Int(rsrc.length) <= data.count {
+            // an iPod partition: put rsrc after the last image
+            let at = imageBase + lastEnd
+            guard data[at..<at + Int(rsrc.length)].allSatisfy({ $0 == 0 }) else {
+                throw FirmwareError("The space after the last image is not empty; rsrc cannot move there.")
+            }
+            data.replaceSubrange(at..<at + Int(rsrc.length), with: rsrcData)
+            rsrc.devOffset = UInt32(lastEnd)
+            writeEntry(rsrc)
+            return
+        }
+        guard !has("hibe") else { throw FirmwareError("There is no space for rsrc after the last image, and hibe cannot move.") }
+        guard data[(imageBase + lastEnd)...].allSatisfy({ $0 == 0 }) else {
+            throw FirmwareError("The file has data after its last image; the images cannot move.")
+        }
+        // a firmware file: move rsrc and the images after it forward
+        let delta = (need - Int(rsrc.devOffset) + align - 1) / align * align
+        let moving = try later.map { ($0, try image($0.name)) }
+        let size = imageBase + lastEnd + delta
+        if data.count < size { data += [UInt8](repeating: 0, count: size - data.count) }
+        for (e, _) in moving {
+            let start = imageBase + Int(e.devOffset)
+            data.replaceSubrange(start..<start + Int(e.length), with: [UInt8](repeating: 0, count: Int(e.length)))
+        }
+        for (e, img) in moving {
+            var e = e
+            e.devOffset += UInt32(delta)
+            let start = imageBase + Int(e.devOffset)
+            data.replaceSubrange(start..<start + img.count, with: img)
+            writeEntry(e)
+        }
+    }
+
+    func writeEntry(_ e: ImageEntry) {
+        entries[e.index] = e
+        let at = dirOffset + e.index * 40
+        data.replaceSubrange(at..<at + 40, with: e.packed)
+    }
+
     /// Replace an image in place, updating len and checksum. aupd is always refused.
     public func replaceImage(_ name: String, with new: [UInt8]) throws {
         guard name != "aupd" else { throw FirmwareError("Refusing to modify aupd: it reflashes the NOR boot flash.") }
@@ -168,8 +226,6 @@ public final class FirmwarePartition {
         }
         e.length = UInt32(new.count)
         e.chksum = byteSum(new)
-        entries[e.index] = e
-        let at = dirOffset + e.index * 40
-        data.replaceSubrange(at..<at + 40, with: e.packed)
+        writeEntry(e)
     }
 }

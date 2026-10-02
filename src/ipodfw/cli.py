@@ -90,6 +90,30 @@ def cmd_repack(args) -> None:
     print(f"Wrote {args.output} (osos checksum updated: 0x{fw.entry('osos').chksum:08x})")
 
 
+def cmd_import_theme(args) -> None:
+    from . import themeimport
+    theme_fw, sha = themeimport.load_firmware(args.theme)
+    base_fw, _ = themeimport.load_firmware(args.base)
+    target_fw, _ = themeimport.load_firmware(args.target)
+    th = themeimport.make_theme(theme_fw, base_fw, target_fw, args.name or Path(args.theme).stem, sha)
+    Path(args.output).write_text(th.to_json())
+    print(f"Imported {len(th.imported)} resources ({len(th.changes)} changes) -> {args.output}")
+    for r, why in th.skipped:
+        print(f"  not imported: {r}: {why}")
+
+
+def cmd_apply_theme(args) -> None:
+    from . import themeimport
+    fw = load(args.firmware)
+    th = themeimport.Theme.from_json(Path(args.theme).read_text())
+    osos = bytearray(fw.image("osos"))
+    done, conflicts = themeimport.apply_theme(th, osos, hashlib.sha256(fw.image("osos")).hexdigest())
+    fw.make_room(len(osos))
+    fw.replace_image("osos", bytes(osos))
+    Path(args.output).write_bytes(fw.to_bytes())
+    print(f"Applied {done} changes, {conflicts} not applied -> {args.output}")
+
+
 def cmd_verify(args) -> None:
     fw = load(args.firmware)
     bad = [e.name for e in fw.entries if e.name in ("osos", "rsrc") and not fw.checksum_ok(e.name)]
@@ -223,6 +247,20 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("-o", "--output", required=True)
     s.add_argument("--force", action="store_true", help="allow a folder unpacked from a different firmware")
     s.set_defaults(func=cmd_repack)
+
+    s = sub.add_parser("import-theme", help="make an iPodFirm theme from an iPodWizard theme (e.g. a 1.2.1 theme for 1.3)")
+    s.add_argument("theme", help="the iPodWizard theme: a firmware partition image or .ipsw")
+    s.add_argument("base", help="the Apple firmware that the theme came from (.ipsw or image)")
+    s.add_argument("target", help="the Apple firmware to make the theme for (.ipsw or image)")
+    s.add_argument("-o", "--output", required=True, help="theme file to write (JSON)")
+    s.add_argument("--name", help="name of the theme")
+    s.set_defaults(func=cmd_import_theme)
+
+    s = sub.add_parser("apply-theme", help="apply an iPodFirm theme to a firmware image")
+    s.add_argument("firmware")
+    s.add_argument("theme")
+    s.add_argument("-o", "--output", required=True)
+    s.set_defaults(func=cmd_apply_theme)
 
     s = sub.add_parser("devices", help="list connected iPods")
     s.set_defaults(func=cmd_devices)

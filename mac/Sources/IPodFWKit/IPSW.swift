@@ -29,8 +29,10 @@ public enum IPSW {
 
     /// Apple's firmware from `original` with its osos swapped for `osos` (e.g. the edited OS from a
     /// device backup). Gives a clean .ipsw layout whatever the edited firmware was opened from.
+    /// A larger osos (for example with an imported theme) moves rsrc and aupd forward.
     public static func firmware(original: URL, withOSOS osos: [UInt8]) throws -> [UInt8] {
         let fw = try FirmwarePartition(data: extractFirmware(original).data)
+        try fw.makeRoom(ososLength: osos.count)
         try fw.replaceImage("osos", with: osos)
         return fw.data
     }

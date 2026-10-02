@@ -29,6 +29,7 @@ ENTRY_FMT = "<4s4s8I"
 ENTRY_SIZE = struct.calcsize(ENTRY_FMT)  # 40
 DEVICE_TAGS = (b"!ATA", b"DNAN")
 IMAGE_BASE_CANDIDATES = (2048, 512, 1024, 4096, 0)
+IMAGE_ALIGN = 0x800         # images start at a multiple of 2048 bytes (as in Apple's files)
 
 # The type field is stored byte-reversed on disk ("soso" == "osos").
 IMAGE_NAMES = {b"soso": "osos", b"crsr": "rsrc", b"dpua": "aupd", b"kbso": "osbk", b"ebih": "hibe"}
@@ -156,6 +157,50 @@ class FirmwarePartition:
         e.length = len(new)
         e.chksum = checksum(new)
         self._write_entry(e)
+
+    def make_room(self, osos_length: int) -> None:
+        """Move rsrc if an osos of osos_length bytes does not fit before it.
+
+        An iPod partition has free space after its last image: rsrc goes there, and aupd and
+        hibe stay where they are. A firmware file has no free space: rsrc and the images after
+        it move forward together and the file becomes longer. The content of the images does
+        not change. The OS finds each image through the directory.
+        """
+        osos = self.entry("osos")
+        need = osos.dev_offset + osos_length
+        later = sorted((e for e in self.entries if e.dev_offset > osos.dev_offset), key=lambda e: e.dev_offset)
+        if not later or later[0].dev_offset >= need:
+            return
+        if later[0].name != "rsrc":
+            raise FirmwareError(f"the image after osos is {later[0].name}; only rsrc can move")
+        rsrc = later[0]
+        data = self.image("rsrc")
+        last_end = max(e.dev_offset + e.length for e in self.entries)
+        last_end = (last_end + IMAGE_ALIGN - 1) // IMAGE_ALIGN * IMAGE_ALIGN
+        if self.image_base + last_end + rsrc.length <= len(self.data):
+            # an iPod partition: put rsrc after the last image
+            if any(self.data[self.image_base + last_end:self.image_base + last_end + rsrc.length]):
+                raise FirmwareError("the space after the last image is not empty; rsrc cannot move there")
+            self.data[self.image_base + last_end:self.image_base + last_end + rsrc.length] = data
+            rsrc.dev_offset = last_end
+            self._write_entry(rsrc)
+            return
+        if self.has("hibe"):
+            raise FirmwareError("there is no space for rsrc after the last image, and hibe cannot move")
+        if self.image_base + last_end < len(self.data.rstrip(b"\0")):
+            raise FirmwareError("the file has data after its last image; the images cannot move")
+        # a firmware file: move rsrc and the images after it forward
+        delta = (need - rsrc.dev_offset + IMAGE_ALIGN - 1) // IMAGE_ALIGN * IMAGE_ALIGN
+        moving = [(e, self.image(e.name)) for e in later]
+        self.data.extend(bytes(max(0, self.image_base + last_end + delta - len(self.data))))
+        for e, _ in moving:
+            start = self.image_base + e.dev_offset
+            self.data[start:start + e.length] = bytes(e.length)
+        for e, img in moving:
+            e.dev_offset += delta
+            start = self.image_base + e.dev_offset
+            self.data[start:start + e.length] = img
+            self._write_entry(e)
 
     def _room_for(self, e: ImageEntry) -> int:
         following = [o.dev_offset for o in self.entries if o.dev_offset > e.dev_offset]

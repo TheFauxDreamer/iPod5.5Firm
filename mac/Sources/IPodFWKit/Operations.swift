@@ -111,6 +111,7 @@ public enum Operations {
         guard newBytes.count <= currentBytes.count else {
             throw FirmwareError("The image (\(newBytes.count) bytes) is larger than the iPod's firmware partition (\(currentBytes.count)).")
         }
+        newBytes = try FirmwareFlasher.fitLayout(new: newBytes, current: current)
         try FirmwareFlasher.preserveHibernation(new: &newBytes, current: current)
         let new = try FirmwarePartition(data: newBytes)
         try FirmwareFlasher.checkCompatible(current: current, new: new, label: "New firmware")

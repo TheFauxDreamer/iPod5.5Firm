@@ -41,11 +41,34 @@ final class AppModel: ObservableObject {
     @Published var enabledPatches: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "enabledPatches") ?? []) {
         didSet { UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches") }
     }
+    @Published var appearance: Appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .light {
+        didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
+    }
+    @Published var themes: [ThemeFile] = AppModel.loadThemes()
+    @Published var selectedThemeName: String? = UserDefaults.standard.string(forKey: "darkTheme") {
+        didSet { UserDefaults.standard.set(selectedThemeName, forKey: "darkTheme") }
+    }
+    @Published var themeReport: ImportedTheme?
     @Published var thumbnailStatus: String?
     @Published var helperSetupError: String?
     @AppStorage("requireTouchID") var requireTouchID = true
     @Published var showFullDiskAccessHelp = false
     @Published var showFinderRestoreHelp = false
+
+    /// The appearance of the iPod software.
+    enum Appearance: String, CaseIterable, Identifiable {
+        case light, dark, timed
+        var id: String { rawValue }
+        var title: String { rawValue.capitalized }
+    }
+
+    /// An imported theme in the Themes folder.
+    struct ThemeFile: Identifiable {
+        var id: String { name }
+        var name: String
+        var url: URL
+        var theme: ImportedTheme
+    }
 
     struct AlertInfo: Identifiable { let id = UUID(); let title: String; let message: String }
     struct FlashPlan: Identifiable {
@@ -62,6 +85,7 @@ final class AppModel: ObservableObject {
         return dir
     }()
     static let backupDir = supportDir.appendingPathComponent("Backups")
+    static let themesDir = supportDir.appendingPathComponent("Themes")
     static var patchesDir: URL { Bundle.main.resourceURL!.appendingPathComponent("patches") }
     static let appleFirmwareSHA256 = "840b2480ad5b692c098cb772c3d2bf8f58bf37557788782b596ac01c27ecdc32"
 
@@ -213,7 +237,7 @@ final class AppModel: ObservableObject {
             return
         }
         do {
-            try Data(Self.outputPartition(editor, activePatches)).write(to: url, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches, theme: activeTheme)).write(to: url, options: .atomic)
             isDirty = false
         } catch { fail("Couldn't save", error) }
     }
@@ -252,6 +276,65 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: appearance (dark theme)
+
+    static func loadThemes() -> [ThemeFile] {
+        let files = (try? FileManager.default.contentsOfDirectory(at: themesDir, includingPropertiesForKeys: nil)) ?? []
+        return files.filter { $0.pathExtension == "ipodtheme" }
+            .compactMap { url in (try? ImportedTheme.load(url)).map { ThemeFile(name: $0.name, url: url, theme: $0) } }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    var selectedTheme: ThemeFile? { themes.first { $0.name == selectedThemeName } ?? themes.first }
+
+    /// The theme to apply to the output: only for the Dark appearance.
+    var activeTheme: ImportedTheme? { appearance == .dark ? selectedTheme?.theme : nil }
+
+    func isCompatible(_ t: ImportedTheme) -> Bool { editor?.originalOSOSHash == t.osos_sha256 }
+
+    func chooseFile(_ message: String) -> URL? {
+        let p = NSOpenPanel()
+        p.allowedContentTypes = []
+        p.allowsOtherFileTypes = true
+        p.message = message
+        return p.runModal() == .OK ? p.url : nil
+    }
+
+    /// Import an iPodWizard theme: the theme file, then the Apple firmware that it came from.
+    /// The target is Apple's firmware 1.3, the version of the patches.
+    func importTheme() {
+        guard let themeURL = chooseFile("Choose the iPodWizard theme (a firmware file, for example \"Dark Gray (04_12_20)\")"),
+              let baseURL = chooseFile("Choose the Apple firmware that the theme came from (for example iPod_25.1.2.1.ipsw)") else { return }
+        Task {
+            do {
+                let target = try await ensureAppleIPSW()
+                let file = try await work("Importing \(themeURL.lastPathComponent)…") { () -> ThemeFile in
+                    func partition(_ url: URL) throws -> [UInt8] {
+                        url.pathExtension.lowercased() == "ipsw" ? try IPSW.extractFirmware(url).data : [UInt8](try Data(contentsOf: url))
+                    }
+                    let themeBytes = try partition(themeURL)
+                    let name = themeURL.deletingPathExtension().lastPathComponent
+                    let theme = try ThemeImport.make(theme: FirmwarePartition(data: themeBytes), base: FirmwarePartition(data: partition(baseURL)),
+                                                     target: FirmwarePartition(data: partition(target)), name: name,
+                                                     sourceSHA256: ThemeImport.sha256([UInt8](try Data(contentsOf: themeURL))))
+                    try FileManager.default.createDirectory(at: Self.themesDir, withIntermediateDirectories: true)
+                    let url = Self.themesDir.appendingPathComponent(name + ".ipodtheme")
+                    try theme.write(to: url)
+                    return ThemeFile(name: name, url: url, theme: theme)
+                }
+                themes = Self.loadThemes()
+                selectedThemeName = file.name
+                themeReport = file.theme
+            } catch { fail("Couldn't import the theme", error) }
+        }
+    }
+
+    func deleteTheme(_ t: ThemeFile) {
+        try? FileManager.default.removeItem(at: t.url)
+        themes = Self.loadThemes()
+        if themes.isEmpty, appearance != .light { appearance = .light }
+    }
+
     // MARK: patches
 
     var activePatches: [PatchInfo] {
@@ -263,15 +346,21 @@ final class AppModel: ObservableObject {
         return Patcher.isCompatible(p, originalSHA256: editor.originalOSOSHash)
     }
 
-    /// The osos with the switched-on patches applied (the edits stay as they are).
-    nonisolated static func outputOSOS(_ editor: FirmwareEditor, _ patches: [PatchInfo]) throws -> [UInt8] {
-        patches.isEmpty ? editor.osos : try Patcher.apply(patches, to: editor.osos, originalSHA256: editor.originalOSOSHash)
+    /// The osos with the dark theme (if the appearance is Dark) and the switched-on patches applied.
+    /// The edits stay as they are: the theme does not change a byte that the owner changed.
+    nonisolated static func outputOSOS(_ editor: FirmwareEditor, _ patches: [PatchInfo], theme: ImportedTheme?) throws -> [UInt8] {
+        var osos = editor.osos
+        if let theme { try theme.apply(to: &osos, originalSHA256: editor.originalOSOSHash) }
+        return patches.isEmpty ? osos : try Patcher.apply(patches, to: osos, originalSHA256: editor.originalOSOSHash)
     }
 
-    /// The firmware partition to save or flash: the edits plus the switched-on patches.
-    nonisolated static func outputPartition(_ editor: FirmwareEditor, _ patches: [PatchInfo]) throws -> [UInt8] {
+    /// The firmware partition to save or flash: the edits plus the theme and the switched-on patches.
+    /// A larger osos moves rsrc (see FirmwarePartition.makeRoom).
+    nonisolated static func outputPartition(_ editor: FirmwareEditor, _ patches: [PatchInfo], theme: ImportedTheme?) throws -> [UInt8] {
         let fw = try FirmwarePartition(data: editor.partition.data)
-        try fw.replaceImage("osos", with: outputOSOS(editor, patches))
+        let osos = try outputOSOS(editor, patches, theme: theme)
+        try fw.makeRoom(ososLength: osos.count)
+        try fw.replaceImage("osos", with: osos)
         return fw.data
     }
 
@@ -440,7 +529,7 @@ final class AppModel: ObservableObject {
         let staging = Self.supportDir.appendingPathComponent("Staging/flash.bin")
         do {
             try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(Self.outputPartition(editor, activePatches)).write(to: staging, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches, theme: activeTheme)).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
         } catch { fail("Can't flash", error) }
     }
@@ -463,12 +552,12 @@ final class AppModel: ObservableObject {
         let s = NSSavePanel()
         s.nameFieldStringValue = "custom-iPod_25.1.3.ipsw"
         guard s.runModal() == .OK, let out = s.url else { return }
-        let patches = activePatches
+        let patches = activePatches, theme = activeTheme
         Task {
             do {
                 let original = try await ensureAppleIPSW()
                 try await work("Writing .ipsw…") {
-                    let osos = try Self.outputOSOS(editor, patches)
+                    let osos = try Self.outputOSOS(editor, patches, theme: theme)
                     try IPSW.repack(original: original, firmware: IPSW.firmware(original: original, withOSOS: osos), to: out)
                 }
                 NSWorkspace.shared.activateFileViewerSelecting([out])
@@ -479,13 +568,13 @@ final class AppModel: ObservableObject {
     /// Build the emulator drive from the current edits and boot it in the in-app preview.
     func runInEmulator(_ emu: EmulatorManager, _ session: EmulatorSession) {
         guard let editor else { return }
-        let patches = activePatches
+        let patches = activePatches, theme = activeTheme
         let library = EmulatorManager.Library.current
         session.start { [weak self] in
             guard let self else { return }
             let original = try await self.ensureAppleIPSW()
             let (fw, ososLength) = try await Task.detached { () -> ([UInt8], Int) in
-                let osos = try Self.outputOSOS(editor, patches)
+                let osos = try Self.outputOSOS(editor, patches, theme: theme)
                 return (try IPSW.firmware(original: original, withOSOS: osos), osos.count)
             }.value
             try await emu.prepare(firmware: fw, ososLength: ososLength, originalIPSW: original, library: library)
