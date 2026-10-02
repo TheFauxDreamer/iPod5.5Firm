@@ -57,9 +57,17 @@ final class AppModel: ObservableObject {
 
     /// The appearance of the iPod software.
     enum Appearance: String, CaseIterable, Identifiable {
-        case light, dark, timed
+        case light, dark, onIPod = "switch"
         var id: String { rawValue }
-        var title: String { rawValue.capitalized }
+        var title: String { self == .onIPod ? "Switch on iPod" : rawValue.capitalized }
+    }
+
+    /// What the output build does with the dark theme.
+    enum AppearanceBuild {
+        /// The theme is in the firmware: always dark.
+        case dark(ImportedTheme)
+        /// Light firmware with a Dark Mode item in Settings (DarkMode.build).
+        case switchOnIPod(ImportedTheme, PatchInfo)
     }
 
     /// An imported theme in the Themes folder.
@@ -237,7 +245,7 @@ final class AppModel: ObservableObject {
             return
         }
         do {
-            try Data(Self.outputPartition(editor, activePatches, theme: activeTheme)).write(to: url, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance)).write(to: url, options: .atomic)
             isDirty = false
         } catch { fail("Couldn't save", error) }
     }
@@ -287,8 +295,18 @@ final class AppModel: ObservableObject {
 
     var selectedTheme: ThemeFile? { themes.first { $0.name == selectedThemeName } ?? themes.first }
 
-    /// The theme to apply to the output: only for the Dark appearance.
-    var activeTheme: ImportedTheme? { appearance == .dark ? selectedTheme?.theme : nil }
+    /// The dark-mode patch: not in the list of patches, because DarkMode.build adds it.
+    static let darkModePatch = Patcher.list(in: AppModel.patchesDir).first { $0.spec.name == "dark-mode" }
+
+    /// The appearance build for the output: nothing for Light.
+    var activeAppearance: AppearanceBuild? {
+        guard let theme = selectedTheme?.theme else { return nil }
+        switch appearance {
+        case .light: return nil
+        case .dark: return .dark(theme)
+        case .onIPod: return Self.darkModePatch.map { .switchOnIPod(theme, $0) }
+        }
+    }
 
     func isCompatible(_ t: ImportedTheme) -> Bool { editor?.originalOSOSHash == t.osos_sha256 }
 
@@ -346,19 +364,27 @@ final class AppModel: ObservableObject {
         return Patcher.isCompatible(p, originalSHA256: editor.originalOSOSHash)
     }
 
-    /// The osos with the dark theme (if the appearance is Dark) and the switched-on patches applied.
+    /// The osos with the appearance (Dark, or Switch on iPod) and the switched-on patches applied.
     /// The edits stay as they are: the theme does not change a byte that the owner changed.
-    nonisolated static func outputOSOS(_ editor: FirmwareEditor, _ patches: [PatchInfo], theme: ImportedTheme?) throws -> [UInt8] {
+    nonisolated static func outputOSOS(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?) throws -> [UInt8] {
         var osos = editor.osos
-        if let theme { try theme.apply(to: &osos, originalSHA256: editor.originalOSOSHash) }
+        switch appearance {
+        case .dark(let theme):
+            try theme.apply(to: &osos, originalSHA256: editor.originalOSOSHash)
+        case .switchOnIPod(let theme, let patch):
+            osos = try DarkMode.build(partition: editor.partition, osos: osos, theme: theme, patch: patch,
+                                      originalSHA256: editor.originalOSOSHash).0
+        case nil:
+            break
+        }
         return patches.isEmpty ? osos : try Patcher.apply(patches, to: osos, originalSHA256: editor.originalOSOSHash)
     }
 
     /// The firmware partition to save or flash: the edits plus the theme and the switched-on patches.
     /// A larger osos moves rsrc (see FirmwarePartition.makeRoom).
-    nonisolated static func outputPartition(_ editor: FirmwareEditor, _ patches: [PatchInfo], theme: ImportedTheme?) throws -> [UInt8] {
+    nonisolated static func outputPartition(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?) throws -> [UInt8] {
         let fw = try FirmwarePartition(data: editor.partition.data)
-        let osos = try outputOSOS(editor, patches, theme: theme)
+        let osos = try outputOSOS(editor, patches, appearance: appearance)
         try fw.makeRoom(ososLength: osos.count)
         try fw.replaceImage("osos", with: osos)
         return fw.data
@@ -538,7 +564,7 @@ final class AppModel: ObservableObject {
         let staging = Self.supportDir.appendingPathComponent("Staging/flash.bin")
         do {
             try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(Self.outputPartition(editor, activePatches, theme: activeTheme)).write(to: staging, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance)).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
         } catch { fail("Can't flash", error) }
     }
@@ -561,12 +587,12 @@ final class AppModel: ObservableObject {
         let s = NSSavePanel()
         s.nameFieldStringValue = "custom-iPod_25.1.3.ipsw"
         guard s.runModal() == .OK, let out = s.url else { return }
-        let patches = activePatches, theme = activeTheme
+        let patches = activePatches, appearance = activeAppearance
         Task {
             do {
                 let original = try await ensureAppleIPSW()
                 try await work("Writing .ipsw…") {
-                    let osos = try Self.outputOSOS(editor, patches, theme: theme)
+                    let osos = try Self.outputOSOS(editor, patches, appearance: appearance)
                     try IPSW.repack(original: original, firmware: IPSW.firmware(original: original, withOSOS: osos), to: out)
                 }
                 NSWorkspace.shared.activateFileViewerSelecting([out])
@@ -577,13 +603,13 @@ final class AppModel: ObservableObject {
     /// Build the emulator drive from the current edits and boot it in the in-app preview.
     func runInEmulator(_ emu: EmulatorManager, _ session: EmulatorSession) {
         guard let editor else { return }
-        let patches = activePatches, theme = activeTheme
+        let patches = activePatches, appearance = activeAppearance
         let library = EmulatorManager.Library.current
         session.start { [weak self] in
             guard let self else { return }
             let original = try await self.ensureAppleIPSW()
             let (fw, ososLength) = try await Task.detached { () -> ([UInt8], Int) in
-                let osos = try Self.outputOSOS(editor, patches, theme: theme)
+                let osos = try Self.outputOSOS(editor, patches, appearance: appearance)
                 return (try IPSW.firmware(original: original, withOSOS: osos), osos.count)
             }.value
             try await emu.prepare(firmware: fw, ososLength: ososLength, originalIPSW: original, library: library)

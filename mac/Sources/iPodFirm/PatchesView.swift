@@ -77,24 +77,26 @@ struct AlbumArtControls: View {
     }
 }
 
-/// Light, Dark or Timed, and the imported dark themes.
+/// Light, Dark or Switch on iPod, and the imported dark themes.
 struct AppearanceSection: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
         Section {
-            Text("Light uses the Apple colours. Dark applies an imported dark theme when you save, flash, export an .ipsw or run the emulator. Timed changes between light and dark at set hours.")
+            Text("Light uses the Apple colours. Dark applies an imported dark theme when you save, flash, export an .ipsw or run the emulator. Switch on iPod adds a \"Dark Mode\" item to Settings on the iPod.")
                 .fixedSize(horizontal: false, vertical: true)
             AppearanceControl(selection: $model.appearance) { a in
                 switch a {
                 case .light: true
                 case .dark: !model.themes.isEmpty
-                case .timed: false
+                case .onIPod: !model.themes.isEmpty && AppModel.darkModePatch != nil
                 }
             }
-            .frame(maxWidth: 320)
-            Text("Timed is not available yet. It needs a code patch that reads the clock of the iPod.")
-                .font(.caption).foregroundStyle(.secondary)
+            .frame(maxWidth: 380)
+            if model.appearance == .onIPod {
+                Text("The firmware starts light. In Settings on the iPod, select \"Dark Mode\" to change between light and dark. The iPod saves its settings and restarts (a few seconds). The choice is in the file iPod_Control/iTunes/iPodFirmDarkMode.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             if model.themes.isEmpty {
                 Label("Import a dark theme first.", systemImage: "info.circle").foregroundStyle(.secondary)
             } else if let current = model.selectedTheme {
@@ -110,7 +112,7 @@ struct AppearanceSection: View {
                               systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(.orange)
                     }
                 }
-                if model.appearance == .dark {
+                if model.appearance != .light {
                     Text("The theme makes the iPod software larger. iPodFirm moves the rsrc image (fonts and video firmware) to free space in the firmware partition. It does not move or change aupd or hibe.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
