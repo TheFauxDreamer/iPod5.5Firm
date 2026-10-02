@@ -536,3 +536,57 @@ final class PatcherOptionTests: XCTestCase {
     }
 }
 
+final class DarkModeTests: XCTestCase {
+    func testSwitchTableSwitchesBothWaysAndKeepsEdits() {
+        let osos = (0..<64).map { UInt8($0) }
+        func change(_ r: String, _ at: Int, _ old: [UInt8], _ new: [UInt8]) -> ThemeChange {
+            ThemeChange(resource: r, offset: at, old: Data(old), new: Data(new))
+        }
+        var theme = ImportedTheme(name: "t", source_sha256: "", osos_sha256: "x")
+        theme.changes = [change("View 1", 4, [4, 5, 6], [9, 9, 9]), change("BMap 2", 20, [20, 21], [0, 0]),
+                         change("BMap 3", 40, [99], [1]), change("View 1", 4, [4, 5, 6], [9, 9, 9])]
+        let (table, leftOut) = DarkMode.switchTable(theme, osos: osos)
+        XCTAssertEqual(leftOut, 1)
+        var dark = osos
+        DarkMode.applySwitchTable(&dark, table)
+        XCTAssertEqual(Array(dark[4..<7]), [9, 9, 9]); XCTAssertEqual(Array(dark[20..<22]), [0, 0]); XCTAssertEqual(dark[40], 40)
+        DarkMode.applySwitchTable(&dark, table)
+        XCTAssertEqual(dark, osos)
+    }
+
+    func testSettingsMenuGetsTheItemAfterClicker() throws {
+        func item(_ key: UInt32, _ label: UInt32) -> [UInt8] {
+            var it = [UInt8](repeating: 0, count: 40)
+            put32(&it, 0x18, label); put32(&it, 0x1C, key); put32(&it, 0x20, label)
+            return it
+        }
+        var menu = [UInt8](repeating: 0, count: 4)
+        put32(&menu, 0, 3)
+        menu += item(0x6000_60B7, 0xFF69) + item(0x6000_6088, 0xFF68) + item(0x6000_60AD, 0xFF67)
+        let new = try DarkMode.settingsMenu(menu)
+        XCTAssertEqual(le32(new, 0), 4)
+        XCTAssertEqual((0..<4).map { le32(new, 4 + 40 * $0 + 0x1C) }, [0x6000_60B7, 0x6000_6088, DarkMode.darkKey, 0x6000_60AD])
+        XCTAssertEqual(le32(new, 4 + 80 + 0x18), DarkMode.labelID)
+        XCTAssertThrowsError(try DarkMode.settingsMenu(new))
+    }
+
+    /// The Swift build must give the same osos as `ipodfw apply-theme --switch` (IPODFW_SWITCH_EXPECT).
+    func testBuildAgreesWithPython() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let ipsw = env["IPODFW_IPSW"], let themeFile = env["IPODFW_THEME_EXPECT"], let expect = env["IPODFW_SWITCH_EXPECT"] else {
+            throw XCTSkip("set IPODFW_IPSW, IPODFW_THEME_EXPECT and IPODFW_SWITCH_EXPECT")
+        }
+        let fw = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data)
+        let osos = try fw.image("osos")
+        let theme = try ImportedTheme.load(URL(fileURLWithPath: themeFile))
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        let patch = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "dark-mode" }!
+        XCTAssertEqual(patch.spec.internal, true)
+        let (out, info) = try DarkMode.build(partition: fw, osos: osos, theme: theme, patch: patch, originalSHA256: ThemeImport.sha256(osos))
+        XCTAssertEqual(info.changesLeftOut, 0)
+        let python = try FirmwarePartition(contentsOf: URL(fileURLWithPath: expect)).image("osos")
+        XCTAssertEqual(out.count, python.count)
+        XCTAssertEqual(ThemeImport.sha256(out), ThemeImport.sha256(python))
+    }
+}
+
