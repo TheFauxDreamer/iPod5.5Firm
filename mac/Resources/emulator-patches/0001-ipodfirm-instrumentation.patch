@@ -45,7 +45,7 @@ index f96afc1..3db6e6f 100644
          "trace" => {
              link.peek_req.lock().unwrap().push(TRACE_SENTINEL);
 diff --git a/tools/ipod-gui/src/emu.rs b/tools/ipod-gui/src/emu.rs
-index d8fe22a..a7f9bab 100644
+index d8fe22a..345aa46 100644
 --- a/tools/ipod-gui/src/emu.rs
 +++ b/tools/ipod-gui/src/emu.rs
 @@ -507,6 +507,8 @@ pub struct Out {
@@ -65,7 +65,7 @@ index d8fe22a..a7f9bab 100644
                  pmu_written: Vec::new(),
                  watched_writes: Vec::new(),
                  bus_log: Vec::new(),
-@@ -1617,9 +1620,21 @@ pub fn build(cfg: &Config, first: bool) -> Result<Machine, String> {
+@@ -1617,9 +1620,28 @@ pub fn build(cfg: &Config, first: bool) -> Result<Machine, String> {
      // 8 MB of low address space at 64 bytes a bucket.
      m.mem.regs_at = cfg.regs_at;
      m.mem.watch_range = cfg.watch_writes;
@@ -85,10 +85,17 @@ index d8fe22a..a7f9bab 100644
 +    }) {
 +        m.mem.trace_pc = Some(r);
 +    }
++    // iPodFirm local patch: IPODFW_WATCH_RANGE=BASE:LEN records every write into a range (`writes`).
++    if let Some(r) = std::env::var("IPODFW_WATCH_RANGE").ok().and_then(|v| {
++        let (a, n) = v.split_once(':')?;
++        Some((u32::from_str_radix(a.trim_start_matches("0x"), 16).ok()?, u32::from_str_radix(n.trim_start_matches("0x"), 16).ok()?))
++    }) {
++        m.mem.watch_range = Some(r);
++    }
      // Through `set_clock` even here, where the machine has executed nothing and a bare assignment
      // would do: one way to move the divisor is a rule that can be checked, and two is a rule
      // nobody remembers which half of. On a machine at instruction zero the correction it computes
-@@ -2701,6 +2716,22 @@ fn session(cfg: &Config, link: &Arc<Link>, first: bool, deaths: &mut Deaths) ->
+@@ -2701,6 +2723,22 @@ fn session(cfg: &Config, link: &Arc<Link>, first: bool, deaths: &mut Deaths) ->
                              .map(|p| p.written.iter().map(|(r, (n, v))| (*r, *n, *v)).collect())
                              .unwrap_or_default();
                          Some(out.pmu_written.len() as u32)

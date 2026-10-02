@@ -29,7 +29,7 @@ The app has these functions:
 - Restore a backup to the iPod. If the firmware on the iPod is damaged, the app does a rescue restore.
 - Show the recovery steps, and get the Apple firmware for a restore with Finder.
 - Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
-- Put a music library on the emulated iPod: a test library, or songs from a folder.
+- Put a music library on the emulated iPod: a test library, or songs from a folder. A library from a folder includes the artwork database (`ArtworkDB`), so Now Playing shows the album artwork.
 - Switch code patches on or off (Patches pane). The patches are in [patches/](patches/).
 - Write the album thumbnail file to the iPod for the `album-art` patch.
 - Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light or Dark (Patches pane).
@@ -106,6 +106,17 @@ If iPodFirm cannot restore a backup, use Finder:
 CAUTION: A restore with Finder erases the music on the iPod.
 
 Finder installs the Apple firmware again and repairs a damaged partition table. After that, you can restore a backup in iPodFirm.
+
+### What is verified for the dark theme
+
+The dark theme makes osos larger and moves `rsrc`. These facts support a safe recovery:
+
+- Disk mode is in the boot loader in the flash memory of the iPod, not on the disk (Rockbox manual). iPodFirm never writes or moves `aupd`, the only image that changes this flash memory.
+- RetailOS finds `rsrc` through the directory, by its type and ID (Ghidra, function 0xc60ec). Rockbox `ipodpatcher` also moves `rsrc` when it installs its boot loader.
+- In the emulator, the firmware did not write to the RAM of the background picture during a long test.
+- On a disk image, a restore of the original backup gives the original partition again, byte for byte.
+
+The move of `rsrc` was not done on a real iPod. For the details, refer to [re/dark-theme.md](re/dark-theme.md).
 
 If the iPod does not show disk mode, charge it for one hour and try again. Diagnostic mode can test the disk: push and hold Menu and Select, then push and hold Select and Previous.
 
@@ -218,6 +229,8 @@ The "Timed" appearance (dark at set hours) is not available yet. It needs a code
 | `album-art` | Shows a 20 × 20 thumbnail of the album artwork at the left of each album in the lists. | Tested in the emulator with 200 real songs in 28 albums. Not tested on a real iPod. |
 
 The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums.
+
+The patch draws a thumbnail only in the rows of a list. In Now Playing, RetailOS shows its own large artwork from `iPod_Control/Artwork/ArtworkDB`. Finder writes that database when it syncs music with artwork.
 
 The patch tool compiles C code with the Xcode compiler and links it at a fixed address in the free space after the osos image (maximum 3.9 KB in firmware 1.3).
 

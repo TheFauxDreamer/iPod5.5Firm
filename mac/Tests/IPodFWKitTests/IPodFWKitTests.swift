@@ -478,3 +478,44 @@ final class ThemeTests: XCTestCase {
         try Data(firmware).write(to: URL(fileURLWithPath: out))
     }
 }
+
+final class ArtworkDBTests: XCTestCase {
+    /// The Swift ArtworkDB must be byte-identical with the Python one for the same items
+    /// (src/ipodfw/artworkdb.py, tests/test_artworkdb.py). Only the scaled pixels in the .ithmb files can differ.
+    func testAgreesWithPython() throws {
+        let ctx = CGContext(data: nil, width: 300, height: 300, bitsPerComponent: 8, bytesPerRow: 1200,
+                            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+        let image = ctx.makeImage()!
+        let items = (0..<3).map { ArtworkDB.Item(trackDBID: 0x1000_0000_0000 + UInt64($0), image: image, originalSize: 1000 + UInt32($0)) }
+        let (db, ithmb) = ArtworkDB.build(items)
+        XCTAssertEqual(ThemeImport.sha256(db), "7101a7be8ff4935641ade5919f906c1762a415c8f30c5bee2ea5c379b981add0")
+        XCTAssertEqual(ithmb["F1028_1.ithmb"]?.count, 3 * 100 * 100 * 2)
+        XCTAssertEqual(ithmb["F1029_1.ithmb"]?.count, 3 * 200 * 200 * 2)
+    }
+
+    func testTrackArtworkFields() {
+        var t = DBTrack(title: "T", artist: "A", album: "B", path: ":iPod_Control:Music:F00:T0.m4a", size: 100, lengthMS: 1000)
+        t.dbid = 0x1234; t.imageID = 100; t.artworkSize = 5555
+        let db = ITunesDB.build([t])
+        let mhit = (0..<db.count - 4).first { Array(db[$0..<$0 + 4]) == Array("mhit".utf8) }!
+        XCTAssertEqual(le32(db, mhit + 0x70), 0x1234)
+        XCTAssertEqual(le16(db, mhit + 0x7C), 1)
+        XCTAssertEqual(le32(db, mhit + 0x80), 5555)
+        XCTAssertEqual(db[mhit + 0xA4], 1)
+        XCTAssertEqual(le32(db, mhit + 0x160), 100)
+    }
+}
+
+/// Writes a library from IPODFW_MUSIC to IPODFW_MUSIC_LIBRARY_OUT with the Swift writers, as the
+/// Emulator pane does (for a check of the artwork in the emulator).
+final class MusicLibraryOutputTests: XCTestCase {
+    func testWriteMusicLibrary() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let music = env["IPODFW_MUSIC"], let out = env["IPODFW_MUSIC_LIBRARY_OUT"] else {
+            throw XCTSkip("set IPODFW_MUSIC and IPODFW_MUSIC_LIBRARY_OUT")
+        }
+        let songs = MusicImport.pick(MusicImport.scan(URL(fileURLWithPath: music)), limit: 8, perAlbum: 1)
+        try MusicImport.makeLibrary(from: songs, to: URL(fileURLWithPath: out), copyAudio: true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: out + "/iPod_Control/Artwork/ArtworkDB"))
+    }
+}

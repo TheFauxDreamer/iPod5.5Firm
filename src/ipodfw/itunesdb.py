@@ -38,6 +38,9 @@ class Track:
     aac: bool = True
     album_artist: str = ""
     disc: int = 0
+    dbid: int = 0           # 0: build() makes one
+    image_id: int = 0       # the mhii of the artwork in ArtworkDB (0: no artwork)
+    artwork_size: int = 0   # bytes of the artwork in the music file
 
 
 def _mac_now() -> int:
@@ -76,6 +79,11 @@ def _mhit(tid: int, t: Track, dbid: int, now: int, mhods: list[bytes]) -> bytes:
     struct.pack_into("<I", h, 0x12C, t.size)
     struct.pack_into("<Q", h, 0x134, 0x808080808080)
     struct.pack_into("<I", h, 0x168, 1)
+    if t.image_id:
+        struct.pack_into("<H", h, 0x7C, 1)                # artwork count
+        struct.pack_into("<I", h, 0x80, t.artwork_size)
+        h[0xA4] = 1                                       # has artwork
+        struct.pack_into("<I", h, 0x160, t.image_id)      # mhii link
     body = b"".join(mhods)
     struct.pack_into("<I", h, 8, len(h) + len(body))
     return bytes(h) + body
@@ -103,7 +111,8 @@ def build(tracks: list[Track], library_name: str = "iPod") -> bytes:
                  _string_mhod(MHOD_PATH, t.path), _string_mhod(MHOD_ALBUMARTIST, t.artist)]
         if t.genre:
             mhods.append(_string_mhod(MHOD_GENRE, t.genre))
-        out += _mhit(1000 + i, t, rnd.getrandbits(64), now, mhods)
+        dbid = rnd.getrandbits(64)
+        out += _mhit(1000 + i, t, t.dbid or dbid, now, mhods)
     _patch_size(out, mhsd1)
 
     # mhsd type 2: playlists (master playlist only)

@@ -17,6 +17,9 @@ public struct DBTrack {
     public var genre: String = ""
     public var albumArtist: String = ""
     public var disc: UInt32 = 0
+    public var dbid: UInt64 = 0          // 0: build() makes one
+    public var imageID: UInt32 = 0       // the mhii of the artwork in ArtworkDB (0: no artwork)
+    public var artworkSize: UInt32 = 0   // bytes of the artwork in the music file
 
     public init(title: String, artist: String, album: String, path: String, size: UInt32, lengthMS: UInt32,
                 trackNumber: UInt32 = 0, trackCount: UInt32 = 0, year: UInt32 = 0, genre: String = "",
@@ -103,10 +106,16 @@ public enum ITunesDB {
             w.u32(t.trackCount); w.u32(t.year); w.u32(128); w.u32(44100 << 16)
             w.pad(to: 0x5C, from: start); w.u32(t.disc)
             w.pad(to: 0x68, from: start); w.u32(now)                      // date added
-            w.pad(to: 0x70, from: start); w.u64(rng.next()); w.u8(1)      // dbid, checked
+            let dbid = rng.next()
+            w.pad(to: 0x70, from: start); w.u64(t.dbid != 0 ? t.dbid : dbid); w.u8(1)   // dbid, checked
+            if t.imageID != 0 {
+                w.pad(to: 0x7C, from: start); w.u16(1); w.zeros(2); w.u32(t.artworkSize)    // artwork count and size
+                w.pad(to: 0xA4, from: start); w.u8(1)                                         // has artwork
+            }
             w.pad(to: 0xD0, from: start); w.u32(1)                        // media type: audio
             w.pad(to: 0x12C, from: start); w.u32(t.size)
             w.pad(to: 0x134, from: start); w.u64(0x8080_8080_8080)
+            if t.imageID != 0 { w.pad(to: 0x160, from: start); w.u32(t.imageID) }             // mhii link
             w.pad(to: 0x168, from: start); w.u32(1)
             w.pad(to: 0x248, from: start)
             mhods.forEach { w.b += $0 }

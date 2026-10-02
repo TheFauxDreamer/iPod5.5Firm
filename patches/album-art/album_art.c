@@ -45,6 +45,8 @@ int file_close(void *fh);
 #define VIEW_LEFT   0x5c                  /* offset of the left edge in a view */
 #define VIEW_GC     0x74                  /* offset of the graphics context in a view */
 #define GC_ORIGIN_X 0x2c                  /* gc+0x30 is the y origin */
+#define VIEW_PARENT 0x10                  /* offset of the parent view in a view */
+#define LIST_CELL_CLASS 0x66b4dc          /* vtable of the parent of a label in a list row */
 
 typedef struct { unsigned hash, offset; } Entry;
 
@@ -156,7 +158,9 @@ static void draw_thumbnail(void *gc, const unsigned short *px, int top, int left
 {
     unsigned char rgba[4];
     int y, x;
-    gc_set_mode(gc, 1);
+    /* Mode 0 replaces the pixels. Mode 1 blends with the background, so on a dark theme the
+       thumbnail is not visible. */
+    gc_set_mode(gc, 0);
     for (y = 0; y < (int)size; y++) {
         x = 0;
         while (x < (int)size) {
@@ -258,7 +262,14 @@ void hook_row_label_draw(void *view, const char *text, void *a3)
     draw_with_thumbnail(row_label_draw, view, text, a3);
 }
 
+/* The general label class is also used outside the lists, for example for the album name in
+ * Now Playing. Draw a thumbnail only if the parent of the label is a list row. */
 void hook_label_draw(void *view, const char *text, void *a3)
 {
+    void *parent = *(void **)((char *)view + VIEW_PARENT);
+    if (!parent || *(unsigned *)parent != LIST_CELL_CLASS) {
+        label_draw(view, text, a3);
+        return;
+    }
     draw_with_thumbnail(label_draw, view, text, a3);
 }

@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreGraphics
 import Foundation
 
 /// Makes a music library for the emulator from a folder of music files (the files are only read),
@@ -40,7 +41,7 @@ public enum MusicImport {
         return chosen
     }
 
-    /// Write iPod_Control (iTunesDB, album thumbnails and, if `copyAudio`, the music files) under `out`.
+    /// Write iPod_Control (iTunesDB, ArtworkDB, album thumbnails and, if `copyAudio`, the music files) under `out`.
     @discardableResult
     public static func makeLibrary(from songs: [Song], to out: URL, copyAudio: Bool) throws -> (tracks: Int, albums: Int) {
         let fm = FileManager.default
@@ -48,6 +49,8 @@ public enum MusicImport {
         try fm.createDirectory(at: itunes, withIntermediateDirectories: true)
         var tracks: [DBTrack] = []
         var covers = [String: Data]()
+        var art: [(track: Int, item: ArtworkDB.Item)] = []
+        var decoded = [Data: CGImage]()
         for (n, s) in songs.enumerated() {
             let t = s.tags
             let album = t.album.isEmpty ? "Unknown Album" : t.album
@@ -65,9 +68,25 @@ public enum MusicImport {
                                   path: ":iPod_Control:Music:\(folder):\(name)", size: size, lengthMS: UInt32(t.lengthMS),
                                   trackNumber: UInt32(t.track), trackCount: UInt32(t.tracks), year: UInt32(t.year),
                                   genre: t.genre, albumArtist: t.albumArtist, disc: UInt32(t.disc)))
-            if let c = t.cover, covers[album] == nil { covers[album] = c }
+            tracks[n].dbid = 0x1000_0000_0000 + UInt64(n)
+            if let c = t.cover {
+                if decoded[c] == nil, let img = ArtworkDB.image(c) { decoded[c] = img }
+                if let img = decoded[c] {
+                    art.append((n, ArtworkDB.Item(trackDBID: tracks[n].dbid, image: img, originalSize: UInt32(c.count))))
+                    if covers[album] == nil { covers[album] = c }
+                }
+            }
+        }
+        let (artworkDB, ithmb) = ArtworkDB.build(art.map(\.item))
+        for (i, a) in art.enumerated() {
+            tracks[a.track].imageID = ArtworkDB.firstID + UInt32(i)
+            tracks[a.track].artworkSize = a.item.originalSize
         }
         try Data(ITunesDB.build(tracks)).write(to: itunes.appendingPathComponent("iTunesDB"))
+        let artwork = out.appendingPathComponent("iPod_Control/Artwork")
+        try fm.createDirectory(at: artwork, withIntermediateDirectories: true)
+        try Data(artworkDB).write(to: artwork.appendingPathComponent("ArtworkDB"))
+        for (name, data) in ithmb { try Data(data).write(to: artwork.appendingPathComponent(name)) }
         try Data(AlbumArt.build(covers)).write(to: itunes.appendingPathComponent(AlbumArt.fileName))
         return (tracks.count, Set(tracks.map(\.album)).count)
     }

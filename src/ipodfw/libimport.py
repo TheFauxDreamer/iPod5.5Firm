@@ -1,4 +1,4 @@
-"""Make an iPod music library (iTunesDB and album thumbnails) from a folder of music files.
+"""Make an iPod music library (iTunesDB, ArtworkDB and album thumbnails) from a folder of music files.
 
 The files are read only. For the emulator, the audio is not copied: the lists do not need it.
 """
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import albumart, mp4tags
+from . import albumart, artworkdb, mp4tags
 from .itunesdb import Track, build
 
 
@@ -54,7 +54,8 @@ def make_library(folder: str | Path, out: str | Path, thumb_size: int = albumart
         items = pick(items, limit, per_album)
     out = Path(out)
     (out / "iPod_Control" / "iTunes").mkdir(parents=True, exist_ok=True)
-    tracks, covers = [], {}
+    tracks, covers, art = [], {}, []
+    decoded: dict[bytes, Image.Image | None] = {}
     for n, (path, t) in enumerate(items):
         album = t.album or "Unknown Album"
         folder_name, file_name = f"F{n % 50:02d}", f"T{n:05d}{path.suffix.lower()}"
@@ -62,19 +63,31 @@ def make_library(folder: str | Path, out: str | Path, thumb_size: int = albumart
             dest = out / "iPod_Control" / "Music" / folder_name
             dest.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(path, dest / file_name)
-        tracks.append(Track(
+        track = Track(
             title=t.title or path.stem, artist=t.artist or "Unknown Artist", album=album,
             album_artist=t.album_artist, genre=t.genre, year=t.year, track_nr=t.track, tracks=t.tracks,
             disc=t.disc, path=f":iPod_Control:Music:{folder_name}:{file_name}",
-            size=path.stat().st_size, length_ms=t.length_ms))
-        if t.cover and album not in covers:
-            covers[album] = t.cover
+            size=path.stat().st_size, length_ms=t.length_ms, dbid=0x1000_0000_0000 + n)
+        tracks.append(track)
+        if t.cover:
+            if t.cover not in decoded:
+                try:
+                    decoded[t.cover] = Image.open(io.BytesIO(t.cover))
+                    decoded[t.cover].load()
+                except OSError:
+                    decoded[t.cover] = None
+            if decoded[t.cover] is not None:
+                art.append((track, artworkdb.Artwork(track.dbid, decoded[t.cover], len(t.cover))))
+                covers.setdefault(album, decoded[t.cover])
+    db, ithmb = artworkdb.build([a for _t, a in art])
+    for track, a in art:
+        track.image_id, track.artwork_size = a.image_id, a.original_size
     (out / "iPod_Control" / "iTunes" / "iTunesDB").write_bytes(build(tracks))
-    images = {}
-    for album, data in covers.items():
-        try:
-            images[album] = Image.open(io.BytesIO(data))
-        except OSError:
-            pass
-    (out / "iPod_Control" / "iTunes" / "iPodFirmAlbumArt").write_bytes(albumart.build(images, thumb_size))
-    return {"tracks": len(tracks), "albums": len({t.album for t in tracks}), "covers": len(images)}
+    artwork_dir = out / "iPod_Control" / "Artwork"
+    artwork_dir.mkdir(parents=True, exist_ok=True)
+    (artwork_dir / "ArtworkDB").write_bytes(db)
+    for name, data in ithmb.items():
+        (artwork_dir / name).write_bytes(data)
+    (out / "iPod_Control" / "iTunes" / "iPodFirmAlbumArt").write_bytes(albumart.build(covers, thumb_size))
+    return {"tracks": len(tracks), "albums": len({t.album for t in tracks}), "covers": len(covers),
+            "artwork": len(art)}

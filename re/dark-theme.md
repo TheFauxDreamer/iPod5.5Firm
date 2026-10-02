@@ -83,6 +83,42 @@ The OS finds `rsrc` through the directory. The theme dump from an iPod and the e
 | All element fields, IDs translated, background picture after osos | The same look as the reference. Menus, Albums, Now Playing, Videos and Settings are correct. |
 | The same, with the `album-art` patch | Correct. The thumbnails show. |
 
+## Verification before a flash to a real iPod
+
+### How RetailOS finds rsrc (Ghidra)
+
+The code loads the `crsr` tag at 0xaf548 and 0x1afe44. Both call 0xfc3bc, which calls 0xc60ec. Function 0xc60ec does these steps:
+
+1. It reads the first sector of the firmware partition and examines `]ih[` at +0x100.
+2. It reads the directory at the offset in +0x104, plus 0x200.
+3. It examines a maximum of 10 entries that start with `!ATA`. It selects the entry by its type tag (+4) and its ID (+8), not by its index.
+4. It takes the start from devOffset (+0x0c) plus one sector, and the length from +0x10. Both must be a multiple of the sector size.
+
+Thus RetailOS does not use a fixed rsrc position. iPodFirm keeps the order of the entries, the alignment (0x800) and the length of rsrc.
+
+### Rockbox ipodpatcher
+
+`diskmove()` in `utils/ipodpatcher/ipodpatcher.c` moves all images after osos (rsrc, aupd, hibe) forward and adds the same value to each devOffset. `add_bootloader()` calls it when the bootloader does not fit after osos. On a 5G/5.5G with firmware 1.3 the gap after osos is 2 KB, so a Rockbox dual-boot install moves rsrc. RetailOS still starts in dual-boot mode. iPodFirm uses a different layout: aupd and hibe stay in place, and rsrc goes after hibe.
+
+### The RAM after the image
+
+- The memory setup at 0xc90 describes a region from 0x10800000 (8 MB). The allocator pool object is at 0x1081da00, in that region.
+- No code refers to the area between the image end (0x7358c0) and 8 MB.
+- Emulator test with a write watch (`IPODFW_WATCH_RANGE=0x00700000:0x100000`, a local emulator patch): boot, lists, 60 seconds of playback, Videos, Photos, Extras and Settings. The CPU wrote 10 words in this range, all in the variables of the album-art patch (0x735900–0x7362c0). It wrote nothing to the background picture (0x736800–0x73fe00) or above it.
+- Limit: the watch records CPU writes. It does not prove that no DMA transfer writes there.
+
+### Disk mode
+
+The Rockbox manual for the iPod Video: "The Ipod bootloader is the program that tells your player how to load and start the firmware from disk. It is also responsible for the disk mode on your player. This bootloader is stored in special flash memory in your Ipod." iPodFirm never writes or moves aupd, the only image that changes this flash memory.
+
+## The artwork under the dark background
+
+- The album-art patch drew the thumbnails with `gc_set_mode(gc, 1)`. The mode goes to the video chip. Mode 1 darkens: the thumbnail shows on white, it is not visible on black, and it is faint on the grey highlight.
+- Apple's code uses the modes 0, 1, 8, 32, 33 and 34. With mode 0 the thumbnails show on the dark background.
+- The general label class is also used in Now Playing. The patch drew a thumbnail next to the album name there. The parent of a label (view + 0x10) has the class 0x66b4dc in a list row, and 0x66b298 (a plain view) in Now Playing. The patch now draws only when the parent is a list row.
+- Apple's large artwork in Now Playing comes from `iPod_Control/Artwork/ArtworkDB` and the files `F1028_1.ithmb` (100 × 100) and `F1029_1.ithmb` (200 × 200). The emulator library had no ArtworkDB. iPodFirm now writes it (`ipodfw.artworkdb`, `ArtworkDB.swift`). In the emulator, RetailOS shows the artwork from it.
+- Open: in two runs of the unchanged Apple firmware, Now Playing showed an empty artwork frame. The firmware with the theme or with the patch showed the artwork. The cause is not known.
+
 ## Open items
 
 - Test on a real iPod. The emulator makes its own boot ROM, and it does not test `aupd`.
