@@ -106,8 +106,21 @@ def cmd_apply_theme(args) -> None:
     from . import themeimport
     fw = load(args.firmware)
     th = themeimport.Theme.from_json(Path(args.theme).read_text())
+    original = hashlib.sha256(fw.image("osos")).hexdigest()
+    if args.switch:
+        from . import darkmode
+        osos, info = darkmode.build(fw, fw.image("osos"), th, Path(__file__).resolve().parents[2] / "patches" / "dark-mode",
+                                    original)
+        fw.make_room(len(osos))
+        fw.replace_image("osos", osos)
+        Path(args.output).write_bytes(fw.to_bytes())
+        print(f"Light firmware with the Dark Mode item in Settings -> {args.output}")
+        print(f"  switch table at 0x{info['table'][0]:x} ({info['table'][1]} bytes), menu at 0x{info['menu'][0]:x}, "
+              f"patch {info['patch'][0]}-{info['patch'][1]}, {info['changes_left_out']} changes left out")
+        print(f"  The iPod needs the file {darkmode.SETTING_FILE} (one byte, '0' or '1').")
+        return
     osos = bytearray(fw.image("osos"))
-    done, conflicts = themeimport.apply_theme(th, osos, hashlib.sha256(fw.image("osos")).hexdigest())
+    done, conflicts = themeimport.apply_theme(th, osos, original)
     fw.make_room(len(osos))
     fw.replace_image("osos", bytes(osos))
     Path(args.output).write_bytes(fw.to_bytes())
@@ -260,6 +273,8 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("firmware")
     s.add_argument("theme")
     s.add_argument("-o", "--output", required=True)
+    s.add_argument("--switch", action="store_true",
+                   help="light firmware with a Dark Mode item in Settings (the iPod switches at a restart)")
     s.set_defaults(func=cmd_apply_theme)
 
     s = sub.add_parser("devices", help="list connected iPods")

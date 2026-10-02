@@ -168,15 +168,17 @@ def compile_c(sources: list[Path], workdir: Path) -> bytes:
 
 
 def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int | None = None,
-          symbols: dict[str, int] | None = None) -> tuple[bytes, dict]:
+          symbols: dict[str, int] | None = None, original_sha256: str | None = None) -> tuple[bytes, dict]:
     """Return (patched osos, report). `max_size` is the largest size the osos image can have.
 
     `load_address` replaces the address in patch.json. `symbols` adds addresses that the build
     decides (for example the address of a table that the build puts in the osos image).
+    `original_sha256` is the SHA-256 of the osos before other changes (pictures, text, a theme);
+    without it, osos itself must be Apple's.
     """
     patch_dir = Path(patch_dir)
     spec = json.loads((patch_dir / "patch.json").read_text())
-    if hashlib.sha256(osos).hexdigest() != spec["osos_sha256"]:
+    if (original_sha256 or hashlib.sha256(osos).hexdigest()) != spec["osos_sha256"]:
         raise PatchError(f"patch {spec['name']!r} is for a different firmware (osos SHA-256 does not agree)")
     base = load_address if load_address is not None else int(spec["load_address"], 16)
     fw_syms = {k: int(v, 16) for k, v in spec.get("symbols", {}).items()}

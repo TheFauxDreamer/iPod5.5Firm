@@ -1,0 +1,30 @@
+{
+  "name": "dark-mode",
+  "description": "Dark Mode On/Off in Settings. The build adds the switch table and the Settings item; iPodFirm uses this patch for the appearance \"Switch on iPod\".",
+  "internal": true,
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "load_address": "0x7eb000",
+  "symbols": {
+    "str_lookup": "0x21f418",
+    "str_table": "0x21f3b8",
+    "settings_get": "0x190b00",
+    "settings_set": "0x1919d8",
+    "fw_memset0": "0x07ccd0",
+    "fw_strcpy": "0x07cd6c",
+    "file_open": "0x08f38c",
+    "file_open_rw": "0x08f3f8",
+    "file_read": "0x08f464",
+    "file_write": "0x08f6f4",
+    "file_seek": "0x08f5c4",
+    "file_close": "0x08f184",
+    "save_all": "0x1ee8b8",
+    "prepare_restart": "0x094e08",
+    "restart": "0x001630",
+    "lookup_continue": "0x21f258"
+  },
+  "hooks": [
+    { "kind": "b", "at": "0x21f254", "expect": "0xe92d40f8", "to": "hook_lookup" },
+    { "kind": "word", "at": "0x66c94c", "expect": "0x00190b00", "to": "hook_settings_get" },
+    { "kind": "word", "at": "0x66c950", "expect": "0x001919d8", "to": "hook_settings_set" }
+  ]
+}
