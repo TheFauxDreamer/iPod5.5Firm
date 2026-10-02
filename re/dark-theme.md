@@ -119,6 +119,15 @@ The Rockbox manual for the iPod Video: "The Ipod bootloader is the program that 
 - Apple's large artwork in Now Playing comes from `iPod_Control/Artwork/ArtworkDB` and the files `F1028_1.ithmb` (100 × 100) and `F1029_1.ithmb` (200 × 200). The emulator library had no ArtworkDB. iPodFirm now writes it (`ipodfw.artworkdb`, `ArtworkDB.swift`). In the emulator, RetailOS shows the artwork from it.
 - Open: in two runs of the unchanged Apple firmware, Now Playing showed an empty artwork frame. The firmware with the theme or with the patch showed the artwork. The cause is not known.
 
+## Real iPod test (2 October 2026)
+
+The owner flashed the light firmware with album-art, and then the dark theme with album-art, to a real iPod 5.5G. Both started and operated. Thus RetailOS on the hardware found the moved rsrc.
+
+Two problems were found and corrected:
+
+- The progress bar in Now Playing was almost invisible. The theme makes pictures 24342 and 24343 dark grey (16,16,16 and 33,36,33), also on 1.2.1. The import now keeps the Apple progress bar (`KEEP_APPLE`).
+- The time labels in Now Playing were black on black. Apple also moved positive IDs: Type 14034–14036 in 1.2.1 are 14037–14039 in 1.3, and 14039–14040 are 14042–14043. The ID map translated only negative IDs. It now maps all resources by their contents, and uses the shift of the nearest mapped resource for a changed resource.
+
 ## Open items
 
 - Test on a real iPod. The emulator makes its own boot ROM, and it does not test `aupd`.

@@ -13,8 +13,8 @@ import Foundation
 // stays when the old bytes are different.
 //
 // Rules:
-// - The resources are matched by block, type and ID. Apple changed the negative IDs between the
-//   versions (1.2.1 -279 is 1.3 -277), so the import finds them by their contents.
+// - The resources are matched by block, type and ID. Apple moved some IDs between the
+//   versions (1.2.1 View -279 is 1.3 View -277, Type 14034 is 14037), so the import finds them by their contents.
 // - BMap: the import copies a picture if the target picture has the same header (format, width and
 //   height). A picture that the theme made larger goes into free space after the end of osos.
 // - Type: the import changes a word (4 bytes) only where the target has the base value.
@@ -71,7 +71,7 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
         let end = changes.map { $0.offset + $0.new.count }.max() ?? 0
         if end > osos.count { osos += [UInt8](repeating: 0, count: (end + 0x7FF) / 0x800 * 0x800 - osos.count) }
         var done = 0, conflicts = 0
-        for c in changes {
+        for c in changes where ThemeImport.keepApple[c.resource] == nil {   // skip: a theme file from an earlier version
             let cur = osos[c.offset..<c.offset + c.old.count]
             if cur.elementsEqual(c.old) {
                 osos.replaceSubrange(c.offset..<c.offset + c.new.count, with: c.new)
@@ -90,11 +90,15 @@ public enum ThemeImport {
     public static let format = 1
     /// Join two changed runs if fewer bytes than this separate them.
     static let runGap = 16
-    /// The negative IDs of a type move by a small amount between versions.
+    /// The IDs of a type move by a small amount between versions.
     static let idShifts = (-8...8).sorted { abs($0) < abs($1) }
     /// The reset code of RetailOS stops if the end of the OS image is after 8 MB (0x800004). A
     /// picture that the theme makes larger goes after the current end of osos, below this limit.
     public static let ososLimit = 0x7F0000
+    /// Resources of the target that keep the Apple version: the progress bar in Now Playing (1.3).
+    /// The dark themes make it almost black, so it is not visible.
+    public static let keepApple = ["BMap 24342": "Apple's progress bar stays (the theme makes it almost invisible).",
+                                   "BMap 24343": "Apple's progress bar stays (the theme makes it almost invisible)."]
     /// Element tag -> the resource type that the ID at +12 refers to.
     static let elementIDType = ["BMap": "BMap", "Draw": "BMap", "Str ": "Str ", "None": "View"]
 
@@ -134,36 +138,28 @@ public enum ThemeImport {
     public static func sha256(_ b: [UInt8]) -> String { SHA256.hash(data: b).map { String(format: "%02x", $0) }.joined() }
 
     /// Map the resource keys of base to target. Negative IDs are found by their contents.
+    /// Map the resource keys of base to target.
+    ///
+    /// Apple moved some IDs between the versions (for example Type 14034 in 1.2.1 is 14037 in 1.3).
+    /// Pass 1 maps a resource to the same ID if the data is the same, else to the only resource nearby
+    /// with the same data. Pass 2 maps each other resource with the shift of the nearest resource of
+    /// the same type that pass 1 mapped.
     static func idMap(_ base: Image, _ target: Image) -> [Key: Key] {
         var out: [Key: Key] = [:]
-        var shifts: [String: [(shift: Int, count: Int)]] = [:]   // per block+type, in first-seen order
         for key in base.keys {
-            if key.id >= 0 {
-                if target.res[key] != nil { out[key] = key }
-                continue
-            }
             let data = base.data(key)
-            for d in idShifts {
-                let k2 = Key(block: key.block, type: key.type, id: key.id + d)
-                if target.res[k2] != nil, target.data(k2) == data {
-                    out[key] = k2
-                    let group = key.block + "/" + key.type
-                    if let i = shifts[group, default: []].firstIndex(where: { $0.shift == d }) {
-                        shifts[group]![i].count += 1
-                    } else {
-                        shifts[group, default: []].append((d, 1))
-                    }
-                    break
-                }
-            }
+            if target.res[key] != nil, target.data(key) == data { out[key] = key; continue }
+            let hits = idShifts.filter { $0 != 0 }.map { Key(block: key.block, type: key.type, id: key.id + $0) }
+                .filter { target.res[$0] != nil && target.data($0) == data }
+            if hits.count == 1 { out[key] = hits[0] }
         }
-        // A changed resource has no equal copy: use the most frequent shift of its type.
-        for key in base.keys where out[key] == nil && key.id < 0 {
-            guard let counts = shifts[key.block + "/" + key.type], !counts.isEmpty else { continue }
-            var best = counts[0]
-            for c in counts.dropFirst() where c.count > best.count { best = c }
-            let k2 = Key(block: key.block, type: key.type, id: key.id + best.shift)
-            if let t = target.res[k2], t.0.size == base.res[key]!.0.size { out[key] = k2 }
+        var mapped: [String: [(id: Int, shift: Int)]] = [:]
+        for (key, k2) in out { mapped[key.block + "/" + key.type, default: []].append((key.id, k2.id - key.id)) }
+        for key in base.keys where out[key] == nil {
+            guard let list = mapped[key.block + "/" + key.type],
+                  let near = list.min(by: { (abs($0.id - key.id), $0.id) < (abs($1.id - key.id), $1.id) }) else { continue }
+            let k2 = Key(block: key.block, type: key.type, id: key.id + near.shift)
+            if let t = target.res[k2], target.data(k2) == base.data(key) || t.0.size == base.res[key]!.0.size { out[key] = k2 }
         }
         return out
     }
@@ -244,7 +240,7 @@ public enum ThemeImport {
 
         /// Translate a negative resource ID from base to target.
         func tr(_ type: String, _ value: Int) -> Int {
-            guard value < 0, let k = ids[Key(block: "main", type: type, id: value)] else { return value }
+            guard value != 0, let k = ids[Key(block: "main", type: type, id: value)] else { return value }
             return k.id
         }
 
@@ -381,6 +377,10 @@ public enum ThemeImport {
             }
             let cur = n.data(nkey), pos = n.pos(nkey)
             label = nkey.label
+            if let why = keepApple[label] {
+                theme.skipped.append(ThemeSkip(resource: label, reason: why))
+                continue
+            }
             var changes: [ThemeChange] = []
             if key.type == "BMap" {
                 if new.count == cur.count, new.prefix(28) == cur.prefix(28) {

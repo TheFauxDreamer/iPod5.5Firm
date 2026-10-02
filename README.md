@@ -116,7 +116,7 @@ The dark theme makes osos larger and moves `rsrc`. These facts support a safe re
 - In the emulator, the firmware did not write to the RAM of the background picture during a long test.
 - On a disk image, a restore of the original backup gives the original partition again, byte for byte.
 
-The move of `rsrc` was not done on a real iPod. For the details, refer to [re/dark-theme.md](re/dark-theme.md).
+The owner tested the dark theme and the move of `rsrc` on a real iPod 5.5G. For the details, refer to [re/dark-theme.md](re/dark-theme.md).
 
 If the iPod does not show disk mode, charge it for one hour and try again. Diagnostic mode can test the disk: push and hold Menu and Select, then push and hold Select and Previous.
 
@@ -217,6 +217,7 @@ iPodFirm applies the theme when you save, flash, export an .ipsw or run the emul
 ### How the import operates
 
 - The import compares the theme with Apple firmware 1.2.1. Then it applies the changed pictures, colours and layouts to firmware 1.3.
+- The import keeps Apple's progress bar in Now Playing. The theme makes it almost invisible.
 - The import does not apply changes to the program code. The tested theme removes a signature check; iPodFirm does not copy that change.
 - The theme has a full-screen background picture. The picture makes osos 38 KB larger. Thus iPodFirm moves the `rsrc` image (fonts and video firmware) to free space in the firmware partition. It does not move or change `aupd` or `hibe`.
 
@@ -246,7 +247,7 @@ The patch tool compiles C code with the Xcode compiler and links it at a fixed a
 - The write to the iPod has tests on a disk image. The write was not done on a real iPod.
 - The rescue restore has tests on a disk image with a damaged firmware partition. It was not done on a real iPod.
 - The `album-art` patch has tests in the emulator. It was not done on a real iPod.
-- The dark theme has tests in the emulator, also with the `album-art` patch. The move of `rsrc` has tests on a disk image. Neither was done on a real iPod.
+- The dark theme, with the `album-art` patch, operates on a real iPod 5.5G. This includes the move of `rsrc`.
 
 ## Credits
 

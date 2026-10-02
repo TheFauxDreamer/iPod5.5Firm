@@ -9,8 +9,8 @@ the old bytes and the new bytes. Thus, the app can apply the theme or not, and a
 the owner stays when the old bytes are different.
 
 Rules:
-- The resources are matched by block, type and ID. Apple changed the negative IDs between
-  the versions (1.2.1 -279 is 1.3 -277), so the import finds them by their contents.
+- The resources are matched by block, type and ID. Apple moved some IDs between the versions
+  (1.2.1 View -279 is 1.3 View -277, Type 14034 is 14037), so the import finds them by their contents.
 - BMap: the import copies a picture if the target picture has the same header (format, width
   and height). A picture that the theme made larger needs free space in the target osos.
 - Type: the import changes a word (4 bytes) only where the target has the base value.
@@ -34,12 +34,16 @@ from .partition import FirmwarePartition
 
 FORMAT = 1
 RUN_GAP = 16              # join two changed runs if fewer bytes than this separate them
-ID_SHIFTS = range(-8, 9)  # the negative IDs of a type move by a small amount between versions
+ID_SHIFTS = range(-8, 9)  # the IDs of a type move by a small amount between versions
 # Element tag -> the resource type that the ID at +12 refers to
 ELEMENT_ID_TYPE = {"BMap": "BMap", "Draw": "BMap", "Str ": "Str ", "None": "View"}
 # The reset code of RetailOS stops if the end of the OS image is after 8 MB (0x800004).
 # A picture that the theme makes larger goes after the current end of osos, below this limit.
 OSOS_LIMIT = 0x7F0000
+# Resources of the target that keep the Apple version: the progress bar in Now Playing (1.3).
+# The dark themes make it almost black, so it is not visible.
+KEEP_APPLE = {"BMap 24342": "Apple's progress bar stays (the theme makes it almost invisible).",
+              "BMap 24343": "Apple's progress bar stays (the theme makes it almost invisible)."}
 
 
 class ThemeError(Exception):
@@ -121,32 +125,34 @@ def _label(key) -> str:
 
 
 def _id_map(base: _Image, target: _Image) -> dict[tuple[str, str, int], tuple[str, str, int]]:
-    """Map the resource keys of base to target. Negative IDs are found by their contents."""
+    """Map the resource keys of base to target.
+
+    Apple moved some IDs between the versions (for example Type 14034 in 1.2.1 is 14037 in 1.3).
+    Pass 1 maps a resource to the same ID if the data is the same, else to the only resource
+    nearby with the same data. Pass 2 maps each other resource with the shift of the nearest
+    resource of the same type that pass 1 mapped.
+    """
     out = {}
-    shifts: dict[tuple[str, str], dict[int, int]] = {}
+    shifts = sorted((d for d in ID_SHIFTS if d), key=abs)
     for key in base.res:
-        if key[2] >= 0:
-            if key in target.res:
-                out[key] = key
-            continue
         data = base.data(key)
-        for d in sorted(ID_SHIFTS, key=abs):
-            k2 = (key[0], key[1], key[2] + d)
-            if k2 in target.res and target.data(k2) == data:
-                out[key] = k2
-                shifts.setdefault(key[:2], {}).setdefault(d, 0)
-                shifts[key[:2]][d] += 1
-                break
-    # A changed resource has no equal copy: use the most frequent shift of its type.
-    for key in base.res:
-        if key in out or key[2] >= 0:
+        if key in target.res and target.data(key) == data:
+            out[key] = key
             continue
-        counts = shifts.get(key[:2])
-        if counts:
-            d = max(counts, key=counts.get)
-            k2 = (key[0], key[1], key[2] + d)
-            if k2 in target.res and target.res[k2].size == base.res[key].size:
-                out[key] = k2
+        hits = [k2 for d in shifts for k2 in [(key[0], key[1], key[2] + d)]
+                if k2 in target.res and target.data(k2) == data]
+        if len(hits) == 1:
+            out[key] = hits[0]
+    mapped: dict[tuple[str, str], list[tuple[int, int]]] = {}
+    for key, k2 in out.items():
+        mapped.setdefault(key[:2], []).append((key[2], k2[2] - key[2]))
+    for key in base.res:
+        if key in out or not mapped.get(key[:2]):
+            continue
+        _id, d = min(mapped[key[:2]], key=lambda m: (abs(m[0] - key[2]), m[0]))
+        k2 = (key[0], key[1], key[2] + d)
+        if k2 in target.res and (target.data(k2) == base.data(key) or target.res[k2].size == base.res[key].size):
+            out[key] = k2
     return out
 
 
@@ -222,8 +228,8 @@ class _Merger:
         self.ids = ids
 
     def tr(self, rtype: str, value: int, block: str = "main") -> int:
-        """Translate a negative resource ID from base to target."""
-        if value >= 0:
+        """Translate a resource ID from base to target."""
+        if value == 0:
             return value
         k = self.ids.get((block, rtype, value))
         return k[2] if k else value
@@ -352,6 +358,9 @@ def make_theme(theme_fw: FirmwarePartition, base_fw: FirmwarePartition, target_f
         cur = n.data(nkey)
         pos = n.pos(nkey)
         label = _label(nkey)
+        if label in KEEP_APPLE:
+            theme.skipped.append((label, KEEP_APPLE[label]))
+            continue
         changes: list[Change] = []
         if key[1] == "BMap":
             if len(new) == len(cur) and new[:28] == cur[:28]:
@@ -401,6 +410,8 @@ def apply_theme(theme: Theme, osos: bytearray, original_sha256: str) -> tuple[in
     if end > len(osos):
         osos.extend(bytes((end + 0x7FF) // 0x800 * 0x800 - len(osos)))
     for c in theme.changes:
+        if c.resource in KEEP_APPLE:            # a theme file from an earlier version
+            continue
         cur = bytes(osos[c.offset:c.offset + len(c.old)])
         if cur == c.old:
             osos[c.offset:c.offset + len(c.new)] = c.new
