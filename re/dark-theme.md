@@ -128,6 +128,14 @@ Two problems were found and corrected:
 - The progress bar in Now Playing was almost invisible. The theme makes pictures 24342 and 24343 dark grey (16,16,16 and 33,36,33), also on 1.2.1. The import now keeps the Apple progress bar (`KEEP_APPLE`).
 - The time labels in Now Playing were black on black. Apple also moved positive IDs: Type 14034–14036 in 1.2.1 are 14037–14039 in 1.3, and 14039–14040 are 14042–14043. The ID map translated only negative IDs. It now maps all resources by their contents, and uses the shift of the nearest mapped resource for a changed resource.
 
+## Thumbnails after a sync
+
+The album-art patch loaded the thumbnail file one time. New albums showed only after a restart of the iPod (found on the real iPod).
+
+- iPodFirm writes a stamp at +0x0C of the file: the FNV-1a hash of the entry table.
+- After 100 list labels without a thumbnail, the patch reads the 16-byte header again. If the header changed, it frees the old data with `fw_free` (0x25a8e4, the same pool 0x1081da00 as `fw_alloc`) and loads the file again.
+- Emulator test (threshold 3): 52 header checks without a change caused no reload. After the file was replaced in the drive image, the patch reloaded it, and the Albums list showed the thumbnails of the new file. The UI continued to operate.
+
 ## Open items
 
 - Test on a real iPod. The emulator makes its own boot ROM, and it does not test `aupd`.

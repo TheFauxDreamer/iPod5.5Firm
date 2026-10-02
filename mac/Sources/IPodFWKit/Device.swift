@@ -55,6 +55,11 @@ public enum Device {
     public static func unmount(_ ipod: IPodDisk) throws {
         _ = try runTool("/usr/sbin/diskutil", ["unmountDisk", ipod.disk])
     }
+
+    /// Unmount all volumes of the iPod and eject it, as Finder does. Then the iPod can be disconnected.
+    public static func eject(_ ipod: IPodDisk) throws {
+        _ = try runTool("/usr/sbin/diskutil", ["eject", ipod.disk])
+    }
 }
 
 public protocol BlockReader {

@@ -17,7 +17,8 @@
     "file_seek": "0x08f5c4",
     "file_close": "0x08f184",
     "gc_prepare": "0x21a27c",
-    "row_label_draw": "0x1bb260"
+    "row_label_draw": "0x1bb260",
+    "fw_free": "0x25a8e4"
   },
   "hooks": [
     {

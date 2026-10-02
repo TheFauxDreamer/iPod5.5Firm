@@ -46,9 +46,16 @@ public enum AlbumArt {
         var out = [UInt8](Array("IFAT".utf8))
         func u16(_ v: Int) { out += [UInt8(v & 0xFF), UInt8(v >> 8 & 0xFF)] }
         func u32(_ v: UInt32) { for i in 0..<4 { out.append(UInt8(v >> (8 * UInt32(i)) & 0xFF)) } }
-        u16(1); u16(size); u32(UInt32(hashes.count)); u32(0)
         let dataStart = 16 + 8 * hashes.count
-        for (i, h) in hashes.enumerated() { u32(h); u32(UInt32(dataStart + i * size * size * 2)) }
+        var table = [UInt8]()
+        for (i, h) in hashes.enumerated() {
+            for v in [h, UInt32(dataStart + i * size * size * 2)] { for k in 0..<4 { table.append(UInt8(v >> (8 * UInt32(k)) & 0xFF)) } }
+        }
+        // The stamp is the FNV-1a hash of the entry table. The patch reads the file again when it changes.
+        var stamp: UInt32 = 2_166_136_261
+        for b in table { stamp = (stamp ^ UInt32(b)) &* 16_777_619 }
+        u16(1); u16(size); u32(UInt32(hashes.count)); u32(stamp)
+        out += table
         for h in hashes { out += entries[h]! }
         return out
     }

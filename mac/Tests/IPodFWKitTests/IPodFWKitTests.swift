@@ -306,6 +306,7 @@ final class PatchAndArtTests: XCTestCase {
         let first = Int(le32(f, 20))
         XCTAssertEqual(le16(f, first), 0xF800)          // pure red in RGB565
         XCTAssertEqual(f.count, 16 + 16 + 2 * 4 * 4 * 2)
+        XCTAssertEqual(le32(f, 12), 0x9cfbef97)                 // stamp: same value as the Python version
     }
 }
 

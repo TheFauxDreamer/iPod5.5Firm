@@ -38,3 +38,14 @@ def test_track_artwork_fields():
     assert struct.unpack_from("<I", db, mhit + 0x80)[0] == 5555
     assert db[mhit + 0xA4] == 1
     assert struct.unpack_from("<I", db, mhit + 0x160)[0] == 100
+
+
+def test_thumbnail_file_stamp():
+    from ipodfw import albumart
+    red = Image.new("RGB", (2, 2), (255, 0, 0))
+    a = albumart.build({"Charm": red, "Burials": red}, 4)
+    b = albumart.build({"Charm": red}, 4)
+    stamp = struct.unpack_from("<I", a, 12)[0]
+    assert stamp == albumart.stamp(a[16:16 + 16]) and stamp != 0
+    assert struct.unpack_from("<I", b, 12)[0] != stamp      # other albums: other stamp
+    assert albumart.build({"Burials": red, "Charm": red}, 4) == a   # same albums: same file

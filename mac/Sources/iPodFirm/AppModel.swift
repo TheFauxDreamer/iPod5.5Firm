@@ -469,6 +469,15 @@ final class AppModel: ObservableObject {
         refreshBackups()
     }
 
+    func ejectIPod() async {
+        guard let ipod = currentIPod else { return }
+        do {
+            try await work("Ejecting \(ipod.volumeName ?? ipod.mediaName)…") { try Device.eject(ipod) }
+            thumbnailStatus = nil
+            await refreshIPods()
+        } catch { fail("Couldn't eject the iPod", error) }
+    }
+
     func refreshBackups() { backups = Backups.list(in: Self.backupDir) }
 
     func backupURL(_ b: BackupInfo) -> URL { Self.backupDir.appendingPathComponent(b.file) }

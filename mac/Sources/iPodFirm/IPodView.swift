@@ -30,6 +30,9 @@ struct IPodView: View {
                 }
                 HStack {
                     Button("Refresh") { Task { await model.refreshIPods() } }
+                    Button("Eject") { Task { await model.ejectIPod() } }
+                        .disabled(model.currentIPod == nil)
+                        .help("Unmount the iPod so that you can disconnect it")
                     Spacer()
                     Button("Back Up Now") { Task { await model.backupNow() } }
                         .disabled(model.currentIPod == nil)

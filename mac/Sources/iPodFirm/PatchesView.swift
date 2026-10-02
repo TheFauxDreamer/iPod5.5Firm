@@ -63,10 +63,12 @@ struct AlbumArtControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("The iPod also needs a thumbnail file made from its own music. Write it after you flash this patch, and again after each sync that adds albums.")
+            Text("The iPod also needs a thumbnail file made from its own music. Write it after you flash this patch, and again after each sync that adds albums. You do not have to restart the iPod: the new thumbnails show after you scroll through a list.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("Write Thumbnails to iPod") { Task { await model.writeThumbnails() } }
+                    .disabled(model.currentIPod == nil)
+                Button("Eject iPod") { Task { await model.ejectIPod() } }
                     .disabled(model.currentIPod == nil)
                 if model.currentIPod == nil { Text("Connect the iPod.").font(.caption).foregroundStyle(.secondary) }
             }

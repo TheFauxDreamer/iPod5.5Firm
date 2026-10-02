@@ -25,6 +25,7 @@ The app has these functions:
 - Show and replace the pictures in the firmware. Use PNG files that have the same size.
 - Show and change the text in the firmware. A gauge shows the bytes that are free in each language.
 - Make a backup of the firmware partition of the iPod.
+- Eject the iPod, so that you can disconnect it (iPod pane and Patches pane).
 - Write the changed firmware to the iPod.
 - Restore a backup to the iPod. If the firmware on the iPod is damaged, the app does a rescue restore.
 - Show the recovery steps, and get the Apple firmware for a restore with Finder.
@@ -229,7 +230,7 @@ The "Timed" appearance (dark at set hours) is not available yet. It needs a code
 |---|---|---|
 | `album-art` | Shows a 20 × 20 thumbnail of the album artwork at the left of each album in the lists. | Tested in the emulator with 200 real songs in 28 albums. Not tested on a real iPod. |
 
-The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums.
+The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary: the patch finds the new file when you scroll through a list.
 
 The patch draws a thumbnail only in the rows of a list. In Now Playing, RetailOS shows its own large artwork from `iPod_Control/Artwork/ArtworkDB`. Finder writes that database when it syncs music with artwork.
 

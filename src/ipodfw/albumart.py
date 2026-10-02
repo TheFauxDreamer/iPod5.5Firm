@@ -22,6 +22,15 @@ def fnv1a(text: str) -> int:
     return h
 
 
+def stamp(table: bytes) -> int:
+    """FNV-1a hash of the entry table. The patch reads the file again when this value changes."""
+    h = 2166136261
+    for b in table:
+        h ^= b
+        h = (h * 16777619) & 0xFFFFFFFF
+    return h
+
+
 def rgb565(img: Image.Image, size: int) -> bytes:
     """Scale an image to a square of `size` pixels and return RGB565 little-endian pixels."""
     img = img.convert("RGB")
@@ -44,9 +53,9 @@ def build(albums: dict[str, Image.Image], size: int = DEFAULT_SIZE) -> bytes:
             entries[h] = rgb565(img, size)
     hashes = sorted(entries)
     data_start = 16 + 8 * len(hashes)
-    out = bytearray(MAGIC + struct.pack("<HHII", VERSION, size, len(hashes), 0))
-    for i, h in enumerate(hashes):
-        out += struct.pack("<II", h, data_start + i * size * size * 2)
+    table = b"".join(struct.pack("<II", h, data_start + i * size * size * 2) for i, h in enumerate(hashes))
+    out = bytearray(MAGIC + struct.pack("<HHII", VERSION, size, len(hashes), stamp(table)))
+    out += table
     for h in hashes:
         out += entries[h]
     return bytes(out)

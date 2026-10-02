@@ -7,12 +7,14 @@
  *  - the general label class (type 0x1580, draw method 0x244924).
  * If the text of the label is the name of an album in the thumbnail file, the wrapper moves the
  * left edge of the label to the right, calls the original method, and draws the thumbnail.
+ * After RECHECK_MISSES list labels without a thumbnail, the patch reads the file header again.
+ * If the header changed (for example after a sync that added albums), it loads the file again.
  *
  * Thumbnail file (written by iPodFirm), all values little-endian:
  *   0x00  "IFAT"
  *   0x04  u16 version (1), u16 thumbnail size S (pixels, square)
  *   0x08  u32 count N
- *   0x0C  u32 reserved
+ *   0x0C  u32 stamp: FNV-1a hash of the entries. It changes when the albums change.
  *   0x10  N entries { u32 FNV-1a hash of the UTF-8 album name, u32 file offset of the pixels },
  *         sorted by hash
  *   then  N thumbnails of S*S RGB565 pixels, row by row
@@ -29,6 +31,7 @@ void gc_set_color(void *gc, const unsigned char *rgba);
 void gc_set_mode(void *gc, int mode);
 void gc_fill_rect(void *gc, Rect *r);
 void *fw_alloc(unsigned size);
+void fw_free(void *p);
 void fw_memset0(void *p, unsigned size);
 void fw_strcpy(char *dst, const char *src);
 int file_open(void *path_record, void *fh, int zero, unsigned mode);
@@ -42,6 +45,7 @@ int file_close(void *fh);
 #define CACHE_SLOTS 64
 #define LOAD_ALL_MAX (1024 * 1024)        /* load all thumbnails if their data is this size or smaller */
 #define GAP         4
+#define RECHECK_MISSES 100                /* labels without a thumbnail before the header is read again */
 #define VIEW_LEFT   0x5c                  /* offset of the left edge in a view */
 #define VIEW_GC     0x74                  /* offset of the graphics context in a view */
 #define GC_ORIGIN_X 0x2c                  /* gc+0x30 is the y origin */
@@ -59,6 +63,8 @@ static unsigned short *all_pixels;        /* all thumbnails, if the file is smal
 static unsigned data_start;
 static unsigned cache_hash[CACHE_SLOTS];
 static unsigned cache_next;
+static unsigned loaded_header[4];         /* the header of the loaded file */
+static unsigned misses;                   /* list labels without a thumbnail since the last check */
 
 static unsigned fnv1a(const char *s)
 {
@@ -90,15 +96,22 @@ static int read_at(unsigned offset, void *buf, unsigned len)
     return (err == 0 && got == len) ? 0 : -1;
 }
 
+/* Releases the loaded file, so that load() reads it again. */
+static void unload(void);
+
 static void load(void)
 {
     unsigned header[4];
+    int i;
 
     if (state != 0)
         return;
+    unload();                             /* memory of an earlier load that failed */
     state = -1;
     if (read_at(0, header, sizeof header) != 0 || header[0] != 0x54414649u)   /* "IFAT" */
         return;
+    for (i = 0; i < 4; i++)
+        loaded_header[i] = header[i];
     if ((header[1] & 0xffff) != 1)
         return;
     size = header[1] >> 16;
@@ -210,6 +223,44 @@ static int view_slot(void *view, int make)
     return empty;
 }
 
+static void unload(void)
+{
+    int i;
+    fw_free(index);
+    fw_free(all_pixels);
+    fw_free(cache_pixels);
+    index = 0;
+    all_pixels = 0;
+    cache_pixels = 0;
+    count = 0;
+    cache_next = 0;
+    for (i = 0; i < CACHE_SLOTS; i++)
+        cache_hash[i] = 0;
+    for (i = 0; i < VIEW_SLOTS; i++) {    /* the slots point into the index */
+        slot_view[i] = 0;
+        slot_entry[i] = 0;
+    }
+    state = 0;
+}
+
+/* A list label without a thumbnail can be a new album. Read the header again after some of
+ * them; if the file changed, release it so that the next draw loads the new file. */
+static void check_for_new_file(void)
+{
+    unsigned header[4];
+    int i;
+    if (++misses < RECHECK_MISSES)
+        return;
+    misses = 0;
+    if (read_at(0, header, sizeof header) != 0)
+        return;                           /* no file now: keep the loaded thumbnails */
+    for (i = 0; i < 4; i++)
+        if (header[i] != loaded_header[i]) {
+            unload();
+            return;
+        }
+}
+
 static void draw_with_thumbnail(draw_fn original, void *view, const char *text, void *a3)
 {
     Rect r;
@@ -241,6 +292,8 @@ static void draw_with_thumbnail(draw_fn original, void *view, const char *text, 
                 if (!e)
                     slot_view[i] = 0;
             }
+            if (!e)
+                check_for_new_file();     /* can release the file: e stays 0 */
         } else if ((i = view_slot(view, 0)) >= 0) {
             e = slot_entry[i];
         }
