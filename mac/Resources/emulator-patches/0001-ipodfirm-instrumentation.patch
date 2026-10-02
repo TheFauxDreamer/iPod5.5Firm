@@ -45,7 +45,7 @@ index f96afc1..3db6e6f 100644
          "trace" => {
              link.peek_req.lock().unwrap().push(TRACE_SENTINEL);
 diff --git a/tools/ipod-gui/src/emu.rs b/tools/ipod-gui/src/emu.rs
-index d8fe22a..345aa46 100644
+index d8fe22a..f45f349 100644
 --- a/tools/ipod-gui/src/emu.rs
 +++ b/tools/ipod-gui/src/emu.rs
 @@ -507,6 +507,8 @@ pub struct Out {
@@ -95,7 +95,21 @@ index d8fe22a..345aa46 100644
      // Through `set_clock` even here, where the machine has executed nothing and a bare assignment
      // would do: one way to move the divisor is a rule that can be checked, and two is a rule
      // nobody remembers which half of. On a machine at instruction zero the correction it computes
-@@ -2701,6 +2723,22 @@ fn session(cfg: &Config, link: &Arc<Link>, first: bool, deaths: &mut Deaths) ->
+@@ -2599,6 +2621,13 @@ fn session(cfg: &Config, link: &Arc<Link>, first: bool, deaths: &mut Deaths) ->
+         };
+         let executed = m.executed as u64;
+ 
++        // iPodFirm local patch: the firmware restarted the iPod (DEV_RS). Boot the machine again
++        // from the reset vector, on the same drive, as the hardware does.
++        if m.mem.reset_requested {
++            println!("iPodFirm: the firmware restarted the iPod at {executed} instructions (pc {:#x}).", m.cpu.regs[15]);
++            return Outcome::ColdBoot;
++        }
++
+         // The scripted power cycle, in the first session only. Announced with the machine's own
+         // numbers so the second session's are visibly a different machine's.
+         if first {
+@@ -2701,6 +2730,22 @@ fn session(cfg: &Config, link: &Arc<Link>, first: bool, deaths: &mut Deaths) ->
                              .map(|p| p.written.iter().map(|(r, (n, v))| (*r, *n, *v)).collect())
                              .unwrap_or_default();
                          Some(out.pmu_written.len() as u32)
@@ -130,3 +144,41 @@ index 614f566..095d3c5 100644
              pmu_written: Vec::new(),
              watched_writes: Vec::new(),
              bus_log: Vec::new(),
+diff --git a/tools/ipod-machine/src/lib.rs b/tools/ipod-machine/src/lib.rs
+index ed9b163..07d92a3 100644
+--- a/tools/ipod-machine/src/lib.rs
++++ b/tools/ipod-machine/src/lib.rs
+@@ -759,6 +759,11 @@ pub struct Memory {
+     /// from "never wrote" — that ambiguity produced a whole contradiction in research/06 and was
+     /// leaned on twice more. This records the write itself, over a whole structure.
+     pub watch_range: Option<(u32, u32)>,
++    /// iPodFirm local patch: the firmware wrote DEV_SYSTEM (4) to DEV_RS (0x60006004), which
++    /// restarts a real iPod. The session reads this flag and boots the machine again.
++    pub reset_requested: bool,
++    /// iPodFirm local patch: honour the restart only after this many instructions.
++    pub reset_after: Option<u64>,
+     /// An ordered **sample** of those writes. The report is driven by `watch_range_words` below.
+     /// An ordered **sample** of those writes, as `(pc, address, byte, usec)`.
+     ///
+@@ -2485,6 +2490,12 @@ impl Bus for Memory {
+ 
+     fn write32(&mut self, addr: u32, val: u32) {
+         self.note_store_pc(addr, val);
++        // iPodFirm local patch: DEV_RS with DEV_SYSTEM restarts the iPod (Apple's FUN_00001630).
++        // The emulated start calls it too (start checks that pass on hardware), so it is honoured
++        // only after IPODFW_RESET_AFTER instructions (set by the test that wants it).
++        if addr & !3 == 0x6000_6004 && val == 4 && self.reset_after.is_some_and(|n| self.icount >= n) {
++            self.reset_requested = true;
++        }
+         // CPU_CTRL. Bit 31 is the core asking to be switched off until an interrupt, and RetailOS's
+         // idle task writes it in a tight loop — it is the second-hottest instruction in the resting
+         // state. Unmodelled, the idle task spun at full speed, so a 2 G-instruction budget bought
+@@ -4720,6 +4731,8 @@ impl Machine {
+             input_probe: None,
+             input_regs: BTreeMap::new(),
+             watch_range: None,
++            reset_requested: false,
++            reset_after: std::env::var("IPODFW_RESET_AFTER").ok().and_then(|v| v.parse().ok()),
+             watch_range_log: Capped::new(4096),
+             watch_range_words: BTreeMap::new(),
+             low_stores: BTreeMap::new(),

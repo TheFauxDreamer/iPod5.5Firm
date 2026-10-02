@@ -40,3 +40,19 @@ RECIPE=... ipod-film run --out=_film         # one PNG per distinct screen + tim
 
 - The emulator synthesises the boot ROM unless you give it a real 1 MB NOR dump, so a passing boot there is strong evidence but not proof.
 - It has no USB, so `ipodfw flash` itself can only be tested on hardware.
+
+## iPodFirm additions to the emulator
+
+The patch `mac/Resources/emulator-patches/0001-ipodfirm-instrumentation.patch` adds these settings. Set them as environment variables when you start the emulator.
+
+| Variable | Function |
+|---|---|
+| `IPODFW_PROFILE=1` | Counts the instructions in each 64-byte block of code. Read the counts with the `hist` command. |
+| `IPODFW_REGS_AT=ADDR,COUNT` | Records the registers the first COUNT times ADDR runs. Read them with the `regs` command. |
+| `IPODFW_TRACE_PC=FROM-TO` | Records the program counter in a range. |
+| `IPODFW_WATCH_RANGE=BASE:LEN` | Records each CPU write into a range. Read the result with the `writes` command. Use the CPU address (osos offset), not the physical address. |
+| `IPODFW_RESET_AFTER=N` | Restarts the emulated iPod when the firmware writes 4 to `DEV_RS` (0x60006004), after N instructions. |
+
+`peek` reads a physical address: use 0x10000000 + the osos offset.
+
+CAUTION: The emulated start writes 4 to `DEV_RS` several times (start checks that pass on the hardware). Thus set `IPODFW_RESET_AFTER` to a value after the start, for example 1000000000.
