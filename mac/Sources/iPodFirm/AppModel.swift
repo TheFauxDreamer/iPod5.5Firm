@@ -37,7 +37,7 @@ final class AppModel: ObservableObject {
     @Published var flashPlan: FlashPlan?
     @Published var hasFullDiskAccess = AppModel.checkFullDiskAccess()
     @Published var helperStatus: SMAppService.Status = HelperClient.service.status
-    @Published var patches: [PatchInfo] = Patcher.list(in: AppModel.patchesDir)
+    @Published var patches: [PatchInfo] = Patcher.list(in: AppModel.patchesDir).filter { $0.spec.internal != true }
     @Published var enabledPatches: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "enabledPatches") ?? []) {
         didSet { UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches") }
     }

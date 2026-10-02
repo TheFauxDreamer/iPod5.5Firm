@@ -167,14 +167,20 @@ def compile_c(sources: list[Path], workdir: Path) -> bytes:
     return objs[0].read_bytes()
 
 
-def apply(osos: bytes, patch_dir: str | Path, max_size: int) -> tuple[bytes, dict]:
-    """Return (patched osos, report). `max_size` is the largest size the osos image can have."""
+def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int | None = None,
+          symbols: dict[str, int] | None = None) -> tuple[bytes, dict]:
+    """Return (patched osos, report). `max_size` is the largest size the osos image can have.
+
+    `load_address` replaces the address in patch.json. `symbols` adds addresses that the build
+    decides (for example the address of a table that the build puts in the osos image).
+    """
     patch_dir = Path(patch_dir)
     spec = json.loads((patch_dir / "patch.json").read_text())
     if hashlib.sha256(osos).hexdigest() != spec["osos_sha256"]:
         raise PatchError(f"patch {spec['name']!r} is for a different firmware (osos SHA-256 does not agree)")
-    base = int(spec["load_address"], 16)
+    base = load_address if load_address is not None else int(spec["load_address"], 16)
     fw_syms = {k: int(v, 16) for k, v in spec.get("symbols", {}).items()}
+    fw_syms.update(symbols or {})
     with tempfile.TemporaryDirectory() as tmp:
         obj = compile_c(sorted(patch_dir.glob("*.c")), Path(tmp))
     code, table = link(obj, base, fw_syms)

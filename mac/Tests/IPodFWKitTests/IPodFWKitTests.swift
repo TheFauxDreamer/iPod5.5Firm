@@ -520,3 +520,19 @@ final class MusicLibraryOutputTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: out + "/iPod_Control/Artwork/ArtworkDB"))
     }
 }
+
+/// The patcher options that the dark-mode build uses. Needs IPODFW_IPSW.
+final class PatcherOptionTests: XCTestCase {
+    func testLoadAddressAndSizeLimit() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        let patch = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "row-marker" }!
+        let sha = ThemeImport.sha256(osos)
+        XCTAssertThrowsError(try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7eb000))
+        let out = try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7eb000, maxSize: 0x7F0000)
+        XCTAssertEqual(out.count % 0x800, 0)
+        XCTAssertTrue((0x7eb000..<0x7F0000).contains(Int(le32(out, 0x677a14))))
+    }
+}
+

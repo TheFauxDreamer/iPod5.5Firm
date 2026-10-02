@@ -20,6 +20,9 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var load_address: String
     public var symbols: [String: String]?
     public var hooks: [Hook]?
+    /// true: the patch is part of a build step (for example the dark-mode switch) and is not shown
+    /// in the list of patches.
+    public var `internal`: Bool?
 }
 
 public struct PatchInfo: Identifiable, Hashable {
@@ -70,18 +73,22 @@ public enum Patcher {
         originalSHA256 == patch.spec.osos_sha256
     }
 
-    static func apply(_ patch: PatchInfo, to current: [UInt8], originalSHA256: String) throws -> [UInt8] {
+    /// Apply one patch. `loadAddress` replaces the address in patch.json, and `symbols` adds
+    /// addresses that the build decides (for example the address of a table in the osos image).
+    public static func apply(_ patch: PatchInfo, to current: [UInt8], originalSHA256: String, loadAddress: UInt32? = nil,
+                             symbols: [String: UInt32] = [:], maxSize: Int = maxOSOSSize) throws -> [UInt8] {
         let spec = patch.spec
         guard originalSHA256 == spec.osos_sha256 else {
             throw PatchError("The patch \"\(spec.name)\" is for a different firmware version.")
         }
-        let base = try hex(spec.load_address)
+        let base = try loadAddress ?? hex(spec.load_address)
         var fw = [String: UInt32]()
         for (k, v) in spec.symbols ?? [:] { fw[k] = try hex(v) }
+        fw.merge(symbols) { $1 }
         let obj = try compile(patch.folder)
         let (code, table) = try link(obj, base: base, firmware: fw)
         let end = Int(base) + code.count
-        guard end <= maxOSOSSize else { throw PatchError("The patch code ends at \(String(end, radix: 16)); the maximum is \(String(maxOSOSSize, radix: 16)).") }
+        guard end <= maxSize else { throw PatchError("The patch code ends at \(String(end, radix: 16)); the maximum is \(String(maxSize, radix: 16)).") }
         var out = current
         let size = max(out.count, (end + 0x7FF) / 0x800 * 0x800)
         if out.count < size { out += [UInt8](repeating: 0, count: size - out.count) }
