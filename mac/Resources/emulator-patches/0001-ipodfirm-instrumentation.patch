@@ -183,10 +183,10 @@ index 614f566..8217290 100644
              watched_writes: Vec::new(),
              bus_log: Vec::new(),
 diff --git a/tools/ipod-machine/src/lib.rs b/tools/ipod-machine/src/lib.rs
-index ed9b163..14cefe7 100644
+index ed9b163..4a9542d 100644
 --- a/tools/ipod-machine/src/lib.rs
 +++ b/tools/ipod-machine/src/lib.rs
-@@ -759,6 +759,14 @@ pub struct Memory {
+@@ -759,6 +759,17 @@ pub struct Memory {
      /// from "never wrote" — that ambiguity produced a whole contradiction in research/06 and was
      /// leaned on twice more. This records the write itself, over a whole structure.
      pub watch_range: Option<(u32, u32)>,
@@ -198,10 +198,13 @@ index ed9b163..14cefe7 100644
 +    /// iPodFirm local patch: writes to the ATA taskfile, the ATA control register and GPO32,
 +    /// as `(instructions, usec, pc, addr, byte)`. Read and cleared by the `evlog` command.
 +    pub ev_log: Vec<(u64, u32, u32, u32, u8)>,
++    /// iPodFirm local patch: IPODFW_MARK_AT=ADDR,ADDR,... adds a marker (address 0xfffffffd, byte =
++    /// the index in this list) to `ev_log` each time one of these addresses runs.
++    pub mark_at: Vec<u32>,
      /// An ordered **sample** of those writes. The report is driven by `watch_range_words` below.
      /// An ordered **sample** of those writes, as `(pc, address, byte, usec)`.
      ///
-@@ -2248,6 +2256,16 @@ impl Memory {
+@@ -2248,6 +2259,17 @@ impl Memory {
              e.0 += 1;
              self.read_log.push((pc, addr, 0, n));
          }
@@ -210,7 +213,8 @@ index ed9b163..14cefe7 100644
 +            && !self.internal
 +            && ((0xc300_01e0..0xc300_0200).contains(&addr)
 +                || (0xc300_03f8..0xc300_03fc).contains(&addr)
-+                || (0x7000_0080..0x7000_0088).contains(&addr))
++                || (0x7000_0080..0x7000_0088).contains(&addr)
++                || (0x7000_c000..0x7000_c100).contains(&addr))
 +            && self.ev_log.len() < 200_000
 +        {
 +            self.ev_log.push((self.icount, self.usec, self.pc, addr, wval));
@@ -218,7 +222,7 @@ index ed9b163..14cefe7 100644
          if write {
              // The vector-page guard. Ahead of `watch_range` because it is not conditional on
              // anything: see `Machine::low_stores`.
-@@ -2485,6 +2503,12 @@ impl Bus for Memory {
+@@ -2485,6 +2507,12 @@ impl Bus for Memory {
  
      fn write32(&mut self, addr: u32, val: u32) {
          self.note_store_pc(addr, val);
@@ -231,17 +235,32 @@ index ed9b163..14cefe7 100644
          // CPU_CTRL. Bit 31 is the core asking to be switched off until an interrupt, and RetailOS's
          // idle task writes it in a tight loop — it is the second-hottest instruction in the resting
          // state. Unmodelled, the idle task spun at full speed, so a 2 G-instruction budget bought
-@@ -4720,6 +4744,9 @@ impl Machine {
+@@ -4720,6 +4748,12 @@ impl Machine {
              input_probe: None,
              input_regs: BTreeMap::new(),
              watch_range: None,
 +            reset_requested: false,
 +            reset_after: std::env::var("IPODFW_RESET_AFTER").ok().and_then(|v| v.parse().ok()),
 +            ev_log: Vec::new(),
++            mark_at: std::env::var("IPODFW_MARK_AT")
++                .map(|v| v.split(',').filter_map(|a| u32::from_str_radix(a.trim().trim_start_matches("0x"), 16).ok()).collect())
++                .unwrap_or_default(),
              watch_range_log: Capped::new(4096),
              watch_range_words: BTreeMap::new(),
              low_stores: BTreeMap::new(),
-@@ -7920,6 +7947,9 @@ pub fn install_game_stubs(&mut self, exe_stem: &str, o: GameStubs) -> bool {
+@@ -7914,12 +7948,21 @@ pub fn install_game_stubs(&mut self, exe_stem: &str, o: GameStubs) -> bool {
+             }
+             prev_pc = pc;
+ 
++            if !self.mem.mark_at.is_empty() {
++                if let Some(i) = self.mem.mark_at.iter().position(|&a| a == pc) {
++                    let us = self.mem.usec;
++                    self.mem.ev_log.push((self.executed as u64, us, pc, 0xffff_fffd, i as u8));
++                }
++            }
+             if let Some((addr, n)) = self.mem.regs_at {
+                 if pc == addr && self.mem.regs_seen.len() < n {
+                     let mut r = [0u32; 16];
                      r.copy_from_slice(&self.cpu.regs);
                      let at = self.executed as u64;
                      self.mem.regs_seen.push((at, r));
@@ -251,3 +270,14 @@ index ed9b163..14cefe7 100644
                  }
              }
  
+@@ -10159,6 +10202,10 @@ impl Memory {
+             }
+             let f = w.stream_frame();
+             w.post(f, now);
++            // iPodFirm local patch: a button frame in the drive event log (address 0xfffffffe).
++            if (f >> 8) & 0x1f != 0 {
++                self.ev_log.push((now, self.usec, 0, 0xffff_fffe, ((f >> 8) & 0x1f) as u8));
++            }
+         }
+         // Level, not pulse: the line follows the receive-ready flag, so a handler that returns
+         // without acknowledging is re-entered rather than losing the packet — which is what the

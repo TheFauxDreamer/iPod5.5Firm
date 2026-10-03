@@ -60,6 +60,27 @@ A first version replaced the power-off call at 0x23344c with a NOP. That version
 
 Test in the emulator: after start, the power stayed on and went off later through the stock path. Shuffle Songs woke the drive and showed Now Playing.
 
+## Remaining delay
+
+On the real iPod, the patch made the first song only slightly faster (2026-10-03). Thus, the power-on is not the only cause.
+
+Shuffle Songs in the emulator, with the patched firmware (time after the button frame):
+
+| Time | Event |
+|---|---|
+| 0.7 ms | Drive "set power" with 1 (sleep request; the drive is already off) |
+| 510, 713, 916, 1107 ms | The same sleep request again |
+| 1108 ms | Drive "set power" with 0: power on |
+| 1106–1300 ms | I²C writes (0x282dd4, 0x282f9c, 0x18bcc4) |
+| 1232 ms | First read of the song |
+
+The CPU ran only 13 M instructions from the click to the first read. Thus, the firmware waits for an event for approximately 1.1 s. The emulator has no audio hardware, so this wait in the emulator can be different from the wait on a real iPod.
+
+The emulator patch has two more instruments for this work:
+- A marker at each button frame (address 0xFFFFFFFE in `evlog`).
+- `IPODFW_MARK_AT=ADDR,ADDR,...`: a marker (address 0xFFFFFFFD, byte = index) each time one of the addresses runs.
+- The `evlog` also records writes to the I²C controller (0x7000C000–0x7000C0FF).
+
 ## Open items
 
 - Measure the delay on the real iPod with the patch.

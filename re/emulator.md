@@ -52,6 +52,7 @@ The patch `mac/Resources/emulator-patches/0001-ipodfirm-instrumentation.patch` a
 | `IPODFW_TRACE_PC=FROM-TO` | Records the program counter in a range. |
 | `IPODFW_WATCH_RANGE=BASE:LEN` | Records each CPU write into a range. Read the result with the `writes` command. Use the CPU address (osos offset), not the physical address. |
 | (always on) | Records each write to the ATA taskfile (0xC30001E0–0xC30001FF), the ATA control register (0xC30003F8) and `GPO32_VAL` (0x70000080), with the instruction count, the emulated µs and the PC. Read and clear the log with the `evlog` command. Each `IPODFW_REGS_AT` record also adds a marker (address 0xFFFFFFFF) to this log. Writes to `GPO32_VAL` show only when `IPODFW_WATCH_RANGE` is set, for example `0x70000080:8`. |
+| `IPODFW_MARK_AT=ADDR,ADDR,...` | Adds a marker to the `evlog` output (address 0xFFFFFFFD, byte = index in the list) each time one of the addresses runs. A button frame also adds a marker (address 0xFFFFFFFE, byte = buttons). The `evlog` also records writes to the I²C controller (0x7000C000–0x7000C0FF). |
 | `IPODFW_RESET_AFTER=N` | Restarts the emulated iPod when the firmware writes 4 to `DEV_RS` (0x60006004), after N instructions. |
 
 The instruction count stops while the emulated iPod sleeps. Thus, use the emulated µs in the `evlog` output to measure time, not the instruction count.
