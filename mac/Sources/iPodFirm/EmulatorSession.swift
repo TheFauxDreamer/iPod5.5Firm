@@ -42,9 +42,7 @@ final class EmulatorSession: ObservableObject {
         p.arguments = ["--headless=100000000000000", "--control=\(socketPath)"]
         var env = ProcessInfo.processInfo.environment
         env["IPOD_EMULATOR_DATA"] = EmulatorManager.profile.path
-        // The restart of the Dark Mode item (iPodFirm emulator patch). The emulated start also writes
-        // DEV_RS, so the emulator honours it only after the start.
-        env["IPODFW_RESET_AFTER"] = "1000000000"
+        env["IPODFW_RESET_AFTER"] = EmulatorManager.resetAfter
         p.environment = env
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice

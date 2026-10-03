@@ -139,11 +139,15 @@ final class EmulatorManager: ObservableObject {
     }
 
     /// Open the prepared test device in the emulator's own window.
+    /// The restart of the Dark Mode item (iPodFirm emulator patch, DEV_RS). The emulated start also
+    /// writes DEV_RS, so the emulator honours it only after this many instructions.
+    nonisolated static let resetAfter = "1000000000"
+
     func openWindow() async throws {
         try await quitEmulator()
         let config = NSWorkspace.OpenConfiguration()
         config.arguments = ["--cold"]
-        config.environment = ["IPOD_EMULATOR_DATA": Self.profile.path]
+        config.environment = ["IPOD_EMULATOR_DATA": Self.profile.path, "IPODFW_RESET_AFTER": Self.resetAfter]
         config.createsNewApplicationInstance = true
         try await NSWorkspace.shared.openApplication(at: Self.appURL, configuration: config)
     }
