@@ -242,13 +242,13 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 | Patch | Function | Status |
 |---|---|---|
 | `album-art` | Shows a 20 × 20 thumbnail of the album artwork at the left of each album in the lists. | Tested in the emulator with 200 real songs in 28 albums. Not tested on a real iPod. |
-| `flash-keep-awake` | For flash storage (iFlash and similar adapters). Keeps the storage on for 2 minutes after each access, not for 1 second. The first song after idle time starts faster. | Tested in the emulator. Not tested on a real iPod. |
+| `flash-keep-awake` | For flash storage (iFlash and similar adapters). Keeps the storage on for 30 minutes after each access, not for 1 second. Starts the storage at once when the iPod wakes from sleep. The first song starts faster. | Tested in the emulator, except the wake from sleep. The 2-minute version made the first song slightly faster on a real iPod 5.5G. |
 
 The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary: the patch finds the new file when you scroll through a list.
 
 The patch draws a thumbnail only in the rows of a list. In Now Playing, RetailOS shows its own large artwork from `iPod_Control/Artwork/ArtworkDB`. Finder writes that database when it syncs music with artwork.
 
-The stock firmware switches off the storage power approximately 1 s after the last access. A flash adapter needs some seconds to start again after a power cut. Thus, the first song after idle time starts 3–6 s late. The `flash-keep-awake` patch changes only the keep-awake time. After 2 minutes, and when the iPod goes to sleep, the iPod switches off the storage as usual. For the research, refer to [re/play-latency.md](re/play-latency.md).
+The stock firmware switches off the storage power approximately 1 s after the last access. A flash adapter needs some seconds to start again after a power cut. Thus, the first song after idle time starts 3–6 s late. The `flash-keep-awake` patch changes the keep-awake time to 30 minutes. It also asks for the storage when the iPod wakes from sleep, so that the adapter starts while you look for a song. When the iPod goes to sleep, it switches off the storage as usual. If the connected iPod has a capacity within 5 GB of an original drive (30, 60 or 80 GB), iPodFirm shows a warning in the Patches pane, before you turn the patch on and before you flash. The original hard drive turns for a longer time with this patch. For the research, refer to [re/play-latency.md](re/play-latency.md).
 
 The patch tool compiles C code with the Xcode compiler and links it at a fixed address in the free space after the osos image (maximum 3.9 KB in firmware 1.3).
 

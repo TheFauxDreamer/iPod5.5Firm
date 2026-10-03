@@ -98,7 +98,7 @@ Plausible causes, roughly in order:
 
 The emulator can trace ATA commands and time each one between the click and the screen change. If the delay is a fixed timeout or a buffer-size constant, the patch can be a single value. That would be the cheapest win of the three goals.
 
-**Result (2026-10-03):** the cause is the drive power-off approximately 1 s after the last access. The firmware's own wait at power-on is only 14 ms. The rest is the start time of the flash adapter. The `flash-keep-awake` patch keeps the storage on for 2 minutes. Refer to [re/play-latency.md](re/play-latency.md).
+**Result (2026-10-03):** the cause is the drive power-off approximately 1 s after the last access. The firmware's own wait at power-on is only 14 ms. The rest is the start time of the flash adapter. The `flash-keep-awake` patch keeps the storage on for 30 minutes and starts it when the iPod wakes. Refer to [re/play-latency.md](re/play-latency.md).
 
 ## Roadmap
 

@@ -12,6 +12,17 @@ public struct IPodDisk: Codable, Identifiable, Hashable {
     public var size: Int64
     public var volumeName: String?
     public var rawPath: String { "/dev/r\(disk)" }
+
+    /// The drive sizes of the original iPod 5G and 5.5G, in GB (10^9 bytes, as Apple marks them).
+    public static let originalHDDSizes = [30, 60, 80]
+
+    /// The nominal size in GB if the capacity is within 5 GB of an original hard drive, else nil.
+    /// A flash card of a near size (for example 64 GB) also gives a value: the result is "probably".
+    public static func likelyOriginalHDD(size: Int64) -> Int? {
+        originalHDDSizes.first { abs(size - Int64($0) * 1_000_000_000) <= 5_000_000_000 }
+    }
+
+    public var likelyOriginalHDD: Int? { Self.likelyOriginalHDD(size: size) }
 }
 
 func runTool(_ path: String, _ args: [String]) throws -> Data {

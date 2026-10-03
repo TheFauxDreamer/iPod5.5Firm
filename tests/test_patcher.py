@@ -32,7 +32,9 @@ def test_flash_keep_awake():
     hook = int(report["symbols"]["hook_keep_awake_time"], 16)
     assert struct.unpack_from("<I", out, 0x284c7c)[0] == patcher.branch("bl", 0x284c7c, hook)
     assert struct.unpack_from("<I", out, hook)[0] == 0xe5941018      # the replaced "ldr r1, [r4, #0x18]"
-    assert struct.pack("<I", 120000) in out[hook:hook + report["bytes"]]
+    assert struct.pack("<I", 1800000) in out[hook:hook + report["bytes"]]
+    wake = int(report["symbols"]["hook_after_wake"], 16)
+    assert struct.unpack_from("<I", out, 0xb45f4)[0] == patcher.branch("bl", 0xb45f4, wake)
     # the album-art patch and this patch use different areas
     with_art, _ = patcher.apply(osos, REPO / "patches/album-art", 0x736800)
     patcher.apply(with_art, REPO / "patches/flash-keep-awake", 0x736800,

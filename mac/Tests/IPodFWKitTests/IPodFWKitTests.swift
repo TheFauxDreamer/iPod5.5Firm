@@ -294,6 +294,8 @@ final class PatchAndArtTests: XCTestCase {
         let out = try Patcher.apply(keep, to: osos)
         XCTAssertEqual(le32(out, 0x284c7c), try Patcher.branch("bl", at: 0x284c7c, to: 0x736700))
         XCTAssertEqual(le32(out, 0x736700), 0xe594_1018)
+        XCTAssertEqual(le32(out, 0xb45f4) & 0xFF00_0000, 0xEB00_0000)   // the wake hook is a bl
+        XCTAssertNotEqual(le32(out, 0xb45f4), le32(osos, 0xb45f4))
         // with the album-art patch: the two patches use different areas
         _ = try Patcher.apply(all.filter { ["album-art", "flash-keep-awake"].contains($0.spec.name) }, to: osos)
     }
@@ -320,6 +322,19 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertEqual((0..<osos.count).filter { osos[$0] != out[$0] }, [0x9ee94])
         XCTAssertEqual(le32(out, 0x175ae4), 0xe3a0_2030)   // VisibleBuildID stays 1.3
         XCTAssertThrowsError(try FirmwareVersion.apply(.stock, to: &out))
+    }
+
+    /// The original drives are 30, 60 and 80 GB. A size within 5 GB of one of them gives a warning.
+    func testLikelyOriginalHDD() {
+        XCTAssertEqual(IPodDisk.likelyOriginalHDD(size: 30_000_000_000), 30)
+        XCTAssertEqual(IPodDisk.likelyOriginalHDD(size: 29_800_000_000), 30)
+        XCTAssertEqual(IPodDisk.likelyOriginalHDD(size: 79_900_000_000), 80)
+        XCTAssertEqual(IPodDisk.likelyOriginalHDD(size: 64_000_000_000), 60)
+        for size: Int64 in [16_000_000_000, 128_000_000_000, 256_000_000_000, 2_000_000_000_000] {
+            XCTAssertNil(IPodDisk.likelyOriginalHDD(size: size))
+        }
+        let keep = Patcher.list(in: Self.repo.appendingPathComponent("patches")).first { $0.spec.name == "flash-keep-awake" }
+        XCTAssertNotNil(keep?.spec.hdd_warning)
     }
 
     func testReadTracksRoundTrip() {

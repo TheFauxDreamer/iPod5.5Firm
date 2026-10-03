@@ -1,9 +1,16 @@
 {
   "name": "flash-keep-awake",
-  "description": "For flash storage (iFlash and similar adapters). The iPod keeps the storage on for 2 minutes after each use, not for 1 second. A song that you start in this time starts faster. After 2 minutes, and when the iPod goes to sleep, the iPod switches the storage off as usual.",
+  "description": "For flash storage (iFlash and similar adapters). The iPod keeps the storage on for 30 minutes after each use, not for 1 second. When the iPod wakes from sleep, it starts the storage at once, so that the storage is ready when you choose a song. When the iPod goes to sleep, it switches the storage off as usual.",
+  "hdd_warning": "This patch is for flash storage. On the original hard drive, it keeps the disk turning for 30 minutes after each use. This uses more battery and causes more wear.",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "load_address": "0x736700",
+  "symbols": {
+    "fw_resume_tail": "0x1b9118",
+    "ka_always_on": "0x94e6c",
+    "ka_timed": "0x94d80"
+  },
   "hooks": [
-    { "kind": "bl", "at": "0x284c7c", "expect": "0xe5941018", "to": "hook_keep_awake_time" }
+    { "kind": "bl", "at": "0x284c7c", "expect": "0xe5941018", "to": "hook_keep_awake_time" },
+    { "kind": "bl", "at": "0xb45f4", "expect": "0xeb0412c7", "to": "hook_after_wake" }
   ]
 }

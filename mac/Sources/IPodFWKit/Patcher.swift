@@ -20,6 +20,8 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var load_address: String
     public var symbols: [String: String]?
     public var hooks: [Hook]?
+    /// A warning for an iPod that probably has the original hard drive (see IPodDisk.likelyOriginalHDD).
+    public var hdd_warning: String?
     /// true: the patch is part of a build step (for example the dark-mode switch) and is not shown
     /// in the list of patches.
     public var `internal`: Bool?

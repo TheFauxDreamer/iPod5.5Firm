@@ -39,11 +39,22 @@ struct PatchRow: View {
         let on = Binding(
             get: { model.enabledPatches.contains(patch.spec.name) },
             set: { v in
+                if v && !confirmOnHDD() { return }
                 if v { model.enabledPatches.insert(patch.spec.name) } else { model.enabledPatches.remove(patch.spec.name) }
             })
         VStack(alignment: .leading, spacing: 6) {
             Toggle(isOn: on) {
                 Text(patch.spec.description ?? patch.spec.name).fixedSize(horizontal: false, vertical: true)
+            }
+            if let warning = patch.spec.hdd_warning {
+                if let gb = model.currentIPod?.likelyOriginalHDD {
+                    Label("The connected iPod has approximately \(gb) GB. This is the size of an original hard drive. \(warning)",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                } else if model.currentIPod == nil {
+                    Label("Connect the iPod to check its storage.", systemImage: "info.circle")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             if model.editor != nil {
                 if model.isCompatible(patch) {
@@ -56,6 +67,21 @@ struct PatchRow: View {
                 }
             }
         }
+    }
+}
+
+extension PatchRow {
+    /// true: turn the patch on. Asks first if the patch is for flash storage and the connected iPod
+    /// probably has the original hard drive.
+    func confirmOnHDD() -> Bool {
+        guard let warning = patch.spec.hdd_warning, let gb = model.currentIPod?.likelyOriginalHDD else { return true }
+        let a = NSAlert()
+        a.alertStyle = .warning
+        a.messageText = "This iPod probably has the original hard drive"
+        a.informativeText = "The connected iPod has approximately \(gb) GB, the size of an original iPod hard drive. \(warning) If the iPod has a flash adapter of this size, you can turn the patch on."
+        a.addButton(withTitle: "Turn On")
+        a.addButton(withTitle: "Cancel")
+        return a.runModal() == .alertFirstButtonReturn
     }
 }
 

@@ -8,7 +8,7 @@ The iPod 5.5G has the stock firmware 1.3 and a flash adapter. The first song aft
 
 The stock firmware switches off the storage power about 1 s after the last access. The next access must switch the power on again. The firmware then waits until the adapter clears BSY. A flash adapter must start its SD card(s) again after a power cut, and this takes seconds.
 
-The firmware's own part of the wake is approximately 15 ms. Thus, a shorter wait in the firmware cannot remove the delay. The patch `patches/flash-keep-awake` keeps the storage on for 2 minutes after each access.
+The firmware's own part of the wake is approximately 15 ms. Thus, a shorter wait in the firmware cannot remove the delay. The patch `patches/flash-keep-awake` keeps the storage on for 30 minutes after each access, and starts the storage when the iPod wakes from sleep.
 
 ## Findings from other projects
 
@@ -50,9 +50,9 @@ The emulated drive is ready at once. On a real iPod, the adapter's start time co
 
 These actions read the drive in the emulator after idle time: open Settings, Shuffle Songs. Notes and games do not read it, because the firmware loads them at start. A song from a list does not start, because the emulator has no audio.
 
-## The patch
+## First version of the patch (2 minutes)
 
-`patches/flash-keep-awake` replaces `ldr r1, [r4, #0x18]` at 0x284c7c (the time of a type-2 message) with a call to a hook. The hook makes each time that is shorter than 120000 ms equal to 120000 ms. It does not change 0 or 0xffffffff.
+`patches/flash-keep-awake` replaces `ldr r1, [r4, #0x18]` at 0x284c7c (the time of a type-2 message) with a call to a hook. The hook makes each time that is shorter than MIN_MS equal to MIN_MS (first 120000 ms, now 1800000 ms). It does not change 0 or 0xffffffff.
 
 All the power paths of the firmware stay the same. After 2 minutes without access, the stock path sends STANDBY and switches the power off. The sleep and shutdown paths do not change.
 
@@ -60,29 +60,65 @@ A first version replaced the power-off call at 0x23344c with a NOP. That version
 
 Test in the emulator: after start, the power stayed on and went off later through the stock path. Shuffle Songs woke the drive and showed Now Playing.
 
-## Remaining delay
+## Measurements on the real iPod (2-minute version of the patch)
 
-On the real iPod, the patch made the first song only slightly faster (2026-10-03). Thus, the power-on is not the only cause.
-
-Shuffle Songs in the emulator, with the patched firmware (time after the button frame):
-
-| Time | Event |
+| Test | Delay |
 |---|---|
-| 0.7 ms | Drive "set power" with 1 (sleep request; the drive is already off) |
-| 510, 713, 916, 1107 ms | The same sleep request again |
-| 1108 ms | Drive "set power" with 0: power on |
-| 1106–1300 ms | I²C writes (0x282dd4, 0x282f9c, 0x18bcc4) |
-| 1232 ms | First read of the song |
+| Pause, wait 1 min, resume | none |
+| Pause, wait 1 min, new album | 2 s |
+| Sleep, wake, start a song at once | 6 s |
+| Menus for 30 s with no playback, start a song | 2 s |
+| A song plays, start a song from a new album | none |
 
-The CPU ran only 13 M instructions from the click to the first read. Thus, the firmware waits for an event for approximately 1.1 s. The emulator has no audio hardware, so this wait in the emulator can be different from the wait on a real iPod.
+The song is AAC, 278 kbit/s, 7 MB, with `moov` at the start and a 200 KB cover.
 
-The emulator patch has two more instruments for this work:
+The resume is instant, thus the audio start is not the cause. The iPod reads the full song into memory at the start of the song. Thus, the last access was more than 2 minutes earlier in tests 2 and 4, and the storage was off. Before the iPod sleeps, the firmware always cuts the storage power. Thus, test 3 always needs a full start of the adapter.
+
+## Delay from the button in the emulator
+
+The firmware starts a song when the button is released, not when it is pressed. Measured from the release, with the storage on, the first read of the song comes after approximately 140 ms. Thus, the firmware path is fast.
+
+CAUTION: The `press` command of the emulator holds the button for 120 ms of host time. The emulated clock runs ahead while the iPod is idle, so the firmware can see a press of approximately 1 s. Measure from the release (the button frame with no buttons), not from the press.
+
+## Sleep and wake
+
+The sleep function at 0xb43dc (called from 0x1dfe18) does this:
+1. It sends keep-awake message type 4 ("sleep now", helper 0x94e08, call at 0xb449c). The storage gets STANDBY and its power is cut.
+2. It enters power mode 3 or 2 (0x2823bc, calls at 0xb4524 and 0xb4604).
+3. After the wake, it continues at 0xb4528 (mode 3) or 0xb4608 (mode 2). Both continue to 0xb45f4 (`bl 0x1b9118`), the last call.
+
+Keep-awake helpers (slot in r0):
+
+| Function | Message |
+|---|---|
+| 0x94e6c | Type 0: always on (r1 = 0 in the firmware calls) |
+| 0x94bbc | Type 1: on if the storage is on; returns the result |
+| 0x94d80 | Type 2: on for r1 ms |
+| 0x94d1c | Type 3 |
+| 0x94e08 | Type 4: sleep now |
+| 0x94c24, 0x94c88 | Types 5 and 6 |
+
+The firmware uses slots 1–4, 6, 8–11, 13, 15, 17, 22, 24–26, 28–33, 36, 39 and 42–44 as constants. Some calls give the slot in a register.
+
+The UI event handler (0x1d8264) calls 0x94bbc(4) and then 0x94d80(4, 3000) for each event while the storage is on.
+
+## The patch (30 minutes and wake)
+
+Hook 1 at 0x284c7c makes each keep-awake time at least 1,800,000 ms (30 minutes).
+
+Hook 2 at 0xb45f4 calls the original function, then 0x94e6c(40, 0) and 0x94d80(40, 1800000). Thus, the storage starts when the iPod wakes, while you look for a song. If you start a song at once, you still wait for the rest of the adapter start.
+
+Test in the emulator: a test build called the same two helpers from the UI event handler. One button press switched the storage on 1.5 ms later, with no file access. The emulator cannot sleep, thus hook 2 itself has no test in the emulator.
+
+## Instruments
+
+The emulator patch has these instruments for this work:
 - A marker at each button frame (address 0xFFFFFFFE in `evlog`).
 - `IPODFW_MARK_AT=ADDR,ADDR,...`: a marker (address 0xFFFFFFFD, byte = index) each time one of the addresses runs.
 - The `evlog` also records writes to the I²C controller (0x7000C000–0x7000C0FF).
 
 ## Open items
 
-- Measure the delay on the real iPod with the patch.
+- Measure the delay on the real iPod with the 30-minute patch and the wake hook.
 - Measure the battery life with the patch.
-- The 120000 ms value is a choice. A longer time gives more fast starts and uses more battery.
+- The 30-minute value is a choice of the owner (2026-10-03).

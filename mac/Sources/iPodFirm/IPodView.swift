@@ -148,6 +148,14 @@ struct FlashConfirmSheet: View {
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if plan.reason == "flash", let gb = plan.ipod.likelyOriginalHDD {
+                ForEach(model.activePatches.filter { $0.spec.hdd_warning != nil }) { p in
+                    Label("The iPod has approximately \(gb) GB, the size of an original hard drive. The patch \"\(p.spec.name)\" is on. \(p.spec.hdd_warning ?? "")",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             VStack(alignment: .leading, spacing: 6) {
                 Label("A backup of the iPod's current firmware is taken first.", systemImage: "externaldrive.badge.timemachine")
                 Label("\(ByteCountFormatter.string(fromByteCount: Int64(total), countStyle: .file)) will be written in \(ranges.count) place(s), then read back and verified.", systemImage: "square.and.pencil")
