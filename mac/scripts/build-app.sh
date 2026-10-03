@@ -31,11 +31,7 @@ for p in ../patches/*/; do
     cp "$p"patch.json "$p"*.c "$APP/Contents/Resources/patches/$n/"
 done
 
-if [ ! -f build/AppIcon.icns ]; then
-    swift scripts/make-icon.swift build/AppIcon.iconset
-    iconutil -c icns build/AppIcon.iconset -o build/AppIcon.icns
-fi
-cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
