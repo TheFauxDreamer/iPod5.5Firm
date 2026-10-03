@@ -35,7 +35,29 @@ def test_flash_keep_awake():
     assert struct.pack("<I", 1800000) in out[hook:hook + report["bytes"]]
     wake = int(report["symbols"]["hook_after_wake"], 16)
     assert struct.unpack_from("<I", out, 0xb45f4)[0] == patcher.branch("bl", 0xb45f4, wake)
+    assert struct.unpack_from("<I", out, hook + 4)[0] == 0xe3510001      # "cmp r1, #1": a release stays a release
+    gate = int(report["symbols"]["hook_storage_in_use"], 16)
+    assert struct.unpack_from("<I", out, 0x1d871c)[0] == patcher.branch("bl", 0x1d871c, gate)
+    base = int(report["code"][0], 16)
+    code = out[base:base + report["bytes"]]
+    assert struct.pack("<I", 0x1086bedc) in code and struct.pack("<I", 0x1086bf0c) in code   # the slot arrays
     # the album-art patch and this patch use different areas
     with_art, _ = patcher.apply(osos, REPO / "patches/album-art", 0x736800)
     patcher.apply(with_art, REPO / "patches/flash-keep-awake", 0x736800,
                   original_sha256=hashlib.sha256(osos).hexdigest())
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_sleep_now():
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    out, report = patcher.apply(osos, REPO / "patches/sleep-now", 0x736800)
+    item = int(report["symbols"]["hook_sleep_item"], 16)
+    power = int(report["symbols"]["hook_power_test"], 16)
+    assert struct.unpack_from("<I", out, 0x69fd2c)[0] == item                      # the table entry
+    assert struct.unpack_from("<I", out, 0x1e8ce8)[0] == patcher.branch("bl", 0x1e8ce8, item)
+    assert struct.unpack_from("<I", out, 0x1ee930)[0] == patcher.branch("bl", 0x1ee930, power)
+    # the three code patches use different areas
+    original = hashlib.sha256(osos).hexdigest()
+    both, _ = patcher.apply(osos, REPO / "patches/album-art", 0x736800)
+    both, _ = patcher.apply(both, REPO / "patches/sleep-now", 0x736800, original_sha256=original)
+    patcher.apply(both, REPO / "patches/flash-keep-awake", 0x736800, original_sha256=original)

@@ -110,6 +110,29 @@ Hook 2 at 0xb45f4 calls the original function, then 0x94e6c(40, 0) and 0x94d80(4
 
 Test in the emulator: a test build called the same two helpers from the UI event handler. One button press switched the storage on 1.5 ms later, with no file access. The emulator cannot sleep, thus hook 2 itself has no test in the emulator.
 
+## Sleep stopped by the 30-minute patch (fixed 2026-10-03)
+
+Symptom on the real iPod: after Sleep, the music paused and the wheel did not respond, but the screen stayed on. The backlight dimmed with the backlight timer. A button woke the iPod. Without the patch, the same thing occurred for about 1 minute after a computer session. With the patch, the screen did not go off after more than 2 minutes.
+
+Cause:
+
+1. The Sleep command (0x1d80fc, then the timer handler 0x1d8cd0) calls 0x1ee8d0. In some conditions, 0x1ee8d0 does not sleep. It sets the "sleep pending" flag (+0x487) and keeps the display on (0xb7c64(1)). The external-power test 0x9e664 (vtable 0x670720, offset 0xb4) controls this branch.
+2. The idle timer (0x1d8a40) completes the sleep later, through the gate 0x1d938c → 0x1d8444 → 0x1d8670 and 0x1d8718.
+3. 0x1d8718 calls 0x94cec. 0x94cec returns 1 if any of the 45 keep-awake slots is active (flags at 0x1086bedc, the same array as the task). The gate then refuses the sleep.
+4. With hook 1, each access keeps a slot active for 30 minutes. Thus the gate refused the sleep for 30 minutes after the last access.
+5. The helper 0x94d80 sends r1 + 1. A release (r1 = 0) thus sends 1 ms. Hook 1 changed 1 ms into 30 minutes. The Sleep sequence itself releases slot 3 in this way (0x1ee8d0).
+
+Slot data of the task: flags at 0x1086bedc (45 bytes), time left in ms at 0x1086bf0c (45 words). An "always on" slot has the time 0xffffffff.
+
+The fix:
+
+- Hook 1 does not change a time of 0, 1 or 0xffffffff.
+- Hook 3 replaces `bl 0x94cec` at 0x1d871c with `bl hook_storage_in_use`. The hook returns 1 only if an active slot is always on (a client that uses the storage now). A timed slot does not stop the sleep. The sleep function then sends message type 4 as before.
+
+Test in the emulator: the patched firmware starts and shows the main menu. After the start, the slots have times in ms (a new slot: 1,800,000), and no slot is always on. The emulator cannot sleep, thus hook 3 has no test of a full sleep.
+
+Not known: why the stock firmware defers Sleep after a computer session. The external-power test is involved. A wall charger does not cause the delay.
+
 ## Instruments
 
 The emulator patch has these instruments for this work:
@@ -120,5 +143,6 @@ The emulator patch has these instruments for this work:
 ## Open items
 
 - Measure the delay on the real iPod with the 30-minute patch and the wake hook.
+- Test Sleep on the real iPod with hook 3: after a computer session, during playback and after 1 minute without use.
 - Measure the battery life with the patch.
 - The 30-minute value is a choice of the owner (2026-10-03).
