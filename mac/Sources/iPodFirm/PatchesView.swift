@@ -9,6 +9,7 @@ struct PatchesView: View {
     var body: some View {
         Form {
             AppearanceSection()
+            VersionSection()
             Section {
                 Text("A patch adds new code to the iPod software. The switched-on patches are included when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.")
                     .fixedSize(horizontal: false, vertical: true)
@@ -125,6 +126,31 @@ struct AppearanceSection: View {
             Text("Select the theme file (a firmware file from iPodWizard), then the Apple firmware that the theme came from, for example iPod_25.1.2.1.ipsw. iPodFirm moves the pictures, colours and layouts of the theme to firmware 1.3.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         } header: { Text("iPod Appearance") }
+    }
+}
+
+/// A different version on the About screen of the iPod. Off by default.
+struct VersionSection: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        Section {
+            Toggle("Show a different version on the About screen", isOn: $model.customVersionOn)
+            if model.customVersionOn {
+                TextField("Version", text: $model.customVersion, prompt: Text("1.3.1"))
+                    .frame(maxWidth: 260)
+                if let v = FirmwareVersion(model.customVersion) {
+                    Text("Settings > About on the iPod shows \"\(v.description)\".")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Label("This version is not valid. Use the format 1.3 or 1.3.1. The first number is 0–255. The other numbers are 0–15. The firmware keeps version 1.3.",
+                          systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Text("This changes only the text on the iPod. iTunes and Finder continue to see version 1.3.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        } header: { Text("Software Version") }
     }
 }
 

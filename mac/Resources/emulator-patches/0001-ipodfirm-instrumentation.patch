@@ -1,8 +1,8 @@
 diff --git a/tools/ipod-gui/src/control.rs b/tools/ipod-gui/src/control.rs
-index f96afc1..3db6e6f 100644
+index f96afc1..d961813 100644
 --- a/tools/ipod-gui/src/control.rs
 +++ b/tools/ipod-gui/src/control.rs
-@@ -64,6 +64,10 @@ use std::sync::{Arc, Mutex};
+@@ -64,6 +64,12 @@ use std::sync::{Arc, Mutex};
  /// with one place that answers questions, rather than two that can drift apart.
  pub const UNMAPPED_SENTINEL: u32 = 0xFFFF_FFFF;
  pub const TRACE_SENTINEL: u32 = 0xFFFF_FFFE;
@@ -10,10 +10,12 @@ index f96afc1..3db6e6f 100644
 +pub const HIST_SENTINEL: u32 = 0xFFFF_FF0A;
 +/// iPodFirm local patch: hand over the registers recorded at IPODFW_REGS_AT, and clear them.
 +pub const REGS_SENTINEL: u32 = 0xFFFF_FF0B;
++/// iPodFirm local patch: hand over the drive event log (ATA taskfile, ATA control, GPO32), and clear it.
++pub const EVLOG_SENTINEL: u32 = 0xFFFF_FF0C;
  /// Ask the run loop for the PMU's per-register write census. Same request/answer route as the
  /// others, because `Pcf50605` lives on the emulator thread and cannot be borrowed from this one.
  pub const PMU_SENTINEL: u32 = 0xFFFF_FFFD;
-@@ -341,6 +345,30 @@ fn command(line: &str, link: Option<&Arc<Link>>) -> String {
+@@ -341,6 +347,58 @@ fn command(line: &str, link: Option<&Arc<Link>>) -> String {
                  std::thread::sleep(std::time::Duration::from_millis(10));
              }
          }
@@ -41,31 +43,62 @@ index f96afc1..3db6e6f 100644
 +                .collect();
 +            format!("ok regs {}\n{}\nend", lines.len(), lines.join("\n"))
 +        }
++        // iPodFirm local patch: the drive event log since the last `evlog`, one write per line:
++        // `instructions usec pc addr byte` in hexadecimal.
++        "evlog" => {
++            link.peek_req.lock().unwrap().push(EVLOG_SENTINEL);
++            // Wait for the run loop's answer. A sleeping iPod answers later than 150 ms, and an
++            // early read hands over the previous log.
++            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
++            loop {
++                {
++                    let mut ans = link.peek_ans.lock().unwrap();
++                    if let Some(i) = ans.iter().position(|(a, _)| *a == EVLOG_SENTINEL) {
++                        ans.remove(i);
++                        break;
++                    }
++                }
++                if std::time::Instant::now() > deadline {
++                    return "error: timed out".into();
++                }
++                std::thread::sleep(std::time::Duration::from_millis(10));
++            }
++            let out = link.out.lock().unwrap();
++            let lines: Vec<String> = out
++                .ev_log
++                .iter()
++                .map(|(n, us, pc, a, v)| format!("{n:x} {us:x} {pc:x} {a:x} {v:x}"))
++                .collect();
++            format!("ok evlog {}\n{}\nend", lines.len(), lines.join("\n"))
++        }
          // Hand over the execution trace, newest run first, and clear it.
          "trace" => {
              link.peek_req.lock().unwrap().push(TRACE_SENTINEL);
 diff --git a/tools/ipod-gui/src/emu.rs b/tools/ipod-gui/src/emu.rs
-index d8fe22a..f45f349 100644
+index d8fe22a..7fdc1eb 100644
 --- a/tools/ipod-gui/src/emu.rs
 +++ b/tools/ipod-gui/src/emu.rs
-@@ -507,6 +507,8 @@ pub struct Out {
+@@ -507,6 +507,10 @@ pub struct Out {
      pub unmapped_pages: Vec<u32>,
      /// The most recent PC trace handed over by the run loop.
      pub pc_trace: Vec<(u32, u64)>,
 +    /// iPodFirm local patch: registers recorded at IPODFW_REGS_AT.
 +    pub regs_seen: Vec<(u64, [u32; 16])>,
++    /// iPodFirm local patch: the drive event log.
++    pub ev_log: Vec<(u64, u32, u32, u32, u8)>,
      /// The PMU's write census, `(register, writes, last value)`, handed over on request.
      ///
      /// Carried through `Out` rather than read directly because `Pcf50605` lives on the emulator
-@@ -948,6 +950,7 @@ impl Link {
+@@ -948,6 +952,8 @@ impl Link {
                  fb_addr: FB_FRONT,
                  unmapped_pages: Vec::new(),
                  pc_trace: Vec::new(),
 +                regs_seen: Vec::new(),
++                ev_log: Vec::new(),
                  pmu_written: Vec::new(),
                  watched_writes: Vec::new(),
                  bus_log: Vec::new(),
-@@ -1617,9 +1620,28 @@ pub fn build(cfg: &Config, first: bool) -> Result<Machine, String> {
+@@ -1617,9 +1623,28 @@ pub fn build(cfg: &Config, first: bool) -> Result<Machine, String> {
      // 8 MB of low address space at 64 bytes a bucket.
      m.mem.regs_at = cfg.regs_at;
      m.mem.watch_range = cfg.watch_writes;
@@ -95,7 +128,7 @@ index d8fe22a..f45f349 100644
      // Through `set_clock` even here, where the machine has executed nothing and a bare assignment
      // would do: one way to move the divisor is a rule that can be checked, and two is a rule
      // nobody remembers which half of. On a machine at instruction zero the correction it computes
-@@ -2599,6 +2621,13 @@ fn session(cfg: &Config, link: &Arc<Link>, first: bool, deaths: &mut Deaths) ->
+@@ -2599,6 +2624,13 @@ fn session(cfg: &Config, link: &Arc<Link>, first: bool, deaths: &mut Deaths) ->
          };
          let executed = m.executed as u64;
  
@@ -109,7 +142,7 @@ index d8fe22a..f45f349 100644
          // The scripted power cycle, in the first session only. Announced with the machine's own
          // numbers so the second session's are visibly a different machine's.
          if first {
-@@ -2701,6 +2730,22 @@ fn session(cfg: &Config, link: &Arc<Link>, first: bool, deaths: &mut Deaths) ->
+@@ -2701,6 +2733,26 @@ fn session(cfg: &Config, link: &Arc<Link>, first: bool, deaths: &mut Deaths) ->
                              .map(|p| p.written.iter().map(|(r, (n, v))| (*r, *n, *v)).collect())
                              .unwrap_or_default();
                          Some(out.pmu_written.len() as u32)
@@ -117,6 +150,10 @@ index d8fe22a..f45f349 100644
 +                        let mut out = link.out.lock().unwrap();
 +                        out.regs_seen = std::mem::take(&mut m.mem.regs_seen);
 +                        Some(out.regs_seen.len() as u32)
++                    } else if a == crate::control::EVLOG_SENTINEL {
++                        let mut out = link.out.lock().unwrap();
++                        out.ev_log = std::mem::take(&mut m.mem.ev_log);
++                        Some(out.ev_log.len() as u32)
 +                    } else if a == crate::control::HIST_SENTINEL {
 +                        let mut out = link.out.lock().unwrap();
 +                        out.pc_trace.clear();
@@ -133,22 +170,23 @@ index d8fe22a..f45f349 100644
                          // Hand the trace over and clear it, so a second dump shows what happened
                          // since the first rather than repeating it.
 diff --git a/tools/ipod-gui/src/machine.rs b/tools/ipod-gui/src/machine.rs
-index 614f566..095d3c5 100644
+index 614f566..8217290 100644
 --- a/tools/ipod-gui/src/machine.rs
 +++ b/tools/ipod-gui/src/machine.rs
-@@ -1466,6 +1466,7 @@ mod tests {
+@@ -1466,6 +1466,8 @@ mod tests {
              stalled_secs: 0.0,
              unmapped_pages: Vec::new(),
              pc_trace: Vec::new(),
 +            regs_seen: Vec::new(),
++            ev_log: Vec::new(),
              pmu_written: Vec::new(),
              watched_writes: Vec::new(),
              bus_log: Vec::new(),
 diff --git a/tools/ipod-machine/src/lib.rs b/tools/ipod-machine/src/lib.rs
-index ed9b163..07d92a3 100644
+index ed9b163..14cefe7 100644
 --- a/tools/ipod-machine/src/lib.rs
 +++ b/tools/ipod-machine/src/lib.rs
-@@ -759,6 +759,11 @@ pub struct Memory {
+@@ -759,6 +759,14 @@ pub struct Memory {
      /// from "never wrote" — that ambiguity produced a whole contradiction in research/06 and was
      /// leaned on twice more. This records the write itself, over a whole structure.
      pub watch_range: Option<(u32, u32)>,
@@ -157,10 +195,30 @@ index ed9b163..07d92a3 100644
 +    pub reset_requested: bool,
 +    /// iPodFirm local patch: honour the restart only after this many instructions.
 +    pub reset_after: Option<u64>,
++    /// iPodFirm local patch: writes to the ATA taskfile, the ATA control register and GPO32,
++    /// as `(instructions, usec, pc, addr, byte)`. Read and cleared by the `evlog` command.
++    pub ev_log: Vec<(u64, u32, u32, u32, u8)>,
      /// An ordered **sample** of those writes. The report is driven by `watch_range_words` below.
      /// An ordered **sample** of those writes, as `(pc, address, byte, usec)`.
      ///
-@@ -2485,6 +2490,12 @@ impl Bus for Memory {
+@@ -2248,6 +2256,16 @@ impl Memory {
+             e.0 += 1;
+             self.read_log.push((pc, addr, 0, n));
+         }
++        // iPodFirm local patch: the drive event log (see `ev_log`).
++        if write
++            && !self.internal
++            && ((0xc300_01e0..0xc300_0200).contains(&addr)
++                || (0xc300_03f8..0xc300_03fc).contains(&addr)
++                || (0x7000_0080..0x7000_0088).contains(&addr))
++            && self.ev_log.len() < 200_000
++        {
++            self.ev_log.push((self.icount, self.usec, self.pc, addr, wval));
++        }
+         if write {
+             // The vector-page guard. Ahead of `watch_range` because it is not conditional on
+             // anything: see `Machine::low_stores`.
+@@ -2485,6 +2503,12 @@ impl Bus for Memory {
  
      fn write32(&mut self, addr: u32, val: u32) {
          self.note_store_pc(addr, val);
@@ -173,12 +231,23 @@ index ed9b163..07d92a3 100644
          // CPU_CTRL. Bit 31 is the core asking to be switched off until an interrupt, and RetailOS's
          // idle task writes it in a tight loop — it is the second-hottest instruction in the resting
          // state. Unmodelled, the idle task spun at full speed, so a 2 G-instruction budget bought
-@@ -4720,6 +4731,8 @@ impl Machine {
+@@ -4720,6 +4744,9 @@ impl Machine {
              input_probe: None,
              input_regs: BTreeMap::new(),
              watch_range: None,
 +            reset_requested: false,
 +            reset_after: std::env::var("IPODFW_RESET_AFTER").ok().and_then(|v| v.parse().ok()),
++            ev_log: Vec::new(),
              watch_range_log: Capped::new(4096),
              watch_range_words: BTreeMap::new(),
              low_stores: BTreeMap::new(),
+@@ -7920,6 +7947,9 @@ pub fn install_game_stubs(&mut self, exe_stem: &str, o: GameStubs) -> bool {
+                     r.copy_from_slice(&self.cpu.regs);
+                     let at = self.executed as u64;
+                     self.mem.regs_seen.push((at, r));
++                    // iPodFirm local patch: a marker in the drive event log gives each record a time.
++                    let (us, k) = (self.mem.usec, self.mem.regs_seen.len() as u8);
++                    self.mem.ev_log.push((at, us, pc, 0xffff_ffff, k));
+                 }
+             }
+ 

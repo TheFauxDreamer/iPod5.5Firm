@@ -127,6 +127,31 @@ class Emulator:
             out.append((v[0], v[1:]))
         return out
 
+    def evlog(self) -> list[tuple[int, int, int, int, int]]:
+        """Drive writes since the last call, as (instructions, usec, pc, address, byte) (iPodFirm emulator patch).
+
+        Address 0xC30001FC is the ATA command, 0x70000083 the byte of GPO32_VAL with the drive power bit
+        (0x40 = off). Use usec for time: the instruction count stops while the iPod sleeps."""
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(30)
+            s.connect(self.sock)
+            s.sendall(b"evlog\n")
+            buf = b""
+            while not buf.endswith(b"\nend\n") and not buf.startswith(b"error"):
+                chunk = s.recv(1 << 20)
+                if not chunk:
+                    break
+                buf += chunk
+            s.sendall(b"quit\n")
+        out = []
+        for line in buf.decode().splitlines()[1:]:
+            if line == "end":
+                break
+            if line.strip():
+                n, us, pc, addr, v = (int(x, 16) for x in line.split())
+                out.append((n, us, pc, addr, v))
+        return out
+
     def shot(self, path: str | Path) -> bytes:
         self.cmd(f"shot {path}")
         return Path(path).read_bytes()

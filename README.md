@@ -34,6 +34,7 @@ The app has these functions:
 - Switch code patches on or off (Patches pane). The patches are in [patches/](patches/).
 - Write the album thumbnail file to the iPod for the `album-art` patch.
 - Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane).
+- Show a different version on the About screen of the iPod, for example 1.3.1 (Patches pane). This setting is off by default. iTunes and Finder continue to see version 1.3.
 
 ### Build and install the app
 
@@ -241,10 +242,13 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 | Patch | Function | Status |
 |---|---|---|
 | `album-art` | Shows a 20 × 20 thumbnail of the album artwork at the left of each album in the lists. | Tested in the emulator with 200 real songs in 28 albums. Not tested on a real iPod. |
+| `flash-keep-awake` | For flash storage (iFlash and similar adapters). Keeps the storage on for 2 minutes after each access, not for 1 second. The first song after idle time starts faster. | Tested in the emulator. Not tested on a real iPod. |
 
 The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary: the patch finds the new file when you scroll through a list.
 
 The patch draws a thumbnail only in the rows of a list. In Now Playing, RetailOS shows its own large artwork from `iPod_Control/Artwork/ArtworkDB`. Finder writes that database when it syncs music with artwork.
+
+The stock firmware switches off the storage power approximately 1 s after the last access. A flash adapter needs some seconds to start again after a power cut. Thus, the first song after idle time starts 3–6 s late. The `flash-keep-awake` patch changes only the keep-awake time. After 2 minutes, and when the iPod goes to sleep, the iPod switches off the storage as usual. For the research, refer to [re/play-latency.md](re/play-latency.md).
 
 The patch tool compiles C code with the Xcode compiler and links it at a fixed address in the free space after the osos image (maximum 3.9 KB in firmware 1.3).
 
@@ -260,6 +264,7 @@ The patch tool compiles C code with the Xcode compiler and links it at a fixed a
 - The write to the iPod has tests on a disk image. The write was not done on a real iPod.
 - The rescue restore has tests on a disk image with a damaged firmware partition. It was not done on a real iPod.
 - The `album-art` patch has tests in the emulator. It was not done on a real iPod.
+- The `flash-keep-awake` patch has tests in the emulator. It was not done on a real iPod.
 - The dark theme, with the `album-art` patch, operates on a real iPod 5.5G. This includes the move of `rsrc`.
 - The "Dark Mode" item in Settings has tests in the emulator (light, dark and light again, also without the setting file). It was not done on a real iPod.
 

@@ -1,5 +1,6 @@
 """Tests for the patcher options that the dark-mode build uses (needs IPODFW_IPSW)."""
 
+import hashlib
 import os
 import struct
 from pathlib import Path
@@ -22,3 +23,17 @@ def test_load_address_and_size_limit():
     assert report["code"][0] == "0x7eb000"
     assert len(out) % 0x800 == 0 and len(out) > 0x7eb000
     assert struct.unpack_from("<I", out, 0x677a14)[0] == int(report["symbols"]["hook_label_draw"], 16)
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_flash_keep_awake():
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    out, report = patcher.apply(osos, REPO / "patches/flash-keep-awake", 0x736800)
+    hook = int(report["symbols"]["hook_keep_awake_time"], 16)
+    assert struct.unpack_from("<I", out, 0x284c7c)[0] == patcher.branch("bl", 0x284c7c, hook)
+    assert struct.unpack_from("<I", out, hook)[0] == 0xe5941018      # the replaced "ldr r1, [r4, #0x18]"
+    assert struct.pack("<I", 120000) in out[hook:hook + report["bytes"]]
+    # the album-art patch and this patch use different areas
+    with_art, _ = patcher.apply(osos, REPO / "patches/album-art", 0x736800)
+    patcher.apply(with_art, REPO / "patches/flash-keep-awake", 0x736800,
+                  original_sha256=hashlib.sha256(osos).hexdigest())

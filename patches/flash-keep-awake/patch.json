@@ -1,0 +1,9 @@
+{
+  "name": "flash-keep-awake",
+  "description": "For flash storage (iFlash and similar adapters). The iPod keeps the storage on for 2 minutes after each use, not for 1 second. A song that you start in this time starts faster. After 2 minutes, and when the iPod goes to sleep, the iPod switches the storage off as usual.",
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "load_address": "0x736700",
+  "hooks": [
+    { "kind": "bl", "at": "0x284c7c", "expect": "0xe5941018", "to": "hook_keep_awake_time" }
+  ]
+}

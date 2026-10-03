@@ -284,6 +284,44 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertEqual(out, [UInt8](try Data(contentsOf: URL(fileURLWithPath: expected))))
     }
 
+    /// The flash-keep-awake patch: a bl at 0x284c7c to the hook, which keeps the replaced instruction.
+    func testFlashKeepAwake() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        let keep = all.filter { $0.spec.name == "flash-keep-awake" }
+        XCTAssertEqual(keep.count, 1)
+        let out = try Patcher.apply(keep, to: osos)
+        XCTAssertEqual(le32(out, 0x284c7c), try Patcher.branch("bl", at: 0x284c7c, to: 0x736700))
+        XCTAssertEqual(le32(out, 0x736700), 0xe594_1018)
+        // with the album-art patch: the two patches use different areas
+        _ = try Patcher.apply(all.filter { ["album-art", "flash-keep-awake"].contains($0.spec.name) }, to: osos)
+    }
+
+    func testVersionText() {
+        XCTAssertEqual(FirmwareVersion("1.3.1"), FirmwareVersion(major: 1, minor: 3, fix: 1))
+        XCTAssertEqual(FirmwareVersion("1.3"), .stock)
+        XCTAssertEqual(FirmwareVersion("1.3.1")?.description, "1.3.1")
+        XCTAssertEqual(FirmwareVersion("2.0.0")?.description, "2.0")
+        for bad in ["", "1", "x", "1.16", "1.3.16", "256.0", "1..3", "1.3.1.1", "-1.3", "+1.3"] {
+            XCTAssertNil(FirmwareVersion(bad), bad)
+        }
+    }
+
+    /// The About-screen version: only the two mov instructions at 0x9ee90 change.
+    func testVersionChangesOnlyTheAboutScreen() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        var out = osos
+        try FirmwareVersion.apply(FirmwareVersion(major: 1, minor: 3, fix: 1), to: &out)
+        XCTAssertEqual(out.count, osos.count)
+        XCTAssertEqual(le32(out, 0x9ee90), 0xe3a0_1001)
+        XCTAssertEqual(le32(out, 0x9ee94), 0xe3a0_2031)
+        XCTAssertEqual((0..<osos.count).filter { osos[$0] != out[$0] }, [0x9ee94])
+        XCTAssertEqual(le32(out, 0x175ae4), 0xe3a0_2030)   // VisibleBuildID stays 1.3
+        XCTAssertThrowsError(try FirmwareVersion.apply(.stock, to: &out))
+    }
+
     func testReadTracksRoundTrip() {
         let tracks = (0..<5).map { DBTrack(title: "Song \($0)", artist: "A", album: "Album \($0 / 2)", path: ":iPod_Control:Music:F00:T\($0).m4a", size: 1, lengthMS: 1) }
         let read = ITunesDB.readTracks(ITunesDB.build(tracks))

@@ -48,6 +48,12 @@ final class AppModel: ObservableObject {
     @Published var selectedThemeName: String? = UserDefaults.standard.string(forKey: "darkTheme") {
         didSet { UserDefaults.standard.set(selectedThemeName, forKey: "darkTheme") }
     }
+    @Published var customVersionOn = UserDefaults.standard.bool(forKey: "customVersionOn") {
+        didSet { UserDefaults.standard.set(customVersionOn, forKey: "customVersionOn") }
+    }
+    @Published var customVersion = UserDefaults.standard.string(forKey: "customVersion") ?? "1.3.1" {
+        didSet { UserDefaults.standard.set(customVersion, forKey: "customVersion") }
+    }
     @Published var themeReport: ImportedTheme?
     @Published var thumbnailStatus: String?
     @Published var helperSetupError: String?
@@ -245,7 +251,7 @@ final class AppModel: ObservableObject {
             return
         }
         do {
-            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance)).write(to: url, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion)).write(to: url, options: .atomic)
             isDirty = false
         } catch { fail("Couldn't save", error) }
     }
@@ -308,6 +314,12 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The version for the About screen: nothing when the toggle is off, the text is not valid or it is the Apple version.
+    var activeVersion: FirmwareVersion? {
+        guard customVersionOn, let v = FirmwareVersion(customVersion), v != .stock else { return nil }
+        return v
+    }
+
     func isCompatible(_ t: ImportedTheme) -> Bool { editor?.originalOSOSHash == t.osos_sha256 }
 
     func chooseFile(_ message: String) -> URL? {
@@ -366,7 +378,8 @@ final class AppModel: ObservableObject {
 
     /// The osos with the appearance (Dark, or Switch on iPod) and the switched-on patches applied.
     /// The edits stay as they are: the theme does not change a byte that the owner changed.
-    nonisolated static func outputOSOS(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?) throws -> [UInt8] {
+    nonisolated static func outputOSOS(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?,
+                                       version: FirmwareVersion?) throws -> [UInt8] {
         var osos = editor.osos
         switch appearance {
         case .dark(let theme):
@@ -377,14 +390,17 @@ final class AppModel: ObservableObject {
         case nil:
             break
         }
-        return patches.isEmpty ? osos : try Patcher.apply(patches, to: osos, originalSHA256: editor.originalOSOSHash)
+        if !patches.isEmpty { osos = try Patcher.apply(patches, to: osos, originalSHA256: editor.originalOSOSHash) }
+        if let version { try FirmwareVersion.apply(version, to: &osos) }
+        return osos
     }
 
     /// The firmware partition to save or flash: the edits plus the theme and the switched-on patches.
     /// A larger osos moves rsrc (see FirmwarePartition.makeRoom).
-    nonisolated static func outputPartition(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?) throws -> [UInt8] {
+    nonisolated static func outputPartition(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?,
+                                            version: FirmwareVersion?) throws -> [UInt8] {
         let fw = try FirmwarePartition(data: editor.partition.data)
-        let osos = try outputOSOS(editor, patches, appearance: appearance)
+        let osos = try outputOSOS(editor, patches, appearance: appearance, version: version)
         try fw.makeRoom(ososLength: osos.count)
         try fw.replaceImage("osos", with: osos)
         return fw.data
@@ -564,7 +580,7 @@ final class AppModel: ObservableObject {
         let staging = Self.supportDir.appendingPathComponent("Staging/flash.bin")
         do {
             try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance)).write(to: staging, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion)).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
         } catch { fail("Can't flash", error) }
     }
@@ -587,12 +603,12 @@ final class AppModel: ObservableObject {
         let s = NSSavePanel()
         s.nameFieldStringValue = "custom-iPod_25.1.3.ipsw"
         guard s.runModal() == .OK, let out = s.url else { return }
-        let patches = activePatches, appearance = activeAppearance
+        let patches = activePatches, appearance = activeAppearance, version = activeVersion
         Task {
             do {
                 let original = try await ensureAppleIPSW()
                 try await work("Writing .ipsw…") {
-                    let osos = try Self.outputOSOS(editor, patches, appearance: appearance)
+                    let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version)
                     try IPSW.repack(original: original, firmware: IPSW.firmware(original: original, withOSOS: osos), to: out)
                 }
                 NSWorkspace.shared.activateFileViewerSelecting([out])
@@ -603,13 +619,13 @@ final class AppModel: ObservableObject {
     /// Build the emulator drive from the current edits and boot it in the in-app preview.
     func runInEmulator(_ emu: EmulatorManager, _ session: EmulatorSession) {
         guard let editor else { return }
-        let patches = activePatches, appearance = activeAppearance
+        let patches = activePatches, appearance = activeAppearance, version = activeVersion
         let library = EmulatorManager.Library.current
         session.start { [weak self] in
             guard let self else { return }
             let original = try await self.ensureAppleIPSW()
             let (fw, ososLength) = try await Task.detached { () -> ([UInt8], Int) in
-                let osos = try Self.outputOSOS(editor, patches, appearance: appearance)
+                let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version)
                 return (try IPSW.firmware(original: original, withOSOS: osos), osos.count)
             }.value
             try await emu.prepare(firmware: fw, ososLength: ososLength, originalIPSW: original, library: library)
