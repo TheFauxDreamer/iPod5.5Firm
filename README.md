@@ -1,8 +1,8 @@
 # iPod5.5Firm
 
-This project changes the stock Apple firmware of an iPod Video (5th generation and 5.5th generation). It operates on a Mac with Apple silicon.
+This project allows you to modify the stock Apple firmware of an iPod Video (5th generation and 5.5th generation). Apple Silicon only.
 
-The changed firmware replaces the Apple firmware on the iPod. This is the same procedure that iPodWizard used. You can restore the Apple firmware at any time.
+The changed firmware replaces the Apple firmware on the iPod. This is the same process that iPodWizard used.
 
 For the research, the risks and the plan, refer to [FEASIBILITY.md](FEASIBILITY.md).
 
@@ -30,7 +30,6 @@ The app has these functions:
 - Restore a backup to the iPod. If the firmware on the iPod is damaged, the app does a rescue restore.
 - Show the recovery steps, and get the Apple firmware for a restore with Finder.
 - Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
-- Put a music library on the emulated iPod: a test library, or songs from a folder. A library from a folder includes the artwork database (`ArtworkDB`), so Now Playing shows the album artwork.
 - Switch code patches on or off (Patches pane). The patches are in [patches/](patches/).
 - Write the album thumbnail file to the iPod for the `album-art` patch.
 - Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane).
@@ -69,13 +68,13 @@ The app must read and write the disk of the iPod directly. Thus, the app needs t
 
 If you do not set up the Touch ID helper, the app asks for your administrator password.
 
-## Protection of the iPod
+## Protecting the iPod
 
-The app and the tool protect the iPod in these ways:
+The app has the following safety measures in place:
 
 - They make a backup of the firmware partition before each write or restore. They do not overwrite a backup.
 - They keep the first backup as "Original (first backup).bin".
-- They do not change the `aupd` image. This image updates the boot flash memory. A bad boot flash can make the iPod unserviceable.
+- They do not change the `aupd` image. This image updates the boot flash memory. A bad boot flash can make the iPod unrecoverable.
 - They do not write the `hibe` image. The iPod writes this image when it goes into deep sleep.
 - They examine the checksums and the partition layout before they write.
 - They show the bytes that they will write. You must confirm before the write starts.
@@ -118,7 +117,7 @@ The dark theme makes osos larger and moves `rsrc`. These facts support a safe re
 - In the emulator, the firmware did not write to the RAM of the background picture during a long test.
 - On a disk image, a restore of the original backup gives the original partition again, byte for byte.
 
-The owner tested the dark theme and the move of `rsrc` on a real iPod 5.5G. For the details, refer to [re/dark-theme.md](re/dark-theme.md).
+Tested the dark theme and the move of `rsrc` on a real model iPod 5.5G. For the details, refer to [re/dark-theme.md](re/dark-theme.md).
 
 If the iPod does not show disk mode, charge it for one hour and try again. Diagnostic mode can test the disk: push and hold Menu and Select, then push and hold Select and Previous.
 
@@ -225,15 +224,15 @@ iPodFirm applies the theme when you save, flash, export an .ipsw or run the emul
 
 ### Switch on iPod
 
-With this appearance, the firmware starts light, and Settings on the iPod has a "Dark Mode" item (On/Off).
+This allows the user to toggle dark/light mode on the device. The firmware starts light, and Settings on the iPod has a "Dark Mode" item (On/Off).
 
 1. On the iPod, open Settings.
 2. Select "Dark Mode".
-3. Wait while the iPod restarts. This takes some seconds.
+3. Wait while the iPod restarts to apply the theme.
 
 The iPod saves its settings before it restarts. It keeps the choice in the file `iPod_Control/iTunes/iPodFirmDarkMode` (one byte: `0` light, `1` dark). If the file does not exist, the iPod starts light.
 
-The iPod must restart because RetailOS makes its screens one time, at the start. For the research, refer to [re/dark-theme.md](re/dark-theme.md).
+The iPod must restart because RetailOS creates its screens one time, at the start. For the research, refer to [re/dark-theme.md](re/dark-theme.md).
 
 NOTE: In the emulator, the restart operates only with the iPodFirm emulator patch of this version. In the Emulator pane, click "Update Emulator" one time.
 
@@ -241,8 +240,8 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 
 | Patch | Function | Status |
 |---|---|---|
-| `album-art` | Shows a 20 × 20 thumbnail of the album artwork at the left of each album in the lists. | Tested in the emulator with 200 real songs in 28 albums. Not tested on a real iPod. |
-| `flash-keep-awake` | For flash storage (iFlash and similar adapters). Keeps the storage on for 30 minutes after each access, not for 1 second. Starts the storage at once when the iPod wakes from sleep. The first song starts faster. | Tested in the emulator, except the wake from sleep. The 2-minute version made the first song slightly faster on a real iPod 5.5G. |
+| `album-art` | Shows a 20 × 20 thumbnail of the album artwork at the left of each album in the lists. | Tested in the emulator with 200 real songs in 28 albums. Working on real iPod, bit buggy when a song name matches album name. |
+| `flash-keep-awake` | For flash storage (iFlash and similar adapters). Keeps the storage on for 30 minutes after each access, not for 1 second. Starts the storage at once when the iPod wakes from sleep. The first song starts slightly faster. |
 
 The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary: the patch finds the new file when you scroll through a list.
 
