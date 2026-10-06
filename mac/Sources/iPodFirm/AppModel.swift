@@ -65,6 +65,8 @@ final class AppModel: ObservableObject {
     /// Increases when the app writes a theme file (an edit of a dark picture).
     @Published var themeRevision = 0
     @Published var thumbnailStatus: String?
+    /// The result of the last "Start the probe at the next restart" (usb-host-probe).
+    @Published var usbProbeStatus: String?
     /// The playlists of the connected iPod and their thumbnails (album-art patch).
     @Published var playlistArt: [MusicImport.PlaylistArt] = []
     /// True after a change to a playlist image that is not yet in the thumbnail file on the iPod.
@@ -505,6 +507,21 @@ final class AppModel: ObservableObject {
             thumbnailStatus = "\(r.covers) of \(r.albums) albums and \(r.playlistArt) of \(r.playlists) playlists have a thumbnail (\(Date().formatted(date: .abbreviated, time: .shortened)))."
             playlistArtChanged = false
         } catch { fail("Couldn't write the thumbnails", error) }
+    }
+
+    /// The trigger file of the usb-host-probe patch: '1' starts the USB host stack one time, at the
+    /// first button event after the next restart. The patch writes '0' back before the start.
+    static let usbProbeFile = "iPod_Control/iTunes/iPodFirmUSBProbe"
+
+    func armUSBProbe() {
+        guard let volume = ipodMusicVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder, then try again.")
+            return
+        }
+        do {
+            try Data("1".utf8).write(to: volume.appendingPathComponent(Self.usbProbeFile), options: .atomic)
+            usbProbeStatus = "The probe starts at the first button press after the next restart of the iPod (\(Date().formatted(date: .omitted, time: .shortened)))."
+        } catch { fail("Couldn't write the probe file", error) }
     }
 
     /// Read the playlists of the connected iPod and their images.

@@ -14,6 +14,7 @@ For the research, the risks and the plan, refer to [FEASIBILITY.md](FEASIBILITY.
 | `ipodfw` tool | [src/ipodfw/](src/ipodfw/) | A command-line tool in Python. It uses the same file formats as the app. |
 | Technical reference | [docs/](docs/README.md) | The formats, the patches, the Ghidra findings, the app structure and the safety limits. |
 | Research notes | [re/](re/) | Notes for the emulator and for Ghidra, in the sequence of the work. |
+| USB-C audio out plan | [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md) | The plan, the research results and the status of USB-C audio out (the iPod as USB host to headphones and USB DACs). |
 
 ## The iPodFirm app
 
@@ -260,6 +261,7 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 | `flash-keep-awake` | SSD mode for flash storage (iFlash, CompactFlash and SSD adapters). Keeps the storage on for 30 minutes after each access, not for 1 second. Starts the storage at once when the iPod wakes from sleep. Waits 0.5 s before the storage power goes off. On a hard drive, the patch does nothing. |
 | `flash-wake-on-input` | For flash storage. Starts the storage at once when you press a button after a long pause. After a start, it does not examine the storage again for 30 minutes. A turn of the wheel does not start the storage. Switch it on if the first song after a long pause starts late. |
 | `backlight-60s` | The Backlight Timer menu has a 60 Seconds item in place of 2 Seconds. | Menu tested in the emulator. Not tested on a real iPod. |
+| `usb-host-probe` | A one-shot test of the USB host mode through a USB-C mod, for [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md). Only on the branch `usb-audio-out`. | Host start tested in the emulator. Not tested on a real iPod. |
 
 The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary: the patch finds the new file when you scroll through a list.
 

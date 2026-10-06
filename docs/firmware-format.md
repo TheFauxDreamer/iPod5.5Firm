@@ -95,8 +95,10 @@ The code runs at the same addresses as the offsets in the osos image. The table 
 | 0x736700–0x736784 | The `flash-wake-on-input` patch (132 bytes). |
 | 0x736784–0x736800 | Free (124 bytes). |
 | 0x736800 | The maximum osos size for patches (`Patcher.maxOSOSSize`). It is the start of rsrc in Apple's layout. |
-| 0x736800–0x7F0000 | Theme data and the Dark Mode switch. This area is available only when iPodFirm moves rsrc. |
-| 0x7F0000 | `ThemeImport.ososLimit`: the upper limit for all added data. |
+| 0x736800–0x7E8000 | Theme data and the Dark Mode switch. This area is available only when iPodFirm moves rsrc. |
+| 0x7E8000 | `ThemeImport.ososLimit`: the upper limit for theme data and the Dark Mode items. |
+| 0x7E8000–0x7F0000 | The extended patch area (`Patcher.extendedArea`). `usb-host-probe` is at 0x7e8000. This area is available only when iPodFirm moves rsrc. |
+| 0x7F0000 | The upper limit for all added data. |
 
 The RAM after the image is free. The memory set-up at 0xc90 starts a region at physical address 0x10800000 (8 MB). The allocator pool object is at 0x1081da00, in that region. No code refers to the area between the image end and 8 MB. An emulator test with a write watch found no CPU writes there, other than to the patch variables. This test cannot detect DMA writes.
 

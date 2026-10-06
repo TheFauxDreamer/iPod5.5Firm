@@ -15,6 +15,7 @@ All data is for Apple RetailOS 1.3 (`iPod_25.1.3.ipsw`). Other firmware versions
 | [firmware-functions.md](firmware-functions.md) | The Ghidra findings: the firmware functions, vtables, RAM addresses and resource IDs that are identified. The method and the scripts. |
 | [app-and-device.md](app-and-device.md) | The app structure, the detection of the iPod, the privileged helper, and each external process, system API and network call. |
 | [safety.md](safety.md) | The protections before and during a flash, the backups, the recovery procedure, and the known problems. |
+| [../USB-AUDIO-OUT.md](../USB-AUDIO-OUT.md) | The plan and the status of USB-C audio out: the USB host stack, the missing isochronous support, the stages and the gates. |
 
 The research notes in [../re/](../re/) record the experiments in the sequence that they occurred. This reference collects their results. When the two do not agree, the source code is correct.
 

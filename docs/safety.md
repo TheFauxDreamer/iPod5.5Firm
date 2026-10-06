@@ -16,8 +16,8 @@ iPodFirm obeys these limits. The code enforces each limit. The "Where" column gi
 | Write only the firmware partition. | The music partition belongs to the owner. | The helper writes only inside the partition that `locatePartition` found. |
 | Support only the iPod Video (model code 0xB0). | The formats and the addresses are for this model. The iPod classic firmware is encrypted and signed. | `checkModel` (first the Samsung layout; also before a backup), `Backups.save`, `isVideo` checks. |
 | Apply a patch only to Apple osos 1.3. | The addresses are for this version. | `osos_sha256` in each `patch.json`, theme and version check. |
-| Keep osos below 0x7F0000. | The reset code stops if the image end is after 8 MB (0x800004). | `ThemeImport.ososLimit`, `maxSize` in `Patcher.apply`. |
-| Keep the patch code below 0x736800. | rsrc starts there in Apple's layout. | `Patcher.maxOSOSSize`. |
+| Keep osos below 0x7F0000. | The reset code stops if the image end is after 8 MB (0x800004). | `ThemeImport.ososLimit` (0x7E8000 for theme data), `Patcher.extendedArea` (0x7E8000–0x7F0000 for patches), `maxSize` in `Patcher.apply`. |
+| Keep the patch code below 0x736800, or in the extended area. | rsrc starts at 0x736800 in Apple's layout. A patch in the extended area makes the build move rsrc. | `Patcher.maxOSOSSize`, `Patcher.extendedArea`. |
 | Do not put data in the zero area at 0x6ca452. | The firmware stops at start if this area is not zero. | The theme import uses only the area after osos. |
 | Never change the opened file or a backup. | A backup must stay correct. | "Save Firmware As…" refuses the Backups folder. Backups get a new name each time. |
 | Never apply program code changes from a theme. | The import cannot verify them. | `ThemeImport.make` records them as "skipped". |
@@ -148,6 +148,7 @@ A test in the emulator is strong evidence, but not proof:
 | `sleep-now` | Up to the hardware sleep | No |
 | `flash-keep-awake` | Yes, without a sleep | 2-minute version only |
 | `flash-wake-on-input` | Yes | No |
+| `usb-host-probe` | Host start only (no USB in the emulator) | No |
 | Dark Mode switch | Yes | No |
 | Software version | Not recorded | No |
 

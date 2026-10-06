@@ -46,6 +46,12 @@ CLANG_FLAGS = ["--target=armv4t-none-eabi", "-mcpu=arm7tdmi", "-marm", "-mfloat-
 R_ARM_NONE, R_ARM_ABS32, R_ARM_REL32, R_ARM_CALL, R_ARM_JUMP24, R_ARM_V4BX = 0, 2, 3, 28, 29, 40
 
 
+# The extended area for large patches, after the theme data and the Dark Mode items
+# (themeimport.OSOS_LIMIT) and below the 8 MB limit of the reset code. A patch with a load
+# address in this area can use the area to its end. The build must then move rsrc.
+EXTENDED_AREA = (0x7E8000, 0x7F0000)
+
+
 class PatchError(Exception):
     pass
 
@@ -218,6 +224,8 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
             obj = compile_c(sources, Path(tmp))
         code, table = link(obj, base, fw_syms)
     end = base + len(code)
+    if EXTENDED_AREA[0] <= base < EXTENDED_AREA[1]:
+        max_size = EXTENDED_AREA[1]
     if end > max_size:
         raise PatchError(f"patch code ends at {end:#x}, but the osos image can only grow to {max_size:#x}")
     out = bytearray(osos) + bytes(max(0, end - len(osos)))

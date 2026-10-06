@@ -49,6 +49,11 @@ public enum Patcher {
 
     /// The largest size of the osos image in firmware 1.3: the start of the rsrc image.
     public static let maxOSOSSize = 0x736800
+    /// The extended area for large patches, after the theme data and the Dark Mode items
+    /// (`ThemeImport.ososLimit`) and below the 8 MB limit of the reset code. A patch with a load
+    /// address in this area can use the area to its end. The osos image then gets larger than
+    /// `maxOSOSSize`, thus the build moves rsrc (`FirmwarePartition.makeRoom`).
+    public static let extendedArea = 0x7E8000..<0x7F0000
 
     public static func list(in folder: URL) -> [PatchInfo] {
         let dirs = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
@@ -103,6 +108,7 @@ public enum Patcher {
             (code, table) = try link(try compile(patch.folder), base: base, firmware: fw)
         }
         let end = Int(base) + code.count
+        let maxSize = extendedArea.contains(Int(base)) ? extendedArea.upperBound : maxSize
         guard end <= maxSize else { throw PatchError("The patch code ends at \(String(end, radix: 16)); the maximum is \(String(maxSize, radix: 16)).") }
         var out = current
         let size = max(out.count, (end + 0x7FF) / 0x800 * 0x800)

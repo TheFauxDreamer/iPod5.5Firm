@@ -1,0 +1,27 @@
+{
+  "name": "usb-host-probe",
+  "version_letter": "h",
+  "description": "A one-shot test of the USB host mode through a USB-C mod (USB-AUDIO-OUT.md, Stage 0). Select \"Start the probe at the next restart\", eject and restart the iPod, then press a button. The iPod gives a short high tone and starts its USB host stack one time. A long low tone: the host stack runs. High, low, high: a USB flash drive or card reader was found. The next restart is normal again. CAUTION: While the probe runs, the USB port possibly does not operate with a computer. Restart the iPod (hold Menu and Select) to stop the probe.",
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "load_address": "0x7e8000",
+  "symbols": {
+    "fw_memset0": "0x07ccd0",
+    "fw_strcpy": "0x07cd6c",
+    "file_open": "0x08f38c",
+    "file_open_rw": "0x08f3f8",
+    "file_read": "0x08f464",
+    "file_write": "0x08f6f4",
+    "file_seek": "0x08f5c4",
+    "file_close": "0x08f184",
+    "fw_long_play_timer": "0x1d8570",
+    "host_start": "0x2860e8",
+    "tone": "0xcd430",
+    "hub_init_device": "0xe7bc4",
+    "storage_init_interface": "0x10dd00"
+  },
+  "hooks": [
+    { "kind": "bl", "at": "0x1d8260", "expect": "0xeb0000c2", "to": "hook_event" },
+    { "kind": "word", "at": "0x6c8730", "expect": "0x000e7bc4", "to": "hook_hub_init" },
+    { "kind": "word", "at": "0x6c878c", "expect": "0x0010dd00", "to": "hook_storage_init" }
+  ]
+}

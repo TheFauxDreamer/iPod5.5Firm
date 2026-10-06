@@ -16,6 +16,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [sleep-now](#sleep-now) | Code patch | Patches | 1 vtable word and 2 `bl` | No |
 | [flash-keep-awake](#flash-keep-awake) | Code patch | Patches | 4 `bl` | Partly (an earlier version) |
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
+| [usb-host-probe](#usb-host-probe) | Code patch (test, branch `usb-audio-out`) | Patches | 1 `bl` and 2 driver table words | No |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
 | [Dark Mode switch](#dark-mode-switch) | Code and data | Patches > iPod Appearance | 1 `b` and 2 vtable words, a table and a menu | No |
 | [Move of rsrc](#move-of-rsrc) | Partition layout | Automatic | 1 directory entry | Yes |
@@ -314,6 +315,30 @@ The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 min
 
 **Test status.** Emulator: one button push turned on the storage power 0.05 ms later. 60 wheel steps did not run the hook. Not tested on a real iPod.
 
+## usb-host-probe
+
+**User interface.** Patches pane, letter `h`. The button "Start the Probe at the Next Restart" writes '1' to `iPod_Control/iTunes/iPodFirmUSBProbe` on the connected iPod. The pane gives the test steps. This patch is a test for [USB-AUDIO-OUT.md](../USB-AUDIO-OUT.md) (Stage 0). It is only on the branch `usb-audio-out`.
+
+**Effect.** One time after the trigger, the iPod starts its USB host stack and gives tones. The next start is normal.
+
+**Load address.** 0x7e8000, in the extended area (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code is 605 bytes.
+
+**Hooks.**
+
+| Kind | At | Expect | To | Original |
+|---|---|---|---|---|
+| `bl` | 0x1d8260 | 0xeb0000c2 | `hook_event` | `bl 0x1d8570` (long-push timer) in the UI event handler 0x1d81cc |
+| `word` | 0x6c8730 | 0x000e7bc4 | `hook_hub_init` | "Initialize device" of the hub driver dispatch table (RW data) |
+| `word` | 0x6c878c | 0x0010dd00 | `hook_storage_init` | "Initialize interface" of the storage driver dispatch table (RW data) |
+
+**Runtime logic.**
+
+1. `hook_event` calls the original 0x1d8570. At the first event of type 4, 5 or 7 (button or wheel) after the start, it reads the trigger file. Other event types also occur during the start, before the disk is ready.
+2. If the file contains '1', it writes '0'. If the write is correct, it gives a short high tone (0xcd430) and calls the host start 0x2860e8.
+3. `hook_hub_init` gives a long low tone and continues in 0xe7bc4. `hook_storage_init` gives high, low, high and continues in 0x10dd00. These two wrappers are `naked`: they keep r0–r3 and the stack, because the driver functions can have arguments on the stack.
+
+**Test status.** Emulator: a button push ran the host start 0x2860e8, the UIM init 0x97300 and the controller reset 0xd1288. The menus worked after this. At the next start, the host start did not run (the file contained '0'). The emulator has no USB, thus the driver tones have no test. Not tested on a real iPod.
+
 ## Storage type
 
 The two flash patches are not for the original hard drive. iPodFirm does not read the storage model. It uses the size of the iPod disk:
@@ -343,7 +368,7 @@ An earlier version read the ATA IDENTIFY data in the firmware (a hook at 0x142f9
    - Pass 2: the shift of the nearest mapped resource of the same type.
 4. For each changed resource, it makes a list of byte changes (`ThemeChange`: offset, old bytes, new bytes):
    - **BMap** with the same header: the changed pixel runs.
-   - **BMap** that the theme made larger: the picture goes into the free area after the end of osos, below 0x7F0000. If all pixels are grey, iPodFirm stores a 4-bit grey copy. Then the resource table entry gets the new offset and size.
+   - **BMap** that the theme made larger: the picture goes into the free area after the end of osos, below 0x7E8000 (`ThemeImport.ososLimit`). If all pixels are grey, iPodFirm stores a 4-bit grey copy. Then the resource table entry gets the new offset and size.
    - **View**: the changed fields of each element. A field changes only if the target has the base value. The import translates the resource IDs in the fields.
    - **Type**: each changed 32-bit word, only if the target has the base value.
    - Other types (for example `TCmd` and `Menu`): skipped.

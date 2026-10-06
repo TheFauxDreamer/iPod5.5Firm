@@ -195,7 +195,7 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | 0x1d81cc | UI event handler. Runs in the UI task for each button and wheel event. | Emulator |
 | 0x1d813c | Starts the idle timer again and turns the display on. Called at 0x1d8344 for a button event, not for the wheel events 0x10 and 0x1c. | Emulator |
 | 0x1d8264 | UI event handler part: calls 0x94bbc(4) and then 0x94d80(4, 3000) while the storage is on. | Static |
-| 0x1d8570 | 5000 ms timer of key 0x6e (a long push of Play). Posts screen 0x63f2. | Static |
+| 0x1d8570 | 5000 ms timer of key 0x6e (a long push of Play). Posts screen 0x63f2. The handler 0x1d81cc calls it at 0x1d8260 for each event; the code after the call does not use r0. | Static, Patch (`usb-host-probe`) |
 | 0x283e10 | Backlight function. Only the sleep and wake paths call it. | Static |
 
 ### Storage power and keep-awake
@@ -235,6 +235,24 @@ Refer to [re/usb-audio.md](../re/usb-audio.md). No patch uses these functions ye
 | 0x1323d8 | Handles SET_INTERFACE. Alternate setting 1 starts the stream. |
 | 0x1e5b84 | iAP lingo 0x0A (Digital Audio) handler. |
 | 0x1e61c0 | Returns 1 if the audio goes to USB. |
+
+### USB host
+
+Refer to [re/usb-host.md](../re/usb-host.md) and [USB-AUDIO-OUT.md](../USB-AUDIO-OUT.md). The test patch `usb-host-probe` (branch `usb-audio-out`) uses some of them. The facts are Static, except where the table gives Emulator.
+
+| Address | Function |
+|---|---|
+| 0x6bc3dc | Class driver list (RAM 0x1083e138): pairs (driver record, dispatch table). |
+| 0x6c8820 | UIM (host controller driver) dispatch table, version 6. |
+| 0x97300 | UIM init. |
+| 0xd4820, 0xd4828 | Isochronous endpoint create and transfer: stubs that return -1 (table words 0x6c885c, 0x6c8860). |
+| 0xd1288 | Controller reset. Sets `USBMODE` (0xC50001A8) to 3 (host). |
+| 0x2860e8, 0x28608c | Host start and host stop. Emulator: a call of 0x2860e8 runs 0x97300 and 0xd1288, and the menus continue to work. |
+| 0x6c8730 | Hub driver dispatch table, "initialize device" entry (0xe7bc4). Dispatch format: version 0x1100, validate, initialize device, initialize interface, finalize, notify. |
+| 0x6c878c | Storage driver dispatch table, "initialize interface" entry (0x10dd00). |
+| 0xcd430 | Piezo tone (pitch, duration in microseconds): a type-0 message to the queue 0x15 of `AsyncPiezo` (0x285060). The firmware uses pitches 0xb4 and 0x90 with 200000. |
+| 0x1fb50c | iAP lingo 6 (USB host), command 3: tells the Camera Connector to switch on (1) or off (0). |
+| 0x2856a4 | `USBPowerSense` task. |
 
 ### The JavaScript engine
 
@@ -361,4 +379,5 @@ The emulator found these element IDs (view + 0x1c):
 - Why the stock firmware defers Sleep after a computer session.
 - The path of a long push of Play.
 - The function of the audio route flags at 0x1081ee48 + 0 and + 1.
+- The UIM interrupt handler that completes the periodic USB host transfers.
 - The cause of the empty artwork frame in Now Playing with the unchanged firmware in the emulator.

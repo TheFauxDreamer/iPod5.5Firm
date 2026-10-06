@@ -842,10 +842,32 @@ final class PatcherOptionTests: XCTestCase {
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
         let patch = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "row-marker" }!
         let sha = ThemeImport.sha256(osos)
-        XCTAssertThrowsError(try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7eb000))
-        let out = try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7eb000, maxSize: 0x7F0000)
+        // below the extended area, maxSize is the limit
+        XCTAssertThrowsError(try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7e0000))
+        let out = try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7e0000, maxSize: ThemeImport.ososLimit)
         XCTAssertEqual(out.count % 0x800, 0)
-        XCTAssertTrue((0x7eb000..<0x7F0000).contains(Int(le32(out, 0x677a14))))
+        XCTAssertTrue((0x7e0000..<ThemeImport.ososLimit).contains(Int(le32(out, 0x677a14))))
+        // in the extended area, the patch can use the area to its end
+        let ext = try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: UInt32(Patcher.extendedArea.lowerBound))
+        XCTAssertTrue(Patcher.extendedArea.contains(Int(le32(ext, 0x677a14))))
+    }
+
+    /// The usb-host-probe patch: the extended area, a bl in the UI event handler and two driver table words.
+    func testUSBHostProbe() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        let all = Patcher.list(in: repo.appendingPathComponent("patches"))
+        let probe = all.filter { $0.spec.name == "usb-host-probe" }
+        XCTAssertEqual(probe.count, 1)
+        let out = try Patcher.apply(probe, to: osos)
+        XCTAssertGreaterThan(out.count, Patcher.extendedArea.lowerBound)
+        XCTAssertEqual(le32(out, 0x1d8260) & 0xFF00_0000, 0xEB00_0000)
+        XCTAssertNotEqual(le32(out, 0x1d8260), le32(osos, 0x1d8260))
+        for at in [0x6c8730, 0x6c878c] { XCTAssertTrue(Patcher.extendedArea.contains(Int(le32(out, at)))) }
+        // with the other code patches: different areas and hook sites
+        let names = ["album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input", "usb-host-probe"]
+        _ = try Patcher.apply(all.filter { names.contains($0.spec.name) }, to: osos)
     }
 }
 

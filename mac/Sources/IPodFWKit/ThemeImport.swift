@@ -160,7 +160,8 @@ public enum ThemeImport {
     static let idShifts = (-8...8).sorted { abs($0) < abs($1) }
     /// The reset code of RetailOS stops if the end of the OS image is after 8 MB (0x800004). A
     /// picture that the theme makes larger goes after the current end of osos, below this limit.
-    public static let ososLimit = 0x7F0000
+    /// The area from this limit to 0x7F0000 is for patches (`Patcher.extendedArea`).
+    public static let ososLimit = 0x7E8000
     /// Resources of the target that keep the Apple version: the progress bar in Now Playing (1.3).
     /// The dark themes make it almost black, so it is not visible.
     public static let keepApple = ["BMap 24342": "Apple's progress bar stays (the theme makes it almost invisible).",

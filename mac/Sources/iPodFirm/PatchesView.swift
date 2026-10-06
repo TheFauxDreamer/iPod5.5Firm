@@ -22,6 +22,7 @@ struct PatchesView: View {
                 Section {
                     PatchRow(patch: patch)
                     if patch.spec.name == "album-art" { AlbumArtControls() }
+                    if patch.spec.name == "usb-host-probe" { USBProbeControls() }
                 } header: {
                     HStack(spacing: 6) {
                         Text(patch.spec.name)
@@ -97,6 +98,33 @@ extension PatchRow {
         a.addButton(withTitle: "Turn On")
         a.addButton(withTitle: "Cancel")
         return a.runModal() == .alertFirstButtonReturn
+    }
+}
+
+/// The trigger of the usb-host-probe patch. Refer to USB-AUDIO-OUT.md (Stage 0).
+struct USBProbeControls: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("""
+                Do these steps after you flash a firmware with this patch:
+                1. Click Start the Probe at the Next Restart, then click Eject iPod.
+                2. Disconnect the iPod. Restart it (hold Menu and Select until the Apple logo shows).
+                3. Connect a USB flash drive or a card reader through a USB-C OTG adapter with a power input. Connect a charger to the power input.
+                4. Press a button on the iPod. A short high tone: the probe starts. A long low tone: the USB host mode operates. High, low, high: the iPod found the flash drive.
+                5. Restart the iPod again. The next start is normal.
+                """)
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Start the Probe at the Next Restart") { model.armUSBProbe() }
+                    .disabled(model.currentIPod == nil)
+                Button("Eject iPod") { Task { await model.ejectIPod() } }
+                    .disabled(model.currentIPod == nil)
+                if model.currentIPod == nil { Text("Connect the iPod.").font(.caption).foregroundStyle(.secondary) }
+            }
+            if let s = model.usbProbeStatus { Label(s, systemImage: "checkmark.circle").font(.caption) }
+        }
     }
 }
 
