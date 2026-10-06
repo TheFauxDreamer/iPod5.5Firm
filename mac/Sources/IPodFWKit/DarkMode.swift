@@ -42,7 +42,7 @@ public enum DarkMode {
     public static func switchTable(_ theme: ImportedTheme, osos: [UInt8]) -> (table: [UInt8], leftOut: Int) {
         var runs: [UInt8] = [], data: [UInt8] = [], count = 0, leftOut = 0
         var work = osos
-        for c in theme.changes where ThemeImport.keepApple[c.resource] == nil && c.offset + c.old.count <= osos.count {
+        for c in theme.effectiveChanges where c.offset + c.old.count <= osos.count {
             let cur = work[c.offset..<c.offset + c.old.count]
             guard cur.elementsEqual(c.old) else {
                 if !cur.elementsEqual(c.new) { leftOut += 1 }
@@ -95,7 +95,7 @@ public enum DarkMode {
         var out = osos
         // 1. theme data outside osos: in both modes
         var end = patchAreaEnd
-        for c in theme.changes where c.offset + c.old.count > osos.count {
+        for c in theme.effectiveChanges where c.offset + c.old.count > osos.count {
             if out.count < c.offset + c.new.count { out += [UInt8](repeating: 0, count: c.offset + c.new.count - out.count) }
             out.replaceSubrange(c.offset..<c.offset + c.new.count, with: c.new)
             end = max(end, c.offset + c.new.count)

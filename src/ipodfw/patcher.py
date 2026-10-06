@@ -13,6 +13,13 @@ A patch is a folder that contains `patch.json` and one or more C files:
       ]
     }
 
+A patch can also change data. Both sections are optional:
+
+      "bytes":   [ { "at": "0x4baa76", "expect": "fffe", "value": "003c" } ],   # hexadecimal bytes
+      "strings": { "24": { "-140": "60 Seconds" } }                            # block index -> id -> text
+
+A patch with no C file has no code, and then it needs no "load_address".
+
 The C code is compiled with Xcode clang for an ARM7TDMI (ARMv4T, ARM state). A small linker
 in this file puts .text, .rodata and .data at `load_address` and resolves the relocations.
 The code must fit in the space after the original image: the osos image can grow to the start
@@ -28,6 +35,8 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+from . import resources
 
 CLANG_FLAGS = ["--target=armv4t-none-eabi", "-mcpu=arm7tdmi", "-marm", "-mfloat-abi=soft", "-O2",
                "-ffreestanding", "-fno-builtin", "-fno-pic", "-fno-exceptions", "-fno-unwind-tables",
@@ -167,6 +176,25 @@ def compile_c(sources: list[Path], workdir: Path) -> bytes:
     return objs[0].read_bytes()
 
 
+def apply_data(out: bytearray, spec: dict) -> None:
+    """Apply the "bytes" and "strings" sections of a patch to `out`."""
+    for e in spec.get("bytes", []):
+        at = int(e["at"], 16)
+        expect, value = bytes.fromhex(e["expect"]), bytes.fromhex(e["value"])
+        if len(expect) != len(value):
+            raise PatchError(f"bytes at {at:#x}: \"expect\" and \"value\" have different lengths")
+        if out[at:at + len(expect)] != expect:
+            raise PatchError(f"bytes at {at:#x}: found {out[at:at + len(expect)].hex()}, expected {expect.hex()}")
+        out[at:at + len(value)] = value
+    if spec.get("strings"):
+        blocks = resources.scan(bytes(out))
+        for index, values in spec["strings"].items():
+            try:
+                resources.write_strings(out, blocks[int(index)], values)
+            except (IndexError, resources.ResourceError) as e:
+                raise PatchError(f"strings for block {index}: {e}") from e
+
+
 def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int | None = None,
           symbols: dict[str, int] | None = None, original_sha256: str | None = None) -> tuple[bytes, dict]:
     """Return (patched osos, report). `max_size` is the largest size the osos image can have.
@@ -180,12 +208,15 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
     spec = json.loads((patch_dir / "patch.json").read_text())
     if (original_sha256 or hashlib.sha256(osos).hexdigest()) != spec["osos_sha256"]:
         raise PatchError(f"patch {spec['name']!r} is for a different firmware (osos SHA-256 does not agree)")
-    base = load_address if load_address is not None else int(spec["load_address"], 16)
-    fw_syms = {k: int(v, 16) for k, v in spec.get("symbols", {}).items()}
-    fw_syms.update(symbols or {})
-    with tempfile.TemporaryDirectory() as tmp:
-        obj = compile_c(sorted(patch_dir.glob("*.c")), Path(tmp))
-    code, table = link(obj, base, fw_syms)
+    sources = sorted(patch_dir.glob("*.c"))
+    code, table, base = b"", {}, 0
+    if sources:
+        base = load_address if load_address is not None else int(spec["load_address"], 16)
+        fw_syms = {k: int(v, 16) for k, v in spec.get("symbols", {}).items()}
+        fw_syms.update(symbols or {})
+        with tempfile.TemporaryDirectory() as tmp:
+            obj = compile_c(sources, Path(tmp))
+        code, table = link(obj, base, fw_syms)
     end = base + len(code)
     if end > max_size:
         raise PatchError(f"patch code ends at {end:#x}, but the osos image can only grow to {max_size:#x}")
@@ -204,6 +235,7 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
             raise PatchError(f"hook target {h['to']!r} is not a global function in the patch")
         new = target if h["kind"] == "word" else branch(h["kind"], at, target)
         struct.pack_into("<I", out, at, new)
+    apply_data(out, spec)
     # keep the image size a multiple of 0x800, as in Apple's file
     size = max(len(osos), (end + 0x7FF) // 0x800 * 0x800)
     out += bytes(max(0, size - len(out)))

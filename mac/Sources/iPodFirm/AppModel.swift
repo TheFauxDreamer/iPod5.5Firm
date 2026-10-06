@@ -57,6 +57,10 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(customVersion, forKey: "customVersion") }
     }
     @Published var themeReport: ImportedTheme?
+    /// The Pictures pane shows the pictures of the selected dark theme.
+    @Published var picturesDark = false
+    /// Increases when the app writes a theme file (an edit of a dark picture).
+    @Published var themeRevision = 0
     @Published var thumbnailStatus: String?
     @Published var helperSetupError: String?
     @AppStorage("requireTouchID") var requireTouchID = true
@@ -332,6 +336,60 @@ final class AppModel: ObservableObject {
 
     func isCompatible(_ t: ImportedTheme) -> Bool { editor?.originalOSOSHash == t.osos_sha256 }
 
+    // MARK: dark theme pictures
+
+    private var darkCache: (key: String, osos: [UInt8], items: [PictureItem])?
+
+    /// The osos with the selected dark theme, and its pictures. Nil if no theme agrees with the open firmware.
+    var darkPictures: (osos: [UInt8], items: [PictureItem])? {
+        guard let editor, let file = selectedTheme, isCompatible(file.theme) else { return nil }
+        let key = "\(revision) \(themeRevision) \(file.name)"
+        if let c = darkCache, c.key == key { return (c.osos, c.items) }
+        var osos = editor.osos
+        guard (try? file.theme.apply(to: &osos, originalSHA256: editor.originalOSOSHash)) != nil,
+              let main = try? Resources.mainBlock(Resources.scan(osos, limit: editor.partition.appleOSLength)) else { return nil }
+        let items = Pictures.list(osos, main)
+        darkCache = (key, osos, items)
+        return (osos, items)
+    }
+
+    /// The pictures and the osos that the Pictures pane shows: Apple's or the dark theme.
+    var shownPictures: (osos: [UInt8], items: [PictureItem])? {
+        if picturesDark { return darkPictures }
+        return editor.map { ($0.osos, $0.pictures) }
+    }
+
+    /// True if the owner replaced this picture of the dark theme.
+    func hasDarkEdit(_ item: PictureItem) -> Bool {
+        selectedTheme?.theme.edits.contains { $0.offset == item.picture.dataPos } ?? false
+    }
+
+    /// Put a picture into the selected dark theme. The light pictures do not change.
+    func replaceDarkPicture(_ item: PictureItem, rgba: [UInt8]) throws {
+        guard let editor, let file = selectedTheme, let dark = darkPictures else { return }
+        var osos = dark.osos
+        guard try item.picture.encode(&osos, rgba: rgba) else { return }
+        let p = item.picture
+        var theme = file.theme
+        theme.setEdit(resource: "BMap \(item.resourceID)", offset: p.dataPos, light: editor.osos,
+                      new: Array(osos[p.dataPos..<p.dataPos + p.bytesPerRow * p.height]))
+        try saveTheme(theme, to: file.url)
+    }
+
+    /// Use the picture of the imported theme again.
+    func useThemePicture(_ item: PictureItem) {
+        guard let file = selectedTheme else { return }
+        var theme = file.theme
+        theme.removeEdit(offset: item.picture.dataPos)
+        do { try saveTheme(theme, to: file.url) } catch { fail("Couldn't save the theme", error) }
+    }
+
+    private func saveTheme(_ theme: ImportedTheme, to url: URL) throws {
+        try theme.write(to: url)
+        themes = Self.loadThemes()
+        themeRevision += 1
+    }
+
     func chooseFile(_ message: String) -> URL? {
         let p = NSOpenPanel()
         p.allowedContentTypes = []
@@ -437,10 +495,10 @@ final class AppModel: ObservableObject {
     // MARK: pictures
 
     func exportPicture(_ item: PictureItem) {
-        guard let data = editor?.png(of: item) else { return }
+        guard let osos = shownPictures?.osos, let data = ImageCodec.png(for: item.picture, osos: osos) else { return }
         let p = NSSavePanel()
         p.allowedContentTypes = [.png]
-        p.nameFieldStringValue = String(format: "%04d_%d.png", item.index, item.resourceID)
+        p.nameFieldStringValue = String(format: picturesDark ? "%04d_%d_dark.png" : "%04d_%d.png", item.index, item.resourceID)
         if p.runModal() == .OK, let url = p.url {
             do { try data.write(to: url) } catch { fail("Couldn't export", error) }
         }
@@ -453,7 +511,11 @@ final class AppModel: ObservableObject {
             guard img.width == item.picture.width, img.height == item.picture.height else {
                 throw PictureError("That image is \(img.width)×\(img.height). This picture must stay \(item.picture.width)×\(item.picture.height).")
             }
-            if try editor.replacePicture(item, rgba: ImageCodec.rgba(img)) { edited() }
+            if picturesDark {
+                try replaceDarkPicture(item, rgba: ImageCodec.rgba(img))
+            } else if try editor.replacePicture(item, rgba: ImageCodec.rgba(img)) {
+                edited()
+            }
         } catch { fail("Couldn't replace picture", error) }
     }
 

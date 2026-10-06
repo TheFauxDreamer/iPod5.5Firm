@@ -18,6 +18,9 @@ Rules:
   The import matches the elements and changes a field only where the target has the base
   value. It translates the resource IDs in the fields.
 - Other resource types and program code: the import does not apply them.
+- The highlight bar keeps Apple's blue colours (APPLE_HIGHLIGHT). The blue bar is easier to see.
+- Edits: the owner can replace a picture of the theme in the app. An edit replaces the theme
+  changes in the same bytes. Theme.edits keeps the edits apart from the import.
 """
 
 from __future__ import annotations
@@ -40,10 +43,14 @@ ELEMENT_ID_TYPE = {"BMap": "BMap", "Draw": "BMap", "Str ": "Str ", "None": "View
 # The reset code of RetailOS stops if the end of the OS image is after 8 MB (0x800004).
 # A picture that the theme makes larger goes after the current end of osos, below this limit.
 OSOS_LIMIT = 0x7F0000
-# Resources of the target that keep the Apple version: the progress bar in Now Playing (1.3).
+# Resources of the target that keep the Apple version: the progress bar in Now Playing (1.3) and the fill of the rating stars.
 # The dark themes make it almost black, so it is not visible.
 KEEP_APPLE = {"BMap 24342": "Apple's progress bar stays (the theme makes it almost invisible).",
-              "BMap 24343": "Apple's progress bar stays (the theme makes it almost invisible)."}
+              "BMap 24343": "Apple's progress bar stays (the theme makes it almost invisible).",
+              "BMap 24351": "Apple's blue fill of the rating stars stays (the theme makes the stars almost invisible)."}
+# The colours of the highlight bar in Apple's Views (element +76 and +80, ABGR). The dark themes
+# make the bar dark grey. The owner wants the blue bar, because it is easier to see.
+APPLE_HIGHLIGHT = (0xFFD06428, 0xFFE89858)
 
 
 class ThemeError(Exception):
@@ -66,6 +73,7 @@ class Theme:
     changes: list[Change] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)   # (resource, reason)
     imported: list[str] = field(default_factory=list)
+    edits: list[Change] = field(default_factory=list)   # pictures that the owner replaced
 
     def to_json(self) -> str:
         return json.dumps({
@@ -78,6 +86,9 @@ class Theme:
             "changes": [{"resource": c.resource, "offset": c.offset,
                          "old": base64.b64encode(c.old).decode(), "new": base64.b64encode(c.new).decode()}
                         for c in self.changes],
+            "edits": [{"resource": c.resource, "offset": c.offset,
+                       "old": base64.b64encode(c.old).decode(), "new": base64.b64encode(c.new).decode()}
+                      for c in self.edits],
         }, indent=1) + "\n"
 
     @classmethod
@@ -85,10 +96,36 @@ class Theme:
         d = json.loads(text)
         if d.get("format") != FORMAT:
             raise ThemeError("This theme file has an unknown format.")
-        return cls(d["name"], d["source_sha256"], d["osos_sha256"],
-                   [Change(c["resource"], c["offset"], base64.b64decode(c["old"]), base64.b64decode(c["new"]))
-                    for c in d["changes"]],
-                   [(s["resource"], s["reason"]) for s in d["skipped"]], d["imported"])
+        def changes(items):
+            return [Change(c["resource"], c["offset"], base64.b64decode(c["old"]), base64.b64decode(c["new"]))
+                    for c in items]
+        return cls(d["name"], d["source_sha256"], d["osos_sha256"], changes(d["changes"]),
+                   [(s["resource"], s["reason"]) for s in d["skipped"]], d["imported"], changes(d.get("edits", [])))
+
+    def effective_changes(self) -> list[Change]:
+        """The changes to apply: without KEEP_APPLE, with Apple's highlight colours, and with the edits
+        of the owner in place of the theme changes in the same bytes."""
+        out = []
+        for c in self.changes:
+            if c.resource in KEEP_APPLE:            # a theme file from an earlier version
+                continue
+            if any(c.offset < e.offset + len(e.new) and e.offset < c.offset + len(c.new) for e in self.edits):
+                continue
+            c = _keep_highlight(c)
+            if c.old != c.new:
+                out.append(c)
+        return out + self.edits
+
+
+def _keep_highlight(c: Change) -> Change:
+    """The change with Apple's highlight colours where the theme changes them."""
+    if not c.resource.startswith("View ") or len(c.old) != len(c.new):
+        return c
+    new = bytearray(c.new)
+    for i in range(-c.offset % 4, len(c.old) - 3, 4):
+        if struct.unpack_from("<I", c.old, i)[0] in APPLE_HIGHLIGHT:
+            new[i:i + 4] = c.old[i:i + 4]
+    return Change(c.resource, c.offset, c.old, bytes(new))
 
 
 def _sha256(b: bytes) -> str:
@@ -406,12 +443,11 @@ def apply_theme(theme: Theme, osos: bytearray, original_sha256: str) -> tuple[in
     if original_sha256 != theme.osos_sha256:
         raise ThemeError(f"The theme \"{theme.name}\" is for a different firmware.")
     done = conflicts = 0
-    end = max((c.offset + len(c.new) for c in theme.changes), default=0)
+    changes = theme.effective_changes()
+    end = max((c.offset + len(c.new) for c in changes), default=0)
     if end > len(osos):
         osos.extend(bytes((end + 0x7FF) // 0x800 * 0x800 - len(osos)))
-    for c in theme.changes:
-        if c.resource in KEEP_APPLE:            # a theme file from an earlier version
-            continue
+    for c in changes:
         cur = bytes(osos[c.offset:c.offset + len(c.old)])
         if cur == c.old:
             osos[c.offset:c.offset + len(c.new)] = c.new

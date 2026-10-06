@@ -133,6 +133,29 @@ def test_apply_theme_extends_osos():
     assert len(osos) == 0x800 and osos[10:12] == b"\x11\x11"
 
 
+def test_apply_theme_keeps_the_blue_highlight():
+    old = struct.pack("<4I", 0x18, 0xFFD06428, 0xFFE89858, 0x5E9E0000)
+    new = struct.pack("<4I", 0x30, 0xFF252525, 0xFF343434, 0x5E9E0000)
+    th = themeimport.Theme("t", "", "abc", [themeimport.Change("View 22034", 8, old, new),
+                                            themeimport.Change("Type 14037", 24, old[4:8], new[4:8])])
+    osos = bytearray(32)
+    osos[8:24] = old
+    osos[24:28] = old[4:8]
+    themeimport.apply_theme(th, osos, "abc")
+    assert struct.unpack_from("<4I", osos, 8) == (0x30, 0xFFD06428, 0xFFE89858, 0x5E9E0000)
+    assert osos[24:28] == new[4:8]           # only View resources keep the blue colours
+
+
+def test_edits_replace_the_theme_picture_and_survive_json():
+    th = themeimport.Theme("t", "", "abc", [themeimport.Change("BMap 1", 4, b"\x00" * 4, b"\x11" * 4),
+                                            themeimport.Change("BMap 2", 12, b"\x00", b"\x22")],
+                           edits=[themeimport.Change("BMap 1", 4, b"\x00" * 4, b"\x33" * 4)])
+    th = themeimport.Theme.from_json(th.to_json())
+    osos = bytearray(16)
+    assert themeimport.apply_theme(th, osos, "abc") == (2, 0)
+    assert osos[4:8] == b"\x33" * 4 and osos[12] == 0x22
+
+
 THEME_ENV = ("IPODFW_THEME", "IPODFW_THEME_BASE", "IPODFW_IPSW")
 
 

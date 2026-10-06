@@ -219,8 +219,23 @@ iPodFirm applies the theme when you save, flash, export an .ipsw or run the emul
 
 - The import compares the theme with Apple firmware 1.2.1. Then it applies the changed pictures, colours and layouts to firmware 1.3.
 - The import keeps Apple's progress bar in Now Playing. The theme makes it almost invisible.
+- The import keeps Apple's blue fill of the rating stars in Now Playing (picture 24351). The theme makes the stars almost invisible.
+- The lists keep Apple's blue highlight bar. The blue bar is easier to see than the grey bar of the theme.
 - The import does not apply changes to the program code. The tested theme removes a signature check; iPodFirm does not copy that change.
 - The theme has a full-screen background picture. The picture makes osos 38 KB larger. Thus iPodFirm moves the `rsrc` image (fonts and video firmware) to free space in the firmware partition. It does not move or change `aupd` or `hibe`.
+
+### Change the pictures of the dark theme
+
+iPodFirm keeps each imported theme in `~/Library/Application Support/iPodFirm/Themes/` (one `.ipodtheme` file for each theme). The file is a list of byte changes, not pictures. Thus, use the Pictures pane to change it.
+
+1. Open the firmware.
+2. In the Pictures pane, click "Dark Theme".
+3. Select a picture.
+4. Click "Export PNG…" to get the dark picture.
+5. Edit the PNG. Keep the same size.
+6. Click "Replace…", or drop the PNG on the picture.
+
+The replacement changes only the dark theme. The light picture does not change. To get the picture of the theme again, click "Use Theme Picture".
 
 ### Switch on iPod
 
@@ -242,12 +257,15 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 |---|---|---|
 | `album-art` | Shows a 20 × 20 thumbnail of the album artwork at the left of each album in the lists. | Tested in the emulator with 200 real songs in 28 albums. Working on real iPod, bit buggy when a song name matches album name. |
 | `flash-keep-awake` | SSD mode for flash storage (iFlash, CompactFlash and SSD adapters). Keeps the storage on for 30 minutes after each access, not for 1 second. Starts the storage at once when the iPod wakes from sleep, or when you touch a control after a long pause. Waits 0.5 s before the storage power goes off. On a hard drive, the patch does nothing. |
+| `backlight-60s` | The Backlight Timer menu has a 60 Seconds item in place of 2 Seconds. | Menu tested in the emulator. Not tested on a real iPod. |
 
 The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary: the patch finds the new file when you scroll through a list.
 
 The patch draws a thumbnail only in the rows of a list. In Now Playing, RetailOS shows its own large artwork from `iPod_Control/Artwork/ArtworkDB`. Finder writes that database when it syncs music with artwork.
 
 The stock firmware switches off the storage power approximately 1 s after the last access. A flash adapter needs some seconds to start again after a power cut. Thus, the first song after idle time starts 3–6 s late. The `flash-keep-awake` patch changes the keep-awake time to 30 minutes. It also asks for the storage when the iPod wakes from sleep, so that the adapter starts while you look for a song. When the iPod goes to sleep, it switches off the storage as usual. The idea of an "SSD mode" comes from [rockpod](https://github.com/nuxcodes/rockpod), a Rockbox version for the iPod Classic. The patch also starts the storage when you touch a control and the storage is off. Before the power cut, the patch waits 0.5 s, so that an iFlash can complete its writes. Use the patch only with flash storage. The Patches pane examines the size of the connected iPod. An original drive has approximately 30, 60 or 80 GB, thus another size shows that the storage is flash. If the size is near an original drive, iPodFirm asks you before you turn the patch on and before you flash. For the research, refer to [re/play-latency.md](re/play-latency.md).
+
+The `backlight-60s` patch changes only data, not code. A script in the firmware (TCmd resource 9088) converts the menu item to seconds. The patch changes the seconds of a hidden item from "10 seconds" to 60 seconds. Then it puts this item in the menu in place of 2 Seconds. If your iPod is set to 2 Seconds before the flash, it keeps 2 seconds, and the menu shows no check mark. Select a new item one time. For the research, refer to [re/backlight-timer.md](re/backlight-timer.md).
 
 The patch tool compiles C code with the Xcode compiler and links it at a fixed address in the free space after the osos image (maximum 3.9 KB in firmware 1.3).
 
@@ -265,6 +283,7 @@ The patch tool compiles C code with the Xcode compiler and links it at a fixed a
 - The `album-art` patch has tests in the emulator. It was not done on a real iPod.
 - The `flash-keep-awake` patch has tests in the emulator. The SSD mode additions (2026-10-06) were not done on a real iPod.
 - The dark theme, with the `album-art` patch, operates on a real iPod 5.5G. This includes the move of `rsrc`.
+- The `backlight-60s` patch has tests in the emulator: the menu and the selection. The emulator does not show the backlight time. It was not done on a real iPod.
 - The "Dark Mode" item in Settings has tests in the emulator (light, dark and light again, also without the setting file). It was not done on a real iPod.
 
 ## Credits

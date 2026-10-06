@@ -12,8 +12,8 @@ struct PicturesView: View {
     enum Filter: String, CaseIterable { case all = "All", colour = "Colour", transparent = "Transparent", grey = "Greyscale" }
 
     var items: [PictureItem] {
-        guard let ed = model.editor else { return [] }
-        return ed.pictures.filter { item in
+        guard let shown = model.shownPictures else { return [] }
+        return shown.items.filter { item in
             switch filter {
             case .all: true
             case .colour: item.picture.depth == 16 && !item.picture.hasAlpha
@@ -27,12 +27,24 @@ struct PicturesView: View {
         HSplitView {
             VStack(spacing: 0) {
                 HStack {
+                    if model.selectedTheme != nil {
+                        Picker("Pictures", selection: $model.picturesDark) {
+                            Text("Light").tag(false)
+                            Text("Dark Theme").tag(true)
+                        }
+                        .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 180)
+                        .help("Dark Theme shows the pictures of the selected dark theme. A replacement changes only the dark theme.")
+                    }
                     Picker("Show", selection: $filter) { ForEach(Filter.allCases, id: \.self) { Text($0.rawValue) } }
                         .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 360)
                     Spacer()
                     TextField("Index or ID", text: $search).textFieldStyle(.roundedBorder).frame(width: 140)
                 }
                 .padding(10)
+                if model.picturesDark && model.darkPictures == nil {
+                    Label("The selected dark theme does not agree with the open firmware.", systemImage: "xmark.octagon.fill")
+                        .font(.caption).foregroundStyle(.orange).padding(.bottom, 8)
+                }
                 Divider()
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 10)], spacing: 10) {
@@ -42,13 +54,13 @@ struct PicturesView: View {
                         }
                     }
                     .padding(12)
-                    .id(model.revision)
+                    .id("\(model.revision) \(model.themeRevision) \(model.picturesDark)")
                 }
             }
             .frame(minWidth: 420)
 
             Group {
-                if let index = selection, let item = model.editor?.pictures.first(where: { $0.index == index }) {
+                if let index = selection, let item = model.shownPictures?.items.first(where: { $0.index == index }) {
                     PictureDetail(item: item)
                 } else {
                     Text("Select a picture").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -58,16 +70,16 @@ struct PicturesView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .secondaryAction) {
-                Button("Export All…") { model.exportFolder() }
-                Button("Import Folder…") { model.importFolder() }
+                Button("Export All…") { model.exportFolder() }.disabled(model.picturesDark)
+                Button("Import Folder…") { model.importFolder() }.disabled(model.picturesDark)
             }
         }
     }
 }
 
-func nsImage(_ item: PictureItem, _ ed: FirmwareEditor) -> NSImage {
+func nsImage(_ item: PictureItem, _ osos: [UInt8]) -> NSImage {
     let p = item.picture
-    guard let cg = ImageCodec.cgImage(rgba: ed.rgba(of: item), width: p.width, height: p.height, grey: p.isGrey, alpha: p.hasAlpha) else {
+    guard let cg = ImageCodec.cgImage(rgba: p.decode(osos), width: p.width, height: p.height, grey: p.isGrey, alpha: p.hasAlpha) else {
         return NSImage()
     }
     return NSImage(cgImage: cg, size: NSSize(width: p.width, height: p.height))
@@ -95,12 +107,12 @@ struct Thumb: View {
         VStack(spacing: 4) {
             ZStack {
                 Checkerboard()
-                if let ed = model.editor {
-                    Image(nsImage: nsImage(item, ed)).interpolation(.none).resizable().scaledToFit().padding(4)
+                if let osos = model.shownPictures?.osos {
+                    Image(nsImage: nsImage(item, osos)).interpolation(.none).resizable().scaledToFit().padding(4)
                 }
             }
             .frame(width: 76, height: 60)
-            .background(Color(nsColor: .textBackgroundColor))
+            .background(model.picturesDark ? Color.black : Color(nsColor: .textBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(selected ? Color.accentColor : .secondary.opacity(0.3), lineWidth: selected ? 2.5 : 1))
             Text("#\(item.index) · \(item.picture.width)×\(item.picture.height)").font(.caption2).foregroundStyle(.secondary)
@@ -118,12 +130,12 @@ struct PictureDetail: View {
             VStack(alignment: .leading, spacing: 14) {
                 ZStack {
                     Checkerboard()
-                    if let ed = model.editor {
-                        Image(nsImage: nsImage(item, ed)).interpolation(.none).resizable().scaledToFit().padding(10)
+                    if let osos = model.shownPictures?.osos {
+                        Image(nsImage: nsImage(item, osos)).interpolation(.none).resizable().scaledToFit().padding(10)
                     }
                 }
                 .frame(height: 240)
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(model.picturesDark ? Color.black : Color(nsColor: .textBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(dropTargeted ? Color.accentColor : .secondary.opacity(0.3), lineWidth: dropTargeted ? 3 : 1))
                 .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
@@ -132,9 +144,15 @@ struct PictureDetail: View {
                     }
                     return true
                 }
-                .id(model.revision)
+                .id("\(model.revision) \(model.themeRevision)")
                 Text("Drop a \(item.picture.width)×\(item.picture.height) PNG here to replace it.")
                     .font(.caption).foregroundStyle(.secondary)
+                if model.picturesDark {
+                    Text(model.hasDarkEdit(item)
+                         ? "You replaced this picture in the dark theme. The light picture does not change."
+                         : "A replacement changes only the dark theme \"\(model.selectedTheme?.name ?? "")\". The light picture does not change.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
 
                 Grid(alignment: .leading, verticalSpacing: 4) {
                     GridRow { Text("Index").foregroundStyle(.secondary); Text("\(item.index)") }
@@ -145,6 +163,9 @@ struct PictureDetail: View {
                 HStack {
                     Button("Export PNG…") { model.exportPicture(item) }
                     Button("Replace…") { model.chooseReplacement(for: item) }
+                    if model.picturesDark && model.hasDarkEdit(item) {
+                        Button("Use Theme Picture") { model.useThemePicture(item) }
+                    }
                 }
             }
             .padding(16)

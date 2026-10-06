@@ -178,5 +178,27 @@ The album-art patch loaded the thumbnail file one time. New albums showed only a
 ### Open items
 
 - Test on a real iPod.
-- The Settings list keeps a blue highlight in dark mode. The built-in dark theme has the same problem, so it is a limit of the theme import (the layouts of the Settings list).
+- The Settings list keeps a blue highlight in dark mode. Since 6 October 2026 all lists keep the blue highlight (see "The highlight bar").
 - The first screen after a start shows "Press Center to dismiss" in the title bar. This comes from the theme: the original theme on 1.2.1 has it too.
+
+## The highlight bar
+
+The owner tested the dark theme on the real iPod. The grey highlight bar of the theme was difficult to see. Thus the build keeps Apple's blue bar in all lists.
+
+- Each View element has the two colours of the bar at +76 and +80. In 1.3 the values are `ffd06428` and `ffe89858` (ABGR, blue). The theme changes them to `ff252525` and `ff343434`.
+- 539 elements in 1.3 have these colours. Not only list rows have them: `Cntl`, `Draw` and `StSt` elements have them too.
+- The build does not change a word of a View if the Apple value is one of the two blue colours (`APPLE_HIGHLIGHT`, `ThemeImport.appleHighlight`). The rule operates when the theme is applied. Thus theme files from earlier versions get the blue bar too.
+
+## Edits of the owner
+
+The owner can replace a picture of the dark theme in the Pictures pane ("Dark Theme"). The theme file keeps the replacements in a separate list (`edits`). An edit replaces each theme change in the same bytes. "Use Theme Picture" removes the edit.
+
+## The rating stars
+
+On the real iPod the rating stars in Now Playing were almost invisible in dark mode. The dots were correct.
+
+- No picture in 1.3 is a star. `CJK.ttf` in rsrc has the characters ★ and ☆.
+- Picture 24351 (11 × 11) is a blue gradient. The theme makes it dark grey. Function 0x1bccfc loads it, and 0x1bcd44 repeats it across a row.
+- The stock stars are blue with a gradient. The dark stars are dark slate blue. Thus the build keeps Apple's picture 24351 (`KEEP_APPLE`).
+- Open: confirm the result on the real iPod.
+

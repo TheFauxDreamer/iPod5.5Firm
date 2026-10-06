@@ -384,6 +384,24 @@ final class PatchAndArtTests: XCTestCase {
         _ = try Patcher.apply(all.filter { ["album-art", "flash-keep-awake", "sleep-now"].contains($0.spec.name) }, to: osos)
     }
 
+    /// The backlight-60s patch: data only. The Backlight Timer menu has 60 Seconds in place of 2 Seconds.
+    func testBacklight60s() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        let backlight = all.filter { $0.spec.name == "backlight-60s" }
+        XCTAssertEqual(backlight.count, 1)
+        let out = try Patcher.apply(backlight, to: osos)
+        XCTAssertEqual(out.count, osos.count)
+        XCTAssertEqual(Array(out[0x4baa75..<0x4baa78]), [0x58, 0x00, 0x3c])           // the script pushes 60
+        XCTAssertEqual(le32(out, 0x4b06a0 + 40 * 5 + 28) & 0xFFFF, 0x6039)             // item 5 sends 0x6039
+        let blocks = Resources.scan(out)
+        let english = Dictionary(uniqueKeysWithValues: Resources.readStrings(out, blocks[24]).map { ($0.key, $0.value) })
+        XCTAssertEqual(english["-140"], "60 Seconds")
+        // with a code patch
+        _ = try Patcher.apply(all.filter { ["sleep-now", "backlight-60s"].contains($0.spec.name) }, to: osos)
+    }
+
     func testVersionText() {
         XCTAssertEqual(FirmwareVersion("1.3.1"), FirmwareVersion(major: 1, minor: 3, fix: 1))
         XCTAssertEqual(FirmwareVersion("1.3"), .stock)
@@ -689,6 +707,37 @@ final class DarkModeTests: XCTestCase {
         XCTAssertEqual(Array(dark[4..<7]), [9, 9, 9]); XCTAssertEqual(Array(dark[20..<22]), [0, 0]); XCTAssertEqual(dark[40], 40)
         DarkMode.applySwitchTable(&dark, table)
         XCTAssertEqual(dark, osos)
+    }
+
+    func testThemeKeepsTheBlueHighlight() throws {
+        func words(_ w: [UInt32]) -> [UInt8] { var b = [UInt8](repeating: 0, count: 4 * w.count); for (i, v) in w.enumerated() { put32(&b, 4 * i, v) }; return b }
+        let old = words([0x18, 0xFFD0_6428, 0xFFE8_9858, 0x5E9E_0000]), new = words([0x30, 0xFF25_2525, 0xFF34_3434, 0x5E9E_0000])
+        var theme = ImportedTheme(name: "t", source_sha256: "", osos_sha256: "x")
+        theme.changes = [ThemeChange(resource: "View 22034", offset: 8, old: Data(old), new: Data(new)),
+                         ThemeChange(resource: "Type 14037", offset: 24, old: Data(old[4..<8]), new: Data(new[4..<8]))]
+        var osos = [UInt8](repeating: 0, count: 32)
+        osos.replaceSubrange(8..<24, with: old)
+        osos.replaceSubrange(24..<28, with: old[4..<8])
+        try theme.apply(to: &osos, originalSHA256: "x")
+        XCTAssertEqual((0..<4).map { le32(osos, 8 + 4 * $0) }, [0x30, 0xFFD0_6428, 0xFFE8_9858, 0x5E9E_0000])
+        XCTAssertEqual(Array(osos[24..<28]), Array(new[4..<8]))
+    }
+
+    func testEditsReplaceTheThemePictureAndSurviveJSON() throws {
+        var theme = ImportedTheme(name: "t", source_sha256: "", osos_sha256: "x")
+        theme.changes = [ThemeChange(resource: "BMap 1", offset: 4, old: Data(count: 4), new: Data(repeating: 0x11, count: 4)),
+                         ThemeChange(resource: "BMap 2", offset: 12, old: Data([0]), new: Data([0x22]))]
+        theme.setEdit(resource: "BMap 1", offset: 4, light: [UInt8](repeating: 0, count: 16), new: [0x33, 0x33, 0x33, 0x33])
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".ipodtheme")
+        try theme.write(to: url)
+        theme = try ImportedTheme.load(url)
+        var osos = [UInt8](repeating: 0, count: 16)
+        XCTAssertEqual(try theme.apply(to: &osos, originalSHA256: "x").applied, 2)
+        XCTAssertEqual(Array(osos[4..<8]), [0x33, 0x33, 0x33, 0x33]); XCTAssertEqual(osos[12], 0x22)
+        theme.removeEdit(offset: 4)
+        osos = [UInt8](repeating: 0, count: 16)
+        try theme.apply(to: &osos, originalSHA256: "x")
+        XCTAssertEqual(Array(osos[4..<8]), [0x11, 0x11, 0x11, 0x11])
     }
 
     func testSettingsMenuGetsTheItemAfterClicker() throws {

@@ -4,6 +4,7 @@ import Foundation
 // Swift port of src/ipodfw/patcher.py: compile, link and apply code patches to the osos image.
 // A patch is a folder with patch.json and one C file. The C file is compiled with Xcode clang
 // for the ARM7TDMI. A small linker puts the code at "load_address" and resolves relocations.
+// A patch can also change data ("bytes" and "strings"). A patch with no C file has no code.
 
 public struct PatchError: LocalizedError {
     public let message: String
@@ -13,13 +14,18 @@ public struct PatchError: LocalizedError {
 
 public struct PatchSpec: Codable, Identifiable, Hashable {
     public struct Hook: Codable, Hashable { public var kind, at, expect, to: String }
+    /// A data change: `expect` and `value` are hexadecimal bytes.
+    public struct Bytes: Codable, Hashable { public var at, expect, value: String }
     public var id: String { name }
     public var name: String
     public var description: String?
     public var osos_sha256: String
-    public var load_address: String
+    public var load_address: String?
     public var symbols: [String: String]?
     public var hooks: [Hook]?
+    public var bytes: [Bytes]?
+    /// Block index -> string key -> new text.
+    public var strings: [String: [String: String]]?
     /// A warning for an iPod that probably has the original hard drive (see IPodDisk.likelyOriginalHDD).
     public var hdd_warning: String?
     /// true: the patch is part of a build step (for example the dark-mode switch) and is not shown
@@ -83,12 +89,17 @@ public enum Patcher {
         guard originalSHA256 == spec.osos_sha256 else {
             throw PatchError("The patch \"\(spec.name)\" is for a different firmware version.")
         }
-        let base = try loadAddress ?? hex(spec.load_address)
-        var fw = [String: UInt32]()
-        for (k, v) in spec.symbols ?? [:] { fw[k] = try hex(v) }
-        fw.merge(symbols) { $1 }
-        let obj = try compile(patch.folder)
-        let (code, table) = try link(obj, base: base, firmware: fw)
+        var code = [UInt8](), table = [String: UInt32](), base: UInt32 = 0
+        if hasCode(patch.folder) {
+            guard let address = try loadAddress ?? spec.load_address.map(hex) else {
+                throw PatchError("The patch \"\(spec.name)\" has code but no load_address.")
+            }
+            base = address
+            var fw = [String: UInt32]()
+            for (k, v) in spec.symbols ?? [:] { fw[k] = try hex(v) }
+            fw.merge(symbols) { $1 }
+            (code, table) = try link(try compile(patch.folder), base: base, firmware: fw)
+        }
         let end = Int(base) + code.count
         guard end <= maxSize else { throw PatchError("The patch code ends at \(String(end, radix: 16)); the maximum is \(String(maxSize, radix: 16)).") }
         var out = current
@@ -115,7 +126,47 @@ public enum Patcher {
             }
             put32(&out, at, value)
         }
+        try applyData(spec, to: &out)
         return out
+    }
+
+    static func hasCode(_ folder: URL) -> Bool {
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        return files.contains { $0.pathExtension == "c" }
+    }
+
+    static func hexBytes(_ s: String) throws -> [UInt8] {
+        let c = Array(s.utf8)
+        guard c.count % 2 == 0 else { throw PatchError("Bad hexadecimal bytes \(s).") }
+        return try stride(from: 0, to: c.count, by: 2).map { i in
+            guard let v = UInt8(String(decoding: c[i..<i + 2], as: UTF8.self), radix: 16) else {
+                throw PatchError("Bad hexadecimal bytes \(s).")
+            }
+            return v
+        }
+    }
+
+    /// Apply the "bytes" and "strings" sections of a patch.
+    static func applyData(_ spec: PatchSpec, to out: inout [UInt8]) throws {
+        for e in spec.bytes ?? [] {
+            let at = Int(try hex(e.at))
+            let expect = try hexBytes(e.expect), value = try hexBytes(e.value)
+            guard expect.count == value.count else { throw PatchError("Bytes at \(e.at): \"expect\" and \"value\" have different lengths.") }
+            guard at + expect.count <= out.count, Array(out[at..<at + expect.count]) == expect else {
+                throw PatchError("Bytes at \(e.at): the firmware does not have \(e.expect).")
+            }
+            out.replaceSubrange(at..<at + value.count, with: value)
+        }
+        guard let strings = spec.strings, !strings.isEmpty else { return }
+        var blocks = Resources.scan(out)
+        for (key, values) in strings {
+            guard let i = Int(key), blocks.indices.contains(i) else {
+                throw PatchError("The patch \"\(spec.name)\" has strings for block \(key), which the firmware does not have.")
+            }
+            do { try Resources.writeStrings(&out, &blocks[i], values) } catch {
+                throw PatchError("Strings for block \(key): \(error.localizedDescription)")
+            }
+        }
     }
 
     static func branch(_ op: String, at: UInt32, to: UInt32) throws -> UInt32 {

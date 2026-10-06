@@ -63,3 +63,30 @@ def test_sleep_now():
     both, _ = patcher.apply(osos, REPO / "patches/album-art", 0x736800)
     both, _ = patcher.apply(both, REPO / "patches/sleep-now", 0x736800, original_sha256=original)
     patcher.apply(both, REPO / "patches/flash-keep-awake", 0x736800, original_sha256=original)
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_backlight_60s():
+    from ipodfw import resources
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    out, report = patcher.apply(osos, REPO / "patches/backlight-60s", 0x736800)
+    assert len(out) == len(osos) and report["bytes"] == 0                         # data only, no code
+    blocks = resources.scan(out)
+    text = {k: v for k, v in resources.read_strings(out, blocks[24]).items()}
+    menu = 0x4b069c + 4                                                           # Menu -138, 40 bytes an item
+    items = [(text[str(struct.unpack_from("<h", out, menu + 40 * k + 24)[0])],
+              struct.unpack_from("<H", out, menu + 40 * k + 28)[0]) for k in range(7)]
+    assert items == [("Off", 0x6032), ("5 Seconds", 0x6035), ("10 Seconds", 0x6036), ("15 Seconds", 0x6037),
+                     ("20 Seconds", 0x6038), ("60 Seconds", 0x6039), ("Always On", 0x603a)]
+    assert out[0x4baa75:0x4baa78] == bytes.fromhex("58003c")                     # the script pushes 60
+    assert resources.read_strings(out, blocks[3])["-140"] == "60 Sekunden"
+    # a firmware with other bytes is refused
+    bad = bytearray(osos)
+    bad[0x4baa76] = 0
+    with pytest.raises(patcher.PatchError, match="0x4baa76"):
+        patcher.apply(bytes(bad), REPO / "patches/backlight-60s", 0x736800,
+                      original_sha256=hashlib.sha256(osos).hexdigest())
+    # with the code patches
+    original = hashlib.sha256(osos).hexdigest()
+    both, _ = patcher.apply(osos, REPO / "patches/sleep-now", 0x736800)
+    patcher.apply(both, REPO / "patches/backlight-60s", 0x736800, original_sha256=original)

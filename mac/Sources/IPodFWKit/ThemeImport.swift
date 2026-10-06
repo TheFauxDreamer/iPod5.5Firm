@@ -22,6 +22,9 @@ import Foundation
 //   import matches the elements and changes a field only where the target has the base value. It
 //   translates the resource IDs in the fields.
 // - Other resource types and program code: the import does not apply them.
+// - The highlight bar keeps Apple's blue colours (ThemeImport.appleHighlight). The blue bar is easier to see.
+// - Edits: the owner can replace a picture of the theme in the app. An edit replaces the theme
+//   changes in the same bytes. ImportedTheme.edits keeps the edits apart from the import.
 
 public struct ThemeError: LocalizedError {
     public let message: String
@@ -51,6 +54,28 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
     public var imported: [String] = []
     public var skipped: [ThemeSkip] = []
     public var changes: [ThemeChange] = []
+    /// The pictures that the owner replaced in the dark theme.
+    public var edits: [ThemeChange] = []
+
+    enum CodingKeys: String, CodingKey { case format, name, source_sha256, osos_sha256, imported, skipped, changes, edits }
+
+    public init(name: String, source_sha256: String, osos_sha256: String) {
+        self.name = name
+        self.source_sha256 = source_sha256
+        self.osos_sha256 = osos_sha256
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        format = try c.decode(Int.self, forKey: .format)
+        name = try c.decode(String.self, forKey: .name)
+        source_sha256 = try c.decode(String.self, forKey: .source_sha256)
+        osos_sha256 = try c.decode(String.self, forKey: .osos_sha256)
+        imported = try c.decode([String].self, forKey: .imported)
+        skipped = try c.decode([ThemeSkip].self, forKey: .skipped)
+        changes = try c.decode([ThemeChange].self, forKey: .changes)
+        edits = try c.decodeIfPresent([ThemeChange].self, forKey: .edits) ?? []   // not in files from earlier versions
+    }
 
     public static func load(_ url: URL) throws -> ImportedTheme {
         let t = try JSONDecoder().decode(ImportedTheme.self, from: Data(contentsOf: url))
@@ -68,10 +93,11 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
     @discardableResult
     public func apply(to osos: inout [UInt8], originalSHA256: String) throws -> (applied: Int, conflicts: Int) {
         guard originalSHA256 == osos_sha256 else { throw ThemeError("The theme \"\(name)\" is for a different firmware.") }
+        let changes = effectiveChanges
         let end = changes.map { $0.offset + $0.new.count }.max() ?? 0
         if end > osos.count { osos += [UInt8](repeating: 0, count: (end + 0x7FF) / 0x800 * 0x800 - osos.count) }
         var done = 0, conflicts = 0
-        for c in changes where ThemeImport.keepApple[c.resource] == nil {   // skip: a theme file from an earlier version
+        for c in changes {
             let cur = osos[c.offset..<c.offset + c.old.count]
             if cur.elementsEqual(c.old) {
                 osos.replaceSubrange(c.offset..<c.offset + c.new.count, with: c.new)
@@ -84,6 +110,46 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
         }
         return (done, conflicts)
     }
+
+    /// Replace the pixels of a theme picture. `light` is the osos without the theme. `new` is the
+    /// pixel data of the picture at `offset` in the osos with the theme.
+    public mutating func setEdit(resource: String, offset: Int, light: [UInt8], new: [UInt8]) {
+        let old = (offset..<offset + new.count).map { $0 < light.count ? light[$0] : 0 }
+        edits.removeAll { $0.offset == offset }
+        edits.append(ThemeChange(resource: resource, offset: offset, old: Data(old), new: Data(new)))
+    }
+
+    /// Use the picture of the theme again.
+    public mutating func removeEdit(offset: Int) {
+        edits.removeAll { $0.offset == offset }
+    }
+
+    /// The changes to apply: without ThemeImport.keepApple, with Apple's highlight colours, and with
+    /// the edits of the owner in place of the theme changes in the same bytes.
+    public var effectiveChanges: [ThemeChange] {
+        var out: [ThemeChange] = []
+        for c in changes where ThemeImport.keepApple[c.resource] == nil {   // skip: a theme file from an earlier version
+            if edits.contains(where: { c.offset < $0.offset + $0.new.count && $0.offset < c.offset + c.new.count }) { continue }
+            let k = Self.keepHighlight(c)
+            if k.old != k.new { out.append(k) }
+        }
+        return out + edits
+    }
+
+    /// The change with Apple's highlight colours where the theme changes them.
+    static func keepHighlight(_ c: ThemeChange) -> ThemeChange {
+        guard c.resource.hasPrefix("View "), c.old.count == c.new.count else { return c }
+        let old = [UInt8](c.old)
+        var new = [UInt8](c.new)
+        var i = (4 - c.offset % 4) % 4
+        while i + 4 <= old.count {
+            if ThemeImport.appleHighlight.contains(le32(old, i)) { new.replaceSubrange(i..<i + 4, with: old[i..<i + 4]) }
+            i += 4
+        }
+        var out = c
+        out.new = Data(new)
+        return out
+    }
 }
 
 public enum ThemeImport {
@@ -95,10 +161,14 @@ public enum ThemeImport {
     /// The reset code of RetailOS stops if the end of the OS image is after 8 MB (0x800004). A
     /// picture that the theme makes larger goes after the current end of osos, below this limit.
     public static let ososLimit = 0x7F0000
-    /// Resources of the target that keep the Apple version: the progress bar in Now Playing (1.3).
+    /// Resources of the target that keep the Apple version: the progress bar in Now Playing (1.3) and the fill of the rating stars.
     /// The dark themes make it almost black, so it is not visible.
     public static let keepApple = ["BMap 24342": "Apple's progress bar stays (the theme makes it almost invisible).",
-                                   "BMap 24343": "Apple's progress bar stays (the theme makes it almost invisible)."]
+                                   "BMap 24343": "Apple's progress bar stays (the theme makes it almost invisible).",
+                                   "BMap 24351": "Apple's blue fill of the rating stars stays (the theme makes the stars almost invisible)."]
+    /// The colours of the highlight bar in Apple's Views (element +76 and +80, ABGR). The dark themes
+    /// make the bar dark grey. The owner wants the blue bar, because it is easier to see.
+    public static let appleHighlight: Set<UInt32> = [0xFFD0_6428, 0xFFE8_9858]
     /// Element tag -> the resource type that the ID at +12 refers to.
     static let elementIDType = ["BMap": "BMap", "Draw": "BMap", "Str ": "Str ", "None": "View"]
 

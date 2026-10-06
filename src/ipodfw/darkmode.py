@@ -21,7 +21,7 @@ import struct
 from pathlib import Path
 
 from . import patcher
-from .themeimport import KEEP_APPLE, OSOS_LIMIT, Theme, _Image
+from .themeimport import OSOS_LIMIT, Theme, _Image
 from .partition import FirmwarePartition
 
 MAGIC = 0x4D444649                  # "IFDM"
@@ -49,8 +49,8 @@ def switch_table(theme: Theme, osos: bytes) -> tuple[bytes, int]:
     changes left out because of an edit)."""
     runs, data, skipped = [], bytearray(), 0
     work = bytearray(osos)
-    for c in theme.changes:
-        if c.resource in KEEP_APPLE or c.offset + len(c.old) > len(osos):
+    for c in theme.effective_changes():
+        if c.offset + len(c.old) > len(osos):
             continue
         cur = bytes(work[c.offset:c.offset + len(c.old)])
         if cur != c.old:
@@ -100,7 +100,7 @@ def build(fw: FirmwarePartition, osos: bytes, theme: Theme, patch_dir: str | Pat
     out = bytearray(osos)
     # 1. theme data outside osos: in both modes
     end = PATCH_AREA_END
-    for c in theme.changes:
+    for c in theme.effective_changes():
         if c.offset + len(c.old) > len(osos):
             if len(out) < c.offset + len(c.new):
                 out += bytes(c.offset + len(c.new) - len(out))
