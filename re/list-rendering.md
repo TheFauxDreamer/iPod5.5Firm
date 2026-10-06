@@ -115,4 +115,20 @@ The patch is in [patches/album-art/](../patches/album-art/). It is complete and 
 - File functions: open `0x8f38c` (mode `'data'`), read `0x8f464`, seek `0x8f5c4` (64-bit position in r2:r3), close `0x8f184`. Paths use backslashes.
 - Memory allocation: `0x25a974`.
 - Some draws of a highlighted row with a long title pass a structure in place of the text. The first byte of the structure is less than 0x20. The patch then uses the album from the last draw of the same view.
+- A list draws all its rows with one template cell (class 0x66b4dc) and one label view. The highlighted row has a second template cell.
+- The children of a view are in a list at view + 0x78: the count is at + 0x7c, the array pointer at + 0x80.
+- The u16 at view + 0x1c is the layout element ID. The data source of the list (for example `FUN_001ec614`) uses this ID to select the data for each row.
+- Element IDs of the labels, from the emulator:
+
+  | Row | Label ID |
+  |---|---|
+  | Album in the Albums list (normal and highlighted) | 0x6421 |
+  | Song in a song list (normal) | 0x641f |
+  | Song in a song list (highlighted) | 0x641e |
+  | Playlist | 0x6425 |
+  | Menu item | 0x301 |
+
+- The album-art patch draws a thumbnail only for the element ID 0x6421. Before this check, a song with the same title as an album got the thumbnail.
+- The ">" arrow is picture 24268 (8 × 11) in a picture view (class 0x66d89c, element 0x5ecc). In a song row, the same place has element 0x63eb: the speaker (picture 24273) for the song that plays, or no picture. A row without an arrow has a picture view with a width of 0.
+- The emulator often ignores a `wheel` command. Make a screenshot after each `wheel` command, and send the command again if the highlight did not move.
 - The emulator `make-disk` command makes the osos length 0x600 bytes too short. `ipodfw.emudrive` and `EmulatorDrive` correct this.

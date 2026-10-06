@@ -62,7 +62,7 @@ The one way to genuinely brick a 5.5G is a bad write to the NOR flash. Only the 
 
 ## Your three goals in detail
 
-### 1. Themes: doable today
+### 1. Themes
 `ipodfw unpack` gives you every picture as a PNG and every string as JSON. You edit them and run `ipodfw repack`. The result is checked against the real 1.3 firmware: an unchanged round-trip is byte-identical, and edits re-verify.
 
 Current limits:
@@ -87,7 +87,6 @@ Nothing in the resources draws a thumbnail per list row. The list widget's code 
 - Scrolling performance: decoding a thumbnail per row on a 75 MHz ARM7.
 - RAM: whole-library databases on large flash mods already push 32/64 MB.
 
-Expect weeks of reverse engineering, not days.
 
 ### 3. The 2–3 s delay when pressing Play: measure first
 Plausible causes, roughly in order:

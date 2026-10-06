@@ -5,8 +5,10 @@
  *    title on the highlighted row from a cached image of the text, so the complete method is
  *    wrapped, not only its call to the general label draw function;
  *  - the general label class (type 0x1580, draw method 0x244924).
- * If the text of the label is the name of an album in the thumbnail file, the wrapper moves the
- * left edge of the label to the right, calls the original method, and draws the thumbnail.
+ * If the label shows an album name (element ID ALBUM_NAME_ID) and the text is the name of an
+ * album in the thumbnail file, the wrapper moves the left edge of the label to the right, calls
+ * the original method, and draws the thumbnail. A song title has a different element ID, thus a
+ * song with the name of an album gets no thumbnail.
  * After RECHECK_MISSES list labels without a thumbnail, the patch reads the file header again.
  * If the header changed (for example after a sync that added albums), it loads the file again.
  *
@@ -51,6 +53,8 @@ int file_close(void *fh);
 #define GC_ORIGIN_X 0x2c                  /* gc+0x30 is the y origin */
 #define VIEW_PARENT 0x10                  /* offset of the parent view in a view */
 #define LIST_CELL_CLASS 0x66b4dc          /* vtable of the parent of a label in a list row */
+#define VIEW_ELEMENT_ID 0x1c              /* u16: the layout element of a view, also its data property */
+#define ALBUM_NAME_ID   0x6421            /* element of the album name in an album list row */
 
 typedef struct { unsigned hash, offset; } Entry;
 
@@ -280,8 +284,10 @@ static void draw_with_thumbnail(draw_fn original, void *view, const char *text, 
     }
     view_bounds(view, &r);
     height = r.bottom - r.top;
-    /* Only rows of a list: at the left edge of the screen, with the height of a list row. */
-    if (height >= (int)size && height <= (int)size + 12 &&
+    /* Only album names in rows of a list: at the left edge of the screen, with the height of a
+       list row. A song can have the same title as an album, but its label has a different ID. */
+    if (*(unsigned short *)((char *)view + VIEW_ELEMENT_ID) == ALBUM_NAME_ID &&
+        height >= (int)size && height <= (int)size + 12 &&
         r.left + *(int *)((char *)gc + GC_ORIGIN_X) <= 8) {
         /* Some draws pass a structure instead of the text; it starts with pointer bytes. */
         if (text && (unsigned char)*text >= 0x20) {

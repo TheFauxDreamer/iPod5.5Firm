@@ -112,7 +112,8 @@ Apple's code ends at 0x7358c0. The patches use the area to 0x736800 (3904 bytes)
 
 | Patch | Load address | Space | Notes |
 |---|---|---|---|
-| `album-art` | 0x735900 | 0x735900–0x736700 (3584 bytes) | Code, constants and variables. |
+| `album-art` | 0x735900 | 0x735900–0x736600 (3328 bytes) | Code, constants and variables. |
+| `sleep-now` | 0x736600 | 0x736600–0x736700 (256 bytes) | |
 | `flash-keep-awake` | 0x736700 | 0x736700–0x736800 (256 bytes) | |
 | `row-marker` | 0x735900 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |

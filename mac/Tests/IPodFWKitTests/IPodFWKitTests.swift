@@ -311,8 +311,8 @@ final class PatchAndArtTests: XCTestCase {
         let sleep = all.filter { $0.spec.name == "sleep-now" }
         XCTAssertEqual(sleep.count, 1)
         let out = try Patcher.apply(sleep, to: osos)
-        XCTAssertEqual(le32(out, 0x69fd2c), 0x736540)                          // the table entry
-        XCTAssertEqual(le32(out, 0x1e8ce8), try Patcher.branch("bl", at: 0x1e8ce8, to: 0x736540))
+        XCTAssertEqual(le32(out, 0x69fd2c), 0x736600)                          // the table entry
+        XCTAssertEqual(le32(out, 0x1e8ce8), try Patcher.branch("bl", at: 0x1e8ce8, to: 0x736600))
         XCTAssertEqual(le32(out, 0x1ee930) & 0xFF00_0000, 0xEB00_0000)
         XCTAssertNotEqual(le32(out, 0x1ee930), le32(osos, 0x1ee930))
         // with the other code patches: all use different areas
