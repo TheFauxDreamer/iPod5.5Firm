@@ -199,6 +199,7 @@ On the real iPod the rating stars in Now Playing were almost invisible in dark m
 
 - No picture in 1.3 is a star. `CJK.ttf` in rsrc has the characters ★ and ☆.
 - Picture 24351 (11 × 11) is a blue gradient. The theme makes it dark grey. Function 0x1bccfc loads it, and 0x1bcd44 repeats it across a row.
-- The stock stars are blue with a gradient. The dark stars are dark slate blue. Thus the build keeps Apple's picture 24351 (`KEEP_APPLE`).
-- Open: confirm the result on the real iPod.
+- The stock stars are blue with a gradient. The dark stars are dark slate blue.
+- Test on the real iPod (0.1.32): with Apple's picture 24351 (`KEEP_APPLE`), the stars stayed dark grey. Thus picture 24351 is not the fill of the stars. The build does not keep it.
+- Open: find the style of the rating row. The table at 0x336190 gives a style object (0x192448 + 16·n) for each Type ID. The code uses the object addresses.
 

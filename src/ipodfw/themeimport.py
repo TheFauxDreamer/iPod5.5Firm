@@ -43,11 +43,10 @@ ELEMENT_ID_TYPE = {"BMap": "BMap", "Draw": "BMap", "Str ": "Str ", "None": "View
 # The reset code of RetailOS stops if the end of the OS image is after 8 MB (0x800004).
 # A picture that the theme makes larger goes after the current end of osos, below this limit.
 OSOS_LIMIT = 0x7F0000
-# Resources of the target that keep the Apple version: the progress bar in Now Playing (1.3) and the fill of the rating stars.
+# Resources of the target that keep the Apple version: the progress bar in Now Playing (1.3).
 # The dark themes make it almost black, so it is not visible.
 KEEP_APPLE = {"BMap 24342": "Apple's progress bar stays (the theme makes it almost invisible).",
-              "BMap 24343": "Apple's progress bar stays (the theme makes it almost invisible).",
-              "BMap 24351": "Apple's blue fill of the rating stars stays (the theme makes the stars almost invisible)."}
+              "BMap 24343": "Apple's progress bar stays (the theme makes it almost invisible)."}
 # The colours of the highlight bar in Apple's Views (element +76 and +80, ABGR). The dark themes
 # make the bar dark grey. The owner wants the blue bar, because it is easier to see.
 APPLE_HIGHLIGHT = (0xFFD06428, 0xFFE89858)

@@ -38,8 +38,9 @@ def test_flash_keep_awake():
     assert struct.unpack_from("<I", out, hook + 4)[0] == 0xe3510001      # "cmp r1, #1": a release stays a release
     gate = int(report["symbols"]["hook_storage_in_use"], 16)
     assert struct.unpack_from("<I", out, 0x1d871c)[0] == patcher.branch("bl", 0x1d871c, gate)
-    for at, name in ((0x1d8344, "hook_user_event"), (0x23344c, "hook_drive_power_off")):
-        assert struct.unpack_from("<I", out, at)[0] == patcher.branch("bl", at, int(report["symbols"][name], 16))
+    off = int(report["symbols"]["hook_drive_power_off"], 16)
+    assert struct.unpack_from("<I", out, 0x23344c)[0] == patcher.branch("bl", 0x23344c, off)
+    assert out[0x1d8344:0x1d8348] == osos[0x1d8344:0x1d8348]     # the input wake is flash-wake-on-input
     base = int(report["code"][0], 16)
     code = out[base:base + report["bytes"]]
     assert struct.pack("<I", 0x1086bedc) in code and struct.pack("<I", 0x1086bf0c) in code   # the slot arrays
@@ -47,6 +48,21 @@ def test_flash_keep_awake():
     with_art, _ = patcher.apply(osos, REPO / "patches/album-art", 0x736800)
     patcher.apply(with_art, REPO / "patches/flash-keep-awake", 0x736800,
                   original_sha256=hashlib.sha256(osos).hexdigest())
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_flash_wake_on_input():
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    sha = hashlib.sha256(osos).hexdigest()
+    out, report = patcher.apply(osos, REPO / "patches/flash-wake-on-input", 0x736800)
+    hook = int(report["symbols"]["hook_user_event"], 16)
+    assert struct.unpack_from("<I", out, 0x1d8344)[0] == patcher.branch("bl", 0x1d8344, hook)
+    code = out[hook:hook + report["bytes"]]
+    assert struct.pack("<I", 0x60005010) in code                    # USEC_TIMER
+    # all the flash and art patches together: different areas, below the end of the patch area
+    for name in ("album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input"):
+        osos, report = patcher.apply(osos, REPO / "patches" / name, 0x736800, original_sha256=sha)
+    assert int(report["code"][1], 16) <= 0x736800
 
 
 @pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")

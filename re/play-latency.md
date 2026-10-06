@@ -139,7 +139,7 @@ The idea comes from [rockpod](https://github.com/nuxcodes/rockpod), a Rockbox ve
 
 | Hook | Address | Original | Function |
 |---|---|---|---|
-| 4 | 0x1d8344 | `bl 0x1d813c` | The idle-timer start in the UI event handler 0x1d81cc. If no slot is active, the hook wakes the storage. |
+| 4 | 0x1d8344 | `bl 0x1d813c` | In the separate patch `flash-wake-on-input`. The idle-timer start in the UI event handler 0x1d81cc. If no slot is active, the hook wakes the storage. After a wake, the hook does no check for 30 minutes. After a check that finds a slot, it does no check for 1 s. |
 | 5 | 0x23344c | `bl 0x265cc8` | The power-off call in the "set power" method 0x233358. The hook waits 500 ms before the power cut. |
 
 Findings:
@@ -160,7 +160,7 @@ Tests in the emulator:
 | The same copy, storage off, one button press | The hook sent "always on" for slot 40, and the storage power came on 0.05 ms later. Later events did not send a second wake. |
 | Version without the IDENTIFY hook | The firmware starts and shows the Language screen. The storage stays on after the start (30-minute time). |
 
-The functions use `__attribute__((minsize))`, and `album-art` and `sleep-now` moved. The patch has 232 bytes, and 212 bytes are free after it. See [docs/patch-system.md](../docs/patch-system.md).
+The functions use `__attribute__((minsize))`, and `album-art` and `sleep-now` moved. The patch has 340 bytes, and 104 bytes are free after it. See [docs/patch-system.md](../docs/patch-system.md).
 
 ## Instruments
 
@@ -176,3 +176,14 @@ The emulator patch has these instruments for this work:
 - Measure the battery life with the patch.
 - Test the SSD mode hooks on the real iPod: the first song after a long pause starts at once, and Sleep still works.
 - The 30-minute value is a choice of the owner (2026-10-03).
+
+## Scrolling and hook 4 (6 October 2026)
+
+The owner reported that scrolling in lists felt slower with `flash-keep-awake`. Without the patch, it felt a little better.
+
+- Hook 4 now examines the slots only after a set time. After a wake, slot 40 keeps the storage on for 30 minutes, thus the hook does no check for 30 minutes. After a check that finds an active slot, the hook does no check for 1 s. The time comes from `USEC_TIMER` (0x60005010).
+- Emulator test (`IPODFW_MARK_AT` at 0x73671c, 0x94cec, 0x1d8368 and 0x94d80): 60 wheel steps in a list gave no calls of the hook, of the slot check, of the slot 4 refresh at 0x1d8368 or of `ka_timed`. The event handler 0x1d81cc does not call 0x1d813c for the wheel events (codes 0x10 and 0x1c). A button press calls the hook. Only the first press did the slot check.
+- Thus the patch code does not run while you scroll in the emulator. The cause of the slower scrolling is not known.
+- Hook 4 is now a separate patch, `flash-wake-on-input` (load address 0x736700). The owner can switch it on only if the first song after a long pause starts late. Emulator test with all four patches (`album-art`, `sleep-now`, `flash-keep-awake`, `flash-wake-on-input`): the iPod started, the hook ran for each button press, and only the first press examined the slots.
+- Open: compare the scrolling on the real iPod with only one patch switched on at a time (`flash-keep-awake`, `flash-wake-on-input`, `album-art`, `sleep-now`, `backlight-60s`).
+

@@ -1,6 +1,6 @@
 /* flash-keep-awake: "SSD mode" for flash storage. A longer keep-awake time for the storage, a
- * storage wake when the iPod wakes from sleep or when you touch a control, and a settle time
- * before the storage power goes off. The patch is only for flash storage. iPodFirm finds the
+ * storage wake when the iPod wakes from sleep, and a settle time before the storage power goes
+ * off. The storage wake when you touch a control is a separate patch: flash-wake-on-input. The patch is only for flash storage. iPodFirm finds the
  * storage type from the size of the connected iPod, and it does not use the patch on a hard drive.
  *
  * The task at osos 0x284b0c keeps the storage awake for its clients. A client sends a message
@@ -26,9 +26,7 @@
  * client that uses the storage now. A timed slot does not stop the sleep. The sleep function
  * then puts the storage to sleep as usual (message type 4, 0x94e08).
  *
- * Hook 4 replaces "bl 0x1d813c" at 0x1d8344, in the event handler 0x1d81cc of the UI task.
- * 0x1d813c starts the idle timer again and switches the display on. It runs for a button or
- * a wheel event. If no slot is active, the storage is off, and the hook wakes it as hook 2 does.
+ * Hook 4 (the storage wake when you touch a control) is in patches/flash-wake-on-input.
  *
  * Hook 5 replaces the power-off call "bl 0x265cc8" at 0x23344c, in the storage "set power"
  * method 0x233358. The firmware sends STANDBY IMMEDIATE, waits for the drive and switches the
@@ -50,10 +48,8 @@ void ka_always_on(int slot, int arg);       /* keep-awake message type 0 */
 void ka_timed(int slot, int ms);            /* keep-awake message type 2 */
 extern volatile unsigned char ka_active[SLOTS];     /* the slot flags of the task */
 extern volatile int ka_time[SLOTS];                 /* the time left of each slot */
-void fw_user_event(void *ui, int on);       /* the original call at 0x1d8344 */
 void fw_drive_power(int on);                /* the original call at 0x23344c */
 void fw_task_sleep(int ms);
-int fw_any_slot(void);                      /* 1: a slot is active (0x94cec) */
 
 __attribute__((naked)) void hook_keep_awake_time(void)
 {
@@ -92,13 +88,6 @@ __attribute__((minsize)) int hook_storage_in_use(void)
         if (ka_active[i] && ka_time[i] == ALWAYS_ON)
             return 1;
     return 0;
-}
-
-__attribute__((minsize)) void hook_user_event(void *ui, int on)
-{
-    fw_user_event(ui, on);
-    if (!fw_any_slot())
-        wake_storage();
 }
 
 /* The firmware always calls 0x265cc8 with 0 (off) at 0x23344c. */

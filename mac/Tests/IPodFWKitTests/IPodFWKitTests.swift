@@ -359,13 +359,26 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertEqual(le32(out, 0xb45f4) & 0xFF00_0000, 0xEB00_0000)   // the wake hook is a bl
         XCTAssertNotEqual(le32(out, 0xb45f4), le32(osos, 0xb45f4))
         XCTAssertEqual(le32(out, 0x736648), 0xe351_0001)                 // "cmp r1, #1": a release stays a release
-        // the sleep gate, the user event and the power-off call are bl hooks
-        for at in [0x1d871c, 0x1d8344, 0x23344c] {
+        // the sleep gate and the power-off call are bl hooks
+        for at in [0x1d871c, 0x23344c] {
             XCTAssertEqual(le32(out, at) & 0xFF00_0000, 0xEB00_0000)
             XCTAssertNotEqual(le32(out, at), le32(osos, at))
         }
+        XCTAssertEqual(le32(out, 0x1d8344), le32(osos, 0x1d8344))       // the input wake is flash-wake-on-input
         // with the album-art patch: the two patches use different areas
         _ = try Patcher.apply(all.filter { ["album-art", "flash-keep-awake"].contains($0.spec.name) }, to: osos)
+    }
+
+    /// The flash-wake-on-input patch: a bl at 0x1d8344 to the hook. It fits with the other flash and art patches.
+    func testFlashWakeOnInput() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        let wake = all.filter { $0.spec.name == "flash-wake-on-input" }
+        XCTAssertEqual(wake.count, 1)
+        let out = try Patcher.apply(wake, to: osos)
+        XCTAssertEqual(le32(out, 0x1d8344), try Patcher.branch("bl", at: 0x1d8344, to: 0x736700))
+        _ = try Patcher.apply(all.filter { ["album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input"].contains($0.spec.name) }, to: osos)
     }
 
     /// The sleep-now patch: the Sleep item handler calls the patch, and the power test in 0x1ee8d0 is a bl.

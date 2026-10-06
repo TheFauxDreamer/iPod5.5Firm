@@ -108,13 +108,14 @@ After the checks, iPodFirm writes the code and the hooks. It extends osos with z
 
 ## The free space
 
-Apple's code ends at 0x7358c0. The word 0x55AA55AA at 0x7358c0 is a marker; do not put code on it. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. After `flash-keep-awake`, 212 bytes are free (0x73672c–0x736800). A larger patch needs the area after 0x736800, which is available only when iPodFirm moves rsrc.
+Apple's code ends at 0x7358c0. The word 0x55AA55AA at 0x7358c0 is a marker; do not put code on it. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. After `flash-wake-on-input`, 124 bytes are free (0x736784–0x736800). A larger patch needs the area after 0x736800, which is available only when iPodFirm moves rsrc.
 
 | Patch | Load address | Space | Notes |
 |---|---|---|---|
 | `album-art` | 0x7358d0 | 0x7358d0–0x73658c (3260 bytes) | Code, constants and variables. |
 | `sleep-now` | 0x73658c | 0x73658c–0x736644 (181 bytes) | |
-| `flash-keep-awake` | 0x736644 | 0x736644–0x73672c (232 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
+| `flash-keep-awake` | 0x736644 | 0x736644–0x736700 (188 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
+| `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |
 | `row-marker` | 0x7358d0 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
 
