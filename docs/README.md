@@ -11,6 +11,7 @@ All data is for Apple RetailOS 1.3 (`iPod_25.1.3.ipsw`). Other firmware versions
 | [firmware-format.md](firmware-format.md) | The firmware partition, the image directory, the checksums, the osos memory map and the resource formats. |
 | [patch-system.md](patch-system.md) | How iPodFirm compiles, links and installs a C patch. The `patch.json` format. How to write a new patch. |
 | [modifications.md](modifications.md) | Each change that iPodFirm can make to the firmware: hooks, data formats, runtime logic and limits. |
+| [ghidra-guide.md](ghidra-guide.md) | How to search the firmware with Ghidra: the set-up, the scripts, the search recipes, the procedure for an AI agent, the port to another firmware version and the support of another iPod model. |
 | [firmware-functions.md](firmware-functions.md) | The Ghidra findings: the firmware functions, vtables, RAM addresses and resource IDs that are identified. The method and the scripts. |
 | [app-and-device.md](app-and-device.md) | The app structure, the detection of the iPod, the privileged helper, and each external process, system API and network call. |
 | [safety.md](safety.md) | The protections before and during a flash, the backups, the recovery procedure, and the known problems. |
@@ -21,8 +22,33 @@ The research notes in [../re/](../re/) record the experiments in the sequence th
 
 - To know if a flash is safe, read [safety.md](safety.md) first.
 - To write a new patch, read [firmware-format.md](firmware-format.md), then [patch-system.md](patch-system.md), then [firmware-functions.md](firmware-functions.md).
+- To search the firmware, to port a patch or to add a model, read [ghidra-guide.md](ghidra-guide.md).
 - To know what one patch does, read its section in [modifications.md](modifications.md).
 - To know which programs and permissions the app uses, read [app-and-device.md](app-and-device.md).
+
+## Keep the reference current
+
+Each change to the code must update the documents that it affects, in the same commit. A change is not complete until the documents agree with the code. Write all text in ASD-STE100 Simplified Technical English. [CLAUDE.md](../CLAUDE.md) gives the rules.
+
+Use this table to find the documents to update:
+
+| When you change | Update |
+|---|---|
+| A patch: `patches/*/patch.json` or its C file | [modifications.md](modifications.md) (hooks, size, logic, test status), [patch-system.md](patch-system.md) (free space table), [firmware-format.md](firmware-format.md) (osos memory map), [firmware-functions.md](firmware-functions.md) (new firmware addresses), [safety.md](safety.md) (test status) |
+| A new patch | All of the above, and the summary table in [modifications.md](modifications.md). Give it a `version_letter`. |
+| `Patcher.swift` or `patcher.py` | [patch-system.md](patch-system.md) |
+| `Partition.swift`, `Resources.swift`, `Pictures.swift` or their Python versions | [firmware-format.md](firmware-format.md) |
+| `ThemeImport.swift`, `DarkMode.swift`, `FirmwareVersion.swift`, `AlbumArt.swift`, `ArtworkDB.swift`, `MusicImport.swift` | [modifications.md](modifications.md) |
+| `Device.swift`, `Operations.swift`, the helper or `Privileged.swift` | [safety.md](safety.md), [app-and-device.md](app-and-device.md) |
+| A new external program, system API, network connection, file or `UserDefaults` key | [app-and-device.md](app-and-device.md) |
+| A new pane, button or app function | [app-and-device.md](app-and-device.md), [../README.md](../README.md) |
+| `build-app.sh`, `install-emulator.sh` or the emulator patch | [app-and-device.md](app-and-device.md), [../re/emulator.md](../re/emulator.md) |
+| A new Ghidra or emulator result | The note in [../re/](../re/), then [firmware-functions.md](firmware-functions.md) |
+| A script in `re/ghidra-scripts/` or `re/find-pattern.py` | [ghidra-guide.md](ghidra-guide.md) (section 2 and the recipes), [firmware-functions.md](firmware-functions.md) (the tools table) |
+| A hook site of a patch | The appendix of [ghidra-guide.md](ghidra-guide.md): make the signature again with `MakeSignature.java` |
+| A test on the real iPod | [safety.md](safety.md) (test status), [modifications.md](modifications.md) (test status), the note in [../re/](../re/) |
+
+To find the size of a compiled patch, build it with `uv run ipodfw` or examine the result of `Patcher.link`. Do not estimate the size.
 
 ## The address rule
 

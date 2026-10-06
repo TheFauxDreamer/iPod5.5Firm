@@ -2,7 +2,16 @@
 
 ## Writing style: ASD-STE100 Simplified Technical English
 
-Write all documents, code comments, READMEs and remarks in ASD-STE100 Simplified Technical English. This rule applies unless the owner explicitly gives a different instruction.
+This rule is mandatory. Write all text in ASD-STE100 Simplified Technical English. The rule applies to:
+
+- documents in `docs/` and `re/`, and the READMEs;
+- code comments in Swift, Python, C, Java and shell scripts;
+- text in the user interface of the iPodFirm app, and error messages;
+- `patch.json` descriptions and warnings;
+- commit messages and pull request descriptions;
+- remarks to the owner.
+
+The rule applies unless the owner explicitly gives a different instruction. When you change old text that does not obey the rule, write it again in STE.
 
 Apply these rules:
 
@@ -22,6 +31,18 @@ Apply these rules:
 - Put a warning or a caution before the instruction that it applies to.
 
 Do not change code identifiers, command names, file names or program output.
+
+## Documents must agree with the code
+
+This rule is mandatory. Each change to the code must update the documents that it affects.
+
+1. Before you complete a change, find the affected documents in the table "Keep the reference current" in [docs/README.md](docs/README.md).
+2. Update each affected document in the same commit as the code.
+3. Measure each value that you write, for example a patch size, an address or a hook value. Do not copy an old value.
+4. Record each new Ghidra or emulator result in `re/` first. Then copy the result into `docs/firmware-functions.md`.
+5. Update the test status in `docs/safety.md` and `docs/modifications.md` after each test on the real iPod.
+
+If the code and a document do not agree, the code is correct. Correct the document.
 
 ## Other rules
 

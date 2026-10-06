@@ -33,11 +33,13 @@ Example (a part of [patches/flash-keep-awake/patch.json](../patches/flash-keep-a
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "load_address": "0x736644",
   "symbols": { "fw_resume_tail": "0x1b9118", "ka_always_on": "0x94e6c", "ka_timed": "0x94d80",
-               "ka_active": "0x1086bedc", "ka_time": "0x1086bf0c" },
+               "ka_active": "0x1086bedc", "ka_time": "0x1086bf0c",
+               "fw_drive_power": "0x265cc8", "fw_task_sleep": "0x11c9fc" },
   "hooks": [
     { "kind": "bl", "at": "0x284c7c", "expect": "0xe5941018", "to": "hook_keep_awake_time" },
     { "kind": "bl", "at": "0xb45f4",  "expect": "0xeb0412c7", "to": "hook_after_wake" },
-    { "kind": "bl", "at": "0x1d871c", "expect": "0xebfaf172", "to": "hook_storage_in_use" }
+    { "kind": "bl", "at": "0x1d871c", "expect": "0xebfaf172", "to": "hook_storage_in_use" },
+    { "kind": "bl", "at": "0x23344c", "expect": "0xeb00ca1d", "to": "hook_drive_power_off" }
   ]
 }
 ```
@@ -109,12 +111,12 @@ After the checks, iPodFirm writes the code and the hooks. It extends osos with z
 
 ## The free space
 
-Apple's code ends at 0x7358c0. The word 0x55AA55AA at 0x7358c0 is a marker; do not put code on it. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. After `flash-wake-on-input`, 124 bytes are free (0x736784–0x736800). A larger patch needs the area after 0x736800, which is available only when iPodFirm moves rsrc.
+Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker. Do not put code on them. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. After `flash-wake-on-input`, 124 bytes are free (0x736784–0x736800). A larger patch needs the area after 0x736800, which is available only when iPodFirm moves rsrc.
 
 | Patch | Load address | Space | Notes |
 |---|---|---|---|
-| `album-art` | 0x7358d0 | 0x7358d0–0x73658c (3260 bytes) | Code, constants and variables. |
-| `sleep-now` | 0x73658c | 0x73658c–0x736644 (181 bytes) | |
+| `album-art` | 0x7358d0 | 0x7358d0–0x73658c (3260 bytes) | Code, constants and variables use 3168 bytes. |
+| `sleep-now` | 0x73658c | 0x73658c–0x736644 (184 bytes) | The code uses 181 bytes. |
 | `flash-keep-awake` | 0x736644 | 0x736644–0x736700 (188 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
 | `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |
 | `row-marker` | 0x7358d0 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
@@ -143,5 +145,5 @@ Obey these rules in the C code:
 - Do not use the C library. Use the firmware functions, for example `fw_alloc` (0x25a974) and `fw_memset0` (0x07ccd0).
 - Do not use a large array on the stack. The size of the task stacks is not known.
 - Do not use floating point. The CPU has no FPU, and the library functions for soft floating point are not available.
-- Keep the code small. The free space is 3904 bytes for all patches.
+- Keep the code small. The free space is 3888 bytes for all patches.
 - Return quickly from a draw hook. The firmware calls it for each label in each frame.

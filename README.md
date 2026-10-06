@@ -12,7 +12,8 @@ For the research, the risks and the plan, refer to [FEASIBILITY.md](FEASIBILITY.
 |---|---|---|
 | iPodFirm app | [mac/](mac/) | A macOS app. It does all the tasks in this project. |
 | `ipodfw` tool | [src/ipodfw/](src/ipodfw/) | A command-line tool in Python. It uses the same file formats as the app. |
-| Research notes | [re/](re/) | Notes for the emulator and for Ghidra. |
+| Technical reference | [docs/](docs/README.md) | The formats, the patches, the Ghidra findings, the app structure and the safety limits. |
+| Research notes | [re/](re/) | Notes for the emulator and for Ghidra, in the sequence of the work. |
 
 ## The iPodFirm app
 
