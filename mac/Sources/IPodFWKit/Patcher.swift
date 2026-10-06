@@ -25,6 +25,29 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     /// true: the patch is part of a build step (for example the dark-mode switch) and is not shown
     /// in the list of patches.
     public var `internal`: Bool?
+    /// The patch finds the storage type itself (see StorageType). The app can set the type instead.
+    public var storage_switch: StorageSwitch?
+
+    /// `variable`: a global byte of the patch, 1 = flash. `detect_hook`: the hook target that sets it on the iPod.
+    public struct StorageSwitch: Codable, Hashable { public var variable, detect_hook: String }
+}
+
+/// The storage of the iPod for a patch that has a `storage_switch`.
+public enum StorageType: String, CaseIterable, Codable, Sendable {
+    /// The iPod examines the IDENTIFY data of the drive when it starts.
+    case automatic
+    /// The patch operates. The iPod does not examine the drive.
+    case flash
+    /// The patch does nothing. The iPod does not examine the drive.
+    case hardDrive
+
+    public var label: String {
+        switch self {
+        case .automatic: "Automatic"
+        case .flash: "Flash"
+        case .hardDrive: "Hard drive"
+        }
+    }
 }
 
 public struct PatchInfo: Identifiable, Hashable {
@@ -64,10 +87,12 @@ public enum Patcher {
 
     /// Apply several patches to `osos`. `originalSHA256` is the SHA-256 of the osos before any change
     /// (picture and text changes are allowed: the hooks and the code area are examined byte by byte).
-    public static func apply(_ patches: [PatchInfo], to osos: [UInt8], originalSHA256: String? = nil) throws -> [UInt8] {
+    /// `storage` applies to each patch that has a `storage_switch`.
+    public static func apply(_ patches: [PatchInfo], to osos: [UInt8], originalSHA256: String? = nil,
+                             storage: StorageType = .automatic) throws -> [UInt8] {
         let original = originalSHA256 ?? sha256(osos)
         var out = osos
-        for p in patches { out = try apply(p, to: out, originalSHA256: original) }
+        for p in patches { out = try apply(p, to: out, originalSHA256: original, storage: storage) }
         return out
     }
 
@@ -78,8 +103,11 @@ public enum Patcher {
     /// Apply one patch. `loadAddress` replaces the address in patch.json, and `symbols` adds
     /// addresses that the build decides (for example the address of a table in the osos image).
     public static func apply(_ patch: PatchInfo, to current: [UInt8], originalSHA256: String, loadAddress: UInt32? = nil,
-                             symbols: [String: UInt32] = [:], maxSize: Int = maxOSOSSize) throws -> [UInt8] {
+                             symbols: [String: UInt32] = [:], maxSize: Int = maxOSOSSize,
+                             storage: StorageType = .automatic) throws -> [UInt8] {
         let spec = patch.spec
+        // A set storage type: the detection hook is not written, and the variable gets its value now.
+        let fixed = storage == .automatic ? nil : spec.storage_switch
         guard originalSHA256 == spec.osos_sha256 else {
             throw PatchError("The patch \"\(spec.name)\" is for a different firmware version.")
         }
@@ -98,7 +126,13 @@ public enum Patcher {
             throw PatchError("The code area of \"\(spec.name)\" is not empty. Two patches possibly use the same area.")
         }
         out.replaceSubrange(Int(base)..<end, with: code)
-        for h in spec.hooks ?? [] {
+        if let fixed {
+            guard let at = table[fixed.variable], Int(at) >= Int(base), Int(at) < end else {
+                throw PatchError("The storage variable \(fixed.variable) is not in the patch.")
+            }
+            out[Int(at)] = storage == .flash ? 1 : 0
+        }
+        for h in spec.hooks ?? [] where h.to != fixed?.detect_hook {
             let at = Int(try hex(h.at))
             let expect = try hex(h.expect)
             guard le32(out, at) == expect else {

@@ -22,15 +22,16 @@ A patch is a folder in [patches/](../patches/). It holds two files:
 | `symbols` | object | Firmware addresses for the external functions and data that the C code uses. Name → hex address. |
 | `hooks` | array | The changes to the firmware. See [The hooks](#the-hooks). |
 | `hdd_warning` | string, optional | A warning. The app shows it if the iPod probably has the original hard drive. |
+| `storage_switch` | object, optional | `{ "variable": "ka_flash", "detect_hook": "hook_identify" }`. The storage type in the Patches pane: Automatic, Flash or Hard drive. For Flash or Hard drive, iPodFirm does not write the `detect_hook` hook, and it sets the byte `variable` to 1 or 0. In Automatic mode, the size of the connected iPod decides: a size that no original drive has gives Flash. Else the hook examines the drive on the iPod. Only `flash-keep-awake` uses this key. |
 | `internal` | bool, optional | `true`: the patch is a part of a build step. The Patches pane does not show it. Only `dark-mode` uses this key. |
 
-Example (from [patches/flash-keep-awake/patch.json](../patches/flash-keep-awake/patch.json)):
+Example (a part of [patches/flash-keep-awake/patch.json](../patches/flash-keep-awake/patch.json)):
 
 ```json
 {
   "name": "flash-keep-awake",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
-  "load_address": "0x736700",
+  "load_address": "0x736644",
   "symbols": { "fw_resume_tail": "0x1b9118", "ka_always_on": "0x94e6c", "ka_timed": "0x94d80",
                "ka_active": "0x1086bedc", "ka_time": "0x1086bf0c" },
   "hooks": [
@@ -108,14 +109,14 @@ After the checks, iPodFirm writes the code and the hooks. It extends osos with z
 
 ## The free space
 
-Apple's code ends at 0x7358c0. The patches use the area to 0x736800 (3904 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area.
+Apple's code ends at 0x7358c0. The word 0x55AA55AA at 0x7358c0 is a marker; do not put code on it. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. The area is almost full: 7 bytes are free after `flash-keep-awake`. A larger patch needs the area after 0x736800, which is available only when iPodFirm moves rsrc.
 
 | Patch | Load address | Space | Notes |
 |---|---|---|---|
-| `album-art` | 0x735900 | 0x735900–0x736600 (3328 bytes) | Code, constants and variables. |
-| `sleep-now` | 0x736600 | 0x736600–0x736700 (256 bytes) | |
-| `flash-keep-awake` | 0x736700 | 0x736700–0x736800 (256 bytes) | |
-| `row-marker` | 0x735900 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
+| `album-art` | 0x7358d0 | 0x7358d0–0x73658c (3260 bytes) | Code, constants and variables. |
+| `sleep-now` | 0x73658c | 0x73658c–0x736644 (181 bytes) | |
+| `flash-keep-awake` | 0x736644 | 0x736644–0x736800 (437 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
+| `row-marker` | 0x7358d0 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.

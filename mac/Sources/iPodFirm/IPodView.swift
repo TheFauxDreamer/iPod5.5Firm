@@ -28,6 +28,10 @@ struct IPodView: View {
                         }
                     }
                 }
+                if model.currentIPodIsUnsupported {
+                    Label("Unsupported iPod. This iPod is not an iPod Video (5G/5.5G). iPodFirm does not back up, flash or restore it.",
+                          systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+                }
                 HStack {
                     Button("Refresh") { Task { await model.refreshIPods() } }
                     Button("Eject") { Task { await model.ejectIPod() } }
@@ -35,9 +39,9 @@ struct IPodView: View {
                         .help("Unmount the iPod so that you can disconnect it")
                     Spacer()
                     Button("Back Up Now") { Task { await model.backupNow() } }
-                        .disabled(model.currentIPod == nil)
+                        .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported)
                     Button("Flash Edited Firmware…") { Task { await model.flashEdited() } }
-                        .disabled(model.currentIPod == nil || model.editor == nil)
+                        .disabled(model.currentIPod == nil || model.editor == nil || model.currentIPodIsUnsupported)
                         .buttonStyle(.borderedProminent)
                 }
             } header: { Text("Connected iPod") }
@@ -119,7 +123,7 @@ struct BackupRow: View {
             Button("Edit a Copy") { Task { await model.open(model.backupURL(backup), fromBackup: true) } }
                 .help("Open this backup for editing. The backup file itself is never changed.")
             Button("Restore…") { Task { await model.restore(backup) } }
-                .disabled(model.currentIPod == nil || backup.model == Backups.damagedModel)
+                .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported || backup.model == Backups.damagedModel)
                 .help(backup.model == Backups.damagedModel ? "This backup is a copy of a damaged firmware. You cannot restore it." : "")
             Button { NSWorkspace.shared.activateFileViewerSelecting([model.backupURL(backup)]) } label: {
                 Image(systemName: "magnifyingglass")

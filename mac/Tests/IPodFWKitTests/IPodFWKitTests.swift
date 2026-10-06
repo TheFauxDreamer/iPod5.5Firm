@@ -106,6 +106,62 @@ final class RealFirmwareTests: XCTestCase {
     }
 }
 
+final class ModelCheckTests: XCTestCase {
+    /// A small partition with one osos image. `vers` is the value in the directory entry.
+    func partition(vers: UInt32) -> [UInt8] {
+        var d = [UInt8](repeating: 0, count: 0x6000)
+        d.replaceSubrange(0..<stopSignPrefix.count, with: stopSignPrefix)
+        d.replaceSubrange(0x100..<0x104, with: Array("]ih[".utf8))
+        put32(&d, 0x104, 0x4000)
+        let dir = 0x4200, devOffset = 0x1000, length = 256
+        d.replaceSubrange(dir..<dir + 8, with: Array("!ATAsoso".utf8))
+        for i in 0..<length { d[2048 + devOffset + i] = UInt8(i & 0xFF) }
+        put32(&d, dir + 12, UInt32(devOffset)); put32(&d, dir + 16, UInt32(length))
+        put32(&d, dir + 28, byteSum(d[2048 + devOffset..<2048 + devOffset + length]))
+        put32(&d, dir + 32, vers)
+        return d
+    }
+
+    let ipod = IPodDisk(disk: "disk99", mediaName: "Test iPod", blockSize: 512, size: 1, volumeName: nil)
+
+    func testVideoIsSupported() throws {
+        let p = try FirmwarePartition(data: partition(vers: 0xB001))
+        XCTAssertTrue(p.isVideo)
+        XCTAssertNoThrow(try Operations.checkModel(onIPod: p.data))
+    }
+
+    func testOtherModelIsRefused() throws {
+        let data = partition(vers: 0x1301)
+        XCTAssertFalse(try FirmwarePartition(data: data).isVideo)
+        XCTAssertThrowsError(try Operations.checkModel(onIPod: data)) {
+            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.unsupportedIPod)
+        }
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("ipodfw-model-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        XCTAssertThrowsError(try Backups.save(data, ipod: ipod, reason: "test", in: tmp, owner: nil)) {
+            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.unsupportedIPod)
+        }
+        XCTAssertTrue(Backups.list(in: tmp).isEmpty)
+    }
+
+    /// A different model with an incorrect checksum is "unsupported", not "damaged": no rescue restore.
+    func testOtherModelWithBadChecksumIsRefused() {
+        var data = partition(vers: 0x1301)
+        data[2048 + 0x1000] ^= 0xFF
+        XCTAssertThrowsError(try FirmwarePartition(data: data))
+        XCTAssertEqual(FirmwarePartition.modelCode(in: data), 0x13)
+        XCTAssertThrowsError(try Operations.checkModel(onIPod: data)) {
+            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.unsupportedIPod)
+        }
+    }
+
+    /// Without a directory, the model is not known. The damaged-firmware path stays available.
+    func testNoDirectoryGivesNoModel() {
+        XCTAssertNil(FirmwarePartition.modelCode(in: [UInt8](repeating: 0, count: 0x6000)))
+        XCTAssertNoThrow(try Operations.checkModel(onIPod: [UInt8](repeating: 0, count: 0x6000)))
+    }
+}
+
 /// End-to-end on a real block device: a disk image laid out like a Windows-formatted iPod,
 /// attached with hdiutil. Set IPODFW_IPSW and IPODFW_DISK_TEST=1.
 final class DiskImageFlashTests: XCTestCase {
@@ -216,6 +272,12 @@ final class DiskImageFlashTests: XCTestCase {
         try Data(count: stock.count).write(to: zeroURL)
         XCTAssertThrowsError(try Operations.rescueRestore(ipod, image: zeroURL, backupDir: backups, dryRun: false, owner: nil))
 
+        // 7a. the original backup is from a different disk: the rescue is refused
+        var other = ipod
+        other.mediaName = "Other iPod"
+        XCTAssertThrowsError(try Operations.rescueRestore(other, image: backups.appendingPathComponent(Backups.originalName),
+                                                          backupDir: backups, dryRun: true, owner: nil))
+
         // 8. the rescue writes only the damaged blocks (never aupd), keeps the damaged state, and the iPod is stock again
         let rescueDry = try Operations.rescueRestore(ipod, image: backups.appendingPathComponent(Backups.originalName),
                                                      backupDir: backups, dryRun: true, owner: nil)
@@ -292,13 +354,26 @@ final class PatchAndArtTests: XCTestCase {
         let keep = all.filter { $0.spec.name == "flash-keep-awake" }
         XCTAssertEqual(keep.count, 1)
         let out = try Patcher.apply(keep, to: osos)
-        XCTAssertEqual(le32(out, 0x284c7c), try Patcher.branch("bl", at: 0x284c7c, to: 0x736700))
-        XCTAssertEqual(le32(out, 0x736700), 0xe594_1018)
+        XCTAssertEqual(le32(out, 0x284c7c), try Patcher.branch("bl", at: 0x284c7c, to: 0x736644))
+        XCTAssertEqual(le32(out, 0x736644), 0xe594_1018)
         XCTAssertEqual(le32(out, 0xb45f4) & 0xFF00_0000, 0xEB00_0000)   // the wake hook is a bl
         XCTAssertNotEqual(le32(out, 0xb45f4), le32(osos, 0xb45f4))
-        XCTAssertEqual(le32(out, 0x736704), 0xe351_0001)                 // "cmp r1, #1": a release stays a release
-        XCTAssertEqual(le32(out, 0x1d871c) & 0xFF00_0000, 0xEB00_0000)   // the sleep gate hook is a bl
-        XCTAssertNotEqual(le32(out, 0x1d871c), le32(osos, 0x1d871c))
+        XCTAssertEqual(le32(out, 0x736648), 0xe351_0001)                 // "cmp r1, #1": a release stays a release
+        // the sleep gate, the user event, the power-off call and the IDENTIFY swap are bl hooks
+        for at in [0x1d871c, 0x1d8344, 0x23344c, 0x142f94] {
+            XCTAssertEqual(le32(out, at) & 0xFF00_0000, 0xEB00_0000)
+            XCTAssertNotEqual(le32(out, at), le32(osos, at))
+        }
+        // a set storage type: no IDENTIFY hook, and ka_flash (the last byte of the patch, 0x7367f8) has the value
+        XCTAssertEqual(out[0x7367f8], 0)
+        for (type, value) in [(StorageType.flash, UInt8(1)), (.hardDrive, 0)] {
+            let fixed = try Patcher.apply(keep, to: osos, storage: type)
+            XCTAssertEqual(le32(fixed, 0x142f94), le32(osos, 0x142f94))
+            XCTAssertEqual(fixed[0x7367f8], value)
+            XCTAssertEqual(le32(fixed, 0x23344c), le32(out, 0x23344c))   // the other hooks stay
+        }
+        XCTAssertEqual(IPodDisk(disk: "disk9", mediaName: "iPod", blockSize: 2048, size: 1_025_423_441_920).storageFromSize, .flash)
+        XCTAssertNil(IPodDisk(disk: "disk9", mediaName: "iPod", blockSize: 512, size: 80_000_000_000).storageFromSize)
         // with the album-art patch: the two patches use different areas
         _ = try Patcher.apply(all.filter { ["album-art", "flash-keep-awake"].contains($0.spec.name) }, to: osos)
     }
@@ -311,8 +386,8 @@ final class PatchAndArtTests: XCTestCase {
         let sleep = all.filter { $0.spec.name == "sleep-now" }
         XCTAssertEqual(sleep.count, 1)
         let out = try Patcher.apply(sleep, to: osos)
-        XCTAssertEqual(le32(out, 0x69fd2c), 0x736600)                          // the table entry
-        XCTAssertEqual(le32(out, 0x1e8ce8), try Patcher.branch("bl", at: 0x1e8ce8, to: 0x736600))
+        XCTAssertEqual(le32(out, 0x69fd2c), 0x73658c)                          // the table entry
+        XCTAssertEqual(le32(out, 0x1e8ce8), try Patcher.branch("bl", at: 0x1e8ce8, to: 0x73658c))
         XCTAssertEqual(le32(out, 0x1ee930) & 0xFF00_0000, 0xEB00_0000)
         XCTAssertNotEqual(le32(out, 0x1ee930), le32(osos, 0x1ee930))
         // with the other code patches: all use different areas
@@ -353,7 +428,9 @@ final class PatchAndArtTests: XCTestCase {
             XCTAssertNil(IPodDisk.likelyOriginalHDD(size: size))
         }
         let keep = Patcher.list(in: Self.repo.appendingPathComponent("patches")).first { $0.spec.name == "flash-keep-awake" }
-        XCTAssertNotNil(keep?.spec.hdd_warning)
+        // the patch reads the IDENTIFY data and does nothing on a hard drive, thus it has no warning
+        XCTAssertNotNil(keep)
+        XCTAssertNil(keep?.spec.hdd_warning)
     }
 
     func testReadTracksRoundTrip() {

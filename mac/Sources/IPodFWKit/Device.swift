@@ -23,6 +23,10 @@ public struct IPodDisk: Codable, Identifiable, Hashable {
     }
 
     public var likelyOriginalHDD: Int? { Self.likelyOriginalHDD(size: size) }
+
+    /// The storage type from the size: flash if no original drive has this size. Else nil: the size
+    /// does not decide, because a flash card can have a size near an original drive.
+    public var storageFromSize: StorageType? { likelyOriginalHDD == nil ? .flash : nil }
 }
 
 func runTool(_ path: String, _ args: [String]) throws -> Data {

@@ -12,6 +12,8 @@ public struct BackupInfo: Codable, Identifiable, Hashable {
     public var bytes: Int
     public var sha256: String
     public var isOriginal: Bool
+    /// The size of the iPod disk in bytes. Backups from iPodFirm 0.1.28 and earlier do not have it.
+    public var diskSize: Int64?
 }
 
 public enum Backups {
@@ -34,7 +36,12 @@ public enum Backups {
     @discardableResult
     public static func save(_ data: [UInt8], ipod: IPodDisk, reason: String, in dir: URL, owner: uid_t?,
                             damaged: Bool = false) throws -> BackupInfo {
-        let model = damaged ? damagedModel : try FirmwarePartition(data: data).model
+        var model = damagedModel
+        if !damaged {
+            let partition = try FirmwarePartition(data: data)
+            guard partition.isVideo else { throw Operations.unsupported(partition.model) }
+            model = partition.model
+        }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let stamp = DateFormatter()
         stamp.locale = Locale(identifier: "en_US_POSIX")
@@ -56,7 +63,7 @@ public enum Backups {
             guard try Data(contentsOf: url) == Data(data) else { throw FirmwareError("Backup \(name) did not read back correctly.") }
             let info = BackupInfo(file: name, created: now, reason: name == originalName ? "original" : reason,
                                   model: model, mediaName: ipod.mediaName, bytes: data.count, sha256: sha,
-                                  isOriginal: name == originalName)
+                                  isOriginal: name == originalName, diskSize: ipod.size)
             let meta = dir.appendingPathComponent(name + ".json")
             try enc.encode(info).write(to: meta, options: .atomic)
             if let owner {
@@ -75,6 +82,8 @@ public struct HelperResult: Codable {
     public static let fullDiskAccess = "full-disk-access"
     /// The firmware partition on the iPod does not parse (e.g. after an interrupted write): use rescueRestore.
     public static let firmwareUnreadable = "firmware-unreadable"
+    /// The iPod is not an iPod Video (5G/5.5G), for example an iPod classic.
+    public static let unsupportedIPod = "unsupported-ipod"
     public var ok: Bool
     public var message: String
     public var code: String?
@@ -86,6 +95,18 @@ public struct HelperResult: Codable {
 }
 
 public enum Operations {
+    static func unsupported(_ model: String) -> FirmwareError {
+        FirmwareError("This iPod is not an iPod Video (5G/5.5G). Its firmware is for the model \"\(model)\". iPodFirm supports only the iPod Video.",
+                      code: HelperResult.unsupportedIPod)
+    }
+
+    /// Stop if the directory on the iPod is readable and shows a different model.
+    static func checkModel(onIPod bytes: [UInt8]) throws {
+        if let code = FirmwarePartition.modelCode(in: bytes), code != FirmwarePartition.videoModelCode {
+            throw unsupported(models[code] ?? String(format: "unknown (0x%x)", code))
+        }
+    }
+
     static func readCurrent(_ ipod: IPodDisk) throws -> (bytes: [UInt8], start: Int) {
         let disk = try RawDisk(path: ipod.rawPath, blockSize: ipod.blockSize)
         let (start, size) = try FirmwareFlasher.locatePartition(disk)
@@ -102,6 +123,7 @@ public enum Operations {
     public static func flash(_ ipod: IPodDisk, image imageURL: URL, backupDir: URL, reason: String,
                              dryRun: Bool, owner: uid_t?) throws -> HelperResult {
         let (currentBytes, partStart) = try readCurrent(ipod)
+        try checkModel(onIPod: currentBytes)
         let current: FirmwarePartition
         do { current = try FirmwarePartition(data: currentBytes) } catch {
             throw FirmwareError("The firmware on the iPod is damaged (\(error.localizedDescription)). Use the rescue restore.",
@@ -114,6 +136,7 @@ public enum Operations {
         newBytes = try FirmwareFlasher.fitLayout(new: newBytes, current: current)
         try FirmwareFlasher.preserveHibernation(new: &newBytes, current: current)
         let new = try FirmwarePartition(data: newBytes)
+        guard new.isVideo else { throw FirmwareError("The new firmware is for the model \"\(new.model)\", not for the iPod Video.") }
         try FirmwareFlasher.checkCompatible(current: current, new: new, label: "New firmware")
 
         let bs = ipod.blockSize
@@ -148,6 +171,7 @@ public enum Operations {
     public static func rescueRestore(_ ipod: IPodDisk, image imageURL: URL, backupDir: URL,
                                      dryRun: Bool, owner: uid_t?) throws -> HelperResult {
         let (currentBytes, partStart) = try readCurrent(ipod)
+        try checkModel(onIPod: currentBytes)
         guard (try? FirmwarePartition(data: currentBytes)) == nil else {
             throw FirmwareError("The firmware on the iPod is not damaged. Use the normal restore.")
         }
@@ -156,14 +180,26 @@ public enum Operations {
             throw FirmwareError("There is no original backup to compare with. Restore the iPod with Finder.")
         }
         let original = try FirmwarePartition(contentsOf: originalURL)
+        guard original.isVideo else {
+            throw FirmwareError("The original backup is not from an iPod Video. Restore the iPod with Finder.")
+        }
         guard original.data.count == currentBytes.count else {
             throw FirmwareError("The original backup is not from this iPod (the partition size is different). Restore the iPod with Finder.")
+        }
+        // The original backup is the same file for all iPods. The disk must agree with the disk of that backup.
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        if let meta = try? Data(contentsOf: backupDir.appendingPathComponent(Backups.originalName + ".json")),
+           let info = try? dec.decode(BackupInfo.self, from: meta),
+           info.mediaName != ipod.mediaName || (info.diskSize.map { $0 != ipod.size } ?? false) {
+            throw FirmwareError("The original backup is not from this iPod (the disk is different). Restore the iPod with Finder.")
         }
         var newBytes = [UInt8](try Data(contentsOf: imageURL))
         let new: FirmwarePartition
         do { new = try FirmwarePartition(data: newBytes) } catch {
             throw FirmwareError("This backup is damaged too (\(error.localizedDescription)). Select a different backup.")
         }
+        guard new.isVideo else { throw FirmwareError("This backup is not from an iPod Video. Select a different backup.") }
         guard newBytes.count <= currentBytes.count else {
             throw FirmwareError("The backup (\(newBytes.count) bytes) is larger than the iPod's firmware partition (\(currentBytes.count)).")
         }

@@ -79,27 +79,10 @@ public final class FirmwarePartition {
     }
 
     public init(data: [UInt8]) throws {
-        guard data.count > 0x200, Array(data[0..<stopSignPrefix.count]) == stopSignPrefix else {
-            throw FirmwareError("Missing Apple STOP banner: this is not an iPod firmware partition.")
-        }
-        guard Array(data[0x100..<0x104]) == Array("]ih[".utf8) else {
-            throw FirmwareError("Bad firmware directory magic (expected ']ih[').")
-        }
+        let (dirOffset, entries) = try Self.readDirectory(data)
         self.data = data
         formatVersion = le16(data, 0x10A)
-        dirOffset = Int(le32(data, 0x104)) + 0x200
-
-        var entries: [ImageEntry] = []
-        var p = dirOffset
-        let tags = [Array("!ATA".utf8), Array("DNAN".utf8)]
-        while p + 40 <= data.count, tags.contains(Array(data[p..<p + 4])), entries.count < 10 {
-            entries.append(ImageEntry(
-                index: entries.count, dev: Array(data[p..<p + 4]), type: Array(data[p + 4..<p + 8]),
-                id: le32(data, p + 8), devOffset: le32(data, p + 12), length: le32(data, p + 16),
-                addr: le32(data, p + 20), entryOffset: le32(data, p + 24), chksum: le32(data, p + 28),
-                vers: le32(data, p + 32), loadAddr: le32(data, p + 36)))
-            p += 40
-        }
+        self.dirOffset = dirOffset
         self.entries = entries
         guard let osos = entries.first(where: { $0.name == "osos" }) else {
             throw FirmwareError("No osos image in the firmware directory.")
@@ -118,6 +101,43 @@ public final class FirmwarePartition {
         }
         imageBase = base
     }
+
+    /// The STOP banner and the image directory. The images are not examined.
+    static func readDirectory(_ data: [UInt8]) throws -> (dirOffset: Int, entries: [ImageEntry]) {
+        guard data.count > 0x200, Array(data[0..<stopSignPrefix.count]) == stopSignPrefix else {
+            throw FirmwareError("Missing Apple STOP banner: this is not an iPod firmware partition.")
+        }
+        guard Array(data[0x100..<0x104]) == Array("]ih[".utf8) else {
+            throw FirmwareError("Bad firmware directory magic (expected ']ih[').")
+        }
+        let dirOffset = Int(le32(data, 0x104)) + 0x200
+        var entries: [ImageEntry] = []
+        var p = dirOffset
+        let tags = [Array("!ATA".utf8), Array("DNAN".utf8)]
+        while p + 40 <= data.count, tags.contains(Array(data[p..<p + 4])), entries.count < 10 {
+            entries.append(ImageEntry(
+                index: entries.count, dev: Array(data[p..<p + 4]), type: Array(data[p + 4..<p + 8]),
+                id: le32(data, p + 8), devOffset: le32(data, p + 12), length: le32(data, p + 16),
+                addr: le32(data, p + 20), entryOffset: le32(data, p + 24), chksum: le32(data, p + 28),
+                vers: le32(data, p + 32), loadAddr: le32(data, p + 36)))
+            p += 40
+        }
+        return (dirOffset, entries)
+    }
+
+    /// The model code of the iPod Video (5G and 5.5G). iPodFirm supports only this model.
+    public static let videoModelCode: UInt32 = 0xB0
+
+    /// The model code in the osos directory entry, also if an image checksum is incorrect.
+    /// The value is nil if the directory cannot be read.
+    public static func modelCode(in data: [UInt8]) -> UInt32? {
+        guard let osos = try? readDirectory(data).entries.first(where: { $0.name == "osos" }) else { return nil }
+        return osos.vers >> 8
+    }
+
+    public var modelCode: UInt32 { ((try? entry("osos").vers) ?? 0) >> 8 }
+
+    public var isVideo: Bool { modelCode == Self.videoModelCode }
 
     public var model: String {
         let v = (try? entry("osos").vers) ?? 0

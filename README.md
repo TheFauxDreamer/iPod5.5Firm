@@ -241,13 +241,13 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 | Patch | Function | Status |
 |---|---|---|
 | `album-art` | Shows a 20 × 20 thumbnail of the album artwork at the left of each album in the lists. | Tested in the emulator with 200 real songs in 28 albums. Working on real iPod, bit buggy when a song name matches album name. |
-| `flash-keep-awake` | For flash storage (iFlash and similar adapters). Keeps the storage on for 30 minutes after each access, not for 1 second. Starts the storage at once when the iPod wakes from sleep. The first song starts slightly faster. |
+| `flash-keep-awake` | SSD mode for flash storage (iFlash, CompactFlash and SSD adapters). Keeps the storage on for 30 minutes after each access, not for 1 second. Starts the storage at once when the iPod wakes from sleep, or when you touch a control after a long pause. Waits 0.5 s before the storage power goes off. On a hard drive, the patch does nothing. |
 
 The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary: the patch finds the new file when you scroll through a list.
 
 The patch draws a thumbnail only in the rows of a list. In Now Playing, RetailOS shows its own large artwork from `iPod_Control/Artwork/ArtworkDB`. Finder writes that database when it syncs music with artwork.
 
-The stock firmware switches off the storage power approximately 1 s after the last access. A flash adapter needs some seconds to start again after a power cut. Thus, the first song after idle time starts 3–6 s late. The `flash-keep-awake` patch changes the keep-awake time to 30 minutes. It also asks for the storage when the iPod wakes from sleep, so that the adapter starts while you look for a song. When the iPod goes to sleep, it switches off the storage as usual. If the connected iPod has a capacity within 5 GB of an original drive (30, 60 or 80 GB), iPodFirm shows a warning in the Patches pane, before you turn the patch on and before you flash. The original hard drive turns for a longer time with this patch. For the research, refer to [re/play-latency.md](re/play-latency.md).
+The stock firmware switches off the storage power approximately 1 s after the last access. A flash adapter needs some seconds to start again after a power cut. Thus, the first song after idle time starts 3–6 s late. The `flash-keep-awake` patch changes the keep-awake time to 30 minutes. It also asks for the storage when the iPod wakes from sleep, so that the adapter starts while you look for a song. When the iPod goes to sleep, it switches off the storage as usual. The idea of an "SSD mode" comes from [rockpod](https://github.com/nuxcodes/rockpod), a Rockbox version for the iPod Classic. The patch also starts the storage when you touch a control and the storage is off. Before the power cut, the patch waits 0.5 s, so that an iFlash can complete its writes. The Patches pane has a storage type: Automatic, Flash or Hard drive. In Automatic mode, iPodFirm examines the size of the connected iPod. No original drive has a size other than approximately 30, 60 or 80 GB, thus another size gives Flash. If the size does not decide, the patch reads the ATA IDENTIFY data of the storage when the iPod starts. It then operates only if the model starts with "iFlash", or if the data shows CompactFlash or a drive with no rotation. On a hard drive, the patch does nothing. For the research, refer to [re/play-latency.md](re/play-latency.md).
 
 The patch tool compiles C code with the Xcode compiler and links it at a fixed address in the free space after the osos image (maximum 3.9 KB in firmware 1.3).
 
@@ -263,7 +263,7 @@ The patch tool compiles C code with the Xcode compiler and links it at a fixed a
 - The write to the iPod has tests on a disk image. The write was not done on a real iPod.
 - The rescue restore has tests on a disk image with a damaged firmware partition. It was not done on a real iPod.
 - The `album-art` patch has tests in the emulator. It was not done on a real iPod.
-- The `flash-keep-awake` patch has tests in the emulator. It was not done on a real iPod.
+- The `flash-keep-awake` patch has tests in the emulator. The SSD mode additions (2026-10-06) were not done on a real iPod.
 - The dark theme, with the `album-art` patch, operates on a real iPod 5.5G. This includes the move of `rsrc`.
 - The "Dark Mode" item in Settings has tests in the emulator (light, dark and light again, also without the setting file). It was not done on a real iPod.
 
