@@ -57,7 +57,10 @@ The app reads the disk size to identify a probable original hard drive. Refer to
 
 `FirmwareFlasher.locatePartition` then finds the firmware partition in the MBR or in the Apple partition map. Refer to [firmware-format.md](firmware-format.md#the-location-of-the-firmware-partition).
 
-The helper refuses an iPod that is not an iPod Video. It reads the model code in the osos directory entry (`vers >> 8`, 0xB0). The helper returns the code `unsupported-ipod`.
+The helper refuses an iPod that is not an iPod Video. It returns the code `unsupported-ipod`, and the iPod pane disables the back-up, flash and restore buttons. It does two tests:
+
+1. It identifies an iPod with a Samsung CPU (iPod classic). Its directory is at the value at 0x104 + 0x1000, because it uses 4096-byte sectors (`FirmwarePartition.samsungImageHeader`). Refer to [re/ipod-classic-6g.md](../re/ipod-classic-6g.md).
+2. It reads the model code in the osos directory entry (`vers >> 8`). The iPod Video has 0xB0.
 
 ## Privileged access
 

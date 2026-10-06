@@ -24,6 +24,8 @@ Any other layout gives the error "Unrecognised partition table." iPodFirm then d
 | 0x104 | 4 | u32 LE: the directory offset − 0x200. On the 5.5G the directory is at 0x4200. |
 | 0x10A | 2 | u16 LE: the partition format version. It is 3 on the iPod Video. |
 
+The directory is at the value at 0x104 + one sector. The iPod Video uses 512-byte sectors, so the directory is at 0x4200. The iPod classic uses 4096-byte sectors, so its directory is at 0x5000. iPodFirm uses the second position only to identify a classic and to refuse it. Refer to [re/ipod-classic-6g.md](../re/ipod-classic-6g.md).
+
 ## The image directory
 
 The directory has a maximum of 10 entries of 40 bytes. An entry is valid if it starts with `!ATA` or `DNAN`. All values are u32 little-endian.

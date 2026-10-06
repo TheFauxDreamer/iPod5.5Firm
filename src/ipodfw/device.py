@@ -14,7 +14,7 @@ import struct
 import subprocess
 from dataclasses import dataclass
 
-from .partition import ENTRY_SIZE, FirmwareError, FirmwarePartition
+from .partition import ENTRY_SIZE, FirmwareError, FirmwarePartition, samsung_image_header, samsung_message
 
 
 @dataclass
@@ -260,6 +260,9 @@ def rescue_restore(ipod: IPodDisk, backup_bytes: bytes, reference_bytes: bytes,
     with RawDisk(ipod) as disk:
         part_start, part_size = locate_firmware_partition(disk)
         current_bytes = disk.read(part_start, part_size)
+    header = samsung_image_header(current_bytes)
+    if header:
+        raise FirmwareError(samsung_message(header))   # an iPod classic is not a damaged iPod Video
     try:
         FirmwarePartition(current_bytes)
     except FirmwareError:

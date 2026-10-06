@@ -85,6 +85,7 @@ public final class FirmwarePartition {
         self.dirOffset = dirOffset
         self.entries = entries
         guard let osos = entries.first(where: { $0.name == "osos" }) else {
+            if let header = Self.samsungImageHeader(in: data) { throw Self.samsungError(header, code: nil) }
             throw FirmwareError("No osos image in the firmware directory.")
         }
         var base: Int?
@@ -133,6 +134,38 @@ public final class FirmwarePartition {
     public static func modelCode(in data: [UInt8]) -> UInt32? {
         guard let osos = try? readDirectory(data).entries.first(where: { $0.name == "osos" }) else { return nil }
         return osos.vers >> 8
+    }
+
+    /// The firmware of an iPod with a Samsung CPU: the iPod classic and the iPod nano 3G and later.
+    /// These iPods use 4096-byte sectors, thus the directory is at the value at 0x104 + 0x1000, not
+    /// + 0x200. Their osos starts with an "87xx" image header (for example "8702"). The body is
+    /// encrypted and signed, so iPodFirm cannot change it. Refer to re/ipod-classic-6g.md.
+    /// The result is the header tag, "unknown" if the header is not readable, or nil for other firmware.
+    public static func samsungImageHeader(in data: [UInt8]) -> String? {
+        guard data.count > 0x200, Array(data[0..<stopSignPrefix.count]) == stopSignPrefix,
+              Array(data[0x100..<0x104]) == Array("]ih[".utf8) else { return nil }
+        // A directory at the iPod Video position means a PortalPlayer firmware.
+        if let video = try? readDirectory(data), !video.entries.isEmpty { return nil }
+        let tags = [Array("!ATA".utf8), Array("DNAN".utf8)]
+        var p = Int(le32(data, 0x104)) + 0x1000
+        for _ in 0..<10 {
+            guard p + 40 <= data.count, tags.contains(Array(data[p..<p + 4])) else { return nil }
+            if Array(data[p + 4..<p + 8]) == Array("soso".utf8) {
+                let at = Int(le32(data, p + 12))       // the image header is at devOffset
+                guard at + 4 <= data.count else { return "unknown" }
+                let tag = Array(data[at..<at + 4])
+                let isTag = tag[0] == UInt8(ascii: "8") && tag[1] == UInt8(ascii: "7") && tag[2...].allSatisfy { (0x30...0x39).contains($0) }
+                return isTag ? String(decoding: tag, as: UTF8.self) : "unknown"
+            }
+            p += 40
+        }
+        return nil
+    }
+
+    static func samsungError(_ header: String, code: String?) -> FirmwareError {
+        FirmwareError("This firmware is for an iPod classic or an iPod nano 3G or later (Samsung CPU, image header \"\(header)\"). "
+                      + "Its firmware is encrypted and signed. iPodFirm cannot change it. iPodFirm supports only the iPod Video (5G/5.5G).",
+                      code: code)
     }
 
     public var modelCode: UInt32 { ((try? entry("osos").vers) ?? 0) >> 8 }

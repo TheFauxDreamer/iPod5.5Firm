@@ -101,7 +101,12 @@ public enum Operations {
     }
 
     /// Stop if the directory on the iPod is readable and shows a different model.
+    /// An iPod classic has its directory at a different position. Without this first test, it looks
+    /// like an iPod Video with damaged firmware, and the app offers the rescue restore.
     static func checkModel(onIPod bytes: [UInt8]) throws {
+        if let header = FirmwarePartition.samsungImageHeader(in: bytes) {
+            throw FirmwarePartition.samsungError(header, code: HelperResult.unsupportedIPod)
+        }
         if let code = FirmwarePartition.modelCode(in: bytes), code != FirmwarePartition.videoModelCode {
             throw unsupported(models[code] ?? String(format: "unknown (0x%x)", code))
         }
@@ -115,6 +120,7 @@ public enum Operations {
 
     public static func backup(_ ipod: IPodDisk, to dir: URL, owner: uid_t?) throws -> HelperResult {
         let (bytes, _) = try readCurrent(ipod)
+        try checkModel(onIPod: bytes)
         let info = try Backups.save(bytes, ipod: ipod, reason: "manual backup", in: dir, owner: owner)
         return HelperResult(ok: true, message: "Backed up \(bytes.count / 1_048_576) MB firmware partition.", backup: info)
     }

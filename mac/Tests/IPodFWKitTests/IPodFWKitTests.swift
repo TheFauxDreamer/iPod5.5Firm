@@ -160,6 +160,56 @@ final class ModelCheckTests: XCTestCase {
         XCTAssertNil(FirmwarePartition.modelCode(in: [UInt8](repeating: 0, count: 0x6000)))
         XCTAssertNoThrow(try Operations.checkModel(onIPod: [UInt8](repeating: 0, count: 0x6000)))
     }
+
+    /// A small partition with the layout of the iPod classic 6G firmware 1.1.2: the directory at
+    /// 0x4000 + 0x1000, rsrc first, and an osos that starts with an "8702" image header.
+    func classicPartition(header: String = "8702") -> [UInt8] {
+        var d = [UInt8](repeating: 0, count: 0x8000)
+        d.replaceSubrange(0..<stopSignPrefix.count, with: stopSignPrefix)
+        d.replaceSubrange(0x100..<0x104, with: Array("]ih[".utf8))
+        put32(&d, 0x104, 0x4000)
+        let dir = 0x5000
+        d.replaceSubrange(dir..<dir + 8, with: Array("!ATAcrsr".utf8))
+        put32(&d, dir + 12, 0x6000); put32(&d, dir + 16, 0x100)
+        d.replaceSubrange(dir + 40..<dir + 48, with: Array("!ATAsoso".utf8))
+        put32(&d, dir + 52, 0x7000); put32(&d, dir + 56, 0x800); put32(&d, dir + 72, 0x13000)
+        d.replaceSubrange(0x7000..<0x7008, with: Array(header.utf8) + Array("1.0".utf8) + [3])
+        for i in 0x7800..<0x8000 { d[i] = UInt8((i * 7919) & 0xFF) }      // the "encrypted" body
+        return d
+    }
+
+    /// The classic is "unsupported", not "damaged". Before this test existed, the helper offered the rescue restore.
+    func testClassicIsRefusedAsUnsupported() {
+        let data = classicPartition()
+        XCTAssertEqual(FirmwarePartition.samsungImageHeader(in: data), "8702")
+        XCTAssertNil(FirmwarePartition.modelCode(in: data))
+        XCTAssertThrowsError(try Operations.checkModel(onIPod: data)) {
+            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.unsupportedIPod)
+            XCTAssertTrue($0.localizedDescription.contains("iPod classic"))
+        }
+    }
+
+    /// An opened file gives a clear message, but no code: the code would mark the connected iPod as unsupported.
+    func testOpenedClassicFileHasMessageButNoCode() {
+        XCTAssertThrowsError(try FirmwarePartition(data: classicPartition())) {
+            XCTAssertNil(($0 as? FirmwareError)?.code)
+            XCTAssertTrue($0.localizedDescription.contains("encrypted and signed"))
+        }
+    }
+
+    /// A damaged header still identifies the layout.
+    func testClassicWithUnreadableHeaderIsRefused() {
+        let data = classicPartition(header: "\u{0}\u{1}\u{2}\u{3}")
+        XCTAssertEqual(FirmwarePartition.samsungImageHeader(in: data), "unknown")
+        XCTAssertThrowsError(try Operations.checkModel(onIPod: data)) {
+            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.unsupportedIPod)
+        }
+    }
+
+    func testVideoIsNotSamsung() throws {
+        XCTAssertNil(FirmwarePartition.samsungImageHeader(in: partition(vers: 0xB001)))
+        XCTAssertNil(FirmwarePartition.samsungImageHeader(in: [UInt8](repeating: 0, count: 0x8000)))
+    }
 }
 
 /// End-to-end on a real block device: a disk image laid out like a Windows-formatted iPod,

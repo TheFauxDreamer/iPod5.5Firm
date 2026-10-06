@@ -14,7 +14,7 @@ iPodFirm obeys these limits. The code enforces each limit. The "Where" column gi
 | Never change, move or write `aupd`. | `aupd` is the only image that writes the NOR flash. | `replaceImage` refuses `aupd`. `checkCompatible` refuses a different `aupd`. `planWrites` refuses a write that overlaps `aupd`. |
 | Never write `hibe`. | The iPod writes its RAM state there. An old copy is incorrect. | `preserveHibernation` copies the current `hibe` entry and data into the new image. |
 | Write only the firmware partition. | The music partition belongs to the owner. | The helper writes only inside the partition that `locatePartition` found. |
-| Support only the iPod Video (model code 0xB0). | The formats and the addresses are for this model. | `checkModel`, `Backups.save`, `isVideo` checks. |
+| Support only the iPod Video (model code 0xB0). | The formats and the addresses are for this model. The iPod classic firmware is encrypted and signed. | `checkModel` (first the Samsung layout; also before a backup), `Backups.save`, `isVideo` checks. |
 | Apply a patch only to Apple osos 1.3. | The addresses are for this version. | `osos_sha256` in each `patch.json`, theme and version check. |
 | Keep osos below 0x7F0000. | The reset code stops if the image end is after 8 MB (0x800004). | `ThemeImport.ososLimit`, `maxSize` in `Patcher.apply`. |
 | Keep the patch code below 0x736800. | rsrc starts there in Apple's layout. | `Patcher.maxOSOSSize`. |
@@ -29,13 +29,14 @@ The helper does these checks in `Operations.flash` ([Operations.swift](../mac/So
 1. Find the iPod again by its disk name. It must still be connected.
 2. Find the firmware partition (MBR or APM).
 3. Read the complete partition.
-4. Read the model code. Stop if the iPod is not an iPod Video.
-5. Read the partition as a firmware partition. If this fails, stop with the code `firmware-unreadable`. The app then offers the rescue restore.
-6. Make sure that the new image is not larger than the partition.
-7. Put the new osos and rsrc into the layout of the iPod (`fitLayout`).
-8. Copy the `hibe` entry and data of the iPod into the new image (`preserveHibernation`).
-9. Make sure that the new image is for the iPod Video.
-10. Compare the new image with the iPod (`checkCompatible`):
+4. Identify an iPod with a Samsung CPU (iPod classic): the directory is at +0x1000, not at +0x200. Stop with the code `unsupported-ipod`. Refer to [re/ipod-classic-6g.md](../re/ipod-classic-6g.md#detection-in-ipodfirm-fixed-on-6-october-2026).
+5. Read the model code. Stop if the iPod is not an iPod Video.
+6. Read the partition as a firmware partition. If this fails, stop with the code `firmware-unreadable`. The app then offers the rescue restore.
+7. Make sure that the new image is not larger than the partition.
+8. Put the new osos and rsrc into the layout of the iPod (`fitLayout`).
+9. Copy the `hibe` entry and data of the iPod into the new image (`preserveHibernation`).
+10. Make sure that the new image is for the iPod Video.
+11. Compare the new image with the iPod (`checkCompatible`):
     - The same image base and directory offset.
     - The same count of images.
     - Each image has the same type and position. Only rsrc can move.
@@ -43,7 +44,7 @@ The helper does these checks in `Operations.flash` ([Operations.swift](../mac/So
     - rsrc does not overlap osos, aupd or hibe, and it ends inside the image.
     - The osos and rsrc checksums are correct.
     - aupd is the same, byte for byte.
-11. Make a list of the blocks that are different (`planWrites`). Stop if a block overlaps aupd.
+12. Make a list of the blocks that are different (`planWrites`). Stop if a block overlaps aupd.
 
 With `--dry-run`, the helper stops here and returns the list.
 

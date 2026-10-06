@@ -46,6 +46,39 @@ class FirmwareError(Exception):
     pass
 
 
+def samsung_image_header(data: bytes | bytearray) -> str | None:
+    """The image header tag if `data` is the firmware of an iPod with a Samsung CPU.
+
+    The iPod classic and the iPod nano 3G and later use 4096-byte sectors, thus the directory is at
+    the value at 0x104 + 0x1000, not + 0x200. Their osos starts with an "87xx" image header (for
+    example "8702"). The body is encrypted and signed, so ipodfw cannot change it. Refer to
+    re/ipod-classic-6g.md. The result is the tag, "unknown" if the header is not readable, or None.
+    """
+    if len(data) <= 0x200 or not bytes(data).startswith(STOP_SIGN_PREFIX) or data[0x100:0x104] != MAGIC:
+        return None
+    p = struct.unpack_from("<I", data, 0x104)[0] + 0x200
+    if data[p:p + 4] in DEVICE_TAGS:
+        return None                      # a directory at the iPod Video position: a PortalPlayer firmware
+    p = struct.unpack_from("<I", data, 0x104)[0] + 0x1000
+    for _ in range(10):
+        if p + ENTRY_SIZE > len(data) or data[p:p + 4] not in DEVICE_TAGS:
+            return None
+        if data[p + 4:p + 8] == b"soso":
+            at = struct.unpack_from("<I", data, p + 12)[0]       # the image header is at devOffset
+            tag = bytes(data[at:at + 4])
+            if len(tag) == 4 and tag[:2] == b"87" and tag[2:].isdigit():
+                return tag.decode("ascii")
+            return "unknown"
+        p += ENTRY_SIZE
+    return None
+
+
+def samsung_message(header: str) -> str:
+    return (f"this firmware is for an iPod classic or an iPod nano 3G or later (Samsung CPU, image header "
+            f"\"{header}\"); its firmware is encrypted and signed, and ipodfw cannot change it. "
+            "ipodfw supports only the iPod Video (5G/5.5G)")
+
+
 def checksum(data: bytes | memoryview) -> int:
     return sum(data) & 0xFFFFFFFF
 
@@ -87,7 +120,8 @@ class FirmwarePartition:
         self.dir_offset = struct.unpack_from("<I", self.data, 0x104)[0] + 0x200
         self.entries = self._read_directory()
         if not any(e.name == "osos" for e in self.entries):
-            raise FirmwareError("no osos image in directory")
+            header = samsung_image_header(self.data)
+            raise FirmwareError(samsung_message(header) if header else "no osos image in directory")
         self.image_base = self._detect_image_base()
 
     def _read_directory(self) -> list[ImageEntry]:

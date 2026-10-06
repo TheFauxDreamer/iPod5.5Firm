@@ -187,3 +187,36 @@ def test_real_firmware_round_trip(tmp_path):
     assert len(manifest["pictures"]) == 403
     assert not theme.repack(fw, tmp_path).changed
     assert fw.to_bytes() == data
+
+
+def _classic_partition(header: bytes = b"8702") -> bytes:
+    """A small partition with the layout of the iPod classic 6G firmware 1.1.2 (re/ipod-classic-6g.md):
+    the directory at 0x4000 + 0x1000, rsrc first, and an osos that starts with an "8702" image header."""
+    from ipodfw.partition import STOP_SIGN_PREFIX
+    d = bytearray(0x8000)
+    d[:len(STOP_SIGN_PREFIX)] = STOP_SIGN_PREFIX
+    d[0x100:0x104] = b"]ih["
+    struct.pack_into("<I", d, 0x104, 0x4000)
+    d[0x5000:0x5008] = b"!ATAcrsr"
+    struct.pack_into("<II", d, 0x5000 + 12, 0x6000, 0x100)
+    d[0x5028:0x5030] = b"!ATAsoso"
+    struct.pack_into("<II", d, 0x5028 + 12, 0x7000, 0x800)
+    struct.pack_into("<I", d, 0x5028 + 32, 0x13000)
+    d[0x7000:0x7008] = header + b"1.0\x03"
+    for i in range(0x7800, 0x8000):
+        d[i] = (i * 7919) & 0xFF
+    return bytes(d)
+
+
+def test_classic_is_identified():
+    from ipodfw.partition import samsung_image_header
+    assert samsung_image_header(_classic_partition()) == "8702"
+    assert samsung_image_header(_classic_partition(b"\x00\x01\x02\x03")) == "unknown"
+    with pytest.raises(FirmwareError, match="iPod classic"):
+        FirmwarePartition(_classic_partition())
+
+
+def test_video_is_not_samsung(partition_bytes):
+    from ipodfw.partition import samsung_image_header
+    assert samsung_image_header(partition_bytes) is None
+    assert samsung_image_header(bytes(0x8000)) is None

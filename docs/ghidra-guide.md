@@ -67,7 +67,9 @@ JAVA_HOME="$T/jdk-21.0.12.1+1/Contents/Home" \
 
 Replace `osos13` with a new project name for a different firmware, for example `osos121`.
 
-The analysis of the 7 MB image takes several minutes. The log shows `ERROR Unexpected Exception (ArmAnalyzer) ... ContextChangeException`. This error is expected. The analysis continues, and the log ends with `Import succeeded`.
+The analysis of the 7 MB image takes approximately 5.5 minutes on an Apple silicon Mac (322 seconds in the test on 6 October 2026). The log can show `ERROR Unexpected Exception (ArmAnalyzer) ... ContextChangeException`. This error does not stop the analysis. Make sure that the log ends with `Import succeeded`.
+
+The project tested this command with osos 1.3 in a new project. `MakeSignature.java` gave the same signature as in the project `osos13`. Thus two analyses of the same image give the same result for the scripts.
 
 ### 1.4 Run a script
 
@@ -482,7 +484,7 @@ CAUTION: iPodFirm supports one osos per patch folder. The app downloads and uses
 |---|---|---|---|
 | iPod Video 5G, firmware 1.2.1 or earlier | PortalPlayer, the same as 1.3 | Low | The same model code (0xB0). The work is a port (section 6). |
 | iPod photo / color, iPod 4G, iPod mini, iPod nano 1G | PortalPlayer | Medium | The same partition format. Different screens, resources and registers. No emulator. |
-| iPod classic 6G and later, iPod nano 3G and later | Samsung S5L87xx | High | A different CPU and boot chain. This project did not examine them. Public sources say that their firmware is encrypted. Verify this before you start. |
+| iPod classic 6G and later, iPod nano 3G and later | Samsung S5L87xx | Not possible with this method | The osos of the classic 6G (firmware 1.1.2) is encrypted and signed ("S5L8702 Secure Boot"). Ghidra cannot analyze the file. RepriseOS decrypts the 6.5G and 7G firmware on the iPod with a BootROM exploit, and then uses Ghidra. Refer to [re/ipod-classic-6g.md](../re/ipod-classic-6g.md). |
 
 ### 7.3 The first steps for a new model
 
