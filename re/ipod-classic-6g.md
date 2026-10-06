@@ -139,6 +139,56 @@ The tests use a synthetic partition with the layout above. The real file confirm
 
 The detection of the iPod nano 3G and later is not tested. These models also have Samsung CPUs, but their layout was not examined.
 
+## Data from a real iPod classic
+
+The `.ipsw` file does not answer these questions. Only a real iPod classic can answer them:
+
+- The layout of the firmware partition on the disk, and the sector size that macOS reports.
+- The content of the `hash` image after the iPod wrote it. In the `.ipsw` file, all bytes are 0xFF.
+- A test of the classic detection of iPodFirm with a real partition.
+- The USB product ID and the device files (`SysInfoExtended`) of each generation.
+
+[collect-ipod-info.sh](collect-ipod-info.sh) (macOS) and [collect-ipod-info.ps1](collect-ipod-info.ps1) (Windows 10 and 11) collect this data from a connected iPod into one ZIP file. The two scripts collect the same files. They only read the iPod. It copies the firmware partition, the first block of the disk, the files in `iPod_Control/Device`, the folder names in `iPod_Control`, and the `diskutil` and `ioreg` output. With `--library`, it also copies `iPod_Control/iTunes`. It never copies music, photos or videos.
+
+The instructions for iPod owners are one self-contained HTML file: [collect-ipod-info.html](collect-ipod-info.html). It contains a copy of each script, a button that copies each script, and the steps for macOS and for Windows. Send the HTML file to the iPod owner. The file needs no internet connection.
+
+Do not edit the HTML file. Edit a script or [collect-ipod-info.template.html](collect-ipod-info.template.html), then run `python3 re/build-collect-page.py`. The test `tests/test_collect_page.py` fails if the HTML file does not agree with the scripts.
+
+The Windows script opens `\\.\PhysicalDriveN` with `CreateFile` and `GENERIC_READ` only. Windows PowerShell 5.1 (.NET Framework) does not open a `\\.\` path with a normal `FileStream`. The script writes the ZIP entries itself with `/`, because `Compress-Archive` in PowerShell 5.1 writes `\`.
+
+The test of the script (6 October 2026) used disk images in test mode (`IPOD_TEST_IMAGE`):
+
+| Image | Result |
+|---|---|
+| MBR with the classic layout | The copied partition has the `8702` header. `samsung_image_header` identifies it. |
+| APM with the iPod Video layout | The copied partition is byte for byte the same as the original. |
+| A volume with music, artwork and a library | The ZIP has only the device files and the folder names. With `--library`, it also has `iTunesDB`. |
+
+Both scripts read Windows-formatted iPods (MBR) and Mac-formatted iPods (APM). On Windows, a Mac-formatted iPod has no drive letter, so the device files are not copied. The firmware partition is copied.
+
+The partition table gives sectors. iPodFirm multiplies them by the block size that the system reports. Some iPods report a block size that is not the unit of their partition table. Thus both scripts (version 2) try the reported block size, then 512, 2048 and 4096 bytes. They use the first unit where the partition starts with the STOP banner, and record it in `info.txt` ("sector unit"). If no unit matches, they use the reported block size and show a warning. A partition that does not start on a block boundary is read in whole blocks and then cut.
+
+Both scripts (version 3) have hard limits for the deletion of their temporary files. They never delete recursively:
+
+| Limit | macOS | Windows |
+|---|---|---|
+| The temporary folder of the system | Must be an absolute path, not `/`, and must exist. | Must not be empty, a drive root (for example `C:\`) or a network share root. |
+| The work folder | New, from `mktemp -d`, with the name pattern `ipod-info.XXXXXXXX`. | New, with a random GUID name. It must not exist before. |
+| The user | The script refuses to run as root. It uses `sudo` only for the reads of the raw disk. | Administrator rights are necessary for the raw disk. |
+| The files to delete | Each file in `MANIFEST.txt`: a regular file, not a link, with a real folder inside the work folder. | Each file that the script lists itself: no junctions and no links, with a full path inside the work folder. |
+| The folders | `rmdir`, which removes only an empty folder. | `Directory.Delete(path, false)`, which removes only an empty folder. |
+| Anything else | Stays. The script shows the path. | Stays. The script shows the path. |
+
+The library copy (`--library`) uses the same rule: regular files only, no links and no `._*` files. Windows PowerShell 5.1 can follow a junction in a recursive `Get-ChildItem`, `Copy-Item` or `Remove-Item`. Thus the Windows script uses its own list function (`Get-OwnFiles`) for the copy, the manifest, the ZIP and the deletion.
+
+Tests of version 3 (6 October 2026): a library folder with a link to a file and a link to a folder outside the test. Both scripts copied only the real file, and the files that the links point to did not change. With `TMPDIR=/`, a relative `TMPDIR` or a missing folder, the macOS script stopped before it wrote anything. With `TMPDIR=/`, the Windows script (PowerShell 7 on macOS) also stopped. The refusal to run as root is not tested.
+
+Tests of version 2 (both scripts, 6 October 2026): the MBR values in 512-byte units with a reported block of 512 and of 2048 bytes, the MBR values in 2048-byte units with a reported block of 512 bytes, a partition without the STOP banner, and the APM image. Each run gave the expected partition, and both scripts gave the same bytes. No temporary folder was left. With a temporary folder that does not exist, the macOS script stopped with an error.
+
+The Windows script ran the same tests in PowerShell 7.6 on macOS. Its output files were byte for byte the same as the output of the macOS script. Its C# part compiles, and the script parses without errors.
+
+Not tested: the real path with a connected iPod. On macOS, that is `diskutil` and `sudo`. On Windows, that is `Get-Disk`, `CreateFile`, the administrator check, and Windows PowerShell 5.1. The first result from an iPod owner is that test.
+
 ## RepriseOS: a working method for later classic models
 
 Two public projects change the Apple firmware of the iPod classic. This project read their documents on 6 October 2026. It did not run or verify them.

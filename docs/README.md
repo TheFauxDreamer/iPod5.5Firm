@@ -44,6 +44,7 @@ Use this table to find the documents to update:
 | A new pane, button or app function | [app-and-device.md](app-and-device.md), [../README.md](../README.md) |
 | `build-app.sh`, `install-emulator.sh` or the emulator patch | [app-and-device.md](app-and-device.md), [../re/emulator.md](../re/emulator.md) |
 | A new Ghidra or emulator result | The note in [../re/](../re/), then [firmware-functions.md](firmware-functions.md) |
+| `re/collect-ipod-info.sh`, `re/collect-ipod-info.ps1` or their page template | Run `python3 re/build-collect-page.py` to build `re/collect-ipod-info.html` again (the test `tests/test_collect_page.py` checks it). Update [../re/ipod-classic-6g.md](../re/ipod-classic-6g.md#data-from-a-real-ipod-classic). |
 | A script in `re/ghidra-scripts/` or `re/find-pattern.py` | [ghidra-guide.md](ghidra-guide.md) (section 2 and the recipes), [firmware-functions.md](firmware-functions.md) (the tools table) |
 | A hook site of a patch | The appendix of [ghidra-guide.md](ghidra-guide.md): make the signature again with `MakeSignature.java` |
 | A test on the real iPod | [safety.md](safety.md) (test status), [modifications.md](modifications.md) (test status), the note in [../re/](../re/) |

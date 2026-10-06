@@ -44,6 +44,14 @@ This rule is mandatory. Each change to the code must update the documents that i
 
 If the code and a document do not agree, the code is correct. Correct the document.
 
+## Everything stays local
+
+This rule is mandatory. Never publish a document, a page, a report or any other file to a web service. This includes claude.ai Artifacts and Claude Docs.
+
+- Write documents as Markdown files in `docs/` or `re/`.
+- Write a page for other people as one self-contained `.html` file in the repository. Put all CSS and JavaScript in the file. Do not load fonts, scripts or styles from the internet.
+- The owner shares the files.
+
 ## Other rules
 
 - Each feature that operates on the iPod or on the firmware must have a user interface in the iPodFirm app. A command-line tool alone is not sufficient.
