@@ -31,7 +31,8 @@ The app has these functions:
 - Show the recovery steps, and get the Apple firmware for a restore with Finder.
 - Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
 - Switch code patches on or off (Patches pane). The patches are in [patches/](patches/).
-- Write the album thumbnail file to the iPod for the `album-art` patch.
+- Write the album and playlist thumbnail file to the iPod for the `album-art` patch.
+- Set a custom image for each playlist for the `album-art` patch.
 - Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane).
 - Show a different version on the About screen of the iPod, for example 1.3.1 (Patches pane). This setting is off by default. iTunes and Finder continue to see version 1.3.
 
@@ -254,12 +255,21 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 
 | Patch | Function | Status |
 |---|---|---|
-| `album-art` | Shows a 20 × 20 thumbnail of the album artwork at the left of each album in the lists. | Tested in the emulator with 200 real songs in 28 albums. Working on real iPod, bit buggy when a song name matches album name. |
+| `album-art` | Shows a 20 × 20 thumbnail at the left of each album and each playlist in the lists. | Tested in the emulator with 200 real songs in 28 albums. Working on real iPod, bit buggy when a song name matches album name. |
 | `flash-keep-awake` | SSD mode for flash storage (iFlash, CompactFlash and SSD adapters). Keeps the storage on for 30 minutes after each access, not for 1 second. Starts the storage at once when the iPod wakes from sleep. Waits 0.5 s before the storage power goes off. On a hard drive, the patch does nothing. |
 | `flash-wake-on-input` | For flash storage. Starts the storage at once when you press a button after a long pause. After a start, it does not examine the storage again for 30 minutes. A turn of the wheel does not start the storage. Switch it on if the first song after a long pause starts late. |
 | `backlight-60s` | The Backlight Timer menu has a 60 Seconds item in place of 2 Seconds. | Menu tested in the emulator. Not tested on a real iPod. |
 
 The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary: the patch finds the new file when you scroll through a list.
+
+A playlist gets a thumbnail too. The Patches pane shows the playlists of the connected iPod, below "Write Thumbnails to iPod":
+
+- A playlist without a custom image shows a collage of the covers of its first four albums. If the playlist has fewer than four albums, it shows the cover of the first album.
+- To set a custom image, click "Choose Image…" or drag an image onto the playlist. iPodFirm uses the centre square of the image.
+- To remove the custom image, click "Use Automatic".
+- After a change, click "Write Thumbnails to iPod" again.
+
+iPodFirm keeps the custom images on the iPod, in `iPod_Control/iTunes/iPodFirmPlaylistArt/`. Thus they stay with the iPod. A playlist and an album with the same name have different thumbnails.
 
 The patch draws a thumbnail only in the rows of a list. In Now Playing, RetailOS shows its own large artwork from `iPod_Control/Artwork/ArtworkDB`. Finder writes that database when it syncs music with artwork.
 

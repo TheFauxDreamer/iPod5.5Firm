@@ -100,10 +100,12 @@ public enum MusicImport {
     }
 
     /// Write iPod_Control/iTunes/iPodFirmAlbumArt on a mounted iPod, from its own database and music files.
-    public static func writeThumbnails(volume: URL, progress: ((Int, Int) -> Void)? = nil) throws -> (albums: Int, covers: Int) {
+    /// A playlist gets its custom image (see `setPlaylistArt`), or a collage of the covers of its albums.
+    public static func writeThumbnails(volume: URL, progress: ((Int, Int) -> Void)? = nil) throws
+        -> (albums: Int, covers: Int, playlists: Int, playlistArt: Int) {
         let itunes = volume.appendingPathComponent("iPod_Control/iTunes")
         let db = [UInt8](try Data(contentsOf: itunes.appendingPathComponent("iTunesDB")))
-        let tracks = ITunesDB.readTracks(db)
+        let tracks = ITunesDB.readTrackRecords(db)
         guard !tracks.isEmpty else { throw FirmwareError("The iPod music database has no tracks, or iPodFirm cannot read it.") }
         var firstFile = [String: [String]]()
         for t in tracks where !t.album.isEmpty { firstFile[t.album, default: []].append(t.path) }
@@ -116,8 +118,117 @@ public enum MusicImport {
                 if let c = cover(volume.appendingPathComponent(rel)) { covers[album] = c; break }
             }
         }
-        try Data(AlbumArt.build(covers)).write(to: itunes.appendingPathComponent(AlbumArt.fileName), options: .atomic)
-        return (albums.count, covers.count)
+        let art = playlistArt(volume: volume, db: db, tracks: tracks, albumCovers: covers)
+        var entries = covers
+        for (name, data) in art { entries[AlbumArt.playlistKey(name)] = data }
+        try Data(AlbumArt.build(entries)).write(to: itunes.appendingPathComponent(AlbumArt.fileName), options: .atomic)
+        return (albums.count, covers.count, ITunesDB.readPlaylists(db).count, art.count)
+    }
+
+    // MARK: playlist artwork
+
+    /// A playlist on the iPod and the image that its row shows.
+    public struct PlaylistArt: Identifiable {
+        public var name: String
+        public var isCustom: Bool
+        public var image: Data?          // PNG or JPEG; nil: no custom image and no album covers
+        public var id: String { name }
+    }
+
+    /// The playlists of the iPod at `volume`, each with its custom image or its automatic collage.
+    public static func playlists(volume: URL) throws -> [PlaylistArt] {
+        let db = [UInt8](try Data(contentsOf: volume.appendingPathComponent("iPod_Control/iTunes/iTunesDB")))
+        let tracks = ITunesDB.readTrackRecords(db)
+        let art = playlistArt(volume: volume, db: db, tracks: tracks, albumCovers: [:]) { path in
+            cover(volume.appendingPathComponent(path.split(separator: ":").joined(separator: "/")))
+        }
+        return ITunesDB.readPlaylists(db).map { p in
+            PlaylistArt(name: p.name, isCustom: customPlaylistArt(volume: volume, name: p.name) != nil, image: art[p.name])
+        }
+    }
+
+    /// The image for each playlist: the custom image, or a collage of the first four album covers.
+    /// `albumCovers` maps an album name to its cover. `loadCover` reads the cover of a track file
+    /// (iPod path with colons) for an album that is not in `albumCovers`.
+    static func playlistArt(volume: URL, db: [UInt8], tracks: [(id: UInt32, album: String, path: String)],
+                            albumCovers: [String: Data], loadCover: ((String) -> Data?)? = nil) -> [String: Data] {
+        var byID = [UInt32: (album: String, path: String)]()
+        for t in tracks { byID[t.id] = (t.album, t.path) }
+        var out = [String: Data]()
+        for p in ITunesDB.readPlaylists(db) where !p.name.isEmpty && out[p.name] == nil {
+            if let custom = customPlaylistArt(volume: volume, name: p.name) {
+                out[p.name] = custom
+                continue
+            }
+            var seen = Set<String>(), images = [Data]()
+            for id in p.trackIDs {
+                guard images.count < 4, let t = byID[id], !t.album.isEmpty, !seen.contains(t.album) else { continue }
+                if let c = albumCovers[t.album] ?? loadCover?(t.path) {
+                    seen.insert(t.album)
+                    images.append(c)
+                }
+            }
+            if let c = collage(images) { out[p.name] = c }
+        }
+        return out
+    }
+
+    /// A 2×2 PNG from the first four images. With fewer than four images, the first image.
+    public static func collage(_ images: [Data], side: Int = 200) -> Data? {
+        guard let first = images.first else { return nil }
+        guard images.count >= 4 else { return first }
+        var buf = [UInt8](repeating: 0, count: side * side * 4)
+        guard let ctx = CGContext(data: &buf, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+        else { return first }
+        ctx.interpolationQuality = .high
+        let half = CGFloat(side) / 2
+        for (i, data) in images.prefix(4).enumerated() {
+            guard let img = ArtworkDB.image(data) else { continue }
+            let s = min(img.width, img.height)
+            let square = img.cropping(to: CGRect(x: (img.width - s) / 2, y: (img.height - s) / 2, width: s, height: s)) ?? img
+            // CoreGraphics has y up: images 0 and 1 go in the top row.
+            ctx.draw(square, in: CGRect(x: CGFloat(i % 2) * half, y: CGFloat(1 - i / 2) * half, width: half, height: half))
+        }
+        return ctx.makeImage().flatMap(ImageCodec.pngData) ?? first
+    }
+
+    static func playlistArtURL(volume: URL, name: String) -> URL {
+        volume.appendingPathComponent("iPod_Control/iTunes/\(AlbumArt.playlistArtFolder)")
+            .appendingPathComponent(String(format: "%08x.png", AlbumArt.fnv1a(name)))
+    }
+
+    /// The custom image of a playlist on the iPod, or nil.
+    public static func customPlaylistArt(volume: URL, name: String) -> Data? {
+        try? Data(contentsOf: playlistArtURL(volume: volume, name: name))
+    }
+
+    /// Keep `image` (any image file) as the custom image of a playlist on the iPod. iPodFirm keeps
+    /// the centre square, at a maximum of 200 × 200 pixels.
+    public static func setPlaylistArt(volume: URL, name: String, image: URL) throws {
+        let img = try ImageCodec.load(image)
+        let s = min(img.width, img.height), side = min(s, 200)
+        let square = img.cropping(to: CGRect(x: (img.width - s) / 2, y: (img.height - s) / 2, width: s, height: s)) ?? img
+        var buf = [UInt8](repeating: 0, count: side * side * 4)
+        guard let ctx = CGContext(data: &buf, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue),
+              side > 0 else { throw FirmwareError("iPodFirm cannot read the image \(image.lastPathComponent).") }
+        ctx.interpolationQuality = .high
+        ctx.setFillColor(CGColor(gray: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: side, height: side))     // a transparent image gets a white background
+        ctx.draw(square, in: CGRect(x: 0, y: 0, width: side, height: side))
+        guard let png = ctx.makeImage().flatMap(ImageCodec.pngData) else {
+            throw FirmwareError("iPodFirm cannot read the image \(image.lastPathComponent).")
+        }
+        let url = playlistArtURL(volume: volume, name: name)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try png.write(to: url, options: .atomic)
+    }
+
+    /// Remove the custom image of a playlist. The playlist then gets the automatic collage.
+    public static func removePlaylistArt(volume: URL, name: String) throws {
+        let url = playlistArtURL(volume: volume, name: name)
+        if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
     }
 }
 

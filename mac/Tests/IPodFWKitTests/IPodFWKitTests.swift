@@ -423,6 +423,8 @@ final class PatchAndArtTests: XCTestCase {
         for bad in ["", "1", "x", "1.16", "1.3.16", "256.0", "1..3", "1.3.1.1", "-1.3", "+1.3"] {
             XCTAssertNil(FirmwareVersion(bad), bad)
         }
+        XCTAssertEqual(FirmwareVersion(major: 1, minor: 3, fix: 1, letters: "abrs").description, "1.3.1abrs")
+        XCTAssertEqual(FirmwareVersion(major: 1, minor: 3, fix: 0, letters: "k").description, "1.3k")
     }
 
     /// The About-screen version: only the two mov instructions at 0x9ee90 change.
@@ -437,6 +439,33 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertEqual((0..<osos.count).filter { osos[$0] != out[$0] }, [0x9ee94])
         XCTAssertEqual(le32(out, 0x175ae4), 0xe3a0_2030)   // VisibleBuildID stays 1.3
         XCTAssertThrowsError(try FirmwareVersion.apply(.stock, to: &out))
+    }
+
+    /// The About-screen version with letters: only FUN_0009ee70 changes, and it has the text.
+    func testVersionLettersChangeOnlyTheAboutFunction() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        var out = osos
+        try FirmwareVersion.apply(FirmwareVersion(major: 1, minor: 3, fix: 1, letters: "abrs"), to: &out)
+        XCTAssertEqual(out.count, osos.count)
+        XCTAssertTrue((0..<osos.count).filter { osos[$0] != out[$0] }.allSatisfy { (0x9ee70..<0x9eed8).contains($0) })
+        XCTAssertEqual(le32(out, 0x9ee88), 0xebff_ceae)                 // bl 0x92948
+        XCTAssertEqual(le32(out, 0x9ee94), 0xebff_d18a)                 // bl 0x934c4
+        XCTAssertEqual(Array(out[0x9eea0..<0x9eeaa]), Array("1.3.1abrs\0".utf8))
+        XCTAssertEqual(le32(out, 0x175ae4), 0xe3a0_2030)                // VisibleBuildID stays 1.3
+        XCTAssertThrowsError(try FirmwareVersion.apply(FirmwareVersion(major: 1, minor: 3, fix: 1, letters: "a"), to: &out))
+        var copy = osos
+        XCTAssertThrowsError(try FirmwareVersion.apply(FirmwareVersion(major: 1, minor: 3, fix: 0, letters: "A"), to: &copy))
+        XCTAssertThrowsError(try FirmwareVersion.apply(FirmwareVersion(major: 1, minor: 3, fix: 0, letters: String(repeating: "a", count: 22)), to: &copy))
+        XCTAssertEqual(copy, osos)
+    }
+
+    /// Each patch letter is one letter a–z, and no two patches have the same letter.
+    func testPatchVersionLetters() {
+        let letters = Patcher.list(in: Self.repo.appendingPathComponent("patches")).compactMap(\.spec.version_letter)
+        XCTAssertFalse(letters.isEmpty)
+        XCTAssertEqual(Set(letters).count, letters.count)
+        for l in letters { XCTAssertTrue(l.count == 1 && ("a"..."z").contains(l), l) }
     }
 
     /// The original drives are 30, 60 and 80 GB. A size within 5 GB of one of them gives a warning.
@@ -457,6 +486,54 @@ final class PatchAndArtTests: XCTestCase {
         let read = ITunesDB.readTracks(ITunesDB.build(tracks))
         XCTAssertEqual(read.map(\.album), tracks.map(\.album))
         XCTAssertEqual(read.map(\.path), tracks.map(\.path))
+    }
+
+    func testReadPlaylists() {
+        let tracks = (0..<6).map { DBTrack(title: "Song \($0)", artist: "A", album: "Album \($0 / 2)", path: ":iPod_Control:Music:F00:T\($0).m4a", size: 1, lengthMS: 1) }
+        let db = ITunesDB.build(tracks, playlists: [(name: "Album 0", tracks: [5, 0]), (name: "Road Trip ✓", tracks: [])])
+        let lists = ITunesDB.readPlaylists(db)
+        XCTAssertEqual(lists.map(\.name), ["Album 0", "Road Trip ✓"])     // the master playlist is not included
+        let ids = ITunesDB.readTrackRecords(db).map(\.id)
+        XCTAssertEqual(lists[0].trackIDs, [ids[5], ids[0]])
+        XCTAssertEqual(lists[1].trackIDs, [])
+        XCTAssertEqual(ITunesDB.readTracks(db).map(\.album), tracks.map(\.album))
+        XCTAssertEqual(le32(db, 8), UInt32(db.count))
+    }
+
+    func testPlaylistThumbnailKey() throws {
+        // The patch starts the hash of a playlist name after the byte 0x01 (same value as the Python version).
+        XCTAssertEqual(AlbumArt.fnv1a(AlbumArt.playlistKey("Charm")), 0x96a58adf)
+        XCTAssertNotEqual(AlbumArt.fnv1a(AlbumArt.playlistKey("Charm")), AlbumArt.fnv1a("Charm"))
+        func png(_ r: UInt8, _ g: UInt8, _ b: UInt8, _ w: Int) -> Data {
+            ImageCodec.pngData(ImageCodec.cgImage(rgba: (0..<(w * w)).flatMap { _ in [r, g, b, 255] }, width: w, height: w)!)!
+        }
+        XCTAssertNil(MusicImport.collage([]))
+        let red = png(255, 0, 0, 10)
+        XCTAssertEqual(MusicImport.collage([red, red]), red)        // fewer than four covers: the first cover
+        let c = ArtworkDB.image(MusicImport.collage([red, png(0, 255, 0, 10), png(0, 0, 255, 6), png(255, 255, 255, 8)], side: 20)!)!
+        XCTAssertEqual(c.width, 20)
+        XCTAssertEqual(c.height, 20)
+        let px = ImageCodec.rgba(c)
+        func at(_ x: Int, _ y: Int) -> [UInt8] { Array(px[(y * 20 + x) * 4..<(y * 20 + x) * 4 + 3]) }
+        XCTAssertEqual(at(2, 2), [255, 0, 0])                       // first cover: top left
+        XCTAssertEqual(at(17, 2), [0, 255, 0])                      // second cover: top right
+        XCTAssertEqual(at(2, 17), [0, 0, 255])                      // third cover: bottom left
+    }
+
+    func testPlaylistArtFiles() throws {
+        let volume = FileManager.default.temporaryDirectory.appendingPathComponent("ipodfirm-playlists-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: volume) }
+        try ITunesDB.makeLibrary(at: volume, songs: 1, tracks: 30, seconds: 1)
+        let image = volume.appendingPathComponent("wide.png")
+        try ImageCodec.pngData(ImageCodec.cgImage(rgba: (0..<(300 * 100)).flatMap { _ in [0, 0, 255, 255] }, width: 300, height: 100)!)!.write(to: image)
+        try MusicImport.setPlaylistArt(volume: volume, name: "Road Trip", image: image)
+        let custom = try XCTUnwrap(MusicImport.customPlaylistArt(volume: volume, name: "Road Trip"))
+        XCTAssertEqual(ArtworkDB.image(custom)?.width, 100)         // the centre square
+        let lists = try MusicImport.playlists(volume: volume)
+        XCTAssertEqual(lists.map(\.name), ["Test Album 1", "Road Trip"])
+        XCTAssertEqual(lists.map(\.isCustom), [false, true])
+        try MusicImport.removePlaylistArt(volume: volume, name: "Road Trip")
+        XCTAssertNil(MusicImport.customPlaylistArt(volume: volume, name: "Road Trip"))
     }
 
     func testAlbumArtFile() throws {

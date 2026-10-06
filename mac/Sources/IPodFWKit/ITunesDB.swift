@@ -79,7 +79,8 @@ public enum ITunesDB {
         return w.b
     }
 
-    public static func build(_ tracks: [DBTrack], libraryName: String = "iPod") -> [UInt8] {
+    /// `playlists` gives the name of each playlist and the indexes of its tracks in `tracks`.
+    public static func build(_ tracks: [DBTrack], libraryName: String = "iPod", playlists: [(name: String, tracks: [Int])] = []) -> [UInt8] {
         var rng = SystemRandomNumberGenerator()
         let now = UInt32(truncatingIfNeeded: Int(Date().timeIntervalSince1970) + 2_082_844_800)
         var w = Writer()
@@ -123,25 +124,29 @@ public enum ITunesDB {
         }
         w.closeChunk(mhsd1)
 
-        // mhsd type 2: playlists (the master playlist only)
+        // mhsd type 2: playlists (the master playlist first)
+        let lists = [(name: libraryName, tracks: Array(tracks.indices))] + playlists
         let mhsd2 = w.b.count
         w.tag("mhsd"); w.u32(96); w.u32(0); w.u32(2); w.zeros(80)
-        w.tag("mhlp"); w.u32(92); w.u32(1); w.zeros(80)
-        let mhyp = w.b.count
-        w.tag("mhyp"); w.u32(108); w.u32(0); w.u32(2); w.u32(UInt32(tracks.count))
-        w.u8(1); w.u8(0); w.u8(0); w.u8(0); w.u32(now); w.u64(rng.next())
-        w.u32(0); w.u16(1); w.u16(0); w.u32(0)
-        w.pad(to: 108, from: mhyp)
-        w.b += stringMHOD(1, libraryName)
-        w.b += longPlaylistMHOD()
-        for pos in 0..<tracks.count {
-            let mhip = w.b.count
-            w.tag("mhip"); w.u32(76); w.u32(0); w.u32(1); w.u32(0); w.u32(0); w.u32(UInt32(1000 + pos)); w.u32(0); w.u32(0)
-            w.zeros(40)
-            w.b += positionMHOD(UInt32(pos))
-            w.closeChunk(mhip)
+        w.tag("mhlp"); w.u32(92); w.u32(UInt32(lists.count)); w.zeros(80)
+        for (n, list) in lists.enumerated() {
+            let master = n == 0
+            let mhyp = w.b.count
+            w.tag("mhyp"); w.u32(108); w.u32(0); w.u32(master ? 2 : 1); w.u32(UInt32(list.tracks.count))
+            w.u8(master ? 1 : 0); w.u8(0); w.u8(0); w.u8(0); w.u32(now); w.u64(rng.next())
+            w.u32(0); w.u16(1); w.u16(0); w.u32(0)
+            w.pad(to: 108, from: mhyp)
+            w.b += stringMHOD(1, list.name)
+            if master { w.b += longPlaylistMHOD() }
+            for (pos, index) in list.tracks.enumerated() {
+                let mhip = w.b.count
+                w.tag("mhip"); w.u32(76); w.u32(0); w.u32(1); w.u32(0); w.u32(0); w.u32(UInt32(1000 + index)); w.u32(0); w.u32(0)
+                w.zeros(40)
+                w.b += positionMHOD(UInt32(pos))
+                w.closeChunk(mhip)
+            }
+            w.closeChunk(mhyp)
         }
-        w.closeChunk(mhyp)
         w.closeChunk(mhsd2)
         w.closeChunk(0)
         return w.b
@@ -150,6 +155,7 @@ public enum ITunesDB {
     /// Write `iPod_Control/{Music/F00/*.m4a, iTunes/iTunesDB}` under `dir`.
     /// `songs` AAC files (sine tones, made with afconvert). With `tracks` > `songs`, the extra
     /// tracks use the same files with their own titles and albums. Ten tracks make one album.
+    /// The library has two playlists. "Test Album 1" has the same name as an album.
     public static func makeLibrary(at dir: URL, songs: Int = 6, tracks: Int = 60, seconds: Int = 30) throws {
         let fm = FileManager.default
         let music = dir.appendingPathComponent("iPod_Control/Music/F00")
@@ -175,25 +181,35 @@ public enum ITunesDB {
                            path: ":iPod_Control:Music:F00:\(f.name)", size: f.size, lengthMS: UInt32(seconds * 1000),
                            trackNumber: UInt32(n % 10 + 1), trackCount: 10, year: 2006, genre: "Test")
         }
-        try Data(build(list)).write(to: itunes.appendingPathComponent("iTunesDB"))
+        let count = max(tracks, songs)
+        let playlists = [(name: "Test Album 1", tracks: Array(stride(from: 0, to: count, by: 7))),
+                         (name: "Road Trip", tracks: Array(stride(from: count - 1, through: 0, by: -3)))]
+        try Data(build(list, playlists: playlists)).write(to: itunes.appendingPathComponent("iTunesDB"))
         // A plain-colour cover for each test album, so that the album-art patch has artwork to show.
+        // The playlists get grey covers: a different colour from the album with the same name.
         var covers = [String: Data]()
+        func cover(_ c: (UInt8, UInt8, UInt8)) -> Data? {
+            let px: [UInt8] = (0..<(8 * 8)).flatMap { _ -> [UInt8] in [c.0, c.1, c.2, 255] }
+            return ImageCodec.cgImage(rgba: px, width: 8, height: 8, alpha: false).flatMap(ImageCodec.pngData)
+        }
         for album in Set(list.map(\.album)) {
             let n = Int(album.split(separator: " ").last ?? "1") ?? 1
-            let hue = CGFloat((n * 47) % 360) / 360
-            let c = NSColorLike.rgb(hue: hue)
-            let px: [UInt8] = (0..<(8 * 8)).flatMap { _ -> [UInt8] in [c.0, c.1, c.2, 255] }
-            if let img = ImageCodec.cgImage(rgba: px, width: 8, height: 8, alpha: false), let png = ImageCodec.pngData(img) {
-                covers[album] = png
-            }
+            covers[album] = cover(NSColorLike.rgb(hue: CGFloat((n * 47) % 360) / 360))
         }
+        for (i, p) in playlists.enumerated() { covers[AlbumArt.playlistKey(p.name)] = cover(i == 0 ? (90, 90, 90) : (200, 200, 200)) }
         try Data(AlbumArt.build(covers)).write(to: itunes.appendingPathComponent(AlbumArt.fileName))
     }
 
     /// Read (album, path) of each track in an iTunesDB. `path` is the iPod path with colons.
     public static func readTracks(_ db: [UInt8]) -> [(album: String, path: String)] {
+        readTrackRecords(db).map { ($0.album, $0.path) }
+    }
+
+    /// Read (track ID, album, path) of each track in an iTunesDB. The track ID is the value that the
+    /// playlists use.
+    public static func readTrackRecords(_ db: [UInt8]) -> [(id: UInt32, album: String, path: String)] {
         guard db.count > 12, Array(db[0..<4]) == Array("mhbd".utf8) else { return [] }
-        var out: [(String, String)] = []
+        var out: [(UInt32, String, String)] = []
         var p = Int(le32(db, 4))
         while p + 12 <= db.count {
             let tag = String(decoding: db[p..<p + 4], as: UTF8.self)
@@ -204,25 +220,72 @@ public enum ITunesDB {
                 for _ in 0..<Int(le32(db, p + 12)) {
                     guard q + 40 <= db.count, String(decoding: db[q..<q + 4], as: UTF8.self) == "mhod" else { break }
                     let kind = le32(db, q + 12), len = Int(le32(db, q + 8))
-                    if kind == 2 || kind == 3, le32(db, q + 24) == 1 || le32(db, q + 24) == 2 {
-                        let n = Int(le32(db, q + 28))
-                        let raw = Array(db[(q + 40)..<min(q + 40 + n, db.count)])
-                        let text = le32(db, q + 24) == 2 ? String(decoding: raw, as: UTF8.self)
-                            : String(decoding: stride(from: 0, to: raw.count - 1, by: 2).map { UInt16(raw[$0]) | UInt16(raw[$0 + 1]) << 8 }, as: UTF16.self)
+                    if kind == 2 || kind == 3, let text = mhodString(db, q) {
                         if kind == 2 { path = text } else { album = text }
                     }
                     q += len
                 }
-                out.append((album, path))
+                out.append((le32(db, p + 16), album, path))
                 p += total
             } else if tag == "mhsd" || tag == "mhlt" || tag == "mhbd" {
                 p += hlen
             } else {
                 p += max(total, 8)
-                if tag != "mhsd" && tag != "mhlt" { if tag == "mhlp" || tag == "mhyp" { break } }
+                if tag == "mhlp" || tag == "mhyp" { break }
             }
         }
         return out
+    }
+
+    /// Read the name and the track IDs of each playlist in an iTunesDB, in the order of the
+    /// database. The master playlist (the whole library) is not included.
+    public static func readPlaylists(_ db: [UInt8]) -> [(name: String, trackIDs: [UInt32])] {
+        guard db.count > 12, Array(db[0..<4]) == Array("mhbd".utf8) else { return [] }
+        var p = Int(le32(db, 4))
+        while p + 16 <= db.count, String(decoding: db[p..<p + 4], as: UTF8.self) == "mhsd" {
+            let hlen = Int(le32(db, p + 4)), total = Int(le32(db, p + 8))
+            guard total > 0 else { break }
+            if le32(db, p + 12) == 2 {
+                return readPlaylistList(db, from: p + hlen, to: min(p + total, db.count))
+            }
+            p += total
+        }
+        return []
+    }
+
+    static func readPlaylistList(_ db: [UInt8], from start: Int, to end: Int) -> [(name: String, trackIDs: [UInt32])] {
+        guard start + 12 <= end, String(decoding: db[start..<start + 4], as: UTF8.self) == "mhlp" else { return [] }
+        var out: [(String, [UInt32])] = []
+        var p = start + Int(le32(db, start + 4))
+        for _ in 0..<Int(le32(db, start + 8)) {
+            guard p + 21 <= end, String(decoding: db[p..<p + 4], as: UTF8.self) == "mhyp" else { break }
+            let hlen = Int(le32(db, p + 4)), total = Int(le32(db, p + 8))
+            guard total >= hlen, hlen > 0 else { break }
+            let hidden = db[p + 20] != 0
+            var name = "", ids = [UInt32]()
+            var q = p + hlen
+            while q + 12 <= min(p + total, end) {
+                let tag = String(decoding: db[q..<q + 4], as: UTF8.self), len = Int(le32(db, q + 8))
+                guard len > 0 else { break }
+                if tag == "mhod", le32(db, q + 12) == 1, let text = mhodString(db, q) { name = text }
+                if tag == "mhip", q + 28 <= end { ids.append(le32(db, q + 24)) }
+                q += len
+            }
+            if !hidden { out.append((name, ids)) }
+            p += total
+        }
+        return out
+    }
+
+    /// The text of a string mhod at `q`, or nil if it is not a string mhod.
+    static func mhodString(_ db: [UInt8], _ q: Int) -> String? {
+        guard q + 40 <= db.count else { return nil }
+        let encoding = le32(db, q + 24)
+        guard encoding == 1 || encoding == 2 else { return nil }
+        let n = Int(le32(db, q + 28))
+        let raw = Array(db[(q + 40)..<min(q + 40 + n, db.count)])
+        return encoding == 2 ? String(decoding: raw, as: UTF8.self)
+            : String(decoding: stride(from: 0, to: raw.count - 1, by: 2).map { UInt16(raw[$0]) | UInt16(raw[$0 + 1]) << 8 }, as: UTF16.self)
     }
 
     static func sineWAV(seconds: Int, frequency: Double) -> Data {

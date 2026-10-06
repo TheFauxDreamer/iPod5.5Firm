@@ -1,6 +1,7 @@
 {
   "name": "album-art",
-  "description": "Shows a thumbnail of the album artwork at the left of each album in the lists. The thumbnails come from the file iPod_Control\\iTunes\\iPodFirmAlbumArt, which iPodFirm writes.",
+  "version_letter": "a",
+  "description": "Shows a thumbnail at the left of each album and each playlist in the lists. The thumbnails come from the file iPod_Control\\iTunes\\iPodFirmAlbumArt, which iPodFirm writes.",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "load_address": "0x7358d0",
   "symbols": {

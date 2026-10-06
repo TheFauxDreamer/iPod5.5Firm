@@ -12,6 +12,7 @@ from PIL import Image
 MAGIC = b"IFAT"
 VERSION = 1
 DEFAULT_SIZE = 20
+PLAYLIST_PREFIX = "\x01"   # the patch hashes 0x01 and the name for a playlist row
 
 
 def fnv1a(text: str) -> int:
@@ -44,10 +45,12 @@ def rgb565(img: Image.Image, size: int) -> bytes:
     return bytes(out)
 
 
-def build(albums: dict[str, Image.Image], size: int = DEFAULT_SIZE) -> bytes:
-    """`albums` maps the album name (as the iPod shows it) to its artwork."""
+def build(albums: dict[str, Image.Image], size: int = DEFAULT_SIZE,
+          playlists: dict[str, Image.Image] | None = None) -> bytes:
+    """`albums` and `playlists` map the name (as the iPod shows it) to the artwork."""
     entries = {}
-    for name, img in albums.items():
+    items = list(albums.items()) + [(PLAYLIST_PREFIX + n, img) for n, img in (playlists or {}).items()]
+    for name, img in items:
         h = fnv1a(name)
         if h not in entries:                           # the first album wins if two names have the same hash
             entries[h] = rgb565(img, size)

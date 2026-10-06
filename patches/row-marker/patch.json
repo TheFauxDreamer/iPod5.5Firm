@@ -1,5 +1,6 @@
 {
   "name": "row-marker",
+  "version_letter": "r",
   "description": "Test patch. Draws a coloured bar at the left of each label in a list.",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "load_address": "0x7358d0",

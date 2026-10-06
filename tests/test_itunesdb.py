@@ -35,3 +35,16 @@ def test_every_chunk_size_is_consistent():
 def test_strings_are_utf16():
     db = build([Track(title="Ishtar ✓", artist="A", album="B", path=":x", size=1, length_ms=1)])
     assert "Ishtar ✓".encode("utf-16-le") in db
+
+
+def test_playlists():
+    db = build(tracks(5), playlists={"Mix": [4, 0], "Empty": []})
+    info = parse_counts(db)
+    assert info["size"] == len(db)
+    assert [(s["type"], s["list"], s["count"]) for s in info["sections"]] == [(1, "mhlt", 5), (2, "mhlp", 3)]
+    mix = db.index("Mix".encode("utf-16-le"))
+    mhyp = db.rindex(b"mhyp", 0, mix)
+    assert db[mhyp + 20] == 0                                    # not hidden: not the master playlist
+    assert struct.unpack_from("<I", db, mhyp + 16)[0] == 2
+    mhip = db.index(b"mhip", mhyp)
+    assert struct.unpack_from("<I", db, mhip + 24)[0] == 1004    # the track ID of tracks[4]

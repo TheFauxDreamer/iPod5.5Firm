@@ -28,6 +28,8 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var strings: [String: [String: String]]?
     /// A warning for an iPod that probably has the original hard drive (see IPodDisk.likelyOriginalHDD).
     public var hdd_warning: String?
+    /// One letter a–z that the About screen can show after the version (see FirmwareVersion.letters).
+    public var version_letter: String?
     /// true: the patch is part of a build step (for example the dark-mode switch) and is not shown
     /// in the list of patches.
     public var `internal`: Bool?

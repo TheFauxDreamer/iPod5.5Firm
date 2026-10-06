@@ -56,12 +56,19 @@ final class AppModel: ObservableObject {
     @Published var customVersion = UserDefaults.standard.string(forKey: "customVersion") ?? "1.3.1" {
         didSet { UserDefaults.standard.set(customVersion, forKey: "customVersion") }
     }
+    @Published var versionLettersOn = UserDefaults.standard.bool(forKey: "versionLettersOn") {
+        didSet { UserDefaults.standard.set(versionLettersOn, forKey: "versionLettersOn") }
+    }
     @Published var themeReport: ImportedTheme?
     /// The Pictures pane shows the pictures of the selected dark theme.
     @Published var picturesDark = false
     /// Increases when the app writes a theme file (an edit of a dark picture).
     @Published var themeRevision = 0
     @Published var thumbnailStatus: String?
+    /// The playlists of the connected iPod and their thumbnails (album-art patch).
+    @Published var playlistArt: [MusicImport.PlaylistArt] = []
+    /// True after a change to a playlist image that is not yet in the thumbnail file on the iPod.
+    @Published var playlistArtChanged = false
     @Published var helperSetupError: String?
     @AppStorage("requireTouchID") var requireTouchID = true
     @Published var showFullDiskAccessHelp = false
@@ -328,10 +335,12 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The version for the About screen: nothing when the toggle is off, the text is not valid or it is the Apple version.
+    /// The version for the About screen: the custom version (or 1.3) and the letters of the switched-on patches.
+    /// Nothing when the result is the Apple version.
     var activeVersion: FirmwareVersion? {
-        guard customVersionOn, let v = FirmwareVersion(customVersion), v != .stock else { return nil }
-        return v
+        var v = (customVersionOn ? FirmwareVersion(customVersion) : nil) ?? .stock
+        if versionLettersOn { v.letters = activePatches.compactMap(\.spec.version_letter).sorted().joined() }
+        return v == .stock ? nil : v
     }
 
     func isCompatible(_ t: ImportedTheme) -> Bool { editor?.originalOSOSHash == t.osos_sha256 }
@@ -474,22 +483,59 @@ final class AppModel: ObservableObject {
         return fw.data
     }
 
-    /// iPod_Control/iTunes/iPodFirmAlbumArt on the mounted iPod, from its own library.
-    func writeThumbnails() async {
-        guard let ipod = currentIPod else { return }
-        let volume = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: [.volumeNameKey], options: [])?
+    /// The mounted volume of the connected iPod, if it has a music database.
+    func ipodMusicVolume() -> URL? {
+        guard let ipod = currentIPod else { return nil }
+        return FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: [.volumeNameKey], options: [])?
             .first { url in
                 (try? url.resourceValues(forKeys: [.volumeNameKey]).volumeName) == ipod.volumeName &&
                 FileManager.default.fileExists(atPath: url.appendingPathComponent("iPod_Control/iTunes/iTunesDB").path)
             }
-        guard let volume else {
+    }
+
+    /// iPod_Control/iTunes/iPodFirmAlbumArt on the mounted iPod, from its own library.
+    func writeThumbnails() async {
+        guard currentIPod != nil else { return }
+        guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder, then try again.")
             return
         }
         do {
-            let r = try await work("Making album thumbnails from the music on the iPod…") { try MusicImport.writeThumbnails(volume: volume) }
-            thumbnailStatus = "\(r.covers) of \(r.albums) albums have a thumbnail (\(Date().formatted(date: .abbreviated, time: .shortened)))."
+            let r = try await work("Making album and playlist thumbnails from the music on the iPod…") { try MusicImport.writeThumbnails(volume: volume) }
+            thumbnailStatus = "\(r.covers) of \(r.albums) albums and \(r.playlistArt) of \(r.playlists) playlists have a thumbnail (\(Date().formatted(date: .abbreviated, time: .shortened)))."
+            playlistArtChanged = false
         } catch { fail("Couldn't write the thumbnails", error) }
+    }
+
+    /// Read the playlists of the connected iPod and their images.
+    func loadPlaylists() async {
+        guard let volume = ipodMusicVolume() else { playlistArt = []; return }
+        playlistArt = (try? await Task.detached(priority: .userInitiated) { try MusicImport.playlists(volume: volume) }.value) ?? []
+    }
+
+    func choosePlaylistArt(_ name: String) {
+        let p = NSOpenPanel()
+        p.allowedContentTypes = [.image]
+        p.message = "Choose an image for the playlist “\(name)”. iPodFirm uses the centre square."
+        if p.runModal() == .OK, let url = p.url { Task { await setPlaylistArt(name, from: url) } }
+    }
+
+    func setPlaylistArt(_ name: String, from url: URL) async {
+        guard let volume = ipodMusicVolume() else { return }
+        do {
+            try await work("Saving the image for “\(name)” on the iPod…") { try MusicImport.setPlaylistArt(volume: volume, name: name, image: url) }
+            playlistArtChanged = true
+            await loadPlaylists()
+        } catch { fail("Couldn't save the playlist image", error) }
+    }
+
+    func resetPlaylistArt(_ name: String) async {
+        guard let volume = ipodMusicVolume() else { return }
+        do {
+            try MusicImport.removePlaylistArt(volume: volume, name: name)
+            playlistArtChanged = true
+            await loadPlaylists()
+        } catch { fail("Couldn't remove the playlist image", error) }
     }
 
     // MARK: pictures
@@ -589,6 +635,8 @@ final class AppModel: ObservableObject {
         do {
             try await work("Ejecting \(ipod.volumeName ?? ipod.mediaName)…") { try Device.eject(ipod) }
             thumbnailStatus = nil
+            playlistArt = []
+            playlistArtChanged = false
             await refreshIPods()
         } catch { fail("Couldn't eject the iPod", error) }
     }

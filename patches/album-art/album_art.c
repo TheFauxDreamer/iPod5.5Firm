@@ -5,10 +5,12 @@
  *    title on the highlighted row from a cached image of the text, so the complete method is
  *    wrapped, not only its call to the general label draw function;
  *  - the general label class (type 0x1580, draw method 0x244924).
- * If the label shows an album name (element ID ALBUM_NAME_ID) and the text is the name of an
- * album in the thumbnail file, the wrapper moves the left edge of the label to the right, calls
- * the original method, and draws the thumbnail. A song title has a different element ID, thus a
- * song with the name of an album gets no thumbnail.
+ * If the label shows an album name (element ID ALBUM_NAME_ID) or a playlist name (element ID
+ * PLAYLIST_NAME_ID) and the text is in the thumbnail file, the wrapper moves the left edge of the
+ * label to the right, calls the original method, and draws the thumbnail. A song title has a
+ * different element ID, thus a song with the name of an album gets no thumbnail.
+ * The hash of a playlist name starts with the byte 0x01, thus a playlist and an album with the
+ * same name have different thumbnails.
  * After RECHECK_MISSES list labels without a thumbnail, the patch reads the file header again.
  * If the header changed (for example after a sync that added albums), it loads the file again.
  *
@@ -17,8 +19,8 @@
  *   0x04  u16 version (1), u16 thumbnail size S (pixels, square)
  *   0x08  u32 count N
  *   0x0C  u32 stamp: FNV-1a hash of the entries. It changes when the albums change.
- *   0x10  N entries { u32 FNV-1a hash of the UTF-8 album name, u32 file offset of the pixels },
- *         sorted by hash
+ *   0x10  N entries { u32 FNV-1a hash of the UTF-8 album name (or of 0x01 and the playlist
+ *         name), u32 file offset of the pixels }, sorted by hash
  *   then  N thumbnails of S*S RGB565 pixels, row by row
  */
 
@@ -55,6 +57,9 @@ int file_close(void *fh);
 #define LIST_CELL_CLASS 0x66b4dc          /* vtable of the parent of a label in a list row */
 #define VIEW_ELEMENT_ID 0x1c              /* u16: the layout element of a view, also its data property */
 #define ALBUM_NAME_ID   0x6421            /* element of the album name in an album list row */
+#define PLAYLIST_NAME_ID 0x6425           /* element of the playlist name in a playlist list row */
+#define FNV_BASIS       2166136261u
+#define PLAYLIST_BASIS  ((FNV_BASIS ^ 1u) * 16777619u)   /* the FNV-1a state after the byte 0x01 */
 
 typedef struct { unsigned hash, offset; } Entry;
 
@@ -70,9 +75,8 @@ static unsigned cache_next;
 static unsigned loaded_header[4];         /* the header of the loaded file */
 static unsigned misses;                   /* list labels without a thumbnail since the last check */
 
-static unsigned fnv1a(const char *s)
+static unsigned fnv1a(unsigned h, const char *s)
 {
-    unsigned h = 2166136261u;
     while (*s) {
         h ^= (unsigned char)*s++;
         h *= 16777619u;
@@ -272,6 +276,7 @@ static void draw_with_thumbnail(draw_fn original, void *view, const char *text, 
     const Entry *e = 0;
     const unsigned short *px;
     int height, *left, i;
+    unsigned id = *(unsigned short *)((char *)view + VIEW_ELEMENT_ID);
 
     if (state == -1 && ++retry >= 200) {      /* try again later: the file can be added by a sync */
         retry = 0;
@@ -284,14 +289,15 @@ static void draw_with_thumbnail(draw_fn original, void *view, const char *text, 
     }
     view_bounds(view, &r);
     height = r.bottom - r.top;
-    /* Only album names in rows of a list: at the left edge of the screen, with the height of a
-       list row. A song can have the same title as an album, but its label has a different ID. */
-    if (*(unsigned short *)((char *)view + VIEW_ELEMENT_ID) == ALBUM_NAME_ID &&
+    /* Only album and playlist names in rows of a list: at the left edge of the screen, with the
+       height of a list row. A song can have the same title as an album, but its label has a
+       different ID. */
+    if ((id == ALBUM_NAME_ID || id == PLAYLIST_NAME_ID) &&
         height >= (int)size && height <= (int)size + 12 &&
         r.left + *(int *)((char *)gc + GC_ORIGIN_X) <= 8) {
         /* Some draws pass a structure instead of the text; it starts with pointer bytes. */
         if (text && (unsigned char)*text >= 0x20) {
-            e = find(fnv1a(text));
+            e = find(fnv1a(id == PLAYLIST_NAME_ID ? PLAYLIST_BASIS : FNV_BASIS, text));
             i = view_slot(view, e != 0);
             if (i >= 0) {
                 slot_entry[i] = e;

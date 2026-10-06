@@ -3,7 +3,8 @@
 Layout follows libgpod's itdb_itunesdb.c writer (mk_mhbd, mk_mhit, mk_mhod,
 write_playlist, ...): mhbd → mhsd(1: tracks) → mhlt → mhit + string mhods,
 then mhsd(2: playlists) → mhlp → master mhyp with one mhip (+ position mhod)
-per track. No library index mhods (52/53); RetailOS builds its own lists.
+per track, then one mhyp for each other playlist. No library index mhods (52/53); RetailOS
+builds its own lists.
 """
 
 from __future__ import annotations
@@ -89,7 +90,8 @@ def _mhit(tid: int, t: Track, dbid: int, now: int, mhods: list[bytes]) -> bytes:
     return bytes(h) + body
 
 
-def build(tracks: list[Track], library_name: str = "iPod") -> bytes:
+def build(tracks: list[Track], library_name: str = "iPod", playlists: dict[str, list[int]] | None = None) -> bytes:
+    """`playlists` maps the name of a playlist to the indexes of its tracks in `tracks`."""
     rnd = random.Random(0x1505)
     now = _mac_now()
     db_id = rnd.getrandbits(64)
@@ -115,22 +117,26 @@ def build(tracks: list[Track], library_name: str = "iPod") -> bytes:
         out += _mhit(1000 + i, t, t.dbid or dbid, now, mhods)
     _patch_size(out, mhsd1)
 
-    # mhsd type 2: playlists (master playlist only)
+    # mhsd type 2: playlists (the master playlist first)
+    lists = [(library_name, list(range(len(tracks))))] + list((playlists or {}).items())
     mhsd2 = len(out)
     out += b"mhsd" + struct.pack("<III", 96, 0, 2) + bytes(80)
-    out += b"mhlp" + struct.pack("<II", 92, 1) + bytes(80)
-    mhyp = len(out)
-    out += b"mhyp" + struct.pack("<IIII", 108, 0, 2, len(tracks))
-    out += bytes([1, 0, 0, 0]) + struct.pack("<I", now) + struct.pack("<Q", rnd.getrandbits(64))
-    out += struct.pack("<IHHI", 0, 1, 0, 0) + bytes(60)
-    out += _string_mhod(MHOD_TITLE, library_name)
-    out += _long_playlist_mhod()
-    for pos in range(len(tracks)):
-        mhip = len(out)
-        out += b"mhip" + struct.pack("<IIIIIIII", 76, 0, 1, 0, 0, 1000 + pos, 0, 0) + bytes(40)
-        out += _position_mhod(pos)
-        _patch_size(out, mhip)
-    _patch_size(out, mhyp)
+    out += b"mhlp" + struct.pack("<II", 92, len(lists)) + bytes(80)
+    for n, (name, items) in enumerate(lists):
+        master = n == 0
+        mhyp = len(out)
+        out += b"mhyp" + struct.pack("<IIII", 108, 0, 2 if master else 1, len(items))
+        out += bytes([1 if master else 0, 0, 0, 0]) + struct.pack("<I", now) + struct.pack("<Q", rnd.getrandbits(64))
+        out += struct.pack("<IHHI", 0, 1, 0, 0) + bytes(60)
+        out += _string_mhod(MHOD_TITLE, name)
+        if master:
+            out += _long_playlist_mhod()
+        for pos, index in enumerate(items):
+            mhip = len(out)
+            out += b"mhip" + struct.pack("<IIIIIIII", 76, 0, 1, 0, 0, 1000 + index, 0, 0) + bytes(40)
+            out += _position_mhod(pos)
+            _patch_size(out, mhip)
+        _patch_size(out, mhyp)
     _patch_size(out, mhsd2)
 
     _patch_size(out, 0)
@@ -168,6 +174,7 @@ def make_library(outdir, songs: int = 6, total_tracks: int | None = None, second
 
     `songs` distinct AAC files (sine tones, encoded with macOS afconvert). `total_tracks` > songs
     simulates a big library: extra tracks reuse those files under their own titles and albums.
+    The library has two playlists. "Test Album 1" has the same name as an album.
     """
     import math
     import os
@@ -210,5 +217,6 @@ def make_library(outdir, songs: int = 6, total_tracks: int | None = None, second
             title=f"Test Song {n + 1}", artist=f"Test Artist {album_no // 5 + 1}", album=f"Test Album {album_no + 1}",
             path=":" + ":".join(f.relative_to(out).parts), size=os.path.getsize(f), length_ms=seconds * 1000,
             track_nr=track_no + 1, tracks=10, year=2006, genre="Test"))
-    (itunes / "iTunesDB").write_bytes(build(tracks))
+    playlists = {"Test Album 1": list(range(0, total, 7)), "Road Trip": list(range(total - 1, -1, -3))}
+    (itunes / "iTunesDB").write_bytes(build(tracks, playlists=playlists))
     return {"songs": songs, "tracks": total, "path": str(out)}

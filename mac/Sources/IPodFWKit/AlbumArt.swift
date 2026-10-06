@@ -8,6 +8,12 @@ import ImageIO
 public enum AlbumArt {
     public static let fileName = "iPodFirmAlbumArt"
     public static let defaultSize = 20
+    /// The folder on the iPod (in iPod_Control/iTunes) for the custom playlist images.
+    public static let playlistArtFolder = "iPodFirmPlaylistArt"
+
+    /// The name in the thumbnail file for a playlist. The patch hashes the byte 0x01 and the name
+    /// for a playlist row, thus a playlist and an album with the same name have different thumbnails.
+    public static func playlistKey(_ name: String) -> String { "\u{1}" + name }
 
     public static func fnv1a(_ s: String) -> UInt32 {
         var h: UInt32 = 2_166_136_261
@@ -33,7 +39,8 @@ public enum AlbumArt {
         return out
     }
 
-    /// `albums` maps the album name (as the iPod shows it) to the encoded image data (JPEG or PNG).
+    /// `albums` maps the album name (as the iPod shows it) or the `playlistKey` of a playlist to the
+    /// encoded image data (JPEG or PNG).
     public static func build(_ albums: [String: Data], size: Int = defaultSize) -> [UInt8] {
         var entries = [UInt32: [UInt8]]()
         for (name, data) in albums {

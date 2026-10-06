@@ -1,5 +1,6 @@
 {
   "name": "flash-wake-on-input",
+  "version_letter": "w",
   "description": "For flash storage (iFlash, CompactFlash and SSD adapters). When you press a button after a long pause, the iPod starts the storage at once. Thus the storage is ready when you choose a song. After a start, the iPod does not examine the storage again for 30 minutes. A turn of the wheel does not start the storage. Use this patch with flash-keep-awake if the first song after a long pause starts late. Use it only with flash storage.",
   "hdd_warning": "This patch is for flash storage. On the original hard drive, each button press after a long pause starts the disk, and the disk turns for 30 minutes. This uses more battery and causes more wear.",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",

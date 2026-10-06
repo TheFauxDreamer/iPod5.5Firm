@@ -1,6 +1,7 @@
 import AppKit
 import IPodFWKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Code patches: changes to the behaviour of the iPod software. Each one can be switched on or off.
 struct PatchesView: View {
@@ -45,6 +46,9 @@ struct PatchRow: View {
         VStack(alignment: .leading, spacing: 6) {
             Toggle(isOn: on) {
                 Text(patch.spec.description ?? patch.spec.name).fixedSize(horizontal: false, vertical: true)
+            }
+            if let letter = patch.spec.version_letter {
+                Text("Version letter: \(letter)").font(.caption).foregroundStyle(.secondary)
             }
             if let warning = patch.spec.hdd_warning {
                 if let gb = model.currentIPod?.likelyOriginalHDD {
@@ -94,7 +98,7 @@ struct AlbumArtControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("The iPod also needs a thumbnail file made from its own music. Write it after you flash this patch, and again after each sync that adds albums. You do not have to restart the iPod: the new thumbnails show after you scroll through a list.")
+            Text("The iPod also needs a thumbnail file made from its own music. Write it after you flash this patch, and again after each sync that adds albums or playlists. You do not have to restart the iPod: the new thumbnails show after you scroll through a list.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("Write Thumbnails to iPod") { Task { await model.writeThumbnails() } }
@@ -104,6 +108,65 @@ struct AlbumArtControls: View {
                 if model.currentIPod == nil { Text("Connect the iPod.").font(.caption).foregroundStyle(.secondary) }
             }
             if let s = model.thumbnailStatus { Label(s, systemImage: "checkmark.circle").font(.caption) }
+            if !model.playlistArt.isEmpty { PlaylistArtList() }
+        }
+        .task(id: model.currentIPod?.disk) { await model.loadPlaylists() }
+    }
+}
+
+/// The thumbnail of each playlist: a custom image, or a collage of the covers of its first four albums.
+struct PlaylistArtList: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Playlist Artwork").font(.headline).padding(.top, 8)
+            Text("A playlist without a custom image shows the covers of its first four albums. To set a custom image, click Choose Image or drag an image onto the playlist. iPodFirm keeps the custom images on the iPod.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if model.playlistArtChanged {
+                Label("Click Write Thumbnails to iPod to send the changes to the iPod.", systemImage: "exclamationmark.circle")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+            ForEach(model.playlistArt) { p in PlaylistArtRow(playlist: p) }
+        }
+    }
+}
+
+struct PlaylistArtRow: View {
+    @EnvironmentObject var model: AppModel
+    let playlist: MusicImport.PlaylistArt
+    @State private var targeted = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Group {
+                if let data = playlist.image, let img = NSImage(data: data) {
+                    Image(nsImage: img).resizable().interpolation(.high).aspectRatio(1, contentMode: .fill)
+                } else {
+                    Image(systemName: "music.note.list").foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.secondary.opacity(0.15))
+                }
+            }
+            .frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 4))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(playlist.name.isEmpty ? "(No name)" : playlist.name).lineLimit(1)
+                Text(playlist.isCustom ? "Custom image" : playlist.image == nil ? "No album covers" : "Automatic")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Choose Image…") { model.choosePlaylistArt(playlist.name) }
+            Button("Use Automatic") { Task { await model.resetPlaylistArt(playlist.name) } }
+                .disabled(!playlist.isCustom)
+        }
+        .padding(4)
+        .background(RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: targeted ? 2 : 0))
+        .onDrop(of: [.fileURL], isTargeted: $targeted) { providers in
+            guard let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                Task { @MainActor in await model.setPlaylistArt(playlist.name, from: url) }
+            }
+            return true
         }
     }
 }
@@ -159,7 +222,7 @@ struct AppearanceSection: View {
     }
 }
 
-/// A different version on the About screen of the iPod. Off by default.
+/// A different version on the About screen of the iPod, and letters for the switched-on patches. Off by default.
 struct VersionSection: View {
     @EnvironmentObject var model: AppModel
 
@@ -169,16 +232,23 @@ struct VersionSection: View {
             if model.customVersionOn {
                 TextField("Version", text: $model.customVersion, prompt: Text("1.3.1"))
                     .frame(maxWidth: 260)
-                if let v = FirmwareVersion(model.customVersion) {
-                    Text("Settings > About on the iPod shows \"\(v.description)\".")
-                        .font(.caption).foregroundStyle(.secondary)
-                } else {
+                if FirmwareVersion(model.customVersion) == nil {
                     Label("This version is not valid. Use the format 1.3 or 1.3.1. The first number is 0–255. The other numbers are 0–15. The firmware keeps version 1.3.",
                           systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Text("This changes only the text on the iPod. iTunes and Finder continue to see version 1.3.")
+            Toggle("Add a letter for each switched-on patch", isOn: $model.versionLettersOn)
+            if let v = model.activeVersion {
+                Text("Settings > About on the iPod shows \"\(v.description)\".")
+                    .font(.caption).foregroundStyle(.secondary)
+                if v.description.count > FirmwareVersion.maxTextLength {
+                    Label("This version has more than \(FirmwareVersion.maxTextLength) characters. The About screen cannot show it. Switch off some patches or the letters.",
+                          systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Text("This changes only the text on the iPod. iTunes and Finder continue to see version 1.3. The letter of each patch shows below the patch.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         } header: { Text("Software Version") }
     }

@@ -128,7 +128,9 @@ The patch is in [patches/album-art/](../patches/album-art/). It is complete and 
   | Playlist | 0x6425 |
   | Menu item | 0x301 |
 
-- The album-art patch draws a thumbnail only for the element ID 0x6421. Before this check, a song with the same title as an album got the thumbnail.
+- The album-art patch draws a thumbnail only for the element IDs 0x6421 (album) and 0x6425 (playlist). Before this check, a song with the same title as an album got the thumbnail.
+- The playlist label uses the ID 0x6425 in the normal row and in the highlighted row. The emulator confirmed this on 2026-10-06: the highlighted row showed the playlist thumbnail, not the album thumbnail. On-The-Go has no thumbnail, because iTunesDB does not contain it.
+- For a playlist row, the patch calculates the FNV-1a hash of the byte 0x01 and the name. Thus a playlist and an album with the same name have different entries in the thumbnail file.
 - The ">" arrow is picture 24268 (8 × 11) in a picture view (class 0x66d89c, element 0x5ecc). In a song row, the same place has element 0x63eb: the speaker (picture 24273) for the song that plays, or no picture. A row without an arrow has a picture view with a width of 0.
 - The emulator often ignores a `wheel` command. Make a screenshot after each `wheel` command, and send the command again if the highlight did not move.
 - The emulator `make-disk` command makes the osos length 0x600 bytes too short. `ipodfw.emudrive` and `EmulatorDrive` correct this.

@@ -49,3 +49,13 @@ def test_thumbnail_file_stamp():
     assert stamp == albumart.stamp(a[16:16 + 16]) and stamp != 0
     assert struct.unpack_from("<I", b, 12)[0] != stamp      # other albums: other stamp
     assert albumart.build({"Burials": red, "Charm": red}, 4) == a   # same albums: same file
+
+
+def test_thumbnail_file_playlists():
+    from ipodfw import albumart
+    red, blue = Image.new("RGB", (2, 2), (255, 0, 0)), Image.new("RGB", (2, 2), (0, 0, 255))
+    f = albumart.build({"Charm": red}, 4, playlists={"Charm": blue})
+    entries = albumart.parse(f)
+    assert set(entries) == {albumart.fnv1a("Charm"), albumart.fnv1a("\x01Charm")}
+    assert albumart.fnv1a("\x01Charm") == 0x96A58ADF            # same value as the Swift version and the patch
+    assert struct.unpack_from("<H", entries[albumart.fnv1a("\x01Charm")])[0] == 0x001F   # blue in RGB565
