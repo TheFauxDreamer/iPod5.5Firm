@@ -124,7 +124,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 **Effect.** Each row in an album list and in a playlist list shows a 20 × 20 thumbnail at its left side.
 
-**Load address.** 0x7358d0. The compiled code is 3168 bytes. Its area ends at 0x73658c.
+**Load address.** 0x7358d0. The compiled code is 3080 bytes. Its area ends at 0x73658c.
 
 **Hooks.**
 
@@ -132,6 +132,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 |---|---|---|---|---|
 | `word` | 0x66e470 | 0x001bb260 | `hook_row_label_draw` | Draw method of the list-row label class (type 0x3180) |
 | `word` | 0x677a14 | 0x00244924 | `hook_label_draw` | Draw method of the general label class (type 0x1580) |
+| `bl` | 0xb4ad4 | 0xeb057c60 | `hook_db_loaded` | The call of `log_event` (event 0xf, "Exit Disk Mode") in the music database load 0xb4a64 |
 
 The list-row label scrolls a long title on the highlighted row from a cached image of the text. Thus the patch wraps the complete method `0x1bb260`, not only its call to `0x244924`.
 
@@ -149,6 +150,7 @@ The list-row label scrolls a long title on the highlighted row from a cached ima
 | 0x25a974, 0x25a8e4 | `fw_alloc`, `fw_free` | Memory from the pool at 0x1081da00 |
 | 0x07ccd0, 0x07cd6c | `fw_memset0`, `fw_strcpy` | Memory and string functions |
 | 0x08f38c, 0x08f464, 0x08f5c4, 0x08f184 | `file_open`, `file_read`, `file_seek`, `file_close` | File access on the iPod disk |
+| 0x213c5c | `log_event` | Adds an event to the usage log |
 
 **Runtime logic.** For each draw of a label, the wrapper does these steps:
 
@@ -165,7 +167,7 @@ Some draws of a highlighted row pass a structure, not text. The first byte of th
 
 **Draw mode.** The patch uses mode 0, which replaces the pixels. Mode 1 darkens. With mode 1 the thumbnails were not visible on the dark theme.
 
-**Reload after a sync.** After 100 list labels without a thumbnail, the patch reads the 16-byte header again. If the header changed, it frees the old data and loads the file again. If the file does not exist, the patch tries again after 200 draws.
+**Reload after a sync.** The firmware loads the music database at the start and after each USB session. The hook at 0xb4ad4 in this load sets a flag. At the next album label or playlist label, the patch clears the flag and reads the 16-byte header again. If the header changed, it frees the old data and loads the file again. If there was no file, the patch tries to load it again. Without a USB session, the patch does not read the file again.
 
 **Memory.** If all the thumbnails are 1 MB or less, the patch loads all of them. Otherwise it keeps a cache of 64 thumbnails. It reads a thumbnail from the disk when the cache does not have it.
 
@@ -179,7 +181,7 @@ iPodFirm writes `iPod_Control/iTunes/iPodFirmAlbumArt` on the mounted iPod volum
 | 0x04 | 2 | Version: 1 |
 | 0x06 | 2 | Thumbnail size S in pixels (20) |
 | 0x08 | 4 | Count N |
-| 0x0C | 4 | Stamp: the FNV-1a hash of the entry table |
+| 0x0C | 4 | Stamp: the FNV-1a hash of all the bytes after the header (the entries and the thumbnails) |
 | 0x10 | 8 × N | Entries {u32 hash, u32 file offset of the pixels}, sorted by hash |
 | then | 2 × S × S × N | The thumbnails, RGB565, row by row |
 

@@ -58,12 +58,13 @@ public enum AlbumArt {
         for (i, h) in hashes.enumerated() {
             for v in [h, UInt32(dataStart + i * size * size * 2)] { for k in 0..<4 { table.append(UInt8(v >> (8 * UInt32(k)) & 0xFF)) } }
         }
-        // The stamp is the FNV-1a hash of the entry table. The patch reads the file again when it changes.
+        let body = table + hashes.flatMap { entries[$0]! }
+        // The stamp is the FNV-1a hash of the entry table and the thumbnails. The patch reads the
+        // file again when it changes.
         var stamp: UInt32 = 2_166_136_261
-        for b in table { stamp = (stamp ^ UInt32(b)) &* 16_777_619 }
+        for b in body { stamp = (stamp ^ UInt32(b)) &* 16_777_619 }
         u16(1); u16(size); u32(UInt32(hashes.count)); u32(stamp)
-        out += table
-        for h in hashes { out += entries[h]! }
+        out += body
         return out
     }
 }

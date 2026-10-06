@@ -161,6 +161,11 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | 0x08f6f4 | Writes to a file (handle, pointer to length, buffer). | Patch |
 | 0x08f5c4 | Sets the file position. The 64-bit position is in r2:r3. | Patch |
 | 0x08f184 | Closes a file. Writes the buffer to the disk. | Patch |
+| 0xb4a64 | Loads the music database from `iPod_Control\iTunes\iTunesDB`. Runs at the start and after each USB session. At 0xb4ad4 it adds the usage-log event 0xf ("Exit Disk Mode"). | Static, Patch (`album-art`) |
+| 0xa2310 | Makes the music database object and calls 0xb4a64 (at 0xa23fc). | Static |
+| 0x1edb9c | Loads the music database again (`blne 0xb4a64` at 0x1ed2d0) if the flag at +0x489 is 0. | Static |
+| 0x213c5c | Adds an event to the usage log (log, event, value). | Static, Patch |
+| 0x213cd4 | Gives the name of a usage-log event. 0xe is "Enter Disk Mode", 0xf is "Exit Disk Mode". | Static |
 
 ### Settings, sleep and restart
 
@@ -219,6 +224,25 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | 0x282cf0 | Sets a GPIO pin (pin, value). | Static |
 | 0x282870, 0x2828b8 | Busy wait in ms and in µs (`USEC_TIMER`). | Static |
 | 0x11c9fc | Task sleep in ms. | Static, Patch |
+
+### The music database
+
+Refer to [re/album-artist.md](../re/album-artist.md). "Emulator" here means a test build of the proposed `album-artist` hook. No patch in `patches/` uses these functions yet.
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x0af930 | Loads iTunesDB. Calls 0xd7888 for the tracks and 0xd6de8 for the playlists. | Static |
+| 0x0d7888 | Reads the tracks (mhit) and their strings (mhod). | Static, Emulator |
+| 0x0d7e40 | The jump on the mhod type. The table of `b` instructions is at 0xd7e48 + 4 × type (types 0 to 31). Type 22 (Album Artist) goes to the skip code 0xd81ec. | Static, Emulator |
+| 0x0d7f58 | The code for mhod type 4 (Artist). | Static, Emulator |
+| 0x0d821c | The end of the mhod loop body. It examines the result in r5. | Static, Emulator |
+| 0x0d6de8 | Reads the playlists. Its mhod strings are only the playlist names. | Static |
+| 0x10db84 | Reads an mhod string into a string pool. Arguments: reader, 1, type, pool, slot, 1. | Static, Emulator |
+| 0x0f4340 | Reads the string header and the text. Compares the type only with 2 (path). | Static |
+| 0x0885ec | Stores a text in a pool (pool, text, length, slot). Writes 0 to the slot first. The same text gets the same index and 1 more reference. | Static |
+| 0x0907f4 | Updates the artist data of a track. Calls 0x1114dc. | Static, Emulator |
+| 0x1114dc | Makes the artist sort key of a track (pool db + 0x10c). | Static |
+| 0x0dc6a8 | Skips bytes in the file. | Static |
 
 ### USB audio
 
@@ -301,6 +325,9 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | Application object | +0x487 | "Sleep pending" flag |
 | Application object | +0x3e4 | Power controller |
 | Keep-awake message | +0x18 | Time in ms (type 2) |
+| Track | +0x28, +0x2c, +0x34, +0x3c, +0x40 | Pool indexes: title, artist, album, composer, genre |
+| Track | +0x30 | Index of the artist sort key (pool db + 0x10c) |
+| Music database | +0xb4, +0xe0, +0x138, +0x190 | String pools: titles, artists and composers, albums, genres |
 
 ## RAM addresses
 

@@ -110,7 +110,7 @@ def build(tracks: list[Track], library_name: str = "iPod", playlists: dict[str, 
     for i, t in enumerate(tracks):
         mhods = [_string_mhod(MHOD_TITLE, t.title), _string_mhod(MHOD_ARTIST, t.artist),
                  _string_mhod(MHOD_ALBUM, t.album), _string_mhod(MHOD_FILETYPE, t.filetype),
-                 _string_mhod(MHOD_PATH, t.path), _string_mhod(MHOD_ALBUMARTIST, t.artist)]
+                 _string_mhod(MHOD_PATH, t.path), _string_mhod(MHOD_ALBUMARTIST, t.album_artist or t.artist)]
         if t.genre:
             mhods.append(_string_mhod(MHOD_GENRE, t.genre))
         dbid = rnd.getrandbits(64)

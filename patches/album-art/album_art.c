@@ -11,14 +11,18 @@
  * different element ID, thus a song with the name of an album gets no thumbnail.
  * The hash of a playlist name starts with the byte 0x01, thus a playlist and an album with the
  * same name have different thumbnails.
- * After RECHECK_MISSES list labels without a thumbnail, the patch reads the file header again.
- * If the header changed (for example after a sync that added albums), it loads the file again.
+ * A third hook replaces a call in the music database load 0xb4a64. The firmware does this load
+ * at the start and after each USB session ("Exit Disk Mode", event 0xf of the usage log). The hook
+ * only sets a flag, because the load runs in a different task. At the next album or playlist
+ * label, the patch reads the file header again. If the header changed, it loads the file again.
+ * If there was no file, it tries to load the file.
  *
  * Thumbnail file (written by iPodFirm), all values little-endian:
  *   0x00  "IFAT"
  *   0x04  u16 version (1), u16 thumbnail size S (pixels, square)
  *   0x08  u32 count N
- *   0x0C  u32 stamp: FNV-1a hash of the entries. It changes when the albums change.
+ *   0x0C  u32 stamp: FNV-1a hash of all the bytes after the header. It changes when the albums
+ *         or the thumbnails change.
  *   0x10  N entries { u32 FNV-1a hash of the UTF-8 album name (or of 0x01 and the playlist
  *         name), u32 file offset of the pixels }, sorted by hash
  *   then  N thumbnails of S*S RGB565 pixels, row by row
@@ -42,6 +46,7 @@ int file_open(void *path_record, void *fh, int zero, unsigned mode);
 int file_read(void *fh, unsigned *len, void *buf);
 int file_seek(void *fh, int unused, unsigned long long position);
 int file_close(void *fh);
+void log_event(void *log, int event, int value);
 
 #define FILE_PATH   "iPod_Control\\iTunes\\iPodFirmAlbumArt"
 #define MODE_DATA   0x64617461u           /* 'data' */
@@ -49,7 +54,6 @@ int file_close(void *fh);
 #define CACHE_SLOTS 64
 #define LOAD_ALL_MAX (1024 * 1024)        /* load all thumbnails if their data is this size or smaller */
 #define GAP         4
-#define RECHECK_MISSES 100                /* labels without a thumbnail before the header is read again */
 #define VIEW_LEFT   0x5c                  /* offset of the left edge in a view */
 #define VIEW_GC     0x74                  /* offset of the graphics context in a view */
 #define GC_ORIGIN_X 0x2c                  /* gc+0x30 is the y origin */
@@ -64,7 +68,6 @@ int file_close(void *fh);
 typedef struct { unsigned hash, offset; } Entry;
 
 static int state;                         /* 0 = not loaded, 1 = loaded, -1 = no file */
-static unsigned retry;                    /* draws to wait before the next try to open the file */
 static unsigned count, size;
 static Entry *index;
 static unsigned short *cache_pixels;
@@ -73,7 +76,7 @@ static unsigned data_start;
 static unsigned cache_hash[CACHE_SLOTS];
 static unsigned cache_next;
 static unsigned loaded_header[4];         /* the header of the loaded file */
-static unsigned misses;                   /* list labels without a thumbnail since the last check */
+static volatile int db_loaded;            /* set by the database load after a USB session */
 
 static unsigned fnv1a(unsigned h, const char *s)
 {
@@ -251,15 +254,12 @@ static void unload(void)
     state = 0;
 }
 
-/* A list label without a thumbnail can be a new album. Read the header again after some of
- * them; if the file changed, release it so that the next draw loads the new file. */
+/* Reads the header again. If the file changed, releases it so that the next load reads the new
+ * file. */
 static void check_for_new_file(void)
 {
     unsigned header[4];
     int i;
-    if (++misses < RECHECK_MISSES)
-        return;
-    misses = 0;
     if (read_at(0, header, sizeof header) != 0)
         return;                           /* no file now: keep the loaded thumbnails */
     for (i = 0; i < 4; i++)
@@ -278,9 +278,13 @@ static void draw_with_thumbnail(draw_fn original, void *view, const char *text, 
     int height, *left, i;
     unsigned id = *(unsigned short *)((char *)view + VIEW_ELEMENT_ID);
 
-    if (state == -1 && ++retry >= 200) {      /* try again later: the file can be added by a sync */
-        retry = 0;
-        state = 0;
+    /* After a USB session the file can be new or changed. */
+    if (db_loaded && (id == ALBUM_NAME_ID || id == PLAYLIST_NAME_ID)) {
+        db_loaded = 0;
+        if (state == 1)
+            check_for_new_file();
+        else if (state == -1)
+            state = 0;
     }
     load();
     if (state != 1) {
@@ -304,8 +308,6 @@ static void draw_with_thumbnail(draw_fn original, void *view, const char *text, 
                 if (!e)
                     slot_view[i] = 0;
             }
-            if (!e)
-                check_for_new_file();     /* can release the file: e stays 0 */
         } else if ((i = view_slot(view, 0)) >= 0) {
             e = slot_entry[i];
         }
@@ -337,4 +339,11 @@ void hook_label_draw(void *view, const char *text, void *a3)
         return;
     }
     draw_with_thumbnail(label_draw, view, text, a3);
+}
+
+/* Replaces the call at 0xb4ad4 in the music database load: log_event(log, 0xf, 0). */
+void hook_db_loaded(void *log, int event, int value)
+{
+    log_event(log, event, value);
+    db_loaded = 1;
 }

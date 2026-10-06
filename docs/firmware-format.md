@@ -89,7 +89,7 @@ The code runs at the same addresses as the offsets in the osos image. The table 
 | 0x6ca452 | A zero area of 310 KB. The firmware needs it to be zero. If data is put there, the iPod stops at start. |
 | 0x7358c0 | The end of Apple's code and data. |
 | 0x7358c0 | A marker: the bytes `55 AA 55 AA` (the little-endian word 0xAA55AA55). |
-| 0x7358d0–0x73658c | The area of the `album-art` patch (3260 bytes). The code uses 3168 bytes. |
+| 0x7358d0–0x73658c | The area of the `album-art` patch (3260 bytes). The code uses 3080 bytes. |
 | 0x73658c–0x736644 | The `sleep-now` patch (181 bytes). |
 | 0x736644–0x736700 | The `flash-keep-awake` patch (188 bytes). |
 | 0x736700–0x736784 | The `flash-wake-on-input` patch (132 bytes). |

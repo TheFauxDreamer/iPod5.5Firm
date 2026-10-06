@@ -46,8 +46,11 @@ def test_thumbnail_file_stamp():
     a = albumart.build({"Charm": red, "Burials": red}, 4)
     b = albumart.build({"Charm": red}, 4)
     stamp = struct.unpack_from("<I", a, 12)[0]
-    assert stamp == albumart.stamp(a[16:16 + 16]) and stamp != 0
+    assert stamp == albumart.stamp(a[16:]) and stamp != 0
     assert struct.unpack_from("<I", b, 12)[0] != stamp      # other albums: other stamp
+    blue = Image.new("RGB", (2, 2), (0, 0, 255))
+    c = albumart.build({"Charm": red, "Burials": blue}, 4)
+    assert c[16:32] == a[16:32] and struct.unpack_from("<I", c, 12)[0] != stamp   # other artwork: other stamp
     assert albumart.build({"Burials": red, "Charm": red}, 4) == a   # same albums: same file
 
 

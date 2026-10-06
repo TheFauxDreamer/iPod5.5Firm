@@ -134,3 +134,63 @@ The patch is in [patches/album-art/](../patches/album-art/). It is complete and 
 - The ">" arrow is picture 24268 (8 × 11) in a picture view (class 0x66d89c, element 0x5ecc). In a song row, the same place has element 0x63eb: the speaker (picture 24273) for the song that plays, or no picture. A row without an arrow has a picture view with a width of 0.
 - The emulator often ignores a `wheel` command. Make a screenshot after each `wheel` command, and send the command again if the highlight did not move.
 - The emulator `make-disk` command makes the osos length 0x600 bytes too short. `ipodfw.emudrive` and `EmulatorDrive` correct this.
+
+## Thumbnails after a sync
+
+The album-art patch loaded the thumbnail file one time. New albums showed only after a restart of the iPod (found on the real iPod).
+
+- iPodFirm writes a stamp at +0x0C of the file: the FNV-1a hash of the entry table.
+- After 100 list labels without a thumbnail, the patch reads the 16-byte header again. If the header changed, it frees the old data with `fw_free` (0x25a8e4, the same pool 0x1081da00 as `fw_alloc`) and loads the file again.
+- Emulator test (threshold 3): 52 header checks without a change caused no reload. After the file was replaced in the drive image, the patch reloaded it, and the Albums list showed the thumbnails of the new file. The UI continued to operate.
+
+### Reload after a pause (6 October 2026)
+
+On the real iPod, new thumbnails still showed only after a restart. There were two causes:
+
+- The patch counted only labels without a thumbnail. One or two new albums seldom gave 100 such labels. Changed artwork and playlist labels gave none, because each of those rows has a thumbnail.
+- The stamp was the hash of the entry table only. New artwork for the same albums gave the same header.
+
+The changes:
+
+- The stamp is now the FNV-1a hash of all the bytes after the header. iPodFirm, `albumart.py` and MiMusic write the same value.
+- The patch reads `USEC_TIMER` (0x60005010) at each album label and each playlist label. After a gap of 20 seconds or more, it reads the header again. A sync always gives such a gap, because no list shows during the USB session.
+- The count of labels without a thumbnail and the retry after 200 draws are removed. The gap check does both tasks. The code is 3184 bytes (was 3168).
+
+Emulator test (6 October 2026, instrumented emulator, test library with six albums):
+
+- Two thumbnail files had the same six albums. File A had red thumbnails and file B had blue thumbnails. Both files had 4864 bytes.
+- With file A, Albums showed red thumbnails. `state` was 1 and the loaded stamp was 0x6eb5283c (file A).
+- File B replaced file A at the same sectors of the drive image. No restart occurred.
+- After a gap, Albums showed blue thumbnails. The loaded stamp was 0x6e4fd0bc (file B).
+- File A replaced file B again. Albums showed red thumbnails, and the loaded stamp was 0x6eb5283c again.
+- In the first reload, the bytes 0x1200–0x12ff of the RAM copy (the last part-sector of the file) had the old pixels. The last 6 rows of one thumbnail stayed red. All other bytes were correct. Possibly the firmware sector cache kept the old sector, because the test changed the drive without a USB session.
+- The emulator moves its clock forward while the iPod is idle. Thus the test could not make a gap of less than 20 seconds, and that case is not tested.
+
+The timer version was not flashed to a real iPod. The next version replaced it.
+
+### Reload after a USB session (6 October 2026)
+
+The owner asked for a reload only after a sync or a disconnection, not after each pause.
+
+Ghidra results:
+
+- 0xb4a64 loads the music database. It opens `iPod_Control\iTunes\iTunesDB` (string 0xb4de0 and 0xb4df8).
+- At 0xb4ad4, the load calls 0x213c5c with the event 0xf. 0x213c5c adds an event to the usage log. The instruction is `bl 0x213c5c` (0xeb057c60), with r1 = 0xf and r2 = 0.
+- 0x213cd4 gives the name of each usage-log event. Event 0xe is "Enter Disk Mode", and event 0xf is "Exit Disk Mode".
+- Two functions call 0xb4a64. 0xa2310 makes the database object at the start (call at 0xa23fc). 0x1edb9c loads the database again if the flag at +0x489 is 0 (`blne` at 0x1ed2d0).
+- The call at 0xb4ad4 is in the branch where 0xaf528 returns 0. The database is read from `iTunesDB` only in this branch.
+
+The change:
+
+- A third hook replaces the `bl` at 0xb4ad4 with `bl hook_db_loaded`. The hook calls 0x213c5c with the same arguments and sets the flag `db_loaded`.
+- At the next album label or playlist label, the patch clears the flag and reads the header again. If there was no file, it tries to load the file.
+- The timer check is removed. The code is 3080 bytes (was 3184).
+
+Emulator test (6 October 2026, the same files A and B):
+
+- The hook ran one time, 0.30 s after the start (marker at 0x736188).
+- Albums showed the red thumbnails of file A. `db_loaded` was 0 again.
+- File B replaced file A in the drive image. After approximately 600 emulated seconds, Albums still showed red thumbnails, and the loaded stamp was 0x6eb5283c (file A). Thus the patch did not read the file again without a USB session.
+- The emulator has no USB. Thus the reload after a USB session is not tested.
+
+Test status: tested in the emulator (start and no reload). The reload after a sync is not tested on a real iPod.

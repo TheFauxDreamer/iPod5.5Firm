@@ -42,6 +42,8 @@ The app needs macOS 14 or later and an Apple silicon Mac (`--arch arm64`).
 6. It writes the new numbers to `version.env` only after a successful build.
 7. It quits iPodFirm with `osascript` if iPodFirm is open. Then it installs the app in `/Applications`.
 
+The variable `APP_NAME` changes the name of the app (the default is `iPodFirm`). Use it to install a test build next to the normal app, for example `APP_NAME="iPodFirm USB-C Test" mac/scripts/build-app.sh`. The two apps have the same bundle identifier and the same helper. Do not open the two apps at the same time.
+
 A stable signature is necessary. macOS connects Full Disk Access to the signature. An ad-hoc signature changes with each build, and the permission is lost.
 
 ## The detection of the iPod

@@ -19,7 +19,8 @@
     "file_close": "0x08f184",
     "gc_prepare": "0x21a27c",
     "row_label_draw": "0x1bb260",
-    "fw_free": "0x25a8e4"
+    "fw_free": "0x25a8e4",
+    "log_event": "0x213c5c"
   },
   "hooks": [
     {
@@ -33,6 +34,12 @@
       "at": "0x677a14",
       "expect": "0x00244924",
       "to": "hook_label_draw"
+    },
+    {
+      "kind": "bl",
+      "at": "0xb4ad4",
+      "expect": "0xeb057c60",
+      "to": "hook_db_loaded"
     }
   ]
 }
