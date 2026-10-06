@@ -1,8 +1,14 @@
 #!/bin/bash
 # Build iPodFirm.app and install it into /Applications.
 # Every run increments BOTH the version (patch) and the build number in version.env.
+# Set APP_NAME to install a second copy with a different name, for example a test build:
+#   APP_NAME="iPodFirm USB-C Test" mac/scripts/build-app.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
+APP_NAME="${APP_NAME:-iPodFirm}"
+case "$APP_NAME" in
+    */*|.*|*..*) echo "error: APP_NAME must be a plain name, not a path: $APP_NAME" >&2; exit 1 ;;
+esac
 
 source version.env
 if [ "$BUILD_NUMBER" -gt 0 ]; then
@@ -15,7 +21,7 @@ echo "==> Building iPodFirm $MARKETING_VERSION ($BUILD_NUMBER)"
 swift build -c release --arch arm64
 BIN="$(swift build -c release --arch arm64 --show-bin-path)"
 
-APP=build/iPodFirm.app
+APP="build/$APP_NAME.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/iPodFirm" "$BIN/ipodfw-helper" "$APP/Contents/MacOS/"
@@ -39,8 +45,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>iPodFirm</string>
-    <key>CFBundleDisplayName</key><string>iPodFirm</string>
+    <key>CFBundleName</key><string>$APP_NAME</string>
+    <key>CFBundleDisplayName</key><string>$APP_NAME</string>
     <key>CFBundleIdentifier</key><string>com.thefauxdreamer.ipodfirm</string>
     <key>CFBundleExecutable</key><string>iPodFirm</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
@@ -78,9 +84,10 @@ codesign --verify --strict "$APP"
 # Only record the new numbers once the build has succeeded.
 printf 'MARKETING_VERSION=%s\nBUILD_NUMBER=%s\n' "$MARKETING_VERSION" "$BUILD_NUMBER" > version.env
 
-if [ -d /Applications/iPodFirm.app ]; then
-    osascript -e 'tell application "iPodFirm" to quit' >/dev/null 2>&1 || true
-    rm -rf /Applications/iPodFirm.app
+DEST="/Applications/$APP_NAME.app"
+if [ -d "$DEST" ]; then
+    osascript -e "tell application \"$DEST\" to quit" >/dev/null 2>&1 || true
+    rm -rf "$DEST"
 fi
-ditto "$APP" /Applications/iPodFirm.app
-echo "==> Installed /Applications/iPodFirm.app — version $MARKETING_VERSION (build $BUILD_NUMBER)"
+ditto "$APP" "$DEST"
+echo "==> Installed $DEST — version $MARKETING_VERSION (build $BUILD_NUMBER)"

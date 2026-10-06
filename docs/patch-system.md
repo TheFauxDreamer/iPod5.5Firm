@@ -115,7 +115,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 
 | Patch | Load address | Space | Notes |
 |---|---|---|---|
-| `album-art` | 0x7358d0 | 0x7358d0–0x73658c (3260 bytes) | Code, constants and variables use 3168 bytes. |
+| `album-art` | 0x7358d0 | 0x7358d0–0x73658c (3260 bytes) | Code, constants and variables use 3080 bytes. |
 | `sleep-now` | 0x73658c | 0x73658c–0x736644 (184 bytes) | The code uses 181 bytes. |
 | `flash-keep-awake` | 0x736644 | 0x736644–0x736700 (188 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
 | `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |

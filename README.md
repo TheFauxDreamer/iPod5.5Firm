@@ -261,7 +261,7 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 | `flash-wake-on-input` | For flash storage. Starts the storage at once when you press a button after a long pause. After a start, it does not examine the storage again for 30 minutes. A turn of the wheel does not start the storage. Switch it on if the first song after a long pause starts late. |
 | `backlight-60s` | The Backlight Timer menu has a 60 Seconds item in place of 2 Seconds. | Menu tested in the emulator. Not tested on a real iPod. |
 
-The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary: the patch finds the new file when you scroll through a list.
+The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary. After you disconnect the iPod from the computer, the patch examines the file again when an album list or a playlist list shows.
 
 A playlist gets a thumbnail too. The Patches pane shows the playlists of the connected iPod, below "Write Thumbnails to iPod":
 

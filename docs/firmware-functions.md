@@ -161,6 +161,11 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | 0x08f6f4 | Writes to a file (handle, pointer to length, buffer). | Patch |
 | 0x08f5c4 | Sets the file position. The 64-bit position is in r2:r3. | Patch |
 | 0x08f184 | Closes a file. Writes the buffer to the disk. | Patch |
+| 0xb4a64 | Loads the music database from `iPod_Control\iTunes\iTunesDB`. Runs at the start and after each USB session. At 0xb4ad4 it adds the usage-log event 0xf ("Exit Disk Mode"). | Static, Patch (`album-art`) |
+| 0xa2310 | Makes the music database object and calls 0xb4a64 (at 0xa23fc). | Static |
+| 0x1edb9c | Loads the music database again (`blne 0xb4a64` at 0x1ed2d0) if the flag at +0x489 is 0. | Static |
+| 0x213c5c | Adds an event to the usage log (log, event, value). | Static, Patch |
+| 0x213cd4 | Gives the name of a usage-log event. 0xe is "Enter Disk Mode", 0xf is "Exit Disk Mode". | Static |
 
 ### Settings, sleep and restart
 

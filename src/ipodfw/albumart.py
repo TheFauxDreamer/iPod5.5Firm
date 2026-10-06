@@ -23,10 +23,10 @@ def fnv1a(text: str) -> int:
     return h
 
 
-def stamp(table: bytes) -> int:
-    """FNV-1a hash of the entry table. The patch reads the file again when this value changes."""
+def stamp(body: bytes) -> int:
+    """FNV-1a hash of the entry table and the thumbnails. The patch reads the file again when this value changes."""
     h = 2166136261
-    for b in table:
+    for b in body:
         h ^= b
         h = (h * 16777619) & 0xFFFFFFFF
     return h
@@ -57,10 +57,9 @@ def build(albums: dict[str, Image.Image], size: int = DEFAULT_SIZE,
     hashes = sorted(entries)
     data_start = 16 + 8 * len(hashes)
     table = b"".join(struct.pack("<II", h, data_start + i * size * size * 2) for i, h in enumerate(hashes))
-    out = bytearray(MAGIC + struct.pack("<HHII", VERSION, size, len(hashes), stamp(table)))
-    out += table
-    for h in hashes:
-        out += entries[h]
+    body = table + b"".join(entries[h] for h in hashes)
+    out = bytearray(MAGIC + struct.pack("<HHII", VERSION, size, len(hashes), stamp(body)))
+    out += body
     return bytes(out)
 
 
