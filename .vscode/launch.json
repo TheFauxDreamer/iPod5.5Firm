@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:iPod5.5Firm}/mac",
+            "name": "Debug ipodfw-helper (mac)",
+            "target": "ipodfw-helper",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug ipodfw-helper (mac)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:iPod5.5Firm}/mac",
+            "name": "Release ipodfw-helper (mac)",
+            "target": "ipodfw-helper",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release ipodfw-helper (mac)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:iPod5.5Firm}/mac",
+            "name": "Debug iPodFirm (mac)",
+            "target": "iPodFirm",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug iPodFirm (mac)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:iPod5.5Firm}/mac",
+            "name": "Release iPodFirm (mac)",
+            "target": "iPodFirm",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release iPodFirm (mac)"
+        }
+    ]
+}
