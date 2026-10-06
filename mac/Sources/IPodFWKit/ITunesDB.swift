@@ -209,30 +209,41 @@ public enum ITunesDB {
     /// playlists use.
     public static func readTrackRecords(_ db: [UInt8]) -> [(id: UInt32, album: String, path: String)] {
         guard db.count > 12, Array(db[0..<4]) == Array("mhbd".utf8) else { return [] }
-        var out: [(UInt32, String, String)] = []
+        // Go from one mhsd to the next with its total size. The other sections (for example
+        // the album list, mhla, which iTunes writes first) do not all keep their size at +8.
         var p = Int(le32(db, 4))
-        while p + 12 <= db.count {
-            let tag = String(decoding: db[p..<p + 4], as: UTF8.self)
+        while p + 16 <= db.count, String(decoding: db[p..<p + 4], as: UTF8.self) == "mhsd" {
             let hlen = Int(le32(db, p + 4)), total = Int(le32(db, p + 8))
-            if tag == "mhit" {
-                var album = "", path = ""
-                var q = p + hlen
-                for _ in 0..<Int(le32(db, p + 12)) {
-                    guard q + 40 <= db.count, String(decoding: db[q..<q + 4], as: UTF8.self) == "mhod" else { break }
-                    let kind = le32(db, q + 12), len = Int(le32(db, q + 8))
-                    if kind == 2 || kind == 3, let text = mhodString(db, q) {
-                        if kind == 2 { path = text } else { album = text }
-                    }
-                    q += len
-                }
-                out.append((le32(db, p + 16), album, path))
-                p += total
-            } else if tag == "mhsd" || tag == "mhlt" || tag == "mhbd" {
-                p += hlen
-            } else {
-                p += max(total, 8)
-                if tag == "mhlp" || tag == "mhyp" { break }
+            guard total > 0 else { break }
+            if le32(db, p + 12) == 1 {
+                return readTrackList(db, from: p + hlen, to: min(p + total, db.count))
             }
+            p += total
+        }
+        return []
+    }
+
+    static func readTrackList(_ db: [UInt8], from start: Int, to end: Int) -> [(id: UInt32, album: String, path: String)] {
+        guard start + 12 <= end, String(decoding: db[start..<start + 4], as: UTF8.self) == "mhlt" else { return [] }
+        var out: [(UInt32, String, String)] = []
+        var p = start + Int(le32(db, start + 4))
+        for _ in 0..<Int(le32(db, start + 8)) {
+            guard p + 20 <= end, String(decoding: db[p..<p + 4], as: UTF8.self) == "mhit" else { break }
+            let hlen = Int(le32(db, p + 4)), total = Int(le32(db, p + 8))
+            guard total >= hlen, hlen > 0 else { break }
+            var album = "", path = ""
+            var q = p + hlen
+            for _ in 0..<Int(le32(db, p + 12)) {
+                guard q + 40 <= min(p + total, end), String(decoding: db[q..<q + 4], as: UTF8.self) == "mhod" else { break }
+                let kind = le32(db, q + 12), len = Int(le32(db, q + 8))
+                guard len > 0 else { break }
+                if kind == 2 || kind == 3, let text = mhodString(db, q) {
+                    if kind == 2 { path = text } else { album = text }
+                }
+                q += len
+            }
+            out.append((le32(db, p + 16), album, path))
+            p += total
         }
         return out
     }

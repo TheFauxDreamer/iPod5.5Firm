@@ -22,7 +22,17 @@ struct PatchesView: View {
                 Section {
                     PatchRow(patch: patch)
                     if patch.spec.name == "album-art" { AlbumArtControls() }
-                } header: { Text(patch.spec.name) }
+                } header: {
+                    HStack(spacing: 6) {
+                        Text(patch.spec.name)
+                        if let letter = patch.spec.version_letter {
+                            Text(letter).font(.caption.monospaced().bold())
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(Capsule().fill(Color.accentColor.opacity(0.2)))
+                                .help("The version letter of this patch. The About screen shows it after the version when \"Add a letter for each switched-on patch\" is on.")
+                        }
+                    }
+                }
             }
             if model.patches.isEmpty {
                 Section { Text("This copy of iPodFirm has no patches.").foregroundStyle(.secondary) }
@@ -46,9 +56,6 @@ struct PatchRow: View {
         VStack(alignment: .leading, spacing: 6) {
             Toggle(isOn: on) {
                 Text(patch.spec.description ?? patch.spec.name).fixedSize(horizontal: false, vertical: true)
-            }
-            if let letter = patch.spec.version_letter {
-                Text("Version letter: \(letter)").font(.caption).foregroundStyle(.secondary)
             }
             if let warning = patch.spec.hdd_warning {
                 if let gb = model.currentIPod?.likelyOriginalHDD {
@@ -248,7 +255,7 @@ struct VersionSection: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Text("This changes only the text on the iPod. iTunes and Finder continue to see version 1.3. The letter of each patch shows below the patch.")
+            Text("This changes only the text on the iPod. iTunes and Finder continue to see version 1.3. The letter of each patch shows next to the name of the patch.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         } header: { Text("Software Version") }
     }

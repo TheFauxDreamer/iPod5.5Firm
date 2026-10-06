@@ -22,7 +22,7 @@ A patch is a folder in [patches/](../patches/). It holds two files:
 | `symbols` | object | Firmware addresses for the external functions and data that the C code uses. Name → hex address. |
 | `hooks` | array | The changes to the firmware. See [The hooks](#the-hooks). |
 | `hdd_warning` | string, optional | A warning. The app shows it if the iPod probably has the original hard drive. |
-| `version_letter` | string, optional | One letter a–z. If the owner switches on "Add a letter for each switched-on patch", the About screen shows this letter after the version. Each patch has a different letter. |
+| `version_letter` | string | One letter a–z. Each patch must have a letter, but an `internal` patch has no letter. If the owner switches on "Add a letter for each switched-on patch", the About screen shows this letter after the version. Each patch has a different letter. |
 | `internal` | bool, optional | `true`: the patch is a part of a build step. The Patches pane does not show it. Only `dark-mode` uses this key. |
 
 Example (a part of [patches/flash-keep-awake/patch.json](../patches/flash-keep-awake/patch.json)):

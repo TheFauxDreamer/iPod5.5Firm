@@ -460,10 +460,13 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertEqual(copy, osos)
     }
 
-    /// Each patch letter is one letter a–z, and no two patches have the same letter.
+    /// Each patch in the Patches pane has a letter. Each letter is one letter a–z, and no two patches have the same letter.
     func testPatchVersionLetters() {
-        let letters = Patcher.list(in: Self.repo.appendingPathComponent("patches")).compactMap(\.spec.version_letter)
-        XCTAssertFalse(letters.isEmpty)
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        for p in all where p.spec.internal != true {
+            XCTAssertNotNil(p.spec.version_letter, "\(p.spec.name) has no version_letter in patch.json")
+        }
+        let letters = all.compactMap(\.spec.version_letter)
         XCTAssertEqual(Set(letters).count, letters.count)
         for l in letters { XCTAssertTrue(l.count == 1 && ("a"..."z").contains(l), l) }
     }
@@ -498,6 +501,21 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertEqual(lists[1].trackIDs, [])
         XCTAssertEqual(ITunesDB.readTracks(db).map(\.album), tracks.map(\.album))
         XCTAssertEqual(le32(db, 8), UInt32(db.count))
+    }
+
+    /// iTunes and MiMusic write the album list (mhsd type 4, mhla) first. The u32 at +8 of
+    /// mhla is the album count, not a size.
+    func testReadTracksAfterAnAlbumList() {
+        let tracks = (0..<4).map { DBTrack(title: "Song \($0)", artist: "A", album: "Album \($0)", path: ":iPod_Control:Music:F00:T\($0).m4a", size: 1, lengthMS: 1) }
+        let db = ITunesDB.build(tracks, playlists: [(name: "Mix", tracks: [3, 1])])
+        var w = ITunesDB.Writer()
+        w.tag("mhsd"); w.u32(96); w.u32(96 + 92); w.u32(4); w.zeros(80)
+        w.tag("mhla"); w.u32(92); w.u32(325); w.zeros(80)
+        var withAlbums = Array(db[0..<244]) + w.b + Array(db[244...])
+        for i in 0..<4 { withAlbums[8 + i] = UInt8(UInt32(withAlbums.count) >> (8 * UInt32(i)) & 0xFF) }
+        XCTAssertEqual(ITunesDB.readTracks(withAlbums).map(\.album), tracks.map(\.album))
+        let ids = ITunesDB.readTrackRecords(withAlbums).map(\.id)
+        XCTAssertEqual(ITunesDB.readPlaylists(withAlbums).map(\.trackIDs), [[ids[3], ids[1]]])
     }
 
     func testPlaylistThumbnailKey() throws {
