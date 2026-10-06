@@ -21,7 +21,6 @@ struct PatchesView: View {
                 Section {
                     PatchRow(patch: patch)
                     if patch.spec.name == "album-art" { AlbumArtControls() }
-                    if patch.spec.storage_switch != nil { StorageControls() }
                 } header: { Text(patch.spec.name) }
             }
             if model.patches.isEmpty {
@@ -52,7 +51,11 @@ struct PatchRow: View {
                     Label("The connected iPod has approximately \(gb) GB. This is the size of an original hard drive. \(warning)",
                           systemImage: "exclamationmark.triangle.fill")
                         .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
-                } else if model.currentIPod == nil {
+                } else if let ipod = model.currentIPod {
+                    Label("The connected iPod has \(ByteCountFormatter.string(fromByteCount: ipod.size, countStyle: .decimal)). No original iPod drive has this size, thus the storage is flash.",
+                          systemImage: "checkmark.circle.fill")
+                        .font(.caption).foregroundStyle(.green).fixedSize(horizontal: false, vertical: true)
+                } else {
                     Label("Connect the iPod to check its storage.", systemImage: "info.circle")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -83,40 +86,6 @@ extension PatchRow {
         a.addButton(withTitle: "Turn On")
         a.addButton(withTitle: "Cancel")
         return a.runModal() == .alertFirstButtonReturn
-    }
-}
-
-/// The storage type for a patch with a `storage_switch`. The app checks the size of the connected iPod.
-struct StorageControls: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Picker("Storage type", selection: $model.storageChoice) {
-                ForEach(StorageType.allCases, id: \.self) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            Label(status, systemImage: model.effectiveStorage == .flash ? "memorychip" : "internaldrive")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    var status: String {
-        let size = model.currentIPod.map { ByteCountFormatter.string(fromByteCount: $0.size, countStyle: .decimal) }
-        switch model.storageChoice {
-        case .flash:
-            return "Flash: the patch operates. The iPod does not examine its drive."
-        case .hardDrive:
-            return "Hard drive: the patch does nothing."
-        case .automatic:
-            guard let ipod = model.currentIPod, let size else {
-                return "Connect the iPod to check its storage. Without a check, the iPod examines its drive (IDENTIFY) when it starts."
-            }
-            if ipod.storageFromSize == .flash {
-                return "The connected iPod has \(size). No original iPod drive has this size, thus the storage is flash. The patch operates."
-            }
-            return "The connected iPod has \(size), the size of an original hard drive. The iPod examines its drive when it starts: the patch operates only on flash (an \"iFlash\" model, CompactFlash or no rotation)."
-        }
     }
 }
 

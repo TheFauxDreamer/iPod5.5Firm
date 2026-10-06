@@ -359,21 +359,11 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertEqual(le32(out, 0xb45f4) & 0xFF00_0000, 0xEB00_0000)   // the wake hook is a bl
         XCTAssertNotEqual(le32(out, 0xb45f4), le32(osos, 0xb45f4))
         XCTAssertEqual(le32(out, 0x736648), 0xe351_0001)                 // "cmp r1, #1": a release stays a release
-        // the sleep gate, the user event, the power-off call and the IDENTIFY swap are bl hooks
-        for at in [0x1d871c, 0x1d8344, 0x23344c, 0x142f94] {
+        // the sleep gate, the user event and the power-off call are bl hooks
+        for at in [0x1d871c, 0x1d8344, 0x23344c] {
             XCTAssertEqual(le32(out, at) & 0xFF00_0000, 0xEB00_0000)
             XCTAssertNotEqual(le32(out, at), le32(osos, at))
         }
-        // a set storage type: no IDENTIFY hook, and ka_flash (the last byte of the patch, 0x7367f8) has the value
-        XCTAssertEqual(out[0x7367f8], 0)
-        for (type, value) in [(StorageType.flash, UInt8(1)), (.hardDrive, 0)] {
-            let fixed = try Patcher.apply(keep, to: osos, storage: type)
-            XCTAssertEqual(le32(fixed, 0x142f94), le32(osos, 0x142f94))
-            XCTAssertEqual(fixed[0x7367f8], value)
-            XCTAssertEqual(le32(fixed, 0x23344c), le32(out, 0x23344c))   // the other hooks stay
-        }
-        XCTAssertEqual(IPodDisk(disk: "disk9", mediaName: "iPod", blockSize: 2048, size: 1_025_423_441_920).storageFromSize, .flash)
-        XCTAssertNil(IPodDisk(disk: "disk9", mediaName: "iPod", blockSize: 512, size: 80_000_000_000).storageFromSize)
         // with the album-art patch: the two patches use different areas
         _ = try Patcher.apply(all.filter { ["album-art", "flash-keep-awake"].contains($0.spec.name) }, to: osos)
     }
@@ -428,9 +418,7 @@ final class PatchAndArtTests: XCTestCase {
             XCTAssertNil(IPodDisk.likelyOriginalHDD(size: size))
         }
         let keep = Patcher.list(in: Self.repo.appendingPathComponent("patches")).first { $0.spec.name == "flash-keep-awake" }
-        // the patch reads the IDENTIFY data and does nothing on a hard drive, thus it has no warning
-        XCTAssertNotNil(keep)
-        XCTAssertNil(keep?.spec.hdd_warning)
+        XCTAssertNotNil(keep?.spec.hdd_warning)
     }
 
     func testReadTracksRoundTrip() {

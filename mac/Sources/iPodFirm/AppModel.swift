@@ -43,11 +43,6 @@ final class AppModel: ObservableObject {
     @Published var enabledPatches: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "enabledPatches") ?? []) {
         didSet { UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches") }
     }
-    /// The storage type for a patch with a `storage_switch`. Automatic: the size of the connected iPod decides,
-    /// and without a decision the iPod examines its drive (see effectiveStorage).
-    @Published var storageChoice: StorageType = StorageType(rawValue: UserDefaults.standard.string(forKey: "storageType") ?? "") ?? .automatic {
-        didSet { UserDefaults.standard.set(storageChoice.rawValue, forKey: "storageType") }
-    }
     @Published var appearance: Appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .light {
         didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
     }
@@ -266,8 +261,7 @@ final class AppModel: ObservableObject {
             return
         }
         do {
-            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion,
-                                                storage: effectiveStorage)).write(to: url, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion)).write(to: url, options: .atomic)
             isDirty = false
         } catch { fail("Couldn't save", error) }
     }
@@ -383,12 +377,6 @@ final class AppModel: ObservableObject {
 
     // MARK: patches
 
-    /// The storage type that the build uses: the choice of the owner, else the size of the connected iPod,
-    /// else the test on the iPod.
-    var effectiveStorage: StorageType {
-        storageChoice != .automatic ? storageChoice : (currentIPod?.storageFromSize ?? .automatic)
-    }
-
     var activePatches: [PatchInfo] {
         patches.filter { enabledPatches.contains($0.spec.name) }
     }
@@ -401,7 +389,7 @@ final class AppModel: ObservableObject {
     /// The osos with the appearance (Dark, or Switch on iPod) and the switched-on patches applied.
     /// The edits stay as they are: the theme does not change a byte that the owner changed.
     nonisolated static func outputOSOS(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?,
-                                       version: FirmwareVersion?, storage: StorageType) throws -> [UInt8] {
+                                       version: FirmwareVersion?) throws -> [UInt8] {
         var osos = editor.osos
         switch appearance {
         case .dark(let theme):
@@ -412,7 +400,7 @@ final class AppModel: ObservableObject {
         case nil:
             break
         }
-        if !patches.isEmpty { osos = try Patcher.apply(patches, to: osos, originalSHA256: editor.originalOSOSHash, storage: storage) }
+        if !patches.isEmpty { osos = try Patcher.apply(patches, to: osos, originalSHA256: editor.originalOSOSHash) }
         if let version { try FirmwareVersion.apply(version, to: &osos) }
         return osos
     }
@@ -420,9 +408,9 @@ final class AppModel: ObservableObject {
     /// The firmware partition to save or flash: the edits plus the theme and the switched-on patches.
     /// A larger osos moves rsrc (see FirmwarePartition.makeRoom).
     nonisolated static func outputPartition(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?,
-                                            version: FirmwareVersion?, storage: StorageType) throws -> [UInt8] {
+                                            version: FirmwareVersion?) throws -> [UInt8] {
         let fw = try FirmwarePartition(data: editor.partition.data)
-        let osos = try outputOSOS(editor, patches, appearance: appearance, version: version, storage: storage)
+        let osos = try outputOSOS(editor, patches, appearance: appearance, version: version)
         try fw.makeRoom(ososLength: osos.count)
         try fw.replaceImage("osos", with: osos)
         return fw.data
@@ -603,8 +591,7 @@ final class AppModel: ObservableObject {
         let staging = Self.supportDir.appendingPathComponent("Staging/flash.bin")
         do {
             try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion,
-                                                storage: effectiveStorage)).write(to: staging, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion)).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
         } catch { fail("Can't flash", error) }
     }
@@ -627,12 +614,12 @@ final class AppModel: ObservableObject {
         let s = NSSavePanel()
         s.nameFieldStringValue = "custom-iPod_25.1.3.ipsw"
         guard s.runModal() == .OK, let out = s.url else { return }
-        let patches = activePatches, appearance = activeAppearance, version = activeVersion, storage = effectiveStorage
+        let patches = activePatches, appearance = activeAppearance, version = activeVersion
         Task {
             do {
                 let original = try await ensureAppleIPSW()
                 try await work("Writing .ipsw…") {
-                    let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version, storage: storage)
+                    let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version)
                     try IPSW.repack(original: original, firmware: IPSW.firmware(original: original, withOSOS: osos), to: out)
                 }
                 NSWorkspace.shared.activateFileViewerSelecting([out])
@@ -643,13 +630,13 @@ final class AppModel: ObservableObject {
     /// Build the emulator drive from the current edits and boot it in the in-app preview.
     func runInEmulator(_ emu: EmulatorManager, _ session: EmulatorSession) {
         guard let editor else { return }
-        let patches = activePatches, appearance = activeAppearance, version = activeVersion, storage = effectiveStorage
+        let patches = activePatches, appearance = activeAppearance, version = activeVersion
         let library = EmulatorManager.Library.current
         session.start { [weak self] in
             guard let self else { return }
             let original = try await self.ensureAppleIPSW()
             let (fw, ososLength) = try await Task.detached { () -> ([UInt8], Int) in
-                let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version, storage: storage)
+                let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version)
                 return (try IPSW.firmware(original: original, withOSOS: osos), osos.count)
             }.value
             try await emu.prepare(firmware: fw, ososLength: ososLength, originalIPSW: original, library: library)

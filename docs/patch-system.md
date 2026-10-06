@@ -22,7 +22,6 @@ A patch is a folder in [patches/](../patches/). It holds two files:
 | `symbols` | object | Firmware addresses for the external functions and data that the C code uses. Name → hex address. |
 | `hooks` | array | The changes to the firmware. See [The hooks](#the-hooks). |
 | `hdd_warning` | string, optional | A warning. The app shows it if the iPod probably has the original hard drive. |
-| `storage_switch` | object, optional | `{ "variable": "ka_flash", "detect_hook": "hook_identify" }`. The storage type in the Patches pane: Automatic, Flash or Hard drive. For Flash or Hard drive, iPodFirm does not write the `detect_hook` hook, and it sets the byte `variable` to 1 or 0. In Automatic mode, the size of the connected iPod decides: a size that no original drive has gives Flash. Else the hook examines the drive on the iPod. Only `flash-keep-awake` uses this key. |
 | `internal` | bool, optional | `true`: the patch is a part of a build step. The Patches pane does not show it. Only `dark-mode` uses this key. |
 
 Example (a part of [patches/flash-keep-awake/patch.json](../patches/flash-keep-awake/patch.json)):
@@ -109,13 +108,13 @@ After the checks, iPodFirm writes the code and the hooks. It extends osos with z
 
 ## The free space
 
-Apple's code ends at 0x7358c0. The word 0x55AA55AA at 0x7358c0 is a marker; do not put code on it. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. The area is almost full: 7 bytes are free after `flash-keep-awake`. A larger patch needs the area after 0x736800, which is available only when iPodFirm moves rsrc.
+Apple's code ends at 0x7358c0. The word 0x55AA55AA at 0x7358c0 is a marker; do not put code on it. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. After `flash-keep-awake`, 212 bytes are free (0x73672c–0x736800). A larger patch needs the area after 0x736800, which is available only when iPodFirm moves rsrc.
 
 | Patch | Load address | Space | Notes |
 |---|---|---|---|
 | `album-art` | 0x7358d0 | 0x7358d0–0x73658c (3260 bytes) | Code, constants and variables. |
 | `sleep-now` | 0x73658c | 0x73658c–0x736644 (181 bytes) | |
-| `flash-keep-awake` | 0x736644 | 0x736644–0x736800 (437 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
+| `flash-keep-awake` | 0x736644 | 0x736644–0x73672c (232 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
 | `row-marker` | 0x7358d0 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
 

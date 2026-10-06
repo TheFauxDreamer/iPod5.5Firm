@@ -38,7 +38,7 @@ def test_flash_keep_awake():
     assert struct.unpack_from("<I", out, hook + 4)[0] == 0xe3510001      # "cmp r1, #1": a release stays a release
     gate = int(report["symbols"]["hook_storage_in_use"], 16)
     assert struct.unpack_from("<I", out, 0x1d871c)[0] == patcher.branch("bl", 0x1d871c, gate)
-    for at, name in ((0x1d8344, "hook_user_event"), (0x23344c, "hook_drive_power_off"), (0x142f94, "hook_identify")):
+    for at, name in ((0x1d8344, "hook_user_event"), (0x23344c, "hook_drive_power_off")):
         assert struct.unpack_from("<I", out, at)[0] == patcher.branch("bl", at, int(report["symbols"][name], 16))
     base = int(report["code"][0], 16)
     code = out[base:base + report["bytes"]]

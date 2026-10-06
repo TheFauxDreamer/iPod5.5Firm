@@ -135,16 +135,16 @@ Not known: why the stock firmware defers Sleep after a computer session. The ext
 
 ## SSD mode (2026-10)
 
-The idea comes from [rockpod](https://github.com/nuxcodes/rockpod), a Rockbox version for the iPod Classic 6G/7G. Its code is for a different CPU (S5L8702), thus the patch uses only the ideas. The patch adds three hooks.
+The idea comes from [rockpod](https://github.com/nuxcodes/rockpod), a Rockbox version for the iPod Classic 6G/7G. Its code is for a different CPU (S5L8702), thus the patch uses only the ideas. The patch adds two hooks.
 
 | Hook | Address | Original | Function |
 |---|---|---|---|
-| 6 | 0x142f94 | `bl 0x1430a8` | The last byte swap in the IDENTIFY function 0x142e48. The hook reads the IDENTIFY data and sets `ka_flash`. |
 | 4 | 0x1d8344 | `bl 0x1d813c` | The idle-timer start in the UI event handler 0x1d81cc. If no slot is active, the hook wakes the storage. |
 | 5 | 0x23344c | `bl 0x265cc8` | The power-off call in the "set power" method 0x233358. The hook waits 500 ms before the power cut. |
 
 Findings:
 
+- A first version had a third hook at 0x142f94 (`bl 0x1430a8`, the last byte swap in the IDENTIFY function 0x142e48). It read the IDENTIFY data and switched the patch off on a hard drive. It was removed (2026-10-06) to free 205 bytes: iPodFirm now decides from the size of the connected iPod, and it does not use the patch on a hard drive.
 - 0x142e48 sends IDENTIFY (0xEC) into the 512-byte buffer at ATA object + 0x0C. Then it swaps the bytes of the firmware version (+0x2E), the model (+0x36) and the serial number (+0x14). The firmware runs it one time at start. The second IDENTIFY sender, 0x227030, does not run at start.
 - The iFlash reports the model "iFlash-Platform iPod Adapters" and no SSD words: word 217 is 0, and power management, TRIM and CFA are 0 (rockpod issue #37). Thus the patch compares the start of the model with "iFlash". It also accepts word 217 = 1 (no rotation) and word 0 = 0x848A (CompactFlash).
 - The emulated drive reports "Emulated iPod Disk", word 0 = 0x0040 and word 217 = 0. Thus the emulator is a hard drive for the patch.
@@ -155,11 +155,12 @@ Tests in the emulator:
 
 | Test | Result |
 |---|---|
-| Hard drive (the emulated drive) | `ka_flash` = 0. The power-off hook calls the power function at the same µs (no wait). |
-| A test copy that matches "Emulated", with MIN_MS = 20 s | `ka_flash` = 1. Last read at 3.7 s, STANDBY at 24.6 s, power off 510 ms later. |
+| First version, hard drive (the emulated drive) | `ka_flash` = 0. The power-off hook calls the power function at the same µs (no wait). |
+| First version, a test copy that matches "Emulated", with MIN_MS = 20 s | `ka_flash` = 1. Last read at 3.7 s, STANDBY at 24.6 s, power off 510 ms later. |
 | The same copy, storage off, one button press | The hook sent "always on" for slot 40, and the storage power came on 0.05 ms later. Later events did not send a second wake. |
+| Version without the IDENTIFY hook | The firmware starts and shows the Language screen. The storage stays on after the start (30-minute time). |
 
-The patch area is almost full. The functions use `__attribute__((minsize))`, and `album-art` and `sleep-now` moved to give the patch 437 bytes. See [docs/patch-system.md](../docs/patch-system.md).
+The functions use `__attribute__((minsize))`, and `album-art` and `sleep-now` moved. The patch has 232 bytes, and 212 bytes are free after it. See [docs/patch-system.md](../docs/patch-system.md).
 
 ## Instruments
 
@@ -173,5 +174,5 @@ The emulator patch has these instruments for this work:
 - Measure the delay on the real iPod with the 30-minute patch and the wake hook.
 - Test Sleep on the real iPod with hook 3: after a computer session, during playback and after 1 minute without use.
 - Measure the battery life with the patch.
-- Test the SSD mode hooks on the real iPod: confirm that the iFlash sets `ka_flash` (the storage stays on after a button press when it was off).
+- Test the SSD mode hooks on the real iPod: the first song after a long pause starts at once, and Sleep still works.
 - The 30-minute value is a choice of the owner (2026-10-03).
