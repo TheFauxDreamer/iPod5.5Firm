@@ -112,7 +112,7 @@ struct USBProbeControls: View {
                 1. Click Start the Probe at the Next Restart, then click Eject iPod.
                 2. Disconnect the iPod. Restart it (hold Menu and Select until the Apple logo shows).
                 3. Connect a USB flash drive or a card reader through a USB-C OTG adapter with a power input. Connect a charger to the power input.
-                4. Press a button on the iPod. A short high tone: the probe starts. A long low tone: the USB host mode operates. High, low, high: the iPod found the flash drive.
+                4. Press a button on the iPod. First the iPod plays each sign one time: a long low tone, then high, low, high. Then three short beeps and a silence. Then the real result: a long low tone means that the USB host mode operates (a second one: the hub in the adapter). High, low, high means that the iPod found the flash drive or card reader. The iPod does not react for approximately 7 seconds during the tones.
                 5. Restart the iPod again. The next start is normal.
                 """)
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

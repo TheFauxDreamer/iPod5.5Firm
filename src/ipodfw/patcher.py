@@ -46,10 +46,17 @@ CLANG_FLAGS = ["--target=armv4t-none-eabi", "-mcpu=arm7tdmi", "-marm", "-mfloat-
 R_ARM_NONE, R_ARM_ABS32, R_ARM_REL32, R_ARM_CALL, R_ARM_JUMP24, R_ARM_V4BX = 0, 2, 3, 28, 29, 40
 
 
-# The extended area for large patches, after the theme data and the Dark Mode items
-# (themeimport.OSOS_LIMIT) and below the 8 MB limit of the reset code. A patch with a load
-# address in this area can use the area to its end. The build must then move rsrc.
-EXTENDED_AREA = (0x7E8000, 0x7F0000)
+# "load_address": "extended": the build puts the patch after all the data that is already there
+# (the end of the image, at least PATCH_AREA_END): after a theme, the Dark Mode items and other
+# extended patches. The limit is OSOS_LIMIT (themeimport.OSOS_LIMIT). The build must then move rsrc.
+EXTENDED = "extended"
+PATCH_AREA_END = 0x736800
+OSOS_LIMIT = 0x7F0000
+
+
+def extended_base(osos: bytes) -> int:
+    """The load address of an extended patch: after the end of osos, aligned to 16 bytes."""
+    return (max(len(osos), PATCH_AREA_END) + 15) & ~15
 
 
 class PatchError(Exception):
@@ -217,15 +224,20 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
     sources = sorted(patch_dir.glob("*.c"))
     code, table, base = b"", {}, 0
     if sources:
-        base = load_address if load_address is not None else int(spec["load_address"], 16)
+        if load_address is not None:
+            base = load_address
+        elif spec["load_address"] == EXTENDED:
+            base = extended_base(osos)
+        else:
+            base = int(spec["load_address"], 16)
         fw_syms = {k: int(v, 16) for k, v in spec.get("symbols", {}).items()}
         fw_syms.update(symbols or {})
         with tempfile.TemporaryDirectory() as tmp:
             obj = compile_c(sources, Path(tmp))
         code, table = link(obj, base, fw_syms)
     end = base + len(code)
-    if EXTENDED_AREA[0] <= base < EXTENDED_AREA[1]:
-        max_size = EXTENDED_AREA[1]
+    if load_address is None and spec.get("load_address") == EXTENDED:
+        max_size = OSOS_LIMIT
     if end > max_size:
         raise PatchError(f"patch code ends at {end:#x}, but the osos image can only grow to {max_size:#x}")
     out = bytearray(osos) + bytes(max(0, end - len(osos)))

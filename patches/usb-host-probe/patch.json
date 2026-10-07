@@ -1,9 +1,9 @@
 {
   "name": "usb-host-probe",
   "version_letter": "h",
-  "description": "A one-shot test of the USB host mode through a USB-C mod (USB-AUDIO-OUT.md, Stage 0). Select \"Start the probe at the next restart\", eject and restart the iPod, then press a button. The iPod gives a short high tone and starts its USB host stack one time. A long low tone: the host stack runs. High, low, high: a USB flash drive or card reader was found. The next restart is normal again. CAUTION: While the probe runs, the USB port possibly does not operate with a computer. Restart the iPod (hold Menu and Select) to stop the probe.",
+  "description": "A one-shot test of the USB host mode through a USB-C mod (USB-AUDIO-OUT.md, Stage 0). Select \"Start the probe at the next restart\", eject and restart the iPod, then press a button. The iPod first plays each sign tone one time (long low, then high, low, high), then three short beeps and a silence. Then it starts its USB host stack one time, and the real signs follow. A long low tone: the host stack runs (a second one: the hub in the adapter). High, low, high: a USB flash drive or card reader was found. The iPod does not react for approximately 7 seconds during the tones. The next restart is normal again. CAUTION: While the probe runs, the USB port possibly does not operate with a computer. Restart the iPod (hold Menu and Select) to stop the probe.",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
-  "load_address": "0x7e8000",
+  "load_address": "extended",
   "symbols": {
     "fw_memset0": "0x07ccd0",
     "fw_strcpy": "0x07cd6c",
@@ -16,6 +16,7 @@
     "fw_long_play_timer": "0x1d8570",
     "host_start": "0x2860e8",
     "tone": "0xcd430",
+    "task_sleep": "0x11c9fc",
     "hub_init_device": "0xe7bc4",
     "storage_init_interface": "0x10dd00"
   },

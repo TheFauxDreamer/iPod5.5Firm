@@ -49,11 +49,16 @@ public enum Patcher {
 
     /// The largest size of the osos image in firmware 1.3: the start of the rsrc image.
     public static let maxOSOSSize = 0x736800
-    /// The extended area for large patches, after the theme data and the Dark Mode items
-    /// (`ThemeImport.ososLimit`) and below the 8 MB limit of the reset code. A patch with a load
-    /// address in this area can use the area to its end. The osos image then gets larger than
-    /// `maxOSOSSize`, thus the build moves rsrc (`FirmwarePartition.makeRoom`).
-    public static let extendedArea = 0x7E8000..<0x7F0000
+    /// `"load_address": "extended"`: the build puts the patch after all the data that is already
+    /// there (the end of the image, at least `maxOSOSSize`): after a theme, the Dark Mode items and
+    /// other extended patches. The limit is `ThemeImport.ososLimit`. The osos image then gets
+    /// larger than `maxOSOSSize`, thus the build moves rsrc (`FirmwarePartition.makeRoom`).
+    public static let extendedLoadAddress = "extended"
+
+    /// The load address of an extended patch in `osos`: after its end, aligned to 16 bytes.
+    public static func extendedBase(_ osos: [UInt8]) -> UInt32 {
+        UInt32((max(osos.count, maxOSOSSize) + 15) & ~15)
+    }
 
     public static func list(in folder: URL) -> [PatchInfo] {
         let dirs = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
@@ -97,8 +102,11 @@ public enum Patcher {
             throw PatchError("The patch \"\(spec.name)\" is for a different firmware version.")
         }
         var code = [UInt8](), table = [String: UInt32](), base: UInt32 = 0
+        var maxSize = maxSize
+        let extended = loadAddress == nil && spec.load_address == extendedLoadAddress
+        if extended { maxSize = ThemeImport.ososLimit }
         if hasCode(patch.folder) {
-            guard let address = try loadAddress ?? spec.load_address.map(hex) else {
+            guard let address = try loadAddress ?? (extended ? Optional(extendedBase(current)) : spec.load_address.map(hex)) else {
                 throw PatchError("The patch \"\(spec.name)\" has code but no load_address.")
             }
             base = address
@@ -108,7 +116,6 @@ public enum Patcher {
             (code, table) = try link(try compile(patch.folder), base: base, firmware: fw)
         }
         let end = Int(base) + code.count
-        let maxSize = extendedArea.contains(Int(base)) ? extendedArea.upperBound : maxSize
         guard end <= maxSize else { throw PatchError("The patch code ends at \(String(end, radix: 16)); the maximum is \(String(maxSize, radix: 16)).") }
         var out = current
         let size = max(out.count, (end + 0x7FF) / 0x800 * 0x800)

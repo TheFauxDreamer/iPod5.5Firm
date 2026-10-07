@@ -842,14 +842,10 @@ final class PatcherOptionTests: XCTestCase {
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
         let patch = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "row-marker" }!
         let sha = ThemeImport.sha256(osos)
-        // below the extended area, maxSize is the limit
-        XCTAssertThrowsError(try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7e0000))
-        let out = try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7e0000, maxSize: ThemeImport.ososLimit)
+        XCTAssertThrowsError(try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7eb000))
+        let out = try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7eb000, maxSize: 0x7F0000)
         XCTAssertEqual(out.count % 0x800, 0)
-        XCTAssertTrue((0x7e0000..<ThemeImport.ososLimit).contains(Int(le32(out, 0x677a14))))
-        // in the extended area, the patch can use the area to its end
-        let ext = try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: UInt32(Patcher.extendedArea.lowerBound))
-        XCTAssertTrue(Patcher.extendedArea.contains(Int(le32(ext, 0x677a14))))
+        XCTAssertTrue((0x7eb000..<0x7F0000).contains(Int(le32(out, 0x677a14))))
     }
 
     /// The usb-host-probe patch: the extended area, a bl in the UI event handler and two driver table words.
@@ -861,10 +857,16 @@ final class PatcherOptionTests: XCTestCase {
         let probe = all.filter { $0.spec.name == "usb-host-probe" }
         XCTAssertEqual(probe.count, 1)
         let out = try Patcher.apply(probe, to: osos)
-        XCTAssertGreaterThan(out.count, Patcher.extendedArea.lowerBound)
+        XCTAssertGreaterThan(out.count, Patcher.maxOSOSSize)
         XCTAssertEqual(le32(out, 0x1d8260) & 0xFF00_0000, 0xEB00_0000)
         XCTAssertNotEqual(le32(out, 0x1d8260), le32(osos, 0x1d8260))
-        for at in [0x6c8730, 0x6c878c] { XCTAssertTrue(Patcher.extendedArea.contains(Int(le32(out, at)))) }
+        for at in [0x6c8730, 0x6c878c] { XCTAssertTrue((Patcher.maxOSOSSize..<0x737000).contains(Int(le32(out, at)))) }
+        // after other data (a theme and the Dark Mode items to 0x7eb123): the probe goes after it
+        var filled = osos + [UInt8](repeating: 0, count: 0x7eb123 - osos.count)
+        filled[0x7eb122] = 1
+        let after = try Patcher.apply(probe, to: filled, originalSHA256: ThemeImport.sha256(osos))
+        XCTAssertEqual(le32(after, 0x6c8730) & ~0xFFF, 0x7eb000)
+        XCTAssertGreaterThan(Int(le32(after, 0x6c8730)), 0x7eb130)
         // with the other code patches: different areas and hook sites
         let names = ["album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input", "usb-host-probe"]
         _ = try Patcher.apply(all.filter { names.contains($0.spec.name) }, to: osos)
@@ -872,6 +874,25 @@ final class PatcherOptionTests: XCTestCase {
 }
 
 final class DarkModeTests: XCTestCase {
+    /// The owner's case: "Switch on iPod" with a large theme, then an extended patch (usb-host-probe).
+    /// Needs IPODFW_IPSW and IPODFW_THEME (an .ipodtheme file).
+    func testExtendedPatchAfterSwitchBuild() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let ipsw = env["IPODFW_IPSW"], let themePath = env["IPODFW_THEME"] else { throw XCTSkip("set IPODFW_IPSW and IPODFW_THEME") }
+        let partition = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data)
+        let osos = try partition.image("osos")
+        let sha = ThemeImport.sha256(osos)
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        let all = Patcher.list(in: repo.appendingPathComponent("patches"))
+        let dark = all.first { $0.spec.name == "dark-mode" }!
+        let theme = try ImportedTheme.load(URL(fileURLWithPath: themePath))
+        let (switched, info) = try DarkMode.build(partition: partition, osos: osos, theme: theme, patch: dark, originalSHA256: sha)
+        let probe = all.filter { $0.spec.name == "usb-host-probe" }
+        let out = try Patcher.apply(probe, to: switched, originalSHA256: sha)
+        XCTAssertGreaterThan(Int(le32(out, 0x6c8730)), info.patchAt)
+        XCTAssertLessThanOrEqual(out.count, ThemeImport.ososLimit)
+    }
+
     func testSwitchTableSwitchesBothWaysAndKeepsEdits() {
         let osos = (0..<64).map { UInt8($0) }
         func change(_ r: String, _ at: Int, _ old: [UInt8], _ new: [UInt8]) -> ThemeChange {

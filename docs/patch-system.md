@@ -102,7 +102,7 @@ A `b` hook on the first instruction of a function is a wrapper. `lookup_original
 `Patcher.apply` stops with an error if one of these conditions is true:
 
 1. The SHA-256 of the original osos is not `osos_sha256`. iPodFirm uses the hash of the osos as it was first opened. Thus picture and text edits do not stop a patch.
-2. The code ends after `maxSize`. The default is 0x736800, the start of rsrc in Apple's layout. The Dark Mode build uses 0x7E8000 (`ThemeImport.ososLimit`). For a load address in the extended area, the limit is 0x7F0000.
+2. The code ends after `maxSize`. The default is 0x736800, the start of rsrc in Apple's layout. The Dark Mode build and an extended patch use 0x7F0000 (`ThemeImport.ososLimit`).
 3. The code area is not all zero. Two patches possibly use the same area.
 4. A hook word does not have its `expect` value. Another change or another firmware version is in that location.
 5. The `kind` is not known, or the `to` function is not a global function of the patch.
@@ -120,16 +120,18 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `flash-keep-awake` | 0x736644 | 0x736644–0x736700 (188 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
 | `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |
 | `row-marker` | 0x7358d0 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
-| `dark-mode` | Set by the build | After the theme data, below 0x7E8000 | The value 0x7eb000 in `patch.json` is not used. |
-| `usb-host-probe` | 0x7e8000 | 0x7e8000–0x7e825d (605 bytes) | Extended area. Test patch on the branch `usb-audio-out`. |
+| `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
+| `usb-host-probe` | `extended` | After all other data (745 bytes) | Extended patch. Test patch on the branch `usb-audio-out`. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
 
 ### The extended area
 
-The area 0x7E8000–0x7F0000 (32 KB) is for patches that are too large for the area before 0x736800. `Patcher.extendedArea` (Swift) and `EXTENDED_AREA` (Python) give it. A patch with a load address in this area can use the area to its end, whatever `maxSize` is. The osos image then gets larger than 0x736800, thus the build moves rsrc (`FirmwarePartition.makeRoom`), as for a theme.
+A patch that is too large for the area before 0x736800 uses `"load_address": "extended"`. The build then puts the patch after all the data that is already in the image: the end of osos, at least 0x736800, aligned to 16 bytes (`Patcher.extendedBase`, Python `extended_base`). Thus the patch goes after a theme, the Dark Mode switch table, the Settings menu, the dark-mode code and the extended patches before it. The limit is 0x7F0000 (`ThemeImport.ososLimit`), because the reset code of RetailOS stops if the image end is after 8 MB (0x800004). The osos image gets larger than 0x736800, thus the build moves rsrc (`FirmwarePartition.makeRoom`), as for a theme.
 
-The theme pictures and the Dark Mode items stay below 0x7E8000 (`ThemeImport.ososLimit`). The reset code of RetailOS stops if the image end is after 8 MB (0x800004), thus no data goes after 0x7F0000. Each patch in the extended area has a fixed part of it, as in the normal area.
+The address of an extended patch changes with the theme and the other patches. Thus an extended patch must not use a fixed address of its own code or data in another patch.
+
+A first version (6 October 2026) reserved the fixed area 0x7E8000–0x7F0000. It failed with the "Switch on iPod" build of a large theme: the switch table of "Dark Gray" ends at approximately 0x7ea700, thus the dark-mode code went into the reserved area.
 
 ## Write a new patch
 

@@ -79,7 +79,7 @@ Gate: report to the owner. Decide if a patch can force host mode on the USB-C po
 
 The patch is `patches/usb-audio-out`, with the version letter `u`.
 
-- **Space:** only 124 bytes are free in the normal patch area ([docs/patch-system.md](docs/patch-system.md)). Thus the code goes after 0x736800, below 0x7F0000. Extend the build so that a patch can use this area. The build moves rsrc (`FirmwarePartition.makeRoom`) and puts the patch after the Dark Mode items, with the method of `DarkMode.build` (`patchAt`, `maxSize: ThemeImport.ososLimit`). Make the same change in `src/ipodfw/patcher.py`.
+- **Space:** only 124 bytes are free in the normal patch area ([docs/patch-system.md](docs/patch-system.md)). Thus the patch uses `"load_address": "extended"`: the build puts it after all other data (a theme, the Dark Mode items), below 0x7F0000, and moves rsrc. The patchers support this since 7 October 2026.
 - Replace the two stub entries with `"word"` hooks: 0x6c885c (`expect` 0x000d4820) and 0x6c8860 (`expect` 0x000d4828).
 - Do full speed first (siTD, through the built-in transaction translator of the ARC). Then do high speed (iTD).
 - Link the new descriptors into the periodic frame list of 0x97300. Complete them in the interrupt handler from Stage 1.
@@ -121,4 +121,6 @@ The patch is `patches/usb-audio-out`, with the version letter `u`.
 |---|---|---|---|
 | 2026-10-06 | Research | The host stack exists. The isochronous UIM entries are stubs. No audio class driver for the host. | Continue with Stage 0 and Stage 1. |
 | 2026-10-06 | Stage 1 | Host start 0x2860e8 found. `USBMODE` = 3 in 0xd1288. The stock firmware enters host mode only after iAP lingo 6 with a Camera Connector, which probably supplies the 5 V. The patch can call the host start itself. VBUS must come from an OTG adapter with power. See [re/usb-host.md](re/usb-host.md). | Stage 0 changes: it needs a probe patch. Owner to decide. |
-| 2026-10-06 | Stage 0 | The probe patch `usb-host-probe` (0x7e8000, extended area 0x7E8000–0x7F0000) is ready. Emulator: the trigger starts the host stack one time, and the menus continue to work. | Owner: flash it and do the hardware test. |
+| 2026-10-06 | Stage 0 | The probe patch `usb-host-probe` (first at the fixed address 0x7e8000) is ready. Emulator: the trigger starts the host stack one time, and the menus continue to work. | Owner: flash it and do the hardware test. |
+| 2026-10-07 | Stage 0 | The flash failed with "The code area of usb-host-probe is not empty": with "Switch on iPod" and the "Dark Gray" theme, the dark-mode code was at the fixed address. The probe is now an extended patch: the build puts it after all other data. Test with the owner's theme: correct. | Owner: flash again and do the hardware test. |
+| 2026-10-07 | Stage 0 | The probe plays each sign one time, then a countdown of three beeps and 2 s of silence, then the real result. Emulator: correct timing. The real hub sign also comes in the emulator (the root hub is simulated in software). | Owner: flash and do the hardware test. |

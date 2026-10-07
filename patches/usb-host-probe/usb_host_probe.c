@@ -8,12 +8,21 @@
  * The trigger: iPodFirm writes '1' to iPod_Control\iTunes\iPodFirmUSBProbe. At the first button
  * or wheel event after the next start, the patch reads the file. Other event types do not count,
  * because they also occur during the start, before the disk is ready. If it contains '1', the patch
- * writes '0' first, so that the next start is normal again. Then it gives a short high tone and
+ * writes '0' first, so that the next start is normal again. Then it plays the sequence below and
  * starts the host stack (0x2860e8). With no file or '0', the patch does nothing.
  *
- * The tones (0xcd430: pitch, duration in microseconds):
- *  - short high: the probe starts the host stack;
- *  - long low: the hub driver initializes a hub device (the root hub: the host stack runs);
+ * The sequence, so that the owner knows the tones before the test:
+ *  1. Demonstration: the hub sign, a pause, the storage sign, a pause.
+ *  2. Countdown: three short beeps.
+ *  3. Silence (SILENCE_MS).
+ *  4. The host start. The real signs follow.
+ * tone() only puts a tone in the queue of the piezo task. Thus the pauses come from a task sleep
+ * (0x11c9fc, ms) after each sign. The UI task does not react during the sequence (approximately
+ * 7 s).
+ *
+ * The signs (0xcd430: pitch, duration in microseconds):
+ *  - long low: the hub driver initializes a hub device (the root hub: the host stack runs; a
+ *    second one: a hub in the adapter or the dock);
  *  - high, low, high: the storage driver initializes an interface (a USB flash drive or a card
  *    reader enumerated through the USB-C port).
  *
@@ -30,6 +39,9 @@
 #define MODE_DATA  0x64617461u                          /* 'data' */
 #define HIGH       0xb4
 #define LOW        0x90
+#define PAUSE_MS   1200                                 /* after each sign in the demonstration */
+#define BEEP_MS    400                                  /* from one countdown beep to the next */
+#define SILENCE_MS 2000                                 /* after the countdown */
 
 void fw_memset0(void *p, unsigned size);
 void fw_strcpy(char *dst, const char *src);
@@ -42,6 +54,9 @@ int file_close(void *fh);
 int fw_long_play_timer(void *ui, void *event);         /* the original call at 0x1d8260 */
 void host_start(int a, int b, int c, int d);           /* 0x2860e8 */
 void tone(int pitch, int microseconds);                /* 0xcd430 */
+void task_sleep(int ms);                               /* 0x11c9fc */
+void sign_hub(void);
+void sign_storage(void);
 
 static int checked;
 
@@ -94,7 +109,16 @@ int hook_event(void *ui, void *event)
         checked = 1;
         /* Clear the flag before the start, so that a stop in the host start cannot repeat. */
         if (read_flag() && clear_flag() == 0) {
-            tone(HIGH, 100000);
+            int i;
+            sign_hub();                                 /* the demonstration: 400 ms */
+            task_sleep(400 + PAUSE_MS);
+            sign_storage();                             /* 450 ms */
+            task_sleep(450 + PAUSE_MS);
+            for (i = 0; i < 3; i++) {                   /* the countdown */
+                tone(HIGH, 60000);
+                task_sleep(BEEP_MS);
+            }
+            task_sleep(SILENCE_MS);
             host_start(0, 0, 0, 0);
         }
     }

@@ -17,12 +17,11 @@ REPO = Path(__file__).resolve().parent.parent
 @pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
 def test_load_address_and_size_limit():
     osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
-    # below the extended area, max_size is the limit
     with pytest.raises(patcher.PatchError, match="can only grow"):
-        patcher.apply(osos, REPO / "patches/row-marker", 0x736800, load_address=0x7e0000)
-    out, report = patcher.apply(osos, REPO / "patches/row-marker", 0x7E8000, load_address=0x7e0000)
-    assert report["code"][0] == "0x7e0000"
-    assert len(out) % 0x800 == 0 and len(out) > 0x7e0000
+        patcher.apply(osos, REPO / "patches/row-marker", 0x736800, load_address=0x7eb000)
+    out, report = patcher.apply(osos, REPO / "patches/row-marker", 0x7F0000, load_address=0x7eb000)
+    assert report["code"][0] == "0x7eb000"
+    assert len(out) % 0x800 == 0 and len(out) > 0x7eb000
     assert struct.unpack_from("<I", out, 0x677a14)[0] == int(report["symbols"]["hook_label_draw"], 16)
 
 
@@ -113,8 +112,8 @@ def test_backlight_60s():
 def test_usb_host_probe_extended_area():
     osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
     out, report = patcher.apply(osos, REPO / "patches/usb-host-probe", 0x736800)
-    assert report["code"][0] == "0x7e8000"                     # the extended area
-    assert len(out) % 0x800 == 0 and len(out) > patcher.EXTENDED_AREA[0]
+    assert report["code"][0] == "0x736800"                     # extended: after the end of osos
+    assert len(out) % 0x800 == 0 and len(out) > 0x736800
     event = int(report["symbols"]["hook_event"], 16)
     assert struct.unpack_from("<I", out, 0x1d8260)[0] == patcher.branch("bl", 0x1d8260, event)
     assert struct.unpack_from("<I", out, 0x6c8730)[0] == int(report["symbols"]["hook_hub_init"], 16)
@@ -124,3 +123,7 @@ def test_usb_host_probe_extended_area():
     every = osos
     for name in ("album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input", "usb-host-probe"):
         every, _ = patcher.apply(every, REPO / "patches" / name, 0x736800, original_sha256=original)
+    # after other data (for example a theme and the Dark Mode items to 0x7eb123): the probe goes after it
+    filled = osos + bytes(0x7eb123 - len(osos) - 1) + b"\x01"
+    out, report = patcher.apply(filled, REPO / "patches/usb-host-probe", 0x736800, original_sha256=original)
+    assert report["code"][0] == "0x7eb130"

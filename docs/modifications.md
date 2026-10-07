@@ -323,7 +323,7 @@ The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 min
 
 **Effect.** One time after the trigger, the iPod starts its USB host stack and gives tones. The next start is normal.
 
-**Load address.** 0x7e8000, in the extended area (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code is 605 bytes.
+**Load address.** `extended`: the build puts the code after all other data, for example after a theme and the Dark Mode items (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code is 745 bytes.
 
 **Hooks.**
 
@@ -336,10 +336,10 @@ The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 min
 **Runtime logic.**
 
 1. `hook_event` calls the original 0x1d8570. At the first event of type 4, 5 or 7 (button or wheel) after the start, it reads the trigger file. Other event types also occur during the start, before the disk is ready.
-2. If the file contains '1', it writes '0'. If the write is correct, it gives a short high tone (0xcd430) and calls the host start 0x2860e8.
+2. If the file contains '1', it writes '0'. If the write is correct, it plays a demonstration (the hub sign, a pause, the storage sign, a pause), three short beeps and 2 s of silence. The pauses come from the task sleep 0x11c9fc, because the tone function 0xcd430 only puts a tone in the queue. Then it calls the host start 0x2860e8. The UI does not react for approximately 7 s.
 3. `hook_hub_init` gives a long low tone and continues in 0xe7bc4. `hook_storage_init` gives high, low, high and continues in 0x10dd00. These two wrappers are `naked`: they keep r0–r3 and the stack, because the driver functions can have arguments on the stack.
 
-**Test status.** Emulator: a button push ran the host start 0x2860e8, the UIM init 0x97300 and the controller reset 0xd1288. The menus worked after this. At the next start, the host start did not run (the file contained '0'). The emulator has no USB, thus the driver tones have no test. Not tested on a real iPod.
+**Test status.** Emulator: a button push played the demonstration and the countdown with the correct pauses (hub sign, 1.6 s, storage sign, 1.65 s, three beeps 0.4 s apart, 2 s), then ran the host start 0x2860e8, the UIM init 0x97300 and the controller reset 0xd1288. The hub sign came 30 ms after the host start, because the root hub is simulated in software. The menus worked after this, and the iPod did not restart. At the next start, the host start did not run (the file contained '0'). The emulator has no USB, thus the driver tones have no test. Not tested on a real iPod.
 
 ## Storage type
 
@@ -370,7 +370,7 @@ An earlier version read the ATA IDENTIFY data in the firmware (a hook at 0x142f9
    - Pass 2: the shift of the nearest mapped resource of the same type.
 4. For each changed resource, it makes a list of byte changes (`ThemeChange`: offset, old bytes, new bytes):
    - **BMap** with the same header: the changed pixel runs.
-   - **BMap** that the theme made larger: the picture goes into the free area after the end of osos, below 0x7E8000 (`ThemeImport.ososLimit`). If all pixels are grey, iPodFirm stores a 4-bit grey copy. Then the resource table entry gets the new offset and size.
+   - **BMap** that the theme made larger: the picture goes into the free area after the end of osos, below 0x7F0000 (`ThemeImport.ososLimit`). If all pixels are grey, iPodFirm stores a 4-bit grey copy. Then the resource table entry gets the new offset and size.
    - **View**: the changed fields of each element. A field changes only if the target has the base value. The import translates the resource IDs in the fields.
    - **Type**: each changed 32-bit word, only if the target has the base value.
    - Other types (for example `TCmd` and `Menu`): skipped.
