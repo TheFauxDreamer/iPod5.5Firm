@@ -41,7 +41,9 @@
  * Driver numbers: 0 hub, 1 composite, 3 storage, 4 ICA camera, 5 PTP camera. Number 7, entry 2:
  * a root port status record: r0 port, r1 wPortStatus | wPortChange << 16, r2 PORTSC, r3 result.
  * Number 7, entry 3: a register record: r0 USBCMD, r1 USBSTS, r2 PORTSC, r3 OTGSC. The probe
- * makes one after the host start and one before each log write. Number 7, entry 1: a queue
+ * makes one after the host start and one before each log write. Number 7, entry 0: "add device"
+ * (0xd377c): r0 device, r1 parent, r2 port, r3 device descriptor, with 20 bytes of the descriptor.
+ * Number 7, entry 1: a queue
  * record: r0 USBINTR, r1 ASYNCLISTADDR, r2 ASYNCLISTADDR + 0x10, r3 FRINDEX, with 20 bytes of the
  * first queue head at r1 and at r2 (the qTD token of the overlay is at +0x18).
  * Number 6 is the UIM (host controller driver, table 0x6c8820): entry 1 "create control endpoint"
@@ -76,6 +78,8 @@
 #define COMPLETION_LOGS 40                              /* the maximum of completion records */
 #define TAG_REGISTERS            (7 * 4 + 3)
 #define TAG_QUEUE                (7 * 4 + 1)
+#define TAG_ADD_DEVICE           (7 * 4 + 0)
+#define USB_GLOBALS ((volatile unsigned char *)0x1083e0f8) /* the global block of the USB host stack */
 #define TAG_COMPLETION           (6 * 4 + 0)
 #define TAG_CONTROL_ENDPOINT     (6 * 4 + 1)
 #define TAG_CONTROL_TRANSFER     (6 * 4 + 2)
@@ -125,6 +129,7 @@ struct record {
 static int checked, started;
 static unsigned root_hub_address = 0xffffffff;
 static unsigned completion_logs;
+static unsigned device_requests[4], next_request;       /* the request blocks of logged device transfers */
 static unsigned log_saved, port_logs, uim_logs, last_status = 0xffffffff, last_portsc = 0xffffffff;
 static struct {
     unsigned magic, count;
@@ -224,8 +229,26 @@ void log_call(int tag, const unsigned *regs)
         return;
     if ((tag == TAG_CONTROL_ENDPOINT || tag == TAG_CONTROL_TRANSFER) && uim_logs++ >= UIM_LOGS)
         return;
-    if (tag == TAG_COMPLETION && completion_logs++ >= COMPLETION_LOGS)
-        return;
+    /* The root hub polls its port all the time, and each poll ends in a completion. Log only the
+     * completions of the requests of logged device transfers (r0 without the stage bit). */
+    if (tag == TAG_COMPLETION) {
+        unsigned request = regs[0] & ~1u, i, known = 0;
+        for (i = 0; i < 4; i++)
+            if (device_requests[i] == request)
+                known = 1;
+        if (!known || completion_logs++ >= COMPLETION_LOGS)
+            return;
+    }
+    if (tag == TAG_CONTROL_TRANSFER) {
+        unsigned request = regs[0] & ~1u, i, known = 0;
+        for (i = 0; i < 4; i++)
+            if (device_requests[i] == request)
+                known = 1;
+        if (!known) {
+            device_requests[next_request] = request;
+            next_request = (next_request + 1) & 3;
+        }
+    }
     if (usb_log.count < LOG_MAX) {
         struct record *r = &usb_log.r[usb_log.count];
         int i;
@@ -235,7 +258,9 @@ void log_call(int tag, const unsigned *regs)
             r->regs[i] = regs[i];
         if (tag == TAG_CONTROL_TRANSFER)                /* the wrapper saved r0-r3, lr; then the stack arguments */
             r->regs[3] = regs[5];
-        if (tag == TAG_COMPLETION) {                    /* the request block: +10 address, +0x2c flags */
+        if (tag == TAG_ADD_DEVICE) {                    /* the device descriptor is the 4th argument */
+            copy_from(r->at_r1, regs[3]);
+        } else if (tag == TAG_COMPLETION) {             /* the request block: +10 address, +0x2c flags */
             copy_from(r->at_r1, regs[0] & ~1u);
             copy_from(r->at_r2, (regs[0] & ~1u) + 0x20);
         } else {
@@ -329,6 +354,11 @@ int hook_event(void *ui, void *event)
             task_sleep(SILENCE_MS);
             usb_log.magic = 0x31304c55;                 /* "UL01" */
             started = 1;
+            /* Allow external hubs. "Add device" 0xd377c refuses a hub (class 9) after the root hub,
+             * unless the byte at +0 of the global block is not 0 (error 0x673/0x67d, the photo
+             * import screen says "unsupported device"). Nothing in the firmware sets it. With 2,
+             * the test "1 < byte" is true for each hub. */
+            USB_GLOBALS[0] = 2;
             host_start(0, 0, 0, 0);
             log_registers();
             /* The USB tasks find the devices during this wait. Then write the log here, because a
@@ -389,6 +419,10 @@ __attribute__((naked)) void hook_completion(void)
         "b    completion_continue\n");
 }
 
+/* "Add device" 0xd377c (the Mac OS 9 USBExpertInstallDeviceDriver) at its only call, 0x10c1d8:
+ * (device, parent hub, port, device descriptor, power on the stack). It selects and loads the
+ * class driver. Log each device that the stack offers to the drivers. */
+WRAP(hook_add_device, 28, expert_add_device)
 WRAP(hook_uim_control_endpoint, 25, uim_control_endpoint)
 WRAP(hook_uim_control_transfer, 26, uim_control_transfer)
 WRAP(hook_hub_validate, 1, hub_validate)

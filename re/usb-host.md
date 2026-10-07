@@ -173,6 +173,10 @@ Thus the interrupt fix works: the host stack now gets the completions. The stop 
 
 The probe now logs each call of the completion callback 0xcb118 (a `b` hook), with the status and the request block, and the log has 127 records (8 KB). Emulator: the root hub completions have status 0.
 
+## The seventh real log (2026-10-07)
+
+The dock sequence was the same (GET_DESCRIPTOR 8, SET_ADDRESS 44, GET_DESCRIPTOR 18 with the hub descriptor, then no more requests). The 40 completion records were all used by the root hub: its status poll ends in a completion all the time (all with status 0). Thus the probe now logs only the completions of the request blocks of logged device transfers.
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).
