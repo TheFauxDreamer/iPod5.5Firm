@@ -113,17 +113,43 @@ struct USBProbeControls: View {
                 2. Disconnect the iPod. Restart it (hold Menu and Select until the Apple logo shows).
                 3. Connect a USB flash drive or a card reader through a USB-C OTG adapter with a power input. Connect a charger to the power input.
                 4. Press a button on the iPod. First the iPod plays each sign one time: a long low tone, then high, low, high. Then three short beeps and a silence. Then the real result: a long low tone means that the USB host mode operates (a second one: the hub in the adapter). High, low, high means that the iPod found the flash drive or card reader. The iPod does not react for approximately 7 seconds during the tones.
-                5. Restart the iPod again. The next start is normal.
+                5. Wait. Approximately 10 seconds after the result tones, the iPod writes the USB log and gives two short low beeps.
+                6. Disconnect the adapter and restart the iPod. The next start is normal.
+                7. Connect the iPod to the Mac and click Show USB Log.
                 """)
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("Start the Probe at the Next Restart") { model.armUSBProbe() }
+                    .disabled(model.currentIPod == nil)
+                Button("Show USB Log") { model.readUSBProbeLog() }
                     .disabled(model.currentIPod == nil)
                 Button("Eject iPod") { Task { await model.ejectIPod() } }
                     .disabled(model.currentIPod == nil)
                 if model.currentIPod == nil { Text("Connect the iPod.").font(.caption).foregroundStyle(.secondary) }
             }
             if let s = model.usbProbeStatus { Label(s, systemImage: "checkmark.circle").font(.caption) }
+            if let log = model.usbProbeLog {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("USB Log").font(.headline)
+                        Spacer()
+                        Button("Copy Log") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(USBProbeLog.text(log), forType: .string)
+                        }
+                        .disabled(log.isEmpty)
+                    }
+                    .padding(.top, 6)
+                    if log.isEmpty {
+                        Text("The log is empty. The probe did not start the host stack, or no driver was called. Press Menu after the tones, so that the iPod writes the log.")
+                            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    ForEach(Array(log.enumerated()), id: \.offset) { i, e in
+                        Text("\(i + 1). \(e.text)").font(.caption.monospaced()).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
         }
     }
 }

@@ -860,16 +860,49 @@ final class PatcherOptionTests: XCTestCase {
         XCTAssertGreaterThan(out.count, Patcher.maxOSOSSize)
         XCTAssertEqual(le32(out, 0x1d8260) & 0xFF00_0000, 0xEB00_0000)
         XCTAssertNotEqual(le32(out, 0x1d8260), le32(osos, 0x1d8260))
-        for at in [0x6c8730, 0x6c878c] { XCTAssertTrue((Patcher.maxOSOSSize..<0x737000).contains(Int(le32(out, at)))) }
+        // the wrappers are in the probe code, which starts at 0x736800 and is shorter than 8 KB
+        for at in [0x6c8730, 0x6c878c] { XCTAssertTrue((Patcher.maxOSOSSize..<Patcher.maxOSOSSize + 0x2000).contains(Int(le32(out, at)))) }
         // after other data (a theme and the Dark Mode items to 0x7eb123): the probe goes after it
         var filled = osos + [UInt8](repeating: 0, count: 0x7eb123 - osos.count)
         filled[0x7eb122] = 1
         let after = try Patcher.apply(probe, to: filled, originalSHA256: ThemeImport.sha256(osos))
-        XCTAssertEqual(le32(after, 0x6c8730) & ~0xFFF, 0x7eb000)
-        XCTAssertGreaterThan(Int(le32(after, 0x6c8730)), 0x7eb130)
+        XCTAssertTrue((0x7eb130..<0x7eb130 + 0x2000).contains(Int(le32(after, 0x6c8730))))
         // with the other code patches: different areas and hook sites
         let names = ["album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input", "usb-host-probe"]
         _ = try Patcher.apply(all.filter { names.contains($0.spec.name) }, to: osos)
+    }
+}
+
+/// The USB log of usb-host-probe, with the root hub record that the emulator wrote (2026-10-07).
+final class USBProbeLogTests: XCTestCase {
+    func testParseRootHubAndInterface() {
+        var d = [UInt8]("UL01".utf8) + [2, 0, 0, 0]
+        let hub: [UInt8] = [18, 1, 0, 2, 9, 0, 0, 64, 0xAC, 0x05, 0x31, 0x80, 0, 1, 1, 2, 0, 1]
+        func record(_ tag: UInt8, _ r1: [UInt8], _ r2: [UInt8]) -> [UInt8] {
+            [0xA5, tag, 0, 0] + [UInt8](repeating: 0, count: 16)
+                + r1 + [UInt8](repeating: 0, count: 20 - r1.count) + r2 + [UInt8](repeating: 0, count: 20 - r2.count) + [0, 0, 0, 0]
+        }
+        d += record(2, hub, [])                                              // hub: initialize device
+        d += record(15, [9, 4, 0, 0, 2, 8, 6, 0x50, 0], hub)                 // storage: initialize interface
+        var port = record(30, [], [])                                        // root port: connected, power, change connection
+        port.replaceSubrange(4..<16, with: [1, 0, 0, 0, 0x01, 0x01, 0x01, 0x00, 0x01, 0x10, 0x00, 0x08])
+        d += port
+        var regs = record(31, [], [])                                        // controller registers
+        regs.replaceSubrange(4..<20, with: [1, 0, 0, 0, 0, 0x10, 0, 0, 0x01, 0x10, 0, 0, 0, 0x0E, 0, 0])
+        d += regs
+        d[4] = 4
+        let log = USBProbeLog.parse(d)!
+        XCTAssertEqual(log.count, 4)
+        XCTAssertEqual(log[3].text, "Controller: USBCMD 0x00000001 (run), USBSTS 0x00001000 (halted), PORTSC 0x00001001 (connected, power, full speed), OTGSC 0x00000E00 (VBUS valid, B-session valid, A-session valid)")
+        XCTAssertEqual(log[2].text, "Root port 1: status 0x0101 (connected, power), change 0x0001 (connection), PORTSC 0x08001001 (connected, power, high speed, line SE0)")
+        XCTAssertEqual(log[0].text, "Hub: initialize device — device 05AC:8031, class 09/00/00 (hub)")
+        XCTAssertEqual(log[1].text, "Storage: initialize interface — interface 0 (alternate 0), class 08/06/50 (storage) — device 05AC:8031, class 09/00/00 (hub)")
+        XCTAssertNil(USBProbeLog.parse([UInt8](repeating: 0, count: 4096)))
+        // the setup packets that the emulator logged for the root hub
+        XCTAssertEqual(USBProbeLog.stageText(1, [0x80, 6, 0, 1, 0, 0, 0x12, 0]), "setup: GET_DESCRIPTOR device 0, 18 bytes")
+        XCTAssertEqual(USBProbeLog.stageText(1, [0, 5, 0x30, 0, 0, 0, 0, 0]), "setup: SET_ADDRESS 48")
+        XCTAssertEqual(USBProbeLog.stageText(0, []), "status stage")
+        XCTAssertEqual(USBProbeLog.stageText(1, [UInt8](repeating: 0, count: 12)), "data stage, buffer 000000000000000000000000")
     }
 }
 

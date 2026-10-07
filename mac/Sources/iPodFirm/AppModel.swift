@@ -67,6 +67,8 @@ final class AppModel: ObservableObject {
     @Published var thumbnailStatus: String?
     /// The result of the last "Start the probe at the next restart" (usb-host-probe).
     @Published var usbProbeStatus: String?
+    /// The decoded USB log of the probe (nil: not read).
+    @Published var usbProbeLog: [USBProbeLog.Entry]?
     /// The playlists of the connected iPod and their thumbnails (album-art patch).
     @Published var playlistArt: [MusicImport.PlaylistArt] = []
     /// True after a change to a playlist image that is not yet in the thumbnail file on the iPod.
@@ -512,6 +514,8 @@ final class AppModel: ObservableObject {
     /// The trigger file of the usb-host-probe patch: '1' starts the USB host stack one time, at the
     /// first button event after the next restart. The patch writes '0' back before the start.
     static let usbProbeFile = "iPod_Control/iTunes/iPodFirmUSBProbe"
+    /// The log of the probe. iPodFirm makes it empty with the trigger; the patch writes it on the iPod.
+    static let usbProbeLogFile = "iPod_Control/iTunes/iPodFirmUSBLog"
 
     func armUSBProbe() {
         guard let volume = ipodMusicVolume() else {
@@ -519,9 +523,23 @@ final class AppModel: ObservableObject {
             return
         }
         do {
+            try Data(count: USBProbeLog.fileSize).write(to: volume.appendingPathComponent(Self.usbProbeLogFile), options: .atomic)
             try Data("1".utf8).write(to: volume.appendingPathComponent(Self.usbProbeFile), options: .atomic)
+            usbProbeLog = nil
             usbProbeStatus = "The probe starts at the first button press after the next restart of the iPod (\(Date().formatted(date: .omitted, time: .shortened)))."
         } catch { fail("Couldn't write the probe file", error) }
+    }
+
+    func readUSBProbeLog() {
+        guard let volume = ipodMusicVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder, then try again.")
+            return
+        }
+        guard let data = try? Data(contentsOf: volume.appendingPathComponent(Self.usbProbeLogFile)) else {
+            alert = AlertInfo(title: "No USB log", message: "The iPod has no USB log. Click Start the Probe at the Next Restart, then do the test.")
+            return
+        }
+        usbProbeLog = USBProbeLog.parse([UInt8](data)) ?? []
     }
 
     /// Read the playlists of the connected iPod and their images.

@@ -76,6 +76,103 @@ The owner's flash failed: "The code area of usb-host-probe is not empty". The ow
 
 The owner asked to hear the tones before the test. The probe now plays the hub sign and the storage sign one time, then three short beeps and 2 s of silence, then it starts the host stack. Emulator times: demonstration at 31.44 s and 33.08 s, beeps at 35.06, 35.47 and 35.88 s, host start at 38.33 s, UIM init at 38.34 s, and a real hub sign at 38.36 s. Thus `hook_hub_init` operates: the hub driver initializes the simulated root hub, also without USB hardware. The iPod did not restart during the 7 s sleep in the UI task.
 
+## The first real test and the log (2026-10-07)
+
+Real iPod with the 3-in-1 adapter (USB-C plug, USB-A socket, 3.5 mm jack, PD charging) and a USB card reader:
+
+- The host mode sign (one long low tone) came. Thus the patch starts the host mode on the USB-C mod.
+- The photo import screen showed "unsupported device" (string 17037), with and without a card in the reader. Thus the import function did not recognise the reader. The card (128 GB SDXC, FAT32, photos in `DCIM/100NIN03`) is not the cause.
+- No second long low tone and no storage sign. Thus the hub driver did not initialize a hub in the adapter, and the storage driver did not initialize the reader.
+
+The import status strings: 17033 "ready to connect", 17034 "connecting...", 17035 "connection failed", 17036 "no card inserted", 17037 "unsupported device", 17044 "Unknown format".
+
+The probe now logs each call of the six class drivers (entries 1–3 of each dispatch table) and writes the log to `iPodFirmUSBLog`. iPodFirm shows it ("Show USB Log"). Emulator: two records for the simulated root hub (05AC:8031, class 09).
+
+## No log on the real iPod (2026-10-07)
+
+The trigger file contained '0' after the test, thus the probe ran. The log file contained only zeros. Causes:
+
+1. The probe wrote the log at a later button event. 0x1d81cc gives each event to the active modal screen first (0x12d890, 0x12ddb8) and returns if the screen takes it (branch at 0x1d8254). The photo import screen probably took the events. The emulator showed no import screen, thus the emulator test worked.
+2. Emulator: a file write reaches the disk only later. With a stop 5 s after the write, the file had zeros. After 90 s, it had the log.
+
+Fix: 10 s after the host start, the probe writes the log in the UI task, flushes the disk cache (0x1a0120, 0x19ff0c) and gives two short low beeps. Emulator: the log was on the drive 5 s after the beeps.
+
+## The second real log (2026-10-07)
+
+With the dock (a hub), the log had only "Hub: validate" and "Hub: initialize device" for the simulated root hub 05AC:8031. No driver got a device from the USB-C port.
+
+In the emulator, the host start runs and the root hub request handler 0xd26b0 runs four times (descriptor requests), but the port status function 0xe7980 never runs: the hub driver waits for a status-change interrupt, and the emulator has no USB controller. The real log looks the same. Thus possibly the controller on the real iPod also did not report a connection, or its interrupts did not arrive.
+
+The probe now logs:
+
+- each change of the root port status (hooks at 0xd28f0 and 0x10e75c, calls of 0xe7980);
+- the controller registers USBCMD (0xC5000140), USBSTS (0xC5000144), PORTSC (0xC5000184) and OTGSC (0xC50001A4), after the host start and before each log write.
+
+Emulator: USBCMD = 1 (run), the other registers 0.
+
+## The third real log: high speed (2026-10-07)
+
+With the dock and the card reader, the new log showed:
+
+| Record | Meaning |
+|---|---|
+| OTGSC 0x006F4E00 | VBUS valid, A-session and B-session valid: the iPod sees the 5 V. |
+| Port status 0x0101, change 0x0001 | A device connected. |
+| Port status 0x0503, change 0x0012 | After the reset: connected, enabled, power, high speed. |
+| PORTSC 0x28001205 at the end | Connected, enabled, power, PSPD = 2 (high speed), no PFSC. |
+| USBCMD 0x00080B21, USBSTS 0x00008084 | Run, asynchronous schedule on and running (control transfers). |
+
+No driver call came. Thus the hardware path works (the USB-C mod, VBUS, connection, reset, high-speed chirp), but the descriptor transfer after the reset failed. The many port records only differed in the line state bits 11:10, which change during high-speed traffic. The probe now ignores these bits.
+
+Hypothesis: the UIM of the Camera Connector (2005) does not handle high-speed devices correctly. The UIM init has a full-speed path (PFSC) for the other chip type. The probe now uses it (hook at 0x97364). If the descriptors then arrive, high speed is the cause. USB audio needs only full speed.
+
+## The fourth real log: full speed (2026-10-07)
+
+With the full-speed hook, the dock connected at full speed (PFSC set, PSPD = 0), the reset worked and the port was enabled. The asynchronous schedule ran. No driver call came. Thus the speed is not the cause. The owner disconnected the dock after the double beep; the later records come from a log write at a later button press.
+
+Hypothesis: the charger in the adapter also gives VBUS to the iPod. Thus the USB device function of the iPod (USBPowerSense) possibly runs at the same time and takes the controller interrupts. USBSTS never showed "transfer done" (bit 0).
+
+The probe now also logs the UIM calls "create control endpoint" and "control transfer" (word hooks at 0x6c882c and 0x6c8830) and a queue record (USBINTR, ASYNCLISTADDR, FRINDEX, the first queue head and its qTD token). Emulator: the root hub gets GET_DESCRIPTOR (device, 18 bytes), SET_ADDRESS 0x30, GET_DESCRIPTOR (configuration, 4 bytes). A control transfer is three UIM calls (setup, data, status); r1 = 0xcb118 is the completion function; the buffers are in the uncached RAM window (0x93b5xxxx).
+
+## The probe stopped (version 0.1.62, 2026-10-07)
+
+The owner heard one tone, then the photo import screen showed at once. No double beep. The trigger file had '0' (the probe started), and the log file still had the old log. The owner's exact build (Switch on iPod with Dark Gray, five patches, version 1.3.1abhsw) worked in the emulator.
+
+Probable cause: version 0.1.62 read the USB buffers in the window at 0x90000000, where the emulator showed them. The emulator allows the read; the real iPod possibly gives a memory fault. Then the UI task stops the probe and continues, thus the import screen shows at once. Fix: read the same RAM through 0x10000000 (address minus 0x80000000). Emulator with the owner's build: correct, with the setup packets in the log.
+
+Lesson: the emulator allows memory reads that the real iPod possibly does not allow. Read only in the window 0x10000000–0x14000000 (64 MB on the owner's iPod).
+
+## The fifth real log: the transfer completes (2026-10-07)
+
+Version 0.1.63 with the dock at full speed. The root hub was set up completely (GET_DESCRIPTOR, SET_ADDRESS 35, configuration, SET_CONFIGURATION, hub descriptor). The 20 UIM records were all used by the root hub, thus the dock transfers are not in the log. The queue record after the reset:
+
+| Field | Value | Meaning |
+|---|---|---|
+| ASYNCLISTADDR | 0x9362B000 | The first QH, in the uncached window (RAM | 0x80000000) |
+| QH word 1 | 0x0840C000 | Address 0, endpoint 0, full speed, maximum packet 64, head of the list |
+| qTD token | 0x00008D00 | Not active, no error, 0 bytes left, PID IN, interrupt on complete |
+| USBINTR | 0x0B | Transfer done, error and frame-list rollover interrupts enabled |
+| USBSTS | 0x8084 | "Transfer done" (bit 0) is clear |
+
+Thus the dock answered the first GET_DESCRIPTOR, and the hardware completed the transfer, but the host stack never sent the next request (SET_ADDRESS). An interrupt handler cleared bit 0, but the host stack did not get the completion.
+
+The USB interrupt (source 20) has two handlers: the device driver installs 0xcd8e0 (0x220e0c), and the UIM init installs 0xffd1c (0x9741c). The interrupt manager is outside the image, thus its rule for two handlers is not known. In the emulator, the device handler is installed after the start, also without VBUS.
+
+The probe now removes the device handler and installs the host handler (hook at 0x9741c), and logs each step. It also skips the root hub transfers in the log. Emulator: disable 1, remove 1, install 0, enable 0; the menus work. The meaning of these results is not known.
+
+## The sixth real log: the dock answers (2026-10-07)
+
+Version 0.1.64 removed the device handler of the USB interrupt and installed the host handler (results: disable 1, remove 1, install 0, enable 0). Then the dock, at full speed:
+
+1. GET_DESCRIPTOR (device, 8 bytes) at address 0, data, status: correct.
+2. SET_ADDRESS (the log shows the old setup bytes), then "create control endpoint" at address 101.
+3. GET_DESCRIPTOR (device, 18 bytes) at address 101: `12 01 10 02 09 00 00 40` = USB 2.1, class 09 (hub), packet size 64.
+4. Then no further request, and no "Hub: validate" for the dock. The last qTD completed (token 0x8D00).
+
+Thus the interrupt fix works: the host stack now gets the completions. The stop after the device descriptor has another cause. Possibly the driver selection needs the Camera Connector session (the accessory object, vtable 0x668580, state 3), which the probe does not start.
+
+The probe now logs each call of the completion callback 0xcb118 (a `b` hook), with the status and the request block, and the log has 127 records (8 KB). Emulator: the root hub completions have status 0.
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).

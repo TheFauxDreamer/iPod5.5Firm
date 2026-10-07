@@ -177,6 +177,7 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | 0x193b90 | Copies a setting and posts event 0x60000006 when it changes. | Static |
 | 0x1eb65c | Native method: writes the backlight seconds to the application object +0x444. | Static, Emulator |
 | 0x1ee8b8 | Saves the settings and the database, as before a sleep. | Static, Patch |
+| 0x1a0120, 0x19ff0c | 0x1a0120 returns the disk cache object. 0x19ff0c(object) writes the cache to the disk until its queue (+0x6c) is empty. The sleep code calls them at 0x1ed8cc and 0xb4430. Without it, a file write reaches the disk only after more than 10 s. | Static, Emulator, Patch |
 | 0x1ee8d0 | Sleep sequence: saves, writes the cache (0x1ed828, 0x19ff0c), then calls the sleep method. Does not sleep if external power is found. | Static, Emulator |
 | 0x1ecc8c | External-power test, from saved copies of the power pins (vtable offset 0xb4 → 0x9e664). | Static |
 | 0x265698 | Reads the power source pins. | Static |
@@ -274,9 +275,16 @@ Refer to [re/usb-host.md](../re/usb-host.md) and [USB-AUDIO-OUT.md](../USB-AUDIO
 | 0x2860e8, 0x28608c | Host start and host stop. Emulator: a call of 0x2860e8 runs 0x97300 and 0xd1288, and the menus continue to work. |
 | 0x6c8730 | Hub driver dispatch table, "initialize device" entry (0xe7bc4). Dispatch format: version 0x1100, validate, initialize device, initialize interface, finalize, notify. |
 | 0x6c878c | Storage driver dispatch table, "initialize interface" entry (0x10dd00). |
+| 0x6bc3dc | Driver registry entries (44 bytes, pairs at +0x1c): Hub, two USBCompositeDevice1.6 records (one table at 0x6c85ec), SampleStorageDriver (interface class 8), ICAType4CameraDriver (vendor 0x04A9), PTPCameraDriver (class 6/1/1). Emulator: the hub driver gets the simulated root hub 05AC:8031. |
 | 0xcd430 | Piezo tone (pitch, duration in microseconds): a type-0 message to the queue 0x15 of `AsyncPiezo` (0x285060). The firmware uses pitches 0xb4 and 0x90 with 200000. |
 | 0x1fb50c | iAP lingo 6 (USB host), command 3: tells the Camera Connector to switch on (1) or off (0). |
 | 0x2856a4 | `USBPowerSense` task. |
+| 0x97364 | In the UIM init: `bl 0x266794` (chip check 0x598: 1 if the chip ID byte at 0x70000000 is 0x32). The init stores (result == 0) at +0x60 of the controller object and, if it is 1, sets PFSC (force full speed) in PORTSC at 0x9746c. On the owner's iPod the result is 1 (no force). |
+| 0x18a8d8, 0x18a870, 0x18a83c, 0x18a824, 0x18a888 | Interrupt object {u16 source, handler}: make; install and enable (returns the enable result); install only (manager method +0x48); method +0x34; disable and remove (0x127888, then 0x1277d0). The manager (0x127618) is an object outside the image (0x14936ad0). |
+| 0x9741c | In the UIM init: install of the host USB interrupt handler 0xffd1c for source 20 (0x14). The device driver installs 0xcd8e0 for the same source (0x220e0c, literal 0x220ef0). Emulator: the device handler is installed after the start, also without VBUS. |
+| 0xcb118 | Completion callback of a control transfer stage: (request \| stage bit, status, bytes, …). Status 0 is correct; 0xfffffff0, 0xffffe4ba and 0xffffe4c5 are errors. The stage flags are at request + 0x2c (0x1000000, 0x2000000, 0x4000000). Called by the UIM completion code 0xe01a0. |
+| 0xe7a50 | hubAddDeviceHandler: a state machine (+0x18) for a new device on a hub port. The completion callback drives it. |
+| 0xe7980 | Root port status (port, &{wPortStatus, wPortChange}). Called at 0xd28f0 (root hub GET_STATUS) and 0x10e75c (status-change poll 0x10e6e0). |
 
 ### The JavaScript engine
 
