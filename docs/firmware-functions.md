@@ -132,6 +132,35 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | 0x210290 | Sets the draw mode. Apple code uses 0, 1, 8, 32, 33 and 34. Mode 0 replaces the pixels. Mode 1 darkens. | Patch, Emulator |
 | 0x211a00 | Fills a rectangle. | Patch |
 
+### The music database in RAM
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x9bc6c | Resolves a library reference: type byte 1 is the library, type 2 has it at + 0xc9c. | Static |
+| 0x9c838 | (track list, sort, reverse, i): the item at sorted position i. Builds a missing sorted array with 0x1120bc. | Static |
+| 0x9cb7c | Example: the title of track i of the list of all tracks. | Static |
+| 0x9eff8 | (pool, index, buffer, &length, maximum): copies the UTF-16 text of a pool entry. | Static |
+| 0x885ec | Stores a string in a pool. | Static |
+| 0x10a15c | Converts an mhod-52 sort type to a slot (album 4 → 6). | Static |
+| 0x1e804c | The property method of the main provider (class 0x670f54) for the music screens. | Static |
+| 0x21f254 | (provider, type, ID): asks the provider and its parents for a property (vtable + 0x5c). | Static |
+
+### Text drawing
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x2438bc | Draws the text of a label (called by 0x244924). | Static |
+| 0x2115a4 | Measures a UTF-8 text (gc, text, width). | Static |
+| 0x2106ec, 0x2113c0 | Draw a UTF-8 text into a rectangle with the font of the graphics context. | Static |
+
+### Artwork
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0xa1ff0 | Opens `iPod_Control\Artwork\ArtworkDB` when the music database loads (0xb4a64). | Static |
+| 0x205cfc, 0x205db4 | Starts the task `ArtworkLoadTask`, and its task function: a request queue, an image cache and reference-counted image objects. | Static |
+| 0x88094 | Writes `Thumbs\F%d_%d.ithmb` of the Photos database. | Static |
+
 ### The display
 
 The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co-processor. Refer to [../re/cover-flow.md](../re/cover-flow.md#the-screen).
@@ -225,6 +254,8 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x23a04c | Method +0x138 of a browse list: sets the selected row and posts the property event "LstS". | Static |
 | 0x1d3348 | Event method of the application object (class 0x66a510). Sends events to handlers in maps, for example 0x1d81cc. | Static, Emulator |
 | 0x1d8aa4 | Key actions of the UI handler (called for the types 4–7). | Static |
+| 0xa69dc | The click of the lists. Reads the Clicker setting (RAM 0x1081d9c4): bit 1 speaker (piezo message), bit 2 headphones (audio click 0x1b9168). No arguments. | Static, Emulator, Patch (`cover-flow`) |
+| 0x1b9168 | Plays the click on the audio path. Then, if the byte at 0x10882440 + 0x3e has bit 0, the piezo tone 0xcd430(0x55, 3000) at 0x1b91fc. | Static, Emulator |
 
 The first argument of 0x1d81cc and of 0x1d813c is the UI object (0x13e358a4 in the emulator). It is not the application object.
 
@@ -388,6 +419,15 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | Track | +0x28, +0x2c, +0x34, +0x3c, +0x40 | Pool indexes: title, artist, album, composer, genre |
 | Track | +0x30 | Index of the artist sort key (pool db + 0x10c) |
 | Music database | +0xb4, +0xe0, +0x138, +0x190 | String pools: titles, artists and composers, albums, genres |
+| Music database | +0xd2c, +0xd14 | The open file `iPod_Control\Artwork\ArtworkDB` (0xa1ff0) |
+| Track | +0x108, +0x10c | dbid (mhit + 0x70). ArtworkDB links an image to this ID. |
+| Track | +0x00, +0x04 | The database; the next track |
+| Music database | +0x1c, +0x20 | Track count; the track array (0x110 bytes for each track) |
+| String pool (`strc`) | +0x08, +0x10, +0x14 | Handle to the entries {offset, length}; handle to the UTF-16 text; entry count |
+| Library | +0xcf0, +0xcf8 | The list of all tracks; the database |
+| Track list | +0x2fc + 4 × slot | Sorted array of items (the item at + 0x10 + 4 × i; item + 0x20 is the track). Slot 6: by album. |
+| Main provider | +0x1c, +0xc0 … +0xdc | The library; the row counts of the browse lists |
+| Track | +0x8b | Bit 1: the track has artwork (mhit + 0xa5) |
 | View | +0x20 | Flags. (flags & 0x1800) == 0x800 if the view is visible. |
 | Browse list | +0xa4 | An object. Its word at +0x14 is the selected row. |
 | Browse list | +0xb8 | The number of rows |
@@ -416,6 +456,7 @@ The physical address is 0x10000000 + the CPU address.
 | 0x1081e0d4 | The layer index of the display (0). |
 | 0x1081ec54 | Byte: the damage callback binds the layer if it is not 0. |
 | 0x1081da80 | Pointer to the application object (class 0x66a510). |
+| 0x1081d9c4 | The Clicker setting: bit 1 speaker, bit 2 headphones. |
 
 The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No code refers to the area between the image end and 8 MB. The patches and the theme data use this area.
 

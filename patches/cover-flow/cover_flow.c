@@ -1,7 +1,7 @@
 /* Cover Flow for RetailOS 1.3 (iPod Video). Research: re/cover-flow.md.
  *
  * Hold Select in the Albums list to open Cover Flow. Turn the click wheel to move through the
- * covers. Push Select to open the album at the centre. Push Menu to close Cover Flow. Play
+ * covers, with the click of the lists. Push Select to open the album at the centre. Push Menu to close Cover Flow. Play
  * operates as usual. The background is white with the light theme and black with the dark theme.
  *
  * Hooks (all are words in vtables or in a literal pool):
@@ -51,6 +51,7 @@ void display_lock(void *mutex);
 void display_unlock(void *mutex);
 void view_invalidate(void *view);
 void *ui_context(void);
+void ui_click(void);
 int dispatch_event(int *ev, void *target);
 void ui_activity(void *ui, int button);
 void *fw_alloc(unsigned size);
@@ -484,6 +485,8 @@ static void step(int dir)
         target = 0;
     if (target >= (int)count)
         target = count - 1;
+    if (target * 256 != start)
+        ui_click();                       /* the click of the lists, as the Clicker setting gives */
     for (f = 1; f <= frames; f++) {
         pos = start + sdiv((target * 256 - start) * f, frames);
         render();

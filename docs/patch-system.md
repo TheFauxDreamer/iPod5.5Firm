@@ -238,7 +238,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `row-marker` | 0x7358d0 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
 | `usb-host-probe` | `extended` | After all other data (8740 bytes; the 32 KB log buffer comes from the allocator) | Extended patch. Test patch. |
-| `cover-flow` | `extended` | After all other data (8104 bytes; approximately 520 KB for the screen copy and the covers come from the allocator while Cover Flow shows) | Extended patch. |
+| `cover-flow` | `extended` | After all other data (8116 bytes; approximately 520 KB for the screen copy and the covers come from the allocator while Cover Flow shows) | Extended patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
 

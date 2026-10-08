@@ -197,3 +197,54 @@ The owner flashed version 0.1 with the dark theme, the Dark Mode switch, `album-
 - The background follows the theme. The patch examines the left margin of the list rows in the copy of the screen.
 
 The emulator runs at approximately ¼ of the real speed. Each frame takes a long time there.
+
+## Version 0.3: the click
+
+In the stock Albums list, each row of scroll called the piezo tone `0xcd430(0x55, 3000)` from 0x1b91fc (emulator, `IPODFW_REGS_AT=0xcd430`: two rows, two calls). The click function of the firmware is 0xa69dc (no arguments):
+
+- It reads the Clicker setting at RAM 0x1081d9c4.
+- If the setting has bit 1 (speaker) only, it sends a piezo message to the queue 0x15 (0xa6770).
+- If the setting has bit 2 (headphones), it continues at 0x1b9168, which plays the click on the audio path. If the byte at 0x10882440 + 0x3e has bit 0, it also plays the piezo tone.
+- If the setting is off, it does nothing.
+
+Cover Flow calls 0xa69dc once for each cover step. Emulator: two steps, two calls. The emulator has no audio.
+
+## Research: the built-in artwork (8 October 2026)
+
+The aim is to show the covers that iTunes or Finder put on the iPod (`iPod_Control/Artwork/ArtworkDB`, `F1028_1.ithmb` 100 × 100, `F1029_1.ithmb` 200 × 200), without the file `iPodFirmCoverFlow`.
+
+| Address | Finding | Evidence |
+|---|---|---|
+| 0xa1ff0 | Opens `iPod_Control\Artwork\ArtworkDB` (strings at 0xa2108, 0xa211c, 0xa2124). Called by the music database load 0xb4a64. Keeps the open file at db + 0xd2c and db + 0xd14. | Static |
+| 0x205cfc | Starts the task `ArtworkLoadTask` (string 0x2aa7fc). The task function is 0x205db4. | Static |
+| 0x205db4 | The artwork load task. It takes requests from a queue (task + 0x50), keeps an image cache (task + 0x8c), and makes reference-counted image objects. | Static |
+| 0x88094 | Writes `Thumbs\F%d_%d.ithmb`. This is the Photos database, not the music artwork. | Static |
+| 0xd7888 | Track parser. It stores the dbid of the track (mhit + 0x70) at track + 0x108 and + 0x10c, and the "has artwork" byte (mhit + 0xa5) in bit 1 of track + 0x8b. It does not use mhit + 0x160. | Static |
+
+Conclusions:
+
+- The firmware finds the artwork of a track by its dbid. Each mhii in ArtworkDB has the dbid of its song at + 0x14.
+- The firmware loader is asynchronous (a task, a queue, a cache). A patch cannot call it in the time of one frame.
+- A patch can read ArtworkDB and `F1028_1.ithmb` itself with the file functions. It needs the dbid of one track of each album from the RAM database.
+
+### The RAM database (emulator, FolderLibrary: 1000 tracks, 138 albums, no mhod 52)
+
+| Item | Finding | Evidence |
+|---|---|---|
+| Provider | RAM 0x1081da18 points to the main provider (class 0x670f54). Provider + 0x1c is the library object (0x13e27a78 in the emulator). Its event method 0x1e804c answers the properties of the music screens. | Emulator, Static |
+| Library | 0x9bc6c resolves a library reference (byte 1: itself; byte 2: + 0xc9c). Library + 0xcf0 is the list of all tracks. Library + 0xcf8 is the database. | Static (0x9cb7c) |
+| Database | + 0x1c: track count (1000). + 0x20: the track array (each 0x110 bytes; track + 0 is the database, track + 4 the next track). | Emulator |
+| String pools | A pool (tag `strc`, for example db + 0x138 for the albums) has a handle at + 0x08 to 8-byte entries {offset, length}, a handle at + 0x10 to the text, and the count at + 0x14. The text is UTF-16. The album pool has one entry for each track, so each track has its own album string. | Static (0x885ec, 0x9eff8), Emulator |
+| String copy | 0x9eff8(pool, index, buffer, &length, maximum) copies the UTF-16 text of an entry. The index starts at 1. | Static |
+| Sorted tracks | 0x9c838(track list, sort, 0, i) gives the item at sorted position i. Item + 0x20 is the track. The track list keeps the sorted arrays at + 0x2fc + 4 × slot and builds a missing one with 0x1120bc. The count is u16 at (track list + 0x28) + 0x32. 0xeae38 converts some sort values. The slot for the album is 6 (0x10a15c(4)). | Static |
+| Counts | The provider keeps the row count of each browse list at + 0xc0 … + 0xdc (0x254bcc …). For the Albums list (0x6382) it gives `VMax` from provider + 0xc4. | Static |
+| Albums order | The firmware order is not a plain sort: "(III)", "<I°_°I>", "1:15 - Single", "10,000 gecs", "2019", "A Brief …". Punctuation comes before digits. The order of `CoverFlowFile.albumOrder` is different for such names. | Emulator (screen) |
+
+### Text
+
+The label draw 0x244924 calls 0x2438bc(view, gc = view + 0x74, …, text, …, colour, …). That function measures the text with 0x2115a4(gc, text, width) and draws it with 0x2106ec or 0x2113c0(gc, text, …, rect, …). The text is UTF-8. The font comes from the graphics context, and 0x21a27c sets the origin and the clip of the context for one view.
+
+Open items:
+
+1. Confirm that the distinct albums in the album-sorted track list (slot 6) are in the order of the Albums list, also with a database that has mhod 52.
+2. Draw the caption with the firmware font: find how a graphics context gets its font, and how to draw outside the bounds of the view.

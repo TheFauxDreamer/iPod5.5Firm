@@ -319,12 +319,12 @@ The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 min
 
 ## cover-flow
 
-**User interface.** Patches pane > Cover Flow, letter `c`, version 0.2. `"ui": { "tools": ["cover-flow"] }` gives the section "Cover Flow" with the button "Write Cover Flow Covers to iPod". The button writes the cover file. The research is in [../re/cover-flow.md](../re/cover-flow.md).
+**User interface.** Patches pane > Cover Flow, letter `c`, version 0.3. `"ui": { "tools": ["cover-flow"] }` gives the section "Cover Flow" with the button "Write Cover Flow Covers to iPod". The button writes the cover file. The research is in [../re/cover-flow.md](../re/cover-flow.md).
 
 **Effect.**
 
 1. Hold Select in the Albums list for 0.5 s. Cover Flow opens at the selected album.
-2. Turn the click wheel. Cover Flow moves one cover for each wheel step, with 4 frames of animation.
+2. Turn the click wheel. Cover Flow moves one cover for each wheel step, with 4 frames of animation (1 or 2 frames when the wheel turns fast). Each step gives the click of the lists, as the Clicker setting gives.
 3. The centre cover is flat. Four covers at each side are slanted and a little darker. Each cover has a reflection. The album name and the artist show below the covers.
 4. Push Select. The album at the centre opens, as from the list.
 5. Push Menu. The Albums list shows again.
@@ -333,7 +333,7 @@ The background is white with the light theme and black with the dark theme. On w
 
 A short push of Select opens the album as usual. Play/Pause operates as usual. If the iPod shows a new screen (for example Now Playing), Cover Flow closes.
 
-**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 8104 bytes. The framebuffer copy (153600 bytes), the cover cache (11 covers, 360448 bytes for 128 × 128 covers) and the caption buffer come from the allocator 0x25a974 when Cover Flow opens. They are released when it closes.
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 8116 bytes. The framebuffer copy (153600 bytes), the cover cache (11 covers, 360448 bytes for 128 × 128 covers) and the caption buffer come from the allocator 0x25a974 when Cover Flow opens. They are released when it closes.
 
 **Hooks.**
 
@@ -357,6 +357,7 @@ A short push of Select opens the album as usual. Play/Pause operates as usual. I
 | 0x21ac04 | `view_invalidate` | Marks a view for a new draw |
 | 0x13d524 | `dispatch_event` | Event dispatcher |
 | 0x1d813c | `ui_activity` | Starts the idle timer again and turns the display on |
+| 0x0a69dc | `ui_click` | The click of the lists (follows the Clicker setting) |
 | 0x25a974, 0x25a8e4 | `fw_alloc`, `fw_free` | Memory from the pool |
 | 0x07ccd0, 0x07cd6c | `fw_memset0`, `fw_strcpy` | Memory and string functions |
 | 0x08f38c, 0x08f464, 0x08f5c4, 0x08f184 | `file_open`, `file_read`, `file_seek`, `file_close` | File access on the iPod disk |
@@ -369,7 +370,7 @@ A short push of Select opens the album as usual. Play/Pause operates as usual. I
 4. To open, the patch reads the header of the cover file, allocates the memory and copies the framebuffer. It starts at the selected row − 1 (row 0 is "All") if the list has one row more than the file has albums. Else it starts at the first album.
 5. Each frame: clear the framebuffer, draw the covers from the farthest to the centre, draw the caption, then bind the layer, set the dirty rows 0–240 under the lock, and flush. The patch does not call the damage callback, because the callback can bind the layer again and wait for itself.
 6. While Cover Flow shows, `hook_display_damage` ignores the damage of the firmware. If the Albums list is not visible, it closes Cover Flow and gives the damage to the firmware.
-7. A wheel event (type 0xf) moves one cover in its direction (event + 0xc). The patch takes the wheel events, thus it calls 0x1d813c for each of them, as the UI handler does. Then the backlight and the sleep timer start again. The UI handler gets the key events, so it does this for them itself.
+7. A wheel event (type 0xf) moves one cover in its direction (event + 0xc) and calls the click 0xa69dc. The patch takes the wheel events, thus it calls 0x1d813c for each of them, as the UI handler does. Then the backlight and the sleep timer start again. The UI handler gets the key events, so it does this for them itself.
 8. Select (type 4, key 0x6f) opens the centre album: the patch calls the method +0x138 of the list (0x23a04c, set the selected row) with the row of the album (the album index + 1, because row 0 is "All"). Then it closes Cover Flow and gives the push to the original list method. The push then goes on through the chain, and the firmware opens the selected album. If the list does not have one row more than the file has albums, Select does nothing.
 9. The theme: at the open, the patch examines the left margin of the list rows (x = 2, every 8 rows below y = 40) in the copy of the screen. If most pixels are bright (green ≥ 32 of 63), the background is white. Else it is black.
 10. Menu (type 4, key 0x6e) closes Cover Flow: the patch puts the framebuffer copy back, sends it, and marks the top view of the list for a new draw (0x21ac04). The UI handler acts on Menu at type 6 or 7, thus `hook_ui_event` swallows these events of the key and decreases the key count at UI object + 0x44 at the release, as 0x1d820c does.
