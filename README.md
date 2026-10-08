@@ -33,6 +33,7 @@ The app has these functions:
 - Restore a backup to the iPod. If the firmware on the iPod is damaged, the app does a rescue restore.
 - Show the recovery steps, and get the Apple firmware for a restore with Finder.
 - Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
+- Install a patch from other people: double-click a `.ipodpatch` file, or drag it onto the list of patches. Export a patch as a `.ipodpatch` file with its compiled code, so that other people do not need Xcode. Refer to [docs/patch-system.md](docs/patch-system.md#the-ipodpatch-file).
 - Switch code patches on or off (Patches pane). The pane shows a list of the patches at the left. Select a patch to see its description, its compatibility and its tools at the right. The patches are in [patches/](patches/).
 - Write the album and playlist thumbnail file to the iPod for the `album-art` patch.
 - Set a custom image for each playlist for the `album-art` patch.

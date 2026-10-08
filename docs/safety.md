@@ -16,6 +16,8 @@ iPodFirm obeys these limits. The code enforces each limit. The "Where" column gi
 | Write only the firmware partition. | The music partition belongs to the owner. | The helper writes only inside the partition that `locatePartition` found. |
 | Support only the iPod Video (model code 0xB0). | The formats and the addresses are for this model. The iPod classic firmware is encrypted and signed. | `checkModel` (first the Samsung layout; also before a backup), `Backups.save`, `isVideo` checks. |
 | Apply a patch only to Apple osos 1.3. | The addresses are for this version. | `osos_sha256` in each `patch.json`, theme and version check. |
+| Examine a user patch before the install. Let a patch write files only below `iPod_Control/` on the iPod. | A user patch comes from another person. | `PatchLibrary.validate`, `PatchUI.isSafePath`, `PatchUI.maxWrite`. The install sheet tells the owner to install only patches from people that the owner trusts. |
+| Do not turn on two patches that change the same place. | The build fails, or one patch breaks the other. | `Patcher.conflicts`, `AppModel.setPatch`. |
 | Keep osos below 0x7F0000. | The reset code stops if the image end is after 8 MB (0x800004). | `ThemeImport.ososLimit`, `maxSize` in `Patcher.apply` (also for extended patches). |
 | Keep the patch code below 0x736800, or make it an extended patch. | rsrc starts at 0x736800 in Apple's layout. An extended patch goes after all other data and makes the build move rsrc. | `Patcher.maxOSOSSize`, `Patcher.extendedBase`. |
 | Do not put data in the zero area at 0x6ca452. | The firmware stops at start if this area is not zero. | The theme import uses only the area after osos. |

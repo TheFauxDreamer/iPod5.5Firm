@@ -66,6 +66,25 @@ cat > "$APP/Contents/Info.plist" <<PLIST
             <dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
         </dict>
     </dict>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key><string>com.thefauxdreamer.ipodfirm.patch</string>
+            <key>UTTypeDescription</key><string>iPodFirm Patch</string>
+            <key>UTTypeConformsTo</key><array><string>public.zip-archive</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict><key>public.filename-extension</key><array><string>ipodpatch</string></array></dict>
+        </dict>
+    </array>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key><string>iPodFirm Patch</string>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+            <key>LSHandlerRank</key><string>Owner</string>
+            <key>LSItemContentTypes</key><array><string>com.thefauxdreamer.ipodfirm.patch</string></array>
+        </dict>
+    </array>
 </dict>
 </plist>
 PLIST

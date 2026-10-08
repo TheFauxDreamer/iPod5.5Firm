@@ -24,7 +24,7 @@ The app needs macOS 14 or later and an Apple silicon Mac (`--arch arm64`).
 | Firmware | The images, the checksums and the model of the open file. | [OverviewView.swift](../mac/Sources/iPodFirm/OverviewView.swift) |
 | Pictures | Show, export and replace pictures. Show the dark theme pictures. | [PicturesView.swift](../mac/Sources/iPodFirm/PicturesView.swift) |
 | Text | Change the strings of each language. | [StringsView.swift](../mac/Sources/iPodFirm/StringsView.swift) |
-| Patches | A list at the left: iPod Appearance, Software Version and the patches (grouped by `category`). Each patch row has an SF Symbol, the title, the summary, the letter and a switch. The detail at the right shows the selected row: the description, the compatibility, the thumbnails and the playlist artwork (`album-art`), and the USB probe (`usb-host-probe`). | [PatchesView.swift](../mac/Sources/iPodFirm/PatchesView.swift) |
+| Patches | A list at the left: iPod Appearance, Software Version and the patches (grouped by `category`). Below the list: **+** (install a patch), **−** (remove a user patch) and **⋯** (Export Patch…, Show Patches Folder). The list accepts a dropped `.ipodpatch` file or patch folder. Each patch row has an SF Symbol, the title, the summary, the letter and a switch. The detail at the right shows the selected row: the description, the compatibility, the conflicts, the source and the controls from the `ui` object of `patch.json`. | [PatchesView.swift](../mac/Sources/iPodFirm/PatchesView.swift) |
 | iPod | Find the iPod, back up, flash, restore, eject and the recovery steps. A row shows the permission status and opens the Settings window. | [IPodView.swift](../mac/Sources/iPodFirm/IPodView.swift) |
 | Emulator | Install the emulator, start the firmware, show the screen and send button pushes. | [EmulatorView.swift](../mac/Sources/iPodFirm/EmulatorView.swift) |
 
@@ -36,7 +36,7 @@ The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
 | Menu | Commands |
 |---|---|
-| File | Open Firmware… (⌘O), Download Apple Firmware 1.3, Save Firmware As… (⇧⌘S), Export as .ipsw…, Export Pictures & Text…, Import Pictures & Text…, Import iPodWizard Theme… |
+| File | Open Firmware… (⌘O), Download Apple Firmware 1.3, Save Firmware As… (⇧⌘S), Export as .ipsw…, Export Pictures & Text…, Import Pictures & Text…, Import iPodWizard Theme…, Install Patch… |
 | iPod | Flash to iPod… (⇧⌘F), Back Up iPod, Eject iPod (⌘E), Run in Emulator (⌘R) |
 
 The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the centre of its column. In a tall column, the iPod is larger, to a maximum of 1.4 times. The settings column has a maximum width of 520 points.
@@ -148,7 +148,9 @@ macOS blocks raw disk access without Full Disk Access. The app tests the permiss
 | `/usr/sbin/diskutil` | Helper | `unmountDisk DISK` | Unmount the iPod before a write. |
 | `/usr/sbin/diskutil` | App | `eject DISK` | Eject the iPod. |
 | `/usr/bin/xcrun clang` | `Patcher.compile` | Refer to [patch-system.md](patch-system.md#the-compiler) | Compile a patch. |
+| `/usr/bin/xcrun` | `PatchLibrary.hasCompiler` | `--find clang` | Find out if the Mac can compile a patch. |
 | `/usr/bin/ditto` | `IPSW.unpack` | `-x -k IPSW DIR` | Extract an `.ipsw` file. |
+| `/usr/bin/ditto` | `PatchLibrary.inspect`, `PatchLibrary.export` | `-x -k FILE DIR`, `-c -k --keepParent DIR FILE` | Open and make a `.ipodpatch` file. |
 | `/usr/bin/zip` | `IPSW.repack` | `-q -X -r OUT .` | Make an `.ipsw` file. |
 | `/bin/bash` | `EmulatorManager.install` | `install-emulator.sh` | Install the emulator. |
 | `ipod-boot` | `EmulatorManager` | `make-disk IPSW DRIVE`, `put-files DRIVE DIR /iPod_Control` | Make the emulator drive. |
@@ -199,7 +201,9 @@ All paths are in `~/Library/Application Support/iPodFirm/`.
 | `Backups/Original (first backup).bin` | The first backup. The app never replaces it. |
 | `Firmware/iPod_25.1.3.ipsw` | The cached Apple firmware. |
 | `Themes/*.ipodtheme` | The imported themes (JSON). |
+| `Patches/<name>/` | The patches that the owner installed. |
 | `Staging/flash.bin` | The partition that the helper writes. |
+| `Staging/patch-<UUID>/` | A `.ipodpatch` file during the install or the export. The app deletes it after use. |
 | `Emulator/` | The emulator work folder: the custom `.ipsw` and the music libraries. |
 | `EmulatorProfile/` | The private emulator profile (`IPOD_EMULATOR_DATA`): the drive and `settings.txt`. |
 | `emulator-src/` | The emulator source and its build. |
@@ -209,13 +213,14 @@ Temporary files: the object file of each patch, the extracted `.ipsw` folder and
 
 ### Files on the iPod volume
 
-The app writes these files on the mounted iPod volume. It does not change any other file.
+The app writes these files on the mounted iPod volume. A patch can also write files below `iPod_Control/` with the `actions` and `toggles` of its `ui` object (refer to [patch-system.md](patch-system.md#the-ui-object)). The app does not change any other file.
 
 | Path | Writer | Reader |
 |---|---|---|
 | `iPod_Control/iTunes/iPodFirmAlbumArt` | "Write Thumbnails to iPod" | `album-art` patch |
 | `iPod_Control/iTunes/iPodFirmPlaylistArt/*.png` | "Choose Image…" in Playlist Artwork | iPodFirm (the next thumbnail file) |
 | `iPod_Control/iTunes/iPodFirmDarkMode` | The `dark-mode` patch on the iPod | `dark-mode` patch |
+| `iPod_Control/iTunes/iPodFirmUSBProbe`, `iPod_Control/iTunes/iPodFirmUSBLog` | "Start the Probe at the Next Restart" (`ui.actions` of `usb-host-probe`) | `usb-host-probe` patch, "Show USB Log" |
 
 The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not change them.
 

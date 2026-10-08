@@ -116,7 +116,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 ## album-art
 
-**User interface.** Patches pane > Album Artwork, letter `a`. The detail of the patch has these sections:
+**User interface.** Patches pane > Album Artwork, letter `a`. `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
 
 - "Thumbnails": "Write Thumbnails to iPod" writes the thumbnail file. "Eject iPod" ejects the iPod.
 - "Playlist Artwork" sets a custom image for each playlist ("Choose Image…", "Use Automatic", or drag an image).
@@ -318,7 +318,7 @@ The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 min
 
 ## usb-host-probe
 
-**User interface.** Patches pane > USB Host Probe, letter `h`. "Start the Probe at the Next Restart" writes '1' to `iPod_Control/iTunes/iPodFirmUSBProbe` and an empty 32768-byte `iPod_Control/iTunes/iPodFirmUSBLog` on the connected iPod. "Show USB Log" reads and decodes the log (`USBProbeLog` in [USBProbeLog.swift](../mac/Sources/IPodFWKit/USBProbeLog.swift)). The section "Test Procedure" (a disclosure group) gives the test steps. The section "USB Log" shows the log and has "Copy Log". This patch is a test for [USB-AUDIO-OUT.md](../USB-AUDIO-OUT.md) (Stage 0). It is only on the branch `usb-audio-out`.
+**User interface.** Patches pane > USB Host Probe, letter `h`. "Start the Probe at the Next Restart" writes '1' to `iPod_Control/iTunes/iPodFirmUSBProbe` and an empty 32768-byte `iPod_Control/iTunes/iPodFirmUSBLog` on the connected iPod. "Show USB Log" reads and decodes the log (`USBProbeLog` in [USBProbeLog.swift](../mac/Sources/IPodFWKit/USBProbeLog.swift)). The `ui` object of its `patch.json` gives the button, the section "Test Procedure" (the test steps) and the tool `usb-log` (the section "USB Log" with "Show USB Log" and "Copy Log"). This patch is a test for [USB-AUDIO-OUT.md](../USB-AUDIO-OUT.md) (Stage 0). It is only on the branch `usb-audio-out`.
 
 **Effect.** One time after the trigger, the iPod plays a demonstration of the signs and a countdown, starts its USB host stack, gives tones, and logs each call of a USB class driver. The next start is normal.
 

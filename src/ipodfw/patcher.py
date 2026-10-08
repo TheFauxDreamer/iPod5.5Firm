@@ -54,6 +54,10 @@ PATCH_AREA_END = 0x736800
 OSOS_LIMIT = 0x7F0000
 
 
+# The precompiled object of a patch. If it is in the folder, apply() links it and does not compile.
+OBJECT_FILE = "patch.o"
+
+
 def extended_base(osos: bytes) -> int:
     """The load address of an extended patch: after the end of osos, aligned to 16 bytes."""
     return (max(len(osos), PATCH_AREA_END) + 15) & ~15
@@ -222,8 +226,9 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
     if (original_sha256 or hashlib.sha256(osos).hexdigest()) != spec["osos_sha256"]:
         raise PatchError(f"patch {spec['name']!r} is for a different firmware (osos SHA-256 does not agree)")
     sources = sorted(patch_dir.glob("*.c"))
+    prebuilt = patch_dir / OBJECT_FILE
     code, table, base = b"", {}, 0
-    if sources:
+    if sources or prebuilt.exists():
         if load_address is not None:
             base = load_address
         elif spec["load_address"] == EXTENDED:
@@ -232,8 +237,12 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
             base = int(spec["load_address"], 16)
         fw_syms = {k: int(v, 16) for k, v in spec.get("symbols", {}).items()}
         fw_syms.update(symbols or {})
-        with tempfile.TemporaryDirectory() as tmp:
-            obj = compile_c(sources, Path(tmp))
+        if prebuilt.exists():
+            # A precompiled patch (a .ipodpatch file): link patch.o, do not compile.
+            obj = prebuilt.read_bytes()
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                obj = compile_c(sources, Path(tmp))
         code, table = link(obj, base, fw_syms)
     end = base + len(code)
     if load_address is None and spec.get("load_address") == EXTENDED:

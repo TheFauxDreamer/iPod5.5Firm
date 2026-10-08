@@ -530,6 +530,8 @@ final class PatchAndArtTests: XCTestCase {
             XCTAssertTrue(PatchSpec.categories.contains(p.spec.category ?? ""), "\(p.spec.name) has no valid category")
             let symbol = p.spec.symbol ?? ""
             XCTAssertNotNil(NSImage(systemSymbolName: symbol, accessibilityDescription: nil), "\(p.spec.name): no SF Symbol \"\(symbol)\"")
+            for t in p.spec.ui?.tools ?? [] { XCTAssertTrue(PatchSpec.knownTools.contains(t), "\(p.spec.name): unknown tool \(t)") }
+            for path in p.spec.ui?.paths ?? [] { XCTAssertTrue(PatchUI.isSafePath(path), path) }
         }
     }
 
@@ -1022,3 +1024,121 @@ final class DarkModeTests: XCTestCase {
     }
 }
 
+
+/// The patches that the owner installs: examine, install, remove, export and conflicts.
+final class PatchLibraryTests: XCTestCase {
+    static let repo = PatchAndArtTests.repo
+    var tmp: URL!
+    var library: PatchLibrary!
+
+    override func setUpWithError() throws {
+        tmp = FileManager.default.temporaryDirectory.appendingPathComponent("ipodfirm-library-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        library = PatchLibrary(builtInDir: Self.repo.appendingPathComponent("patches"),
+                               userDir: tmp.appendingPathComponent("user"), stagingDir: tmp.appendingPathComponent("staging"))
+    }
+
+    override func tearDownWithError() throws {
+        if let tmp, tmp.lastPathComponent.hasPrefix("ipodfirm-library-") { try? FileManager.default.removeItem(at: tmp) }
+    }
+
+    /// Make a patch folder in the temporary folder.
+    func makePatch(_ json: [String: Any], files: [String: String] = [:], folder: String? = nil) throws -> URL {
+        let dir = tmp.appendingPathComponent("src").appendingPathComponent(folder ?? (json["name"] as? String ?? "x"))
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: json).write(to: dir.appendingPathComponent("patch.json"))
+        for (name, text) in files { try Data(text.utf8).write(to: dir.appendingPathComponent(name)) }
+        return dir
+    }
+
+    func spec(_ name: String, _ extra: [String: Any] = [:]) -> [String: Any] {
+        ["name": name, "osos_sha256": PatchLibrary.firmware13OSOS, "title": "Test", "summary": "A test.",
+         "symbol": "star", "category": "test", "version_letter": "z"].merging(extra) { $1 }
+    }
+
+    func inspect(_ url: URL) throws -> PatchCandidate { try library.inspect(url, existing: library.list()) }
+
+    func testErrors() throws {
+        XCTAssertFalse(try inspect(makePatch(spec("Bad_Name"), folder: "bad")).canInstall)
+        XCTAssertFalse(try inspect(makePatch(spec("sleep-now"), folder: "builtin")).canInstall)
+        XCTAssertFalse(try inspect(makePatch(spec("two-c", ["load_address": "extended"]), files: ["a.c": "", "b.c": ""])).canInstall)
+        XCTAssertFalse(try inspect(makePatch(spec("bad-file"), files: ["run.sh": "echo"])).canInstall)
+        XCTAssertFalse(try inspect(makePatch(spec("bad-object", ["load_address": "extended"]), files: ["patch.o": "not elf"])).canInstall)
+        for path in ["iPod_Control/../x", "Music/x", "/iPod_Control/x"] {
+            let ui: [String: Any] = ["actions": [["title": "Go", "write": [["path": path, "text": "1"]]]]]
+            XCTAssertFalse(try inspect(makePatch(spec("bad-path", ["ui": ui]), folder: "p\(path.count)")).canInstall, path)
+        }
+        let big: [String: Any] = ["actions": [["title": "Go", "write": [["path": "iPod_Control/x", "zeros": PatchUI.maxWrite + 1]]]]]
+        XCTAssertFalse(try inspect(makePatch(spec("big-write", ["ui": big]))).canInstall)
+    }
+
+    /// A missing letter, or a letter in use, gets the first free letter. The install writes it into patch.json.
+    func testLetters() throws {
+        let used = Set(library.list().compactMap(\.spec.version_letter))
+        let free = "abcdefghijklmnopqrstuvwxyz".map(String.init).first { !used.contains($0) }
+        var s = spec("no-letter")
+        s["version_letter"] = nil
+        let c = try inspect(makePatch(s))
+        XCTAssertTrue(c.canInstall)
+        XCTAssertEqual(c.assignedLetter, free)
+        let dest = try library.install(c)
+        let installed = try JSONDecoder().decode(PatchSpec.self, from: Data(contentsOf: dest.appendingPathComponent("patch.json")))
+        XCTAssertEqual(installed.version_letter, free)
+        let usedNow = Set(library.list().compactMap(\.spec.version_letter))
+        XCTAssertTrue(usedNow.contains("a"))
+        let next = "abcdefghijklmnopqrstuvwxyz".map(String.init).first { !usedNow.contains($0) }
+        XCTAssertEqual(try inspect(makePatch(spec("used-letter", ["version_letter": "a"]))).assignedLetter, next)
+    }
+
+    func testInstallFolderZipAndRemove() throws {
+        let folder = try makePatch(spec("data-patch"))
+        let c = try inspect(folder)
+        XCTAssertTrue(c.canInstall, c.errors.joined())
+        XCTAssertNil(c.codeSize)
+        try library.install(c)
+        let p = try XCTUnwrap(library.list().first { $0.spec.name == "data-patch" })
+        XCTAssertEqual(p.source, .user)
+
+        // The same patch as a .ipodpatch file replaces the installed patch.
+        let zip = tmp.appendingPathComponent("data-patch.ipodpatch")
+        try PatchLibrary.run("/usr/bin/ditto", ["-c", "-k", "--keepParent", folder.path, zip.path])
+        let z = try inspect(zip)
+        XCTAssertTrue(z.canInstall, z.errors.joined())
+        XCTAssertTrue(z.replaces)
+        let staging = try XCTUnwrap(z.staging)
+        try library.install(z)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
+
+        try library.remove(try XCTUnwrap(library.list().first { $0.spec.name == "data-patch" }))
+        XCTAssertNil(library.list().first { $0.spec.name == "data-patch" })
+        XCTAssertThrowsError(try library.remove(try XCTUnwrap(library.list().first { $0.spec.name == "sleep-now" })))
+    }
+
+    func testConflicts() {
+        let all = library.list()
+        let pair = all.filter { ["album-art", "row-marker"].contains($0.spec.name) }
+        XCTAssertEqual(pair.count, 2)
+        XCTAssertFalse(Patcher.conflicts(pair).isEmpty)
+        let ok = all.filter { ["album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input", "backlight-60s"].contains($0.spec.name) }
+        XCTAssertTrue(Patcher.conflicts(ok).isEmpty)
+    }
+
+    /// Export makes patch.o. A folder with only patch.o gives the same bytes as the C file.
+    func testExportPrecompiled() throws {
+        guard PatchLibrary.hasCompiler() else { throw XCTSkip("no clang") }
+        let sleep = try XCTUnwrap(library.list().first { $0.spec.name == "sleep-now" })
+        let zip = tmp.appendingPathComponent("sleep-now.ipodpatch")
+        try library.export(sleep, to: zip)
+        let out = tmp.appendingPathComponent("unzipped")
+        try PatchLibrary.run("/usr/bin/ditto", ["-x", "-k", zip.path, out.path])
+        let folder = out.appendingPathComponent("sleep-now")
+        let obj = folder.appendingPathComponent(Patcher.objectFile)
+        XCTAssertTrue(PatchLibrary.isARMObject([UInt8](try Data(contentsOf: obj))))
+        for f in try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) where f.pathExtension == "c" {
+            try FileManager.default.removeItem(at: f)
+        }
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        XCTAssertEqual(try Patcher.apply([PatchInfo(spec: sleep.spec, folder: folder)], to: osos), try Patcher.apply([sleep], to: osos))
+    }
+}

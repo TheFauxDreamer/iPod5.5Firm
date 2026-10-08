@@ -19,7 +19,9 @@ struct IPodFirmApp: App {
                     session.stop()
                 }
                 .frame(minWidth: 980, minHeight: 640)
+                .onAppear { delegate.attach(model) }
         }
+        .handlesExternalEvents(matching: [])
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Open Firmware…") { model.openPanel() }.keyboardShortcut("o")
@@ -37,6 +39,7 @@ struct IPodFirmApp: App {
                 Button("Import Pictures & Text…") { model.importFolder() }.disabled(model.editor == nil)
                 Divider()
                 Button("Import iPodWizard Theme…") { model.importTheme() }
+                Button("Install Patch…") { model.choosePatchToInstall() }
             }
             CommandMenu("iPod") {
                 Button("Flash to iPod…") { model.section = .ipod; Task { await model.flashEdited() } }
@@ -92,6 +95,26 @@ struct SettingsView: View {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private weak var model: AppModel?
+    /// Files that macOS opened before the window showed.
+    private var pending: [URL] = []
+
+    @MainActor func attach(_ model: AppModel) {
+        self.model = model
+        let urls = pending
+        pending = []
+        for url in urls { Task { await model.installPatch(from: url) } }
+    }
+
+    /// A double-click on a .ipodpatch file in Finder.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        let patches = urls.filter(isPatchURL)
+        Task { @MainActor in
+            guard let model else { pending += patches; return }
+            for url in patches { await model.installPatch(from: url) }
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -143,6 +166,7 @@ struct ContentView: View {
         }
         .sheet(item: $model.flashPlan) { plan in FlashConfirmSheet(plan: plan) }
         .sheet(item: $model.themeReport) { t in ThemeReportSheet(theme: t) }
+        .sheet(item: $model.pendingInstall) { c in InstallPatchSheet(candidate: c) }
         .sheet(isPresented: $model.showFullDiskAccessHelp) { FullDiskAccessSheet() }
         .sheet(isPresented: $model.showFinderRestoreHelp) { FinderRestoreSheet() }
         .task { await model.refreshIPods() }

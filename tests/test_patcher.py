@@ -127,3 +127,18 @@ def test_usb_host_probe_extended_area():
     filled = osos + bytes(0x7eb123 - len(osos) - 1) + b"\x01"
     out, report = patcher.apply(filled, REPO / "patches/usb-host-probe", 0x736800, original_sha256=original)
     assert report["code"][0] == "0x7eb130"
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_precompiled_object(tmp_path):
+    """A patch folder with patch.o and no C file gives the same bytes as the compiled C file."""
+    import shutil
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    src = REPO / "patches/sleep-now"
+    folder = tmp_path / "sleep-now"
+    folder.mkdir()
+    shutil.copy(src / "patch.json", folder)
+    (folder / patcher.OBJECT_FILE).write_bytes(patcher.compile_c(sorted(src.glob("*.c")), tmp_path))
+    expected, _ = patcher.apply(osos, src, 0x736800)
+    out, _ = patcher.apply(osos, folder, 0x736800)
+    assert out == expected

@@ -4,12 +4,58 @@ This document tells how iPodFirm changes the program code of RetailOS. A patch i
 
 ## The parts of a patch
 
-A patch is a folder in [patches/](../patches/). It holds two files:
+A patch is a folder. It holds these files:
 
 - `patch.json`: the manifest.
-- One C file. iPodFirm refuses a folder with zero or more than one C file.
+- The code: one C file, or `patch.o` (the compiled object), or both. A data patch has no code. iPodFirm refuses a folder with more than one C file.
+- Optional: a readme (`.md` or `.txt`) and `.png` files.
 
-`mac/scripts/build-app.sh` copies each patch folder into `iPodFirm.app/Contents/Resources/patches/`. It does not copy `row-marker`, because that patch is only for tests.
+If the folder has `patch.o`, the patcher links `patch.o` and does not compile the C file. Thus a user does not need Xcode. `Patcher.objectCode` (Swift) and `apply` (Python, `OBJECT_FILE`) obey this rule.
+
+There are two places for patches:
+
+- The built-in patches are in [patches/](../patches/). `mac/scripts/build-app.sh` copies each patch folder into `iPodFirm.app/Contents/Resources/patches/`. It does not copy `row-marker`, because that patch is only for tests.
+- The user patches are in `~/Library/Application Support/iPodFirm/Patches/`. The owner installs them in the app. A user patch with the name of a built-in patch is ignored (`PatchLibrary.list`).
+
+### The .ipodpatch file
+
+A `.ipodpatch` file is a zip of one patch folder (`ditto -c -k --keepParent`). macOS opens it with iPodFirm (the type `com.thefauxdreamer.ipodfirm.patch` in `Info.plist`).
+
+To install a patch, do one of these steps:
+
+- Double-click the `.ipodpatch` file.
+- Drag the `.ipodpatch` file or the patch folder onto the list of patches.
+- Click **+** below the list, or select File > Install Patch….
+
+iPodFirm examines the patch (`PatchLibrary.inspect` in [PatchLibrary.swift](../mac/Sources/IPodFWKit/PatchLibrary.swift)) and shows the install sheet. It unzips a `.ipodpatch` file into `Staging/patch-<UUID>/` and deletes that folder after the install.
+
+The install stops if one of these errors occurs:
+
+- `patch.json` does not decode, or the `name` has a character that is not a–z, 0–9 or "-".
+- A built-in patch has the same name.
+- The folder has a subfolder, more than one C file, or a file type that is not `.c`, `.o`, `.json`, `.md`, `.txt` or `.png`.
+- `patch.o` is not an ELF32 ARM object.
+- The patch has only a C file, and the Mac has no clang (`xcrun --find clang`).
+- The patch has code but no `load_address`.
+- A trial link fails, for example for an undefined symbol.
+- A path in `ui` is not below `iPod_Control/`, or a write is larger than 1 MB.
+
+The install continues with a note in these conditions:
+
+- The patch is not for the Apple firmware 1.3.
+- The patch has no `version_letter`, or another patch uses the letter. iPodFirm writes the first free letter into the installed `patch.json`.
+- The patch has no `title`, `symbol` or `category`.
+- The patch changes the same place as another patch (`Patcher.conflicts`).
+- `ui` names a tool that the app does not have.
+
+If a user patch with the same name is installed, the sheet shows **Replace**. The old folder goes to the Trash. **−** below the list moves a user patch to the Trash. Built-in patches cannot be removed.
+
+### Make and share a patch
+
+1. Write the patch as in [Write a new patch](#write-a-new-patch). Use `"load_address": "extended"`, so that the patch does not use the area of another patch.
+2. Add `title`, `summary`, `symbol` and `category`.
+3. In the Patches pane, select the patch. Click **⋯** > Export Patch…. iPodFirm compiles `patch.o` and writes the `.ipodpatch` file. The C file stays in the file as the source.
+4. Give the `.ipodpatch` file to other people.
 
 ## The patch.json format
 
@@ -29,7 +75,41 @@ A patch is a folder in [patches/](../patches/). It holds two files:
 | `symbol` | string | The name of an SF Symbol, for example `photo.on.rectangle.angled`. Do not use emoji. |
 | `category` | string | The group in the list of patches: `display`, `power` or `test`. |
 
-Each patch that is not `internal` must have `title`, `summary`, `symbol` and `category`. The test `testPatchMetadata` makes sure of this. It also makes sure that macOS has the SF Symbol.
+| `ui` | object, optional | Controls in the Patches pane. Refer to [The ui object](#the-ui-object). |
+
+Each built-in patch that is not `internal` must have `title`, `summary`, `symbol` and `category`. The test `testPatchMetadata` makes sure of this. It also makes sure that macOS has the SF Symbol, that each tool exists and that each `ui` path is permitted.
+
+### The ui object
+
+The `ui` object gives a patch controls in the Patches pane with no change to the Swift code (`PatchControls` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)).
+
+| Key | Content |
+|---|---|
+| `actions` | Buttons in the section "On the iPod". Each action has `title`, `write` and an optional `status`. Each item of `write` has `path`, and `text` or `zeros` (a number of zero bytes). |
+| `toggles` | Switches. Each switch has `title`, `path`, `on` and `off`. The switch reads the file on the iPod and writes `on` or `off`. |
+| `steps_title`, `steps` | A numbered list in a disclosure group. The default title is "Procedure". |
+| `readme` | The name of a Markdown file in the patch folder. The pane shows it in the section "Read Me". |
+| `tools` | Built-in Swift tools, by id: `album-thumbnails` (the thumbnails and the playlist artwork) and `usb-log` (the USB log). `PatchSpec.knownTools` lists them. |
+
+Each `path` must start with `iPod_Control/` and must not contain `..`. A write can have a maximum of 1 MB (`PatchUI.maxWrite`).
+
+Example (a part of [patches/usb-host-probe/patch.json](../patches/usb-host-probe/patch.json)):
+
+```json
+"ui": {
+  "actions": [{
+    "title": "Start the Probe at the Next Restart",
+    "write": [
+      { "path": "iPod_Control/iTunes/iPodFirmUSBLog", "zeros": 32768 },
+      { "path": "iPod_Control/iTunes/iPodFirmUSBProbe", "text": "1" }
+    ],
+    "status": "The probe starts at the first button press after the next restart of the iPod."
+  }],
+  "steps_title": "Test Procedure",
+  "steps": ["Flash a firmware with this patch.", "…"],
+  "tools": ["usb-log"]
+}
+```
 
 Example (a part of [patches/flash-keep-awake/patch.json](../patches/flash-keep-awake/patch.json)):
 
@@ -52,7 +132,7 @@ Example (a part of [patches/flash-keep-awake/patch.json](../patches/flash-keep-a
 
 ## The compiler
 
-iPodFirm runs `/usr/bin/xcrun clang` with these flags:
+If the patch folder has `patch.o`, iPodFirm does not compile. Otherwise iPodFirm runs `/usr/bin/xcrun clang` with these flags:
 
 ```
 --target=armv4t-none-eabi -mcpu=arm7tdmi -marm -mfloat-abi=soft -O2
@@ -147,11 +227,11 @@ CAUTION: A patch can stop the iPod at start. Test each patch in the emulator bef
 2. Find a hook location: a vtable slot, or one instruction that you can replace.
 3. Write down the current 32-bit value at the hook location. This is the `expect` value.
 4. Select a load address in free space. Do not use the area of another patch.
-5. Make a folder in `patches/` with `patch.json` and one C file.
+5. Make a folder in `patches/` with `patch.json` and one C file. Or make the folder anywhere and install it in the app (drag it onto the list of patches).
 6. Declare each firmware function in C. Add its address to `symbols`.
 7. Write the hook functions. Use the same arguments as the original function.
 8. Build the app with `mac/scripts/build-app.sh`.
-9. Turn on the patch in the Patches pane.
+9. Turn on the patch in the Patches pane. The app does not let you turn on two patches that change the same place.
 10. Run the firmware in the Emulator pane.
 11. Add a test to [tests/test_patcher.py](../tests/test_patcher.py) for the hook encodings.
 

@@ -4,6 +4,11 @@
   "summary": "Thumbnails next to the albums and the playlists.",
   "symbol": "photo.on.rectangle.angled",
   "category": "display",
+  "ui": {
+    "tools": [
+      "album-thumbnails"
+    ]
+  },
   "version_letter": "a",
   "description": "Shows a thumbnail at the left of each album and each playlist in the lists. The thumbnails come from the file iPod_Control\\iTunes\\iPodFirmAlbumArt, which iPodFirm writes.",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",

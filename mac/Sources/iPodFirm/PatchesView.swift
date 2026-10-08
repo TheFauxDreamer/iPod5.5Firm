@@ -32,6 +32,8 @@ struct PatchesView: View {
 
 struct PatchList: View {
     @EnvironmentObject var model: AppModel
+    @State private var dropTargeted = false
+    @State private var confirmRemove: PatchInfo?
 
     static let groups = [("display", "Display"), ("power", "Power and Storage"), ("test", "Tests")]
 
@@ -52,7 +54,17 @@ struct PatchList: View {
                 }
                 ForEach(groups, id: \.title) { group in
                     Section(group.title) {
-                        ForEach(group.patches) { PatchListRow(patch: $0).tag($0.spec.name) }
+                        ForEach(group.patches) { p in
+                            PatchListRow(patch: p).tag(p.spec.name)
+                                .contextMenu {
+                                    Button("Export Patch…") { model.exportPatch(p) }
+                                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([p.folder]) }
+                                    if p.source == .user {
+                                        Divider()
+                                        Button("Remove Patch…") { confirmRemove = p }
+                                    }
+                                }
+                        }
                     }
                 }
                 if model.patches.isEmpty {
@@ -60,9 +72,40 @@ struct PatchList: View {
                 }
             }
             .listStyle(.inset)
+            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.accentColor, lineWidth: dropTargeted ? 3 : 0))
+            .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
+                guard let provider = providers.first else { return false }
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url, isPatchURL(url) else { return }
+                    Task { @MainActor in await model.installPatch(from: url) }
+                }
+                return true
+            }
+            Divider()
+            HStack(spacing: 0) {
+                Button { model.choosePatchToInstall() } label: { Image(systemName: "plus").frame(width: 24, height: 20) }
+                    .help("Install a patch").accessibilityLabel("Install Patch")
+                Button { confirmRemove = selectedPatch } label: { Image(systemName: "minus").frame(width: 24, height: 20) }
+                    .disabled(selectedPatch?.source != .user)
+                    .help("Remove the selected patch").accessibilityLabel("Remove Patch")
+                Spacer()
+                Menu {
+                    Button("Install Patch…") { model.choosePatchToInstall() }
+                    Button("Export Patch…") { if let p = selectedPatch { model.exportPatch(p) } }.disabled(selectedPatch == nil)
+                    Divider()
+                    Button("Show Patches Folder") { model.showPatchesFolder() }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .accessibilityLabel("More Patch Actions")
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 8).padding(.vertical, 4)
             Divider()
             VStack(alignment: .leading, spacing: 4) {
                 Text("Turned-on patches: \(model.activePatches.count)")
+                Text("To install a patch, drag a .ipodpatch file here.")
                 if model.editor == nil {
                     Label("Open a firmware to see which patches agree with it.", systemImage: "info.circle")
                         .fixedSize(horizontal: false, vertical: true)
@@ -72,7 +115,16 @@ struct PatchList: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
         }
+        .confirmationDialog("Remove the patch \"\(confirmRemove?.spec.displayTitle ?? "")\"?", isPresented: Binding(
+            get: { confirmRemove != nil }, set: { if !$0 { confirmRemove = nil } }), presenting: confirmRemove) { p in
+            Button("Move to Trash", role: .destructive) { model.removePatch(p) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("iPodFirm moves the patch folder to the Trash. Firmware that you flashed before does not change.")
+        }
     }
+
+    var selectedPatch: PatchInfo? { model.patches.first { $0.spec.name == model.patchSelection } }
 
     var appearanceSummary: String {
         let name = model.selectedTheme?.name ?? ""
@@ -113,7 +165,7 @@ struct PatchListRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            SymbolTile(symbol: patch.spec.symbol ?? "puzzlepiece.extension", tint: patch.tint)
+            SymbolTile(symbol: validSymbol(patch.spec.symbol), tint: patch.tint)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(patch.spec.displayTitle)
@@ -176,7 +228,7 @@ struct PatchSwitch: View {
             get: { model.enabledPatches.contains(patch.spec.name) },
             set: { v in
                 if v && !confirmOnHDD() { return }
-                if v { model.enabledPatches.insert(patch.spec.name) } else { model.enabledPatches.remove(patch.spec.name) }
+                model.setPatch(patch, on: v)
             })
         if let label {
             Toggle(label, isOn: on).toggleStyle(.switch)
@@ -217,6 +269,7 @@ extension AppModel {
         if patch.spec.hdd_warning != nil, currentIPod?.likelyOriginalHDD != nil {
             return "The connected iPod probably has the original hard drive."
         }
+        if let (other, _) = conflicts(patch).first { return "Changes the same place as \"\(other.spec.displayTitle)\"." }
         return nil
     }
 }
@@ -254,7 +307,7 @@ struct PatchDetail: View {
         Form {
             Section {
                 DetailHeader(title: patch.spec.displayTitle, subtitle: patch.spec.summary,
-                             symbol: patch.spec.symbol ?? "puzzlepiece.extension", tint: patch.tint, patch: patch)
+                             symbol: validSymbol(patch.spec.symbol), tint: patch.tint, patch: patch)
                 PatchSwitch(patch: patch, label: "Include in Firmware")
             } footer: {
                 Text("iPodFirm includes the turned-on patches when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.")
@@ -264,17 +317,17 @@ struct PatchDetail: View {
             }
             Section("Compatibility") {
                 PatchCompatibility(patch: patch)
+                ForEach(model.conflicts(patch), id: \.0.id) { other, place in
+                    Label("Changes the same place as \"\(other.spec.displayTitle)\" (\(place)). You cannot turn on the two patches together.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                }
+                LabeledContent("Source", value: patch.source == .user ? "Installed by you" : "Included with iPodFirm")
             }
-            switch patch.spec.name {
-            case "album-art": AlbumArtSections()
-            case "usb-host-probe": USBProbeSections()
-            default: EmptyView()
-            }
+            PatchControls(patch: patch)
         }
         .formStyle(.grouped)
-        .task(id: "\(patch.spec.name) \(model.currentIPod?.disk ?? "")") {
-            if patch.spec.name == "album-art" { await model.loadPlaylists() }
-        }
+        .task(id: "\(patch.spec.name) \(model.currentIPod?.disk ?? "")") { model.loadPatchToggles(patch) }
     }
 }
 
@@ -322,138 +375,6 @@ struct IPodActionsRow<Actions: View>: View {
             if model.currentIPod == nil { Text("Connect the iPod.").font(.caption).foregroundStyle(.secondary) }
             Button("Eject iPod") { Task { await model.ejectIPod() } }
                 .disabled(model.currentIPod == nil)
-        }
-    }
-}
-
-/// The trigger of the usb-host-probe patch. Refer to USB-AUDIO-OUT.md (Stage 0).
-struct USBProbeSections: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        Section("Probe") {
-            IPodActionsRow {
-                Button("Start the Probe at the Next Restart") { model.armUSBProbe() }
-                Button("Show USB Log") { model.readUSBProbeLog() }
-            }
-            if let s = model.usbProbeStatus { Label(s, systemImage: "checkmark.circle").font(.callout) }
-            DisclosureGroup("Test Procedure") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Do these steps after you flash a firmware with this patch:")
-                    Step(n: 1, text: "Click Start the Probe at the Next Restart.")
-                    Step(n: 2, text: "Click Eject iPod. Then disconnect the iPod.")
-                    Step(n: 3, text: "Restart the iPod. Hold Menu and Select until the Apple logo shows.")
-                    Step(n: 4, text: "Connect a USB flash drive or a card reader through a USB-C OTG adapter with a power input.")
-                    Step(n: 5, text: "Connect a charger to the power input of the adapter.")
-                    Step(n: 6, text: "Press a button on the iPod. First the iPod plays each sign one time: a long low tone, then high, low, high. Then it plays three short beeps and a silence.")
-                    Step(n: 7, text: "Listen for the real result. A long low tone means that the USB host mode operates. A second long low tone means that the hub in the adapter operates. High, low, high means that the iPod found the flash drive or card reader.")
-                    Step(n: 8, text: "Wait for the second double beep. Approximately 10 seconds after the result tones, the iPod writes the USB log and gives two short low beeps. 20 seconds later, it writes the log again and gives two more beeps.")
-                    Step(n: 9, text: "Disconnect the adapter and restart the iPod. The next start is normal.")
-                    Step(n: 10, text: "Connect the iPod to the Mac and click Show USB Log.")
-                    Label("The iPod does not react for approximately 7 seconds during the tones.", systemImage: "info.circle")
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
-                .font(.callout)
-                .padding(.top, 4)
-            }
-        }
-        if let log = model.usbProbeLog {
-            Section {
-                if log.isEmpty {
-                    Text("The log is empty. The probe did not start the host stack, or no driver was called. Press Menu after the tones, so that the iPod writes the log.")
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                } else {
-                    ScrollView {
-                        Text(log.enumerated().map { "\($0.offset + 1). \($0.element.text)" }.joined(separator: "\n"))
-                            .font(.caption.monospaced()).textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(minHeight: 80, maxHeight: 320)
-                }
-            } header: {
-                HStack {
-                    Text("USB Log")
-                    Spacer()
-                    Button("Copy Log") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(USBProbeLog.text(log), forType: .string)
-                    }
-                    .disabled(log.isEmpty)
-                }
-            }
-        }
-    }
-}
-
-/// The thumbnail file and the playlist artwork of the album-art patch.
-struct AlbumArtSections: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        Section {
-            Text("The iPod also needs a thumbnail file made from its own music. Write it after you flash this patch. Write it again after each sync that adds albums or playlists.")
-                .fixedSize(horizontal: false, vertical: true)
-            IPodActionsRow {
-                Button("Write Thumbnails to iPod") { Task { await model.writeThumbnails() } }
-            }
-            if let s = model.thumbnailStatus { Label(s, systemImage: "checkmark.circle").font(.callout) }
-        } header: {
-            Text("Thumbnails")
-        } footer: {
-            Text("You do not have to restart the iPod. The new thumbnails show after you scroll through a list.")
-        }
-        if !model.playlistArt.isEmpty {
-            Section {
-                if model.playlistArtChanged {
-                    Label("Click Write Thumbnails to iPod to send the changes to the iPod.", systemImage: "exclamationmark.circle")
-                        .foregroundStyle(.orange)
-                }
-                ForEach(model.playlistArt) { p in PlaylistArtRow(playlist: p) }
-            } header: {
-                Text("Playlist Artwork")
-            } footer: {
-                Text("A playlist without a custom image shows the covers of its first four albums. To set a custom image, click Choose Image or drag an image onto the playlist. iPodFirm keeps the custom images on the iPod.")
-            }
-        }
-    }
-}
-
-struct PlaylistArtRow: View {
-    @EnvironmentObject var model: AppModel
-    let playlist: MusicImport.PlaylistArt
-    @State private var targeted = false
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Group {
-                if let data = playlist.image, let img = NSImage(data: data) {
-                    Image(nsImage: img).resizable().interpolation(.high).aspectRatio(1, contentMode: .fill)
-                } else {
-                    Image(systemName: "music.note.list").foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.secondary.opacity(0.15))
-                }
-            }
-            .frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 4))
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(playlist.name.isEmpty ? "(No name)" : playlist.name).lineLimit(1)
-                Text(playlist.isCustom ? "Custom image" : playlist.image == nil ? "No album covers" : "Automatic")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button("Choose Image…") { model.choosePlaylistArt(playlist.name) }
-            Button("Use Automatic") { Task { await model.resetPlaylistArt(playlist.name) } }
-                .disabled(!playlist.isCustom)
-        }
-        .padding(4)
-        .background(RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: targeted ? 2 : 0))
-        .onDrop(of: [.fileURL], isTargeted: $targeted) { providers in
-            guard let provider = providers.first else { return false }
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                guard let url else { return }
-                Task { @MainActor in await model.setPlaylistArt(playlist.name, from: url) }
-            }
-            return true
         }
     }
 }

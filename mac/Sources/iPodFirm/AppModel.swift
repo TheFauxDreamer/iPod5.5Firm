@@ -4,6 +4,7 @@ import Foundation
 import IPodFWKit
 import ServiceManagement
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum Pane: String, CaseIterable, Identifiable {
     case overview = "Firmware", pictures = "Pictures", strings = "Text", patches = "Patches", ipod = "iPod", emulator = "Emulator"
@@ -39,7 +40,7 @@ final class AppModel: ObservableObject {
     @Published var flashPlan: FlashPlan?
     @Published var hasFullDiskAccess = AppModel.checkFullDiskAccess()
     @Published var helperStatus: SMAppService.Status = HelperClient.service.status
-    @Published var patches: [PatchInfo] = Patcher.list(in: AppModel.patchesDir).filter { $0.spec.internal != true }
+    @Published var patches: [PatchInfo] = AppModel.patchLibrary.list().filter { $0.spec.internal != true }
     @Published var enabledPatches: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "enabledPatches") ?? []) {
         didSet { UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches") }
     }
@@ -60,6 +61,12 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(versionLettersOn, forKey: "versionLettersOn") }
     }
     @Published var themeReport: ImportedTheme?
+    /// A patch that the owner opened, before the install (the install sheet shows it).
+    @Published var pendingInstall: PatchCandidate?
+    /// The result of the last action of each patch (patch.json "ui"), by patch name.
+    @Published var patchActionStatus: [String: String] = [:]
+    /// The state of the switches of the patches (patch.json "ui"), by path on the iPod.
+    @Published var patchToggleStates: [String: Bool] = [:]
     /// The selected row in the Patches pane: "appearance", "version" or the name of a patch.
     @Published var patchSelection: String? = "appearance"
     /// The Pictures pane shows the pictures of the selected dark theme.
@@ -67,8 +74,6 @@ final class AppModel: ObservableObject {
     /// Increases when the app writes a theme file (an edit of a dark picture).
     @Published var themeRevision = 0
     @Published var thumbnailStatus: String?
-    /// The result of the last "Start the probe at the next restart" (usb-host-probe).
-    @Published var usbProbeStatus: String?
     /// The decoded USB log of the probe (nil: not read).
     @Published var usbProbeLog: [USBProbeLog.Entry]?
     /// The playlists of the connected iPod and their thumbnails (album-art patch).
@@ -120,6 +125,9 @@ final class AppModel: ObservableObject {
     static let backupDir = supportDir.appendingPathComponent("Backups")
     static let themesDir = supportDir.appendingPathComponent("Themes")
     static var patchesDir: URL { Bundle.main.resourceURL!.appendingPathComponent("patches") }
+    /// The built-in patches and the patches that the owner installs (Application Support/iPodFirm/Patches).
+    static let patchLibrary = PatchLibrary(builtInDir: patchesDir, userDir: supportDir.appendingPathComponent("Patches"),
+                                           stagingDir: supportDir.appendingPathComponent("Staging"))
     static let appleFirmwareSHA256 = "840b2480ad5b692c098cb772c3d2bf8f58bf37557788782b596ac01c27ecdc32"
 
     var version: String {
@@ -450,6 +458,124 @@ final class AppModel: ObservableObject {
 
     // MARK: patches
 
+    func reloadPatches() {
+        patches = Self.patchLibrary.list().filter { $0.spec.internal != true }
+        if let s = patchSelection, s != "appearance", s != "version", !patches.contains(where: { $0.spec.name == s }) {
+            patchSelection = "appearance"
+        }
+    }
+
+    /// The turned-on patches that change the same place as `patch`.
+    func conflicts(_ patch: PatchInfo) -> [(PatchInfo, String)] {
+        Patcher.conflicts([patch] + activePatches.filter { $0.spec.name != patch.spec.name })
+            .filter { $0.0.spec.name == patch.spec.name }.map { ($0.1, $0.2) }
+    }
+
+    /// Turn a patch on or off. A patch that conflicts with a turned-on patch stays off.
+    func setPatch(_ patch: PatchInfo, on: Bool) {
+        guard on else { enabledPatches.remove(patch.spec.name); return }
+        if let (other, place) = conflicts(patch).first {
+            alert = AlertInfo(title: "\(patch.spec.displayTitle) cannot be turned on",
+                              message: "The patch changes the same place as \"\(other.spec.displayTitle)\" (\(place)). Turn off \"\(other.spec.displayTitle)\" first.")
+            return
+        }
+        enabledPatches.insert(patch.spec.name)
+    }
+
+    /// Examine a .ipodpatch file or a patch folder, then show the install sheet.
+    func installPatch(from url: URL) async {
+        section = .patches
+        let library = Self.patchLibrary, existing = patches
+        do {
+            pendingInstall = try await work("Examining the patch…") { try library.inspect(url, existing: existing) }
+        } catch { fail("Cannot open the patch", error) }
+    }
+
+    func choosePatchToInstall() {
+        let p = NSOpenPanel()
+        p.canChooseDirectories = true
+        p.allowedContentTypes = [UTType(filenameExtension: PatchLibrary.fileExtension) ?? .zip, .folder]
+        p.message = "Select a .ipodpatch file or a patch folder."
+        if p.runModal() == .OK, let url = p.url { Task { await installPatch(from: url) } }
+    }
+
+    func confirmInstall(_ c: PatchCandidate) {
+        pendingInstall = nil
+        do {
+            try Self.patchLibrary.install(c)
+            reloadPatches()
+            if let name = c.spec?.name { patchSelection = name }
+        } catch { fail("Cannot install the patch", error) }
+    }
+
+    func cancelInstall(_ c: PatchCandidate) {
+        pendingInstall = nil
+        if let staging = c.staging { Self.patchLibrary.cleanStaging(staging) }
+    }
+
+    func removePatch(_ patch: PatchInfo) {
+        do {
+            try Self.patchLibrary.remove(patch)
+            enabledPatches.remove(patch.spec.name)
+            reloadPatches()
+        } catch { fail("Cannot remove the patch", error) }
+    }
+
+    func exportPatch(_ patch: PatchInfo) {
+        let s = NSSavePanel()
+        s.nameFieldStringValue = "\(patch.spec.name).\(PatchLibrary.fileExtension)"
+        s.message = "iPodFirm adds the compiled code (patch.o), so that other people do not need Xcode."
+        guard s.runModal() == .OK, let url = s.url else { return }
+        let library = Self.patchLibrary
+        Task {
+            do {
+                try await work("Exporting the patch…") { try library.export(patch, to: url) }
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch { fail("Cannot export the patch", error) }
+        }
+    }
+
+    func showPatchesFolder() {
+        try? FileManager.default.createDirectory(at: Self.patchLibrary.userDir, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(Self.patchLibrary.userDir)
+    }
+
+    /// Write the files of an action (patch.json "ui") on the mounted iPod.
+    func runPatchAction(_ patch: PatchInfo, _ action: PatchUI.Action) {
+        guard let volume = ipodMusicVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            return
+        }
+        do {
+            for w in action.write where PatchUI.isSafePath(w.path) && w.data.count <= PatchUI.maxWrite {
+                let url = volume.appendingPathComponent(w.path)
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try w.data.write(to: url, options: .atomic)
+            }
+            if action.write.contains(where: { $0.path == Self.usbProbeLogFile }) { usbProbeLog = nil }
+            patchActionStatus[patch.spec.name] = "\(action.status ?? "\(action.title): complete.") (\(Date().formatted(date: .omitted, time: .shortened)))"
+        } catch { fail("Cannot write the file on the iPod", error) }
+    }
+
+    /// Read the switches of a patch (patch.json "ui") from the mounted iPod.
+    func loadPatchToggles(_ patch: PatchInfo) {
+        let volume = ipodMusicVolume()
+        for t in patch.spec.ui?.toggles ?? [] where PatchUI.isSafePath(t.path) {
+            let text = volume.flatMap { try? String(contentsOf: $0.appendingPathComponent(t.path), encoding: .utf8) }
+            patchToggleStates[t.path] = text?.trimmingCharacters(in: .whitespacesAndNewlines) == t.on
+        }
+    }
+
+    func setPatchToggle(_ t: PatchUI.Toggle, on: Bool) {
+        guard PatchUI.isSafePath(t.path), let volume = ipodMusicVolume() else { return }
+        do {
+            let url = volume.appendingPathComponent(t.path)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data((on ? t.on : t.off).utf8).write(to: url, options: .atomic)
+            patchToggleStates[t.path] = on
+        } catch { fail("Cannot write the file on the iPod", error) }
+    }
+
     var activePatches: [PatchInfo] {
         patches.filter { enabledPatches.contains($0.spec.name) }
     }
@@ -513,24 +639,9 @@ final class AppModel: ObservableObject {
         } catch { fail("Cannot write the thumbnails", error) }
     }
 
-    /// The trigger file of the usb-host-probe patch: '1' starts the USB host stack one time, at the
-    /// first button event after the next restart. The patch writes '0' back before the start.
-    static let usbProbeFile = "iPod_Control/iTunes/iPodFirmUSBProbe"
-    /// The log of the probe. iPodFirm makes it empty with the trigger; the patch writes it on the iPod.
+    /// The log of the usb-host-probe patch. The action in its patch.json makes it empty and writes the
+    /// trigger file; the patch writes the log on the iPod.
     static let usbProbeLogFile = "iPod_Control/iTunes/iPodFirmUSBLog"
-
-    func armUSBProbe() {
-        guard let volume = ipodMusicVolume() else {
-            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder, then try again.")
-            return
-        }
-        do {
-            try Data(count: USBProbeLog.fileSize).write(to: volume.appendingPathComponent(Self.usbProbeLogFile), options: .atomic)
-            try Data("1".utf8).write(to: volume.appendingPathComponent(Self.usbProbeFile), options: .atomic)
-            usbProbeLog = nil
-            usbProbeStatus = "The probe starts at the first button press after the next restart of the iPod (\(Date().formatted(date: .omitted, time: .shortened)))."
-        } catch { fail("Cannot write the probe file", error) }
-    }
 
     func readUSBProbeLog() {
         guard let volume = ipodMusicVolume() else {
@@ -538,7 +649,7 @@ final class AppModel: ObservableObject {
             return
         }
         guard let data = try? Data(contentsOf: volume.appendingPathComponent(Self.usbProbeLogFile)) else {
-            alert = AlertInfo(title: "No USB log", message: "The iPod has no USB log. Click Start the Probe at the Next Restart, then do the test.")
+            alert = AlertInfo(title: "No USB log", message: "The iPod has no USB log. Click Start the Probe at the Next Restart. Then do the test.")
             return
         }
         usbProbeLog = USBProbeLog.parse([UInt8](data)) ?? []

@@ -42,14 +42,70 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     /// The group in the list of patches: one of `categories`.
     public var category: String?
 
+    /// Controls in the Patches pane that need no Swift code (see PatchUI).
+    public var ui: PatchUI?
+
     public static let categories = ["display", "power", "test"]
+    /// The ids of the built-in Swift tools that `ui.tools` can name (PatchTools.swift in the app).
+    public static let knownTools = ["album-thumbnails", "usb-log"]
     public var displayTitle: String { title ?? name }
 }
 
+/// The `ui` object of patch.json: buttons, switches and text in the Patches pane.
+public struct PatchUI: Codable, Hashable {
+    /// The content of a file that an action writes on the iPod: a text, or a number of zero bytes.
+    public struct Write: Codable, Hashable {
+        public var path: String
+        public var text: String?
+        public var zeros: Int?
+        public var data: Data { zeros.map { Data(count: $0) } ?? Data((text ?? "").utf8) }
+    }
+    /// A button that writes files on the mounted iPod.
+    public struct Action: Codable, Hashable {
+        public var title: String
+        public var write: [Write]
+        public var status: String?
+    }
+    /// A switch that reads a file on the iPod and writes `on` or `off` to it.
+    public struct Toggle: Codable, Hashable {
+        public var title: String
+        public var path: String
+        public var on: String
+        public var off: String
+    }
+    public var tools: [String]?
+    public var actions: [Action]?
+    public var toggles: [Toggle]?
+    public var steps_title: String?
+    public var steps: [String]?
+    /// A Markdown file in the patch folder.
+    public var readme: String?
+
+    /// The largest file that an action can write.
+    public static let maxWrite = 1 << 20
+
+    /// All the paths on the iPod that the controls write.
+    public var paths: [String] { (actions ?? []).flatMap { $0.write.map(\.path) } + (toggles ?? []).map(\.path) }
+
+    /// true: the path is a relative path under iPod_Control/ with no "..".
+    public static func isSafePath(_ path: String) -> Bool {
+        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
+        return path.hasPrefix("iPod_Control/") && !parts.contains("..") && !parts.contains("") && !path.contains("\\")
+    }
+}
+
 public struct PatchInfo: Identifiable, Hashable {
+    /// Built-in: in the app bundle. User: installed in PatchLibrary.userDir.
+    public enum Source: Hashable { case builtIn, user }
     public var id: String { spec.name }
     public var spec: PatchSpec
     public var folder: URL
+    public var source: Source = .builtIn
+    public init(spec: PatchSpec, folder: URL, source: Source = .builtIn) {
+        self.spec = spec
+        self.folder = folder
+        self.source = source
+    }
 }
 
 public enum Patcher {
@@ -71,13 +127,49 @@ public enum Patcher {
         UInt32((max(osos.count, maxOSOSSize) + 15) & ~15)
     }
 
-    public static func list(in folder: URL) -> [PatchInfo] {
+    public static func list(in folder: URL, source: PatchInfo.Source = .builtIn) -> [PatchInfo] {
         let dirs = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
         return dirs.compactMap { dir in
             guard let data = try? Data(contentsOf: dir.appendingPathComponent("patch.json")),
                   let spec = try? JSONDecoder().decode(PatchSpec.self, from: data) else { return nil }
-            return PatchInfo(spec: spec, folder: dir)
+            return PatchInfo(spec: spec, folder: dir, source: source)
         }.sorted { $0.spec.name < $1.spec.name }
+    }
+
+    /// The precompiled object of a patch. If it is in the folder, the patcher links it and does not compile.
+    public static let objectFile = "patch.o"
+
+    /// The ELF object of a patch: patch.o, or the one C file compiled.
+    public static func objectCode(_ folder: URL) throws -> [UInt8] {
+        let obj = folder.appendingPathComponent(objectFile)
+        if FileManager.default.fileExists(atPath: obj.path) { return [UInt8](try Data(contentsOf: obj)) }
+        return try compile(folder)
+    }
+
+    /// Two turned-on patches that change the same place: the same fixed load address, the same
+    /// hook address, or overlapping "bytes" ranges. The build of such a pair fails.
+    public static func conflicts(_ patches: [PatchInfo]) -> [(PatchInfo, PatchInfo, String)] {
+        func ranges(_ p: PatchInfo) -> [(Range<Int>, String)] {
+            var r: [(Range<Int>, String)] = []
+            if let a = p.spec.load_address, a != extendedLoadAddress, hasCode(p.folder), let v = try? hex(a) {
+                r.append((Int(v)..<Int(v) + 1, "load address \(a)"))
+            }
+            for h in p.spec.hooks ?? [] { if let v = try? hex(h.at) { r.append((Int(v)..<Int(v) + 4, "hook at \(h.at)")) } }
+            for b in p.spec.bytes ?? [] {
+                if let v = try? hex(b.at) { r.append((Int(v)..<Int(v) + max(1, b.expect.count / 2), "bytes at \(b.at)")) }
+            }
+            return r
+        }
+        var out: [(PatchInfo, PatchInfo, String)] = []
+        for i in patches.indices {
+            for j in patches.indices where j > i {
+                let a = ranges(patches[i]), b = ranges(patches[j])
+                if let hit = a.first(where: { x in b.contains { $0.0.overlaps(x.0) } }) {
+                    out.append((patches[i], patches[j], hit.1))
+                }
+            }
+        }
+        return out
     }
 
     static func sha256(_ b: [UInt8]) -> String { SHA256.hash(data: b).map { String(format: "%02x", $0) }.joined() }
@@ -124,7 +216,7 @@ public enum Patcher {
             var fw = [String: UInt32]()
             for (k, v) in spec.symbols ?? [:] { fw[k] = try hex(v) }
             fw.merge(symbols) { $1 }
-            (code, table) = try link(try compile(patch.folder), base: base, firmware: fw)
+            (code, table) = try link(try objectCode(patch.folder), base: base, firmware: fw)
         }
         let end = Int(base) + code.count
         guard end <= maxSize else { throw PatchError("The patch code ends at \(String(end, radix: 16)); the maximum is \(String(maxSize, radix: 16)).") }
@@ -158,7 +250,7 @@ public enum Patcher {
 
     static func hasCode(_ folder: URL) -> Bool {
         let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        return files.contains { $0.pathExtension == "c" }
+        return files.contains { $0.pathExtension == "c" || $0.lastPathComponent == objectFile }
     }
 
     static func hexBytes(_ s: String) throws -> [UInt8] {
