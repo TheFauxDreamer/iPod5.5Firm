@@ -261,6 +261,18 @@ The class 0xEF with an interface association is normal for USB audio devices, an
 
 No entry matches class 0xEF. Thus the EarPods got no driver. The probe now changes the class bytes of the record 0x1084a360 to EF/02 before the host start. The EarPods then get 110 points and the composite driver. The probe also logs the received bytes of each GET_DESCRIPTOR configuration request. Emulator: the host start and both log writes are correct (the emulator has no USB device).
 
+## The configuration of the USB-C EarPods (2026-10-08)
+
+iPodFirm 0.1.79, the dock with its power supply, the EarPods on a USB-C port of the dock.
+
+- "Add device" gave the EarPods to the composite driver (the probe changed the record 0x1084a360 to EF/02). The composite driver sent GET_DESCRIPTOR configuration 4 bytes for numbers 1 and 2 (totals 500 and 165 bytes), then the full configurations into one buffer, then SET_CONFIGURATION 1 and SET_FEATURE 1 (remote wakeup).
+- No interface driver accepted the audio or HID interfaces. That is the expected result.
+- Configuration 1 (430 bytes, the bytes of the first dump): an interface association for interfaces 0–2, class 01/00/20 (UAC2). Interface 0: audio control, clock sources 9 and 10, interrupt endpoint 0x81. Interface 1: playback, alternate 1 = 24 bits (endpoint 0x02, 288 bytes), alternate 2 = 16 bits (endpoint 0x02, 192 bytes). Interface 2: microphone, endpoint 0x83. Interfaces 3 and 4: HID, endpoints 0x85 and 0x86.
+- Endpoint 0x02 has the attributes 0x0d: isochronous, synchronous. The interval is 1 (each frame).
+- The dumps of configurations 2 and 3 were not correct. The composite driver put them in the same buffer, at +430. The probe had read that memory one time already, and the cache kept the old lines.
+
+Raw bytes of configuration 1: refer to the log file copy of the owner (iPodFirmUSBLog, records 379–391).
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).
