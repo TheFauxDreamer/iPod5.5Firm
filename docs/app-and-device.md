@@ -24,7 +24,7 @@ The app needs macOS 14 or later and an Apple silicon Mac (`--arch arm64`).
 | Firmware | The images, the checksums and the model of the open file. | [OverviewView.swift](../mac/Sources/iPodFirm/OverviewView.swift) |
 | Pictures | Show, export and replace pictures. Show the dark theme pictures. | [PicturesView.swift](../mac/Sources/iPodFirm/PicturesView.swift) |
 | Text | Change the strings of each language. | [StringsView.swift](../mac/Sources/iPodFirm/StringsView.swift) |
-| Patches | A list at the left: iPod Appearance, Software Version and the patches (grouped by `category`). Below the list: **+** (install a patch), **−** (remove a user patch) and **⋯** (Export Patch…, Show Patches Folder). The list accepts a dropped `.ipodpatch` file or patch folder. Each patch row has an SF Symbol, the title, the summary, the letter, the version and a switch. The detail at the right shows the selected row: the caution, the sections "What It Does", "You Need" and "Good to Know", the compatibility, the conflicts, the version, the source and the controls from the `ui` object of `patch.json`. | [PatchesView.swift](../mac/Sources/iPodFirm/PatchesView.swift) |
+| Patches | A list at the left: iPod Appearance, Software Version and the patches (grouped by `category`: Display, Power and Storage, Fun, Tests). Below the list: **+** (install a patch), **−** (remove a user patch) and **⋯** (Export Patch…, Show Patches Folder). The list accepts a dropped `.ipodpatch` file or patch folder. Each patch row has an SF Symbol, the title, the summary, the letter, the version and a switch. The detail at the right shows the selected row: the caution, the sections "What It Does", "You Need" and "Good to Know", the compatibility, the conflicts, the version, the source and the controls from the `ui` object of `patch.json`. | [PatchesView.swift](../mac/Sources/iPodFirm/PatchesView.swift) |
 | iPod | Find the iPod, back up, flash, restore, eject and the recovery steps. A row shows the permission status and opens the Settings window. | [IPodView.swift](../mac/Sources/iPodFirm/IPodView.swift) |
 | Emulator | Install the emulator, start the firmware, show the screen and send button pushes. | [EmulatorView.swift](../mac/Sources/iPodFirm/EmulatorView.swift) |
 
@@ -47,7 +47,7 @@ The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the cent
 
 1. It increases the version and the build number in [mac/version.env](../mac/version.env).
 2. It runs `swift build -c release --arch arm64`.
-3. It makes `iPodFirm.app` with the app, the helper, the launchd property list, the emulator files and the patches. It does not copy `row-marker`.
+3. It makes `iPodFirm.app` with the app, the helper, the launchd property list, the emulator files and the patches.
 4. It writes `Info.plist`. The bundle identifier is `com.thefauxdreamer.ipodfirm`.
 5. It signs the helper with the identifier `com.thefauxdreamer.ipodfirm.helper`, then the app. It uses the first "Apple Development" or "Developer ID Application" identity, or `CODESIGN_IDENTITY`.
 6. It writes the new numbers to `version.env` only after a successful build.

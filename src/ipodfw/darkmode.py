@@ -78,18 +78,12 @@ def apply_switch_table(osos: bytearray, table: bytes) -> None:
 def settings_menu(menu: bytes) -> bytes:
     """Menu 24598 with a Dark Mode item after Clicker (a copy of the Sound Check item)."""
     count = struct.unpack_from("<I", menu, 0)[0]
-    items = [bytearray(menu[4 + 40 * i:44 + 40 * i]) for i in range(count)]
-    keys = [struct.unpack_from("<I", it, 0x1C)[0] for it in items]
+    keys = [struct.unpack_from("<I", menu, 4 + 40 * i + 0x1C)[0] for i in range(count)]
     if DARK_KEY in keys:
         raise DarkModeError("The Settings menu already has the Dark Mode item.")
     if TEMPLATE_KEY not in keys or INSERT_AFTER_KEY not in keys:
         raise DarkModeError("The Settings menu is not the menu of firmware 1.3.")
-    item = bytearray(items[keys.index(TEMPLATE_KEY)])
-    struct.pack_into("<I", item, 0x18, LABEL_ID)
-    struct.pack_into("<I", item, 0x1C, DARK_KEY)
-    struct.pack_into("<I", item, 0x20, LABEL_ID)
-    items.insert(keys.index(INSERT_AFTER_KEY) + 1, item)
-    return struct.pack("<I", len(items)) + b"".join(items)
+    return patcher.insert_settings_item(menu, DARK_KEY, LABEL_ID, INSERT_AFTER_KEY, TEMPLATE_KEY)
 
 
 def build(fw: FirmwarePartition, osos: bytes, theme: Theme, patch_dir: str | Path,

@@ -1,0 +1,39 @@
+{
+  "name": "something-comforting",
+  "title": "Something Comforting",
+  "summary": "A Settings item plays a melody on the iPod speaker.",
+  "symbol": "music.note",
+  "category": "fun",
+  "version_letter": "m",
+  "version": "1.0",
+  "description": "An example patch. The Settings menu has a Something Comforting item. When you select the item, the internal speaker of the iPod (the piezo) plays a part of \"Something Comforting\" by Porter Robinson. The patch can be used with all other patches and with Dark Mode.",
+  "details": ["Settings has a Something Comforting item after Clicker.", "Select the item to play approximately 13 seconds of the melody.", "The melody plays on the internal speaker, not in the headphones."],
+  "notes": ["The iPod does not react to the buttons while the melody plays.", "The Clicker setting does not stop the melody.", "This patch is an example of a patch that adds a Settings item."],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "tone": "0xcd430",
+    "task_sleep": "0x11c9fc",
+    "lookup_continue": "0x21f258"
+  },
+  "hooks": [
+    { "kind": "b", "at": "0x21f254", "expect": "0xe92d40f8", "to": "hook_lookup", "chain": "lookup_next", "chain_default": "lookup_original" },
+    { "kind": "word", "at": "0x66c94c", "expect": "0x00190b00", "to": "hook_settings_get", "chain": "get_next" },
+    { "kind": "word", "at": "0x66c950", "expect": "0x001919d8", "to": "hook_settings_set", "chain": "set_next" }
+  ],
+  "settings_items": [
+    { "key": "0x600060e4", "label_id": "0x7e01", "after_key": "0x60006088" }
+  ],
+  "ui": {
+    "steps_title": "Play the Melody",
+    "steps": [
+      "Flash a firmware with this patch.",
+      "On the iPod, open Settings.",
+      "Select Something Comforting.",
+      "Listen to the internal speaker. The melody plays for approximately 13 seconds."
+    ]
+  }
+}

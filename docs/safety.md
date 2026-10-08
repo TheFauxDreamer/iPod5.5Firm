@@ -150,6 +150,7 @@ A test in the emulator is strong evidence, but not proof:
 | `sleep-now` | Up to the hardware sleep | No |
 | `flash-keep-awake` | Yes, without a sleep | 2-minute version only |
 | `flash-wake-on-input` | Yes | No |
+| `something-comforting` | Yes: the Settings item and the `tone` calls (no audio in the emulator) | No |
 | `usb-host-probe` | Host start only (no USB in the emulator) | Yes, as a test: dock hub, storage and the USB-C EarPods enumerate (2026-10-08) |
 | Dark Mode switch | Yes | No |
 | Software version | Not recorded | No |

@@ -14,7 +14,7 @@ If the folder has `patch.o`, the patcher links `patch.o` and does not compile th
 
 There are two places for patches:
 
-- The built-in patches are in [patches/](../patches/). `mac/scripts/build-app.sh` copies each patch folder into `iPodFirm.app/Contents/Resources/patches/`. It does not copy `row-marker`, because that patch is only for tests.
+- The built-in patches are in [patches/](../patches/). `mac/scripts/build-app.sh` copies each patch folder into `iPodFirm.app/Contents/Resources/patches/`.
 - The user patches are in `~/Library/Application Support/iPodFirm/Patches/`. The owner installs them in the app.
 
 A user patch with the name of a built-in patch replaces the built-in patch only if the user patch has a higher `version`. Otherwise the app ignores the user patch (`PatchLibrary.list`). Thus a later app with a higher built-in version uses its built-in patch again.
@@ -103,7 +103,8 @@ The install moves the old folder to the Trash. The patch keeps its switch state,
 | `notes` | array of strings, optional | More information. The section "Good to Know" shows each item. |
 | `caution` | string, optional | A caution. The pane shows it in orange above the switch of the patch. The install sheet also shows it. |
 | `symbol` | string | The name of an SF Symbol, for example `photo.on.rectangle.angled`. Do not use emoji. |
-| `category` | string | The group in the list of patches: `display`, `power` or `test`. |
+| `category` | string | The group in the list of patches: `display`, `power`, `fun` or `test`. |
+| `settings_items` | array, optional | On/Off items that the patch adds to the Settings menu. Refer to [Settings items](#settings-items). |
 
 | `ui` | object, optional | Controls in the Patches pane. Refer to [The ui object](#the-ui-object). |
 
@@ -194,7 +195,7 @@ Any other relocation type stops the build. An undefined symbol that is not in `s
 
 ## The hooks
 
-A hook changes one 32-bit word in osos. Each hook has four keys:
+A hook changes one 32-bit word in osos. Each hook has four keys, and two optional keys for a [hook chain](#hook-chains):
 
 | Key | Content |
 |---|---|
@@ -202,6 +203,8 @@ A hook changes one 32-bit word in osos. Each hook has four keys:
 | `at` | The osos offset of the word. |
 | `expect` | The value that the word must have in the Apple firmware. |
 | `to` | A global function of the patch, or a hex address. |
+| `chain` | Optional. A symbol name. The patch gets the previous target with this name. Only for `word` and `b`. |
+| `chain_default` | Optional, for a `b` hook with `chain`. A global function of the patch that runs the replaced instruction and continues in the firmware. |
 
 | Kind | New value | Use |
 |---|---|---|
@@ -213,6 +216,36 @@ A `bl` hook changes `lr`. If the replaced instruction was not a call, the hook f
 
 A `b` hook on the first instruction of a function is a wrapper. `lookup_original` in [dark_mode.c](../patches/dark-mode/dark_mode.c) runs the replaced `push {r3, r4, r5, r6, r7, lr}` and then jumps to the second instruction (`lookup_continue`, 0x21f258).
 
+### Hook chains
+
+Two patches cannot change the same word without a chain. A hook with `chain` can also replace the hook of an earlier patch. The patch then calls the symbol `chain` for all the work that it does not do itself.
+
+| Kind | The word in osos | The value of `chain` |
+|---|---|---|
+| `word` | `expect` | `expect`: the firmware function. |
+| `word` | An address at or after 0x7358d0 (`Patcher.patchAreaStart`) | That address: the hook of the earlier patch. |
+| `b` | `expect` | The address of `chain_default`: the wrapper of the patch. |
+| `b` | A `b` instruction to an address at or after 0x7358d0 | The branch target: the hook of the earlier patch. |
+
+Each other value is an error. The patcher links the patch two times: the first link gives the address of `chain_default`, and the second link uses the `chain` values. `Patcher.chainTarget` (Python `chain_target`) has the rules.
+
+A hook with `chain` is not a conflict in `Patcher.conflicts`. The patch must be applied after the patches that it chains to. The build applies the Dark Mode build first, then the patches sorted by name. A hook without `chain` on the same word must come first. [something_comforting.c](../patches/something-comforting/something_comforting.c) is an example: it chains to the three Dark Mode hooks.
+
+### Settings items
+
+`settings_items` adds On/Off items to the Settings menu (Menu 24598). Each item has these keys:
+
+| Key | Content |
+|---|---|
+| `key` | The settings key of the item, for example `0x600060e4`. The hooks of the patch receive only the low 16 bits (`0x60e4`). |
+| `label_id` | The string ID of the label, for example `0x7e01`. The `b` hook on the string lookup (0x21f254) must give the text. |
+| `after_key` | Optional. The item comes after the item with this key, for example `0x60006088` (Clicker). If the menu has no such item, the item goes at the end. |
+| `template_key` | Optional. The item to copy. The default is Sound Check (`0x600060b7`), an On/Off item. |
+
+The patcher finds the menu through the resource table entry in the current image. Thus it also finds the menu that the Dark Mode build moved. It writes the new menu after the end of the image, aligned to 16 bytes, and changes the table entry. The image grows to a multiple of 0x800 bytes. The patcher stops with an error if the menu already has the key, or if the menu has no template item. Two patches with the same key are a conflict.
+
+The settings object calls the "get" method (vtable 0x66c94c) for the value text and the "set" method (vtable 0x66c950) when the owner selects the item. A patch hooks both with `chain`. Use a key that is not in the firmware: 0x600060e0 is Dark Mode, and 0x600060e4 is `something-comforting`.
+
 ## The checks before a patch is applied
 
 `Patcher.apply` stops with an error if one of these conditions is true:
@@ -220,8 +253,9 @@ A `b` hook on the first instruction of a function is a wrapper. `lookup_original
 1. The SHA-256 of the original osos is not `osos_sha256`. iPodFirm uses the hash of the osos as it was first opened. Thus picture and text edits do not stop a patch.
 2. The code ends after `maxSize`. The default is 0x736800, the start of rsrc in Apple's layout. The Dark Mode build and an extended patch use 0x7F0000 (`ThemeImport.ososLimit`).
 3. The code area is not all zero. Two patches possibly use the same area.
-4. A hook word does not have its `expect` value. Another change or another firmware version is in that location.
+4. A hook word does not have its `expect` value. Another change or another firmware version is in that location. A hook with `chain` also accepts the hook of an earlier patch.
 5. The `kind` is not known, or the `to` function is not a global function of the patch.
+6. A Settings item key is already in the Settings menu, or the menu has no template item.
 
 After the checks, iPodFirm writes the code and the hooks. It extends osos with zeros to a multiple of 0x800 bytes. The partition code then calculates the new length and checksum.
 
@@ -235,9 +269,9 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `sleep-now` | 0x73658c | 0x73658c–0x736644 (184 bytes) | The code uses 181 bytes. |
 | `flash-keep-awake` | 0x736644 | 0x736644–0x736700 (188 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
 | `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |
-| `row-marker` | 0x7358d0 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
 | `usb-host-probe` | `extended` | After all other data (8740 bytes; the 32 KB log buffer comes from the allocator) | Extended patch. Test patch. |
+| `something-comforting` | `extended` | After all other data (692 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736ab4, menu at 0x737000, osos end 0x737800 | Extended patch. Example patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
 

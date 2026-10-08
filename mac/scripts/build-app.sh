@@ -32,7 +32,6 @@ cp -R Resources/emulator-patches "$APP/Contents/Resources/"
 mkdir -p "$APP/Contents/Resources/patches"
 for p in ../patches/*/; do
     n=$(basename "$p")
-    [ "$n" = "row-marker" ] && continue          # test patch only
     mkdir -p "$APP/Contents/Resources/patches/$n"
     cp "$p"patch.json "$APP/Contents/Resources/patches/$n/"
     for c in "$p"*.c; do [ -e "$c" ] && cp "$c" "$APP/Contents/Resources/patches/$n/"; done   # a data patch has no C file

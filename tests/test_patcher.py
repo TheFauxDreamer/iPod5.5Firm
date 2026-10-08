@@ -18,8 +18,8 @@ REPO = Path(__file__).resolve().parent.parent
 def test_load_address_and_size_limit():
     osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
     with pytest.raises(patcher.PatchError, match="can only grow"):
-        patcher.apply(osos, REPO / "patches/row-marker", 0x736800, load_address=0x7eb000)
-    out, report = patcher.apply(osos, REPO / "patches/row-marker", 0x7F0000, load_address=0x7eb000)
+        patcher.apply(osos, REPO / "patches/album-art", 0x736800, load_address=0x7eb000)
+    out, report = patcher.apply(osos, REPO / "patches/album-art", 0x7F0000, load_address=0x7eb000)
     assert report["code"][0] == "0x7eb000"
     assert len(out) % 0x800 == 0 and len(out) > 0x7eb000
     assert struct.unpack_from("<I", out, 0x677a14)[0] == int(report["symbols"]["hook_label_draw"], 16)
@@ -142,3 +142,62 @@ def test_precompiled_object(tmp_path):
     expected, _ = patcher.apply(osos, src, 0x736800)
     out, _ = patcher.apply(osos, folder, 0x736800)
     assert out == expected
+
+
+def _settings_keys(osos: bytes) -> list[int]:
+    """The keys of the items in the Settings menu, through the resource table entry."""
+    from ipodfw import resources
+    main = resources.main_block(resources.scan(osos))
+    r = next(r for r in main.resources if r.type == "Menu" and r.id == patcher.SETTINGS_MENU_ID)
+    at = main.abs(r)
+    count = struct.unpack_from("<I", osos, at)[0]
+    return [struct.unpack_from("<I", osos, at + 4 + 40 * i + 0x1C)[0] for i in range(count)]
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_something_comforting_alone_and_after_dark_mode():
+    from ipodfw import darkmode, themeimport
+    fw = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1])
+    osos = fw.image("osos")
+    original = hashlib.sha256(osos).hexdigest()
+    patch = REPO / "patches/something-comforting"
+    # alone: the chains go to the firmware (word) and to the trampoline of the patch (b)
+    out, report = patcher.apply(osos, patch, 0x736800)
+    syms = {k: int(v, 16) for k, v in report["symbols"].items()}
+    assert struct.unpack_from("<I", out, 0x66c94c)[0] == syms["hook_settings_get"]
+    assert struct.unpack_from("<I", out, 0x66c950)[0] == syms["hook_settings_set"]
+    assert struct.unpack_from("<I", out, 0x21f254)[0] == patcher.branch("b", 0x21f254, syms["hook_lookup"])
+    keys = _settings_keys(out)
+    assert keys[keys.index(0x60006088) + 1] == 0x600060E4         # after Clicker
+    assert len(out) % 0x800 == 0 and len(out) <= patcher.OSOS_LIMIT
+    assert int(report["settings_menu"], 16) >= int(report["code"][1], 16)
+    # after the Dark Mode build: both items, and the hooks of this patch call the Dark Mode hooks
+    empty = themeimport.Theme("empty", original, original)
+    dark, info = darkmode.build(fw, osos, empty, REPO / "patches/dark-mode", original)
+    dark_get = struct.unpack_from("<I", dark, 0x66c94c)[0]
+    out, report = patcher.apply(dark, patch, 0x736800, original_sha256=original)
+    keys = _settings_keys(out)
+    assert keys.count(0x600060E0) == 1 and keys.count(0x600060E4) == 1
+    assert keys.index(0x600060E4) == keys.index(0x60006088) + 1
+    assert dark_get >= patcher.PATCH_AREA_START
+    assert int(report["code"][0], 16) >= info["end"]
+    # the same patch two times: the Settings item exists already
+    with pytest.raises(patcher.PatchError, match="already has an item"):
+        patcher.apply(out, patch, 0x736800, original_sha256=original)
+
+
+def test_chain_target_rules():
+    osos = bytearray(0x800)
+    struct.pack_into("<I", osos, 0x100, 0x00190B00)
+    word = {"kind": "word", "at": "0x100", "expect": "0x00190b00", "chain": "next"}
+    assert patcher.chain_target(word, bytes(osos), {}) == 0x190B00
+    struct.pack_into("<I", osos, 0x100, 0x7EB010)                 # the hook of an earlier patch
+    assert patcher.chain_target(word, bytes(osos), {}) == 0x7EB010
+    struct.pack_into("<I", osos, 0x100, 0x123456)                 # something else
+    with pytest.raises(patcher.PatchError, match="or the hook of a patch"):
+        patcher.chain_target(word, bytes(osos), {})
+    b = {"kind": "b", "at": "0x200", "expect": "0xe92d40f8", "chain": "next", "chain_default": "orig"}
+    struct.pack_into("<I", osos, 0x200, 0xE92D40F8)
+    assert patcher.chain_target(b, bytes(osos), {"orig": 0x7EC000}) == 0x7EC000
+    struct.pack_into("<I", osos, 0x200, patcher.branch("b", 0x200, 0x7EB100))
+    assert patcher.chain_target(b, bytes(osos), {"orig": 0x7EC000}) == 0x7EB100

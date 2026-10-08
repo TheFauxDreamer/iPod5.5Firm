@@ -492,7 +492,7 @@ CAUTION: iPodFirm supports one osos per patch folder. The app downloads and uses
 2. Make sure that the directory, the checksums and the resource blocks parse.
 3. Import osos into a new Ghidra project (section 1.3).
 4. Find the anchors: the resource lookup (compare with 0x21f254), the file functions (compare with 0x08f38c) and the memory allocator (compare with 0x25a974). Use signatures first, then the recipes.
-5. Make the `row-marker` test patch for the new model. It draws a bar at each label. It proves that the compiler, the linker and the draw functions operate.
+5. Make a small test patch for the new model, for example a patch that draws a bar at each label. It proves that the compiler, the linker and the draw functions operate. The removed patch `row-marker` is an example (refer to [modifications.md](modifications.md#row-marker-removed)).
 6. Record each result in a new note in `re/`, for example `re/model-nano1g.md`.
 
 ## 8. Record the results
@@ -516,7 +516,7 @@ CAUTION: iPodFirm supports one osos per patch folder. The app downloads and uses
 | 0x1d871c | `flash-keep-awake` | `??????1a 0000a0e3 1080bde8 0100a0e3 1080bde8 10402de9 ??????eb 000050e3 0100a003 0000a013 1080bde8 1eff2fe1 10402de9` |
 | 0x23344c | `flash-keep-awake` | `140094e5 050050e1 ??????1a 0400a0e1 ??????eb 0000a0e3 ??????eb 0000a0e3 7080bde8 65657266 0110a0e3 581080e5 600090e5` |
 | 0x1d8344 | `flash-wake-on-input` | `0500a0e1 ??????eb 1c0050e3 ??????0a 0110a0e3 0400a0e1 ??????eb 040095e5 0f0050e3 ??????0a 0400a0e3 ??????eb 000050e3` |
-| 0x21f254 | `dark-mode` | `050051e3 04005113 03005113 01005113 0000a013 1eff2fe1 f8402de9 0150a0e1 0010a0e3 0260a0e1 0040a0e1 00108de5 ??????ea` |
+| 0x21f254 | `dark-mode`, `something-comforting` | `050051e3 04005113 03005113 01005113 0000a013 1eff2fe1 f8402de9 0150a0e1 0010a0e3 0260a0e1 0040a0e1 00108de5 ??????ea` |
 | 0x9ee90 | Software version | `0040a0e1 0030a0e3 8000a0e3 00308de5 0030a0e1 08008de2 0110a0e3 3020a0e3 ??????eb 6420a0e3 24108de2 08008de2 ??????eb` |
 | 0x9ee70 | Software version | `0b0c80e2 d304d0e1 1eff2fe1 a00c90e5 510bd0e5 1eff2fe1 10402de9 62df4de2 0040a0e1 0030a0e3 8000a0e3 00308de5 0030a0e1` |
 
@@ -527,7 +527,7 @@ The signatures of the methods for the vtable hooks. They start at the function e
 | 0x1bb260 | 0x66e470 | `album-art` | `f74f2de9 30d04de2 0040a0e1 741080e2 ??????eb 20108de2 0400a0e1 ??????eb 2c009de5 24109de5 14e08fe2 017040e0 000094e5` |
 | 0x244924 | 0x677a14 | `album-art` | `30402de9 01e0a0e1 0040a0e1 c81094e5 0250a0e1 0820f1e5 c00090e5 24d04de2 2020cde5 0120d1e5 20c08de2 2120cde5 0220d1e5` |
 | 0x1d83fc | 0x69fd2c | `sleep-now` | `10402de9 0040a0e1 180090e5 ??????eb 000050e3 18009415 ??????1b ??????eb 480084e2 ??????eb 480084e2 7d1fa0e3 ??????eb` |
-| 0x190b00 | 0x66c94c | `dark-mode` | `ff4f2de9 0050a0e1 0100a0e3 83df4de2 04028de5 ????9fe5 0080a0e3 000090e5 0160a0e1 010010e3 0340a0e1 ??????1a ????9fe5` |
-| 0x1919d8 | 0x66c950 | `dark-mode` | `f84f2de9 ????9fe5 0040a0e1 71c046e2 ????9fe5 0c0052e1 010086e2 01a0a0e3 0290a0e1 0080a0e3 0350a0e1 907046e2 ??????0a` |
+| 0x190b00 | 0x66c94c | `dark-mode`, `something-comforting` | `ff4f2de9 0050a0e1 0100a0e3 83df4de2 04028de5 ????9fe5 0080a0e3 000090e5 0160a0e1 010010e3 0340a0e1 ??????1a ????9fe5` |
+| 0x1919d8 | 0x66c950 | `dark-mode`, `something-comforting` | `f84f2de9 ????9fe5 0040a0e1 71c046e2 ????9fe5 0c0052e1 010086e2 01a0a0e3 0290a0e1 0080a0e3 0350a0e1 907046e2 ??????0a` |
 
 These signatures are a start point. A function that Apple changed between the versions does not match. Then use the recipes in section 3.

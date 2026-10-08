@@ -276,7 +276,9 @@ Refer to [re/usb-host.md](../re/usb-host.md) and [USB-AUDIO-OUT.md](../USB-AUDIO
 | 0x6c8730 | Hub driver dispatch table, "initialize device" entry (0xe7bc4). Dispatch format: version 0x1100, validate, initialize device, initialize interface, finalize, notify. |
 | 0x6c878c | Storage driver dispatch table, "initialize interface" entry (0x10dd00). |
 | 0x6bc3dc | Driver registry entries (44 bytes, pairs at +0x1c): Hub, two USBCompositeDevice1.6 records (one table at 0x6c85ec), SampleStorageDriver (interface class 8), ICAType4CameraDriver (vendor 0x04A9), PTPCameraDriver (class 6/1/1). Emulator: the hub driver gets the simulated root hub 05AC:8031. |
-| 0xcd430 | Piezo tone (pitch, duration in microseconds): a type-0 message to the queue 0x15 of `AsyncPiezo` (0x285060). The firmware uses pitches 0xb4 and 0x90 with 200000. |
+| 0xcd430 | Piezo tone (period, duration in microseconds): a type-0 message to the queue 0x15 of `AsyncPiezo` (0x285060). Returns 1 if the buffer of 15 notes is full (the note is lost). Hz = 91225 / period. The firmware uses 0xb4 (507 Hz) and 0x90 (634 Hz) with 200000. Refer to [re/piezo.md](../re/piezo.md). |
+| 0x285060 | `AsyncPiezo` task: puts each note in a ring buffer of 16 entries (RAM 0x10882314 periods, 0x10882354 durations, indexes at 0x1081dfb0). |
+| 0xc719c | Piezo player: writes `period \| 0x80800000` to 0x7000a000 for each note. 0x11c750 writes 0 there when the buffer is empty (the piezo stops). |
 | 0x1fb50c | iAP lingo 6 (USB host), command 3: tells the Camera Connector to switch on (1) or off (0). |
 | 0x2856a4 | `USBPowerSense` task. |
 | 0x97364 | In the UIM init: `bl 0x266794` (chip check 0x598: 1 if the chip ID byte at 0x70000000 is 0x32). The init stores (result == 0) at +0x60 of the controller object and, if it is 1, sets PFSC (force full speed) in PORTSC at 0x9746c. On the owner's iPod the result is 1 (no force). |
@@ -364,7 +366,8 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 
 | Address | Name | Use |
 |---|---|---|
-| 0x60005010 | `USEC_TIMER` | Microsecond counter. `flash-wake-on-input` reads it. |
+| 0x60005010 | `USEC_TIMER` | Microsecond counter. `flash-wake-on-input` and `something-comforting` read it. |
+| 0x7000a000 | `PWM0_CTRL` | The piezo: `period \| 0x80800000` plays a tone, 0 stops it. |
 | 0x60006004 | `DEV_RS` | Device reset. 4 restarts the iPod. |
 | 0x6000d13c | GPIOL input value | Power pins: bit 0x08 (FireWire or charger, low = power), bit 0x10 (USB, high = power), bit 0x20 (not known). |
 | 0x70000080 | `GPO32_VAL` | Bit 30 (0x40000000) switches the drive power (set = off). |
@@ -389,6 +392,8 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | Str −4 | "iPod", the title of the main menu. |
 | Str −139 to −145 | The Backlight Timer items. |
 | Str 0x602e, 0x602f | "On" and "Off". |
+| Str 0x7e00 | "Dark Mode" (added by the `dark-mode` patch). |
+| Str 0x7e01, 0x7e02 | "Something Comforting" and "Play" (added by the `something-comforting` patch). |
 
 ## Element IDs
 
@@ -412,6 +417,7 @@ The emulator found these element IDs (view + 0x1c):
 | 0x60006088 | Clicker |
 | 0x600060b7 | Sound Check |
 | 0x600060e0 | Dark Mode (added by iPodFirm) |
+| 0x600060e4 | Something Comforting (added by the `something-comforting` patch). Not a 32-bit word in osos 1.3. |
 
 ## Open questions
 

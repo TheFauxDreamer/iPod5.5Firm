@@ -74,18 +74,12 @@ public enum DarkMode {
     /// Menu 24598 with a Dark Mode item after Clicker (a copy of the Sound Check item).
     public static func settingsMenu(_ menu: [UInt8]) throws -> [UInt8] {
         let count = Int(le32(menu, 0))
-        var items = (0..<count).map { Array(menu[4 + 40 * $0..<44 + 40 * $0]) }
-        let keys = items.map { le32($0, 0x1C) }
+        let keys = (0..<count).map { le32(menu, 4 + 40 * $0 + 0x1C) }
         guard !keys.contains(darkKey) else { throw ThemeError("The Settings menu already has the Dark Mode item.") }
-        guard let template = keys.firstIndex(of: templateKey), let after = keys.firstIndex(of: insertAfterKey) else {
+        guard keys.contains(templateKey), keys.contains(insertAfterKey) else {
             throw ThemeError("The Settings menu is not the menu of firmware 1.3.")
         }
-        var item = items[template]
-        put32(&item, 0x18, labelID); put32(&item, 0x1C, darkKey); put32(&item, 0x20, labelID)
-        items.insert(item, at: after + 1)
-        var out = [UInt8](repeating: 0, count: 4)
-        put32(&out, 0, UInt32(items.count))
-        return out + items.flatMap { $0 }
+        return try Patcher.insertSettingsItem(menu, key: darkKey, label: labelID, after: insertAfterKey, template: templateKey)
     }
 
     /// The osos for "Switch on iPod". `osos` can have edits of the owner; `partition` gives its resources.

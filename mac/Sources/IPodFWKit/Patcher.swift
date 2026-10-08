@@ -5,6 +5,8 @@ import Foundation
 // A patch is a folder with patch.json and one C file. The C file is compiled with Xcode clang
 // for the ARM7TDMI. A small linker puts the code at "load_address" and resolves relocations.
 // A patch can also change data ("bytes" and "strings"). A patch with no C file has no code.
+// A hook with "chain" can share its place with a hook of an earlier patch. A patch can add items
+// to the Settings menu ("settings_items").
 
 public struct PatchError: LocalizedError {
     public let message: String
@@ -13,7 +15,27 @@ public struct PatchError: LocalizedError {
 }
 
 public struct PatchSpec: Codable, Identifiable, Hashable {
-    public struct Hook: Codable, Hashable { public var kind, at, expect, to: String }
+    /// A change of one 32-bit word. With `chain`, the hook can replace the hook of an earlier patch at
+    /// the same place. The patch then gets the symbol `chain`: the address that it must call for all the
+    /// work that it does not do itself (see `Patcher.chainTarget`).
+    public struct Hook: Codable, Hashable {
+        public var kind, at, expect, to: String
+        /// The symbol that gets the previous target. Only for the kinds "word" and "b".
+        public var chain: String? = nil
+        /// A "b" hook: the function in the patch that runs the replaced instruction and continues in the
+        /// firmware. `chain` is this function if no earlier patch hooks the place.
+        public var chain_default: String? = nil
+    }
+    /// An On/Off item that the patch adds to the Settings menu (Menu 24598): a copy of the item with
+    /// `template_key` (default: Sound Check), with the key `key` and the label `label_id`. The item
+    /// comes after the item with `after_key`, or at the end. The hooks of the patch give the label
+    /// text and the action (see patches/something-comforting).
+    public struct SettingsItem: Codable, Hashable {
+        public var key: String
+        public var label_id: String
+        public var after_key: String? = nil
+        public var template_key: String? = nil
+    }
     /// A data change: `expect` and `value` are hexadecimal bytes.
     public struct Bytes: Codable, Hashable { public var at, expect, value: String }
     /// A firmware build that the patch is for: the iPod model and the firmware version, for display.
@@ -41,6 +63,8 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var bytes: [Bytes]?
     /// Block index -> string key -> new text.
     public var strings: [String: [String: String]]?
+    /// Items that the patch adds to the Settings menu.
+    public var settings_items: [SettingsItem]?
     /// A warning for an iPod that probably has the original hard drive (see IPodDisk.likelyOriginalHDD).
     public var hdd_warning: String?
     /// One letter a–z that the About screen can show after the version (see FirmwareVersion.letters).
@@ -71,7 +95,7 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     /// Controls in the Patches pane that need no Swift code (see PatchUI).
     public var ui: PatchUI?
 
-    public static let categories = ["display", "power", "test"]
+    public static let categories = ["display", "power", "fun", "test"]
     /// The ids of the built-in Swift tools that `ui.tools` can name (PatchTools.swift in the app).
     public static let knownTools = ["album-thumbnails", "usb-log"]
     public var displayTitle: String { title ?? name }
@@ -198,6 +222,9 @@ public enum Patcher {
     /// larger than `maxOSOSSize`, thus the build moves rsrc (`FirmwarePartition.makeRoom`).
     public static let extendedLoadAddress = "extended"
 
+    /// The start of the patch areas. A hook that points at or after this address is the hook of a patch.
+    public static let patchAreaStart: UInt32 = 0x7358D0
+
     /// The load address of an extended patch in `osos`: after its end, aligned to 16 bytes.
     public static func extendedBase(_ osos: [UInt8]) -> UInt32 {
         UInt32((max(osos.count, maxOSOSSize) + 15) & ~15)
@@ -223,14 +250,20 @@ public enum Patcher {
     }
 
     /// Two turned-on patches that change the same place: the same fixed load address, the same
-    /// hook address, or overlapping "bytes" ranges. The build of such a pair fails.
+    /// hook address, overlapping "bytes" ranges or the same Settings item key. The build of such a
+    /// pair fails. Hooks with "chain" can share a place.
     public static func conflicts(_ patches: [PatchInfo]) -> [(PatchInfo, PatchInfo, String)] {
         func ranges(_ p: PatchInfo) -> [(Range<Int>, String)] {
             var r: [(Range<Int>, String)] = []
             if let a = p.spec.load_address, a != extendedLoadAddress, hasCode(p.folder), let v = try? hex(a) {
                 r.append((Int(v)..<Int(v) + 1, "load address \(a)"))
             }
-            for h in p.spec.hooks ?? [] { if let v = try? hex(h.at) { r.append((Int(v)..<Int(v) + 4, "hook at \(h.at)")) } }
+            for h in p.spec.hooks ?? [] where h.chain == nil {
+                if let v = try? hex(h.at) { r.append((Int(v)..<Int(v) + 4, "hook at \(h.at)")) }
+            }
+            for item in p.spec.settings_items ?? [] {
+                if let v = try? hex(item.key) { r.append((Int(v)..<Int(v) + 1, "Settings item \(item.key)")) }
+            }
             for b in p.spec.bytes ?? [] {
                 if let v = try? hex(b.at) { r.append((Int(v)..<Int(v) + max(1, b.expect.count / 2), "bytes at \(b.at)")) }
             }
@@ -292,7 +325,15 @@ public enum Patcher {
             var fw = [String: UInt32]()
             for (k, v) in spec.symbols ?? [:] { fw[k] = try hex(v) }
             fw.merge(symbols) { $1 }
-            (code, table) = try link(try objectCode(patch.folder), base: base, firmware: fw)
+            let object = try objectCode(patch.folder)
+            let chained = (spec.hooks ?? []).filter { $0.chain != nil }
+            if !chained.isEmpty {
+                // The layout does not depend on the symbol values. Thus a first link gives the address of chain_default.
+                for h in chained { fw[h.chain!] = 0 }
+                let (_, first) = try link(object, base: base, firmware: fw)
+                for h in chained { fw[h.chain!] = try chainTarget(h, in: current, patchSymbols: first) }
+            }
+            (code, table) = try link(object, base: base, firmware: fw)
         }
         let end = Int(base) + code.count
         guard end <= maxSize else { throw PatchError("The patch code ends at \(String(end, radix: 16)); the maximum is \(String(maxSize, radix: 16)).") }
@@ -306,7 +347,8 @@ public enum Patcher {
         for h in spec.hooks ?? [] {
             let at = Int(try hex(h.at))
             let expect = try hex(h.expect)
-            guard le32(out, at) == expect else {
+            // A hook with "chain" can also replace the hook of an earlier patch (chainTarget examined it).
+            guard le32(out, at) == expect || h.chain != nil else {
                 throw PatchError("Hook at \(h.at): the firmware has 0x\(String(le32(out, at), radix: 16)), not \(h.expect).")
             }
             guard let target = h.to.hasPrefix("0x") ? try hex(h.to) : table[h.to] else {
@@ -321,7 +363,82 @@ public enum Patcher {
             put32(&out, at, value)
         }
         try applyData(spec, to: &out)
+        if let items = spec.settings_items, !items.isEmpty { try addSettingsItems(items, to: &out) }
         return out
+    }
+
+    /// The previous target of a hook with `chain`. "word": the word in the firmware (`expect`), or the
+    /// address that an earlier patch wrote. "b": `chain_default` if the instruction is `expect`, or the
+    /// target of the branch of an earlier patch.
+    static func chainTarget(_ h: PatchSpec.Hook, in osos: [UInt8], patchSymbols: [String: UInt32]) throws -> UInt32 {
+        let at = Int(try hex(h.at)), expect = try hex(h.expect), word = le32(osos, at)
+        switch h.kind {
+        case "word":
+            if word == expect || word >= patchAreaStart { return word }
+        case "b":
+            if word == expect {
+                guard let name = h.chain_default, let target = patchSymbols[name] else {
+                    throw PatchError("Hook at \(h.at): \"chain_default\" must be a global function in the patch.")
+                }
+                return target
+            }
+            if word & 0xFF00_0000 == 0xEA00_0000 {
+                let offset = (Int64(word & 0xFF_FFFF) ^ 0x80_0000) - 0x80_0000
+                let target = UInt32(truncatingIfNeeded: Int64(at) + 8 + offset * 4)
+                if target >= patchAreaStart { return target }
+            }
+        default:
+            throw PatchError("Hook at \(h.at): \"chain\" is possible only for the kinds \"word\" and \"b\".")
+        }
+        throw PatchError("Hook at \(h.at): the firmware has 0x\(String(word, radix: 16)), not \(h.expect) or the hook of a patch.")
+    }
+
+    /// The Settings menu of firmware 1.3: Menu 24598 in the main resource block.
+    public static let settingsMenuID: Int16 = 24598
+    /// The Sound Check item: an On/Off item.
+    public static let soundCheckKey: UInt32 = 0x6000_60B7
+
+    /// The Settings menu with one more item: a copy of the item `template`, with `key` and `label`, after the
+    /// item `after` (or at the end, if the menu has no such item).
+    public static func insertSettingsItem(_ menu: [UInt8], key: UInt32, label: UInt32, after: UInt32?,
+                                          template: UInt32 = soundCheckKey) throws -> [UInt8] {
+        let count = Int(le32(menu, 0))
+        guard menu.count >= 4 + 40 * count else { throw PatchError("The Settings menu is not complete.") }
+        var items = (0..<count).map { Array(menu[4 + 40 * $0..<44 + 40 * $0]) }
+        let keys = items.map { le32($0, 0x1C) }
+        guard !keys.contains(key) else { throw PatchError("The Settings menu already has an item with the key 0x\(String(key, radix: 16)).") }
+        guard let t = keys.firstIndex(of: template) else { throw PatchError("The Settings menu is not the menu of firmware 1.3.") }
+        var item = items[t]
+        put32(&item, 0x18, label); put32(&item, 0x1C, key); put32(&item, 0x20, label)
+        items.insert(item, at: after.flatMap { keys.firstIndex(of: $0) }.map { $0 + 1 } ?? items.count)
+        var out = [UInt8](repeating: 0, count: 4)
+        put32(&out, 0, UInt32(items.count))
+        return out + items.flatMap { $0 }
+    }
+
+    /// Add the items to the Settings menu. The menu can be the menu of an earlier build step (for example
+    /// Dark Mode): the resource table entry gives its place. The new menu goes after the end of `out`,
+    /// and the table entry then points to it.
+    static func addSettingsItems(_ items: [PatchSpec.SettingsItem], to out: inout [UInt8]) throws {
+        let blocks = Resources.scan(out, limit: maxOSOSSize)
+        let main = try Resources.mainBlock(blocks)
+        guard let res = main.resources.first(where: { $0.type == "Menu" && $0.id == settingsMenuID }) else {
+            throw PatchError("The firmware has no Settings menu (Menu 24598).")
+        }
+        let at = main.abs(res)
+        guard at + Int(res.size) <= out.count else { throw PatchError("The Settings menu is outside the image.") }
+        var menu = Array(out[at..<at + Int(res.size)])
+        for item in items {
+            menu = try insertSettingsItem(menu, key: try hex(item.key), label: try hex(item.label_id),
+                                          after: try item.after_key.map(hex), template: try item.template_key.map(hex) ?? soundCheckKey)
+        }
+        let menuAt = Int(extendedBase(out))
+        let size = (menuAt + menu.count + 0x7FF) / 0x800 * 0x800
+        guard size <= ThemeImport.ososLimit else { throw PatchError("No space for the Settings menu.") }
+        out += [UInt8](repeating: 0, count: size - out.count)
+        out.replaceSubrange(menuAt..<menuAt + menu.count, with: menu)
+        put32(&out, res.tablePos + 4, UInt32(menuAt - main.dataStart))
+        put32(&out, res.tablePos + 8, UInt32(menu.count))
     }
 
     static func hasCode(_ folder: URL) -> Bool {

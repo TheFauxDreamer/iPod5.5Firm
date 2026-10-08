@@ -6,6 +6,9 @@ Firmware-*
 *.bin
 *.img
 backups/
+# Music files (for example the MIDI file for re/midi-to-tones.py) are copyrighted.
+*.mid
+*.midi
 work/
 
 # Python

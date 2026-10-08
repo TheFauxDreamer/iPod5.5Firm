@@ -20,6 +20,17 @@ A patch can also change data. Both sections are optional:
 
 A patch with no C file has no code, and then it needs no "load_address".
 
+A hook with "chain" can share its place with a hook of an earlier patch. The patch gets the
+symbol "chain": the previous target, which it calls for all the work that it does not do itself.
+A "b" hook also needs "chain_default": the function in the patch that runs the replaced
+instruction and continues in the firmware (see chain_target):
+
+        { "kind": "word", "at": "0x66c950", "expect": "0x001919d8", "to": "hook_set", "chain": "set_next" }
+
+"settings_items" adds On/Off items to the Settings menu (Menu 24598, see add_settings_items):
+
+      "settings_items": [ { "key": "0x600060e4", "label_id": "0x7e01", "after_key": "0x60006088" } ]
+
 The C code is compiled with Xcode clang for an ARM7TDMI (ARMv4T, ARM state). A small linker
 in this file puts .text, .rodata and .data at `load_address` and resolves the relocations.
 The code must fit in the space after the original image: the osos image can grow to the start
@@ -51,6 +62,9 @@ R_ARM_NONE, R_ARM_ABS32, R_ARM_REL32, R_ARM_CALL, R_ARM_JUMP24, R_ARM_V4BX = 0, 
 # extended patches. The limit is OSOS_LIMIT (themeimport.OSOS_LIMIT). The build must then move rsrc.
 EXTENDED = "extended"
 PATCH_AREA_END = 0x736800
+PATCH_AREA_START = 0x7358D0        # a hook that points at or after this address is the hook of a patch
+SETTINGS_MENU_ID = 24598
+SOUND_CHECK_KEY = 0x600060B7       # the Sound Check item: an On/Off item
 OSOS_LIMIT = 0x7F0000
 
 
@@ -212,6 +226,74 @@ def apply_data(out: bytearray, spec: dict) -> None:
                 raise PatchError(f"strings for block {index}: {e}") from e
 
 
+def chain_target(h: dict, osos: bytes, patch_symbols: dict[str, int]) -> int:
+    """The previous target of a hook with "chain". "word": the word in the firmware ("expect") or the
+    address that an earlier patch wrote. "b": "chain_default" if the instruction is "expect", or the
+    target of the branch of an earlier patch."""
+    at, expect = int(h["at"], 16), int(h["expect"], 16)
+    word, = struct.unpack_from("<I", osos, at)
+    if h["kind"] == "word":
+        if word == expect or word >= PATCH_AREA_START:
+            return word
+    elif h["kind"] == "b":
+        if word == expect:
+            if h.get("chain_default") not in patch_symbols:
+                raise PatchError(f"hook at {at:#x}: \"chain_default\" must be a global function in the patch")
+            return patch_symbols[h["chain_default"]]
+        if word & 0xFF000000 == 0xEA000000:
+            offset = ((word & 0xFFFFFF) ^ 0x800000) - 0x800000
+            target = at + 8 + offset * 4
+            if target >= PATCH_AREA_START:
+                return target
+    else:
+        raise PatchError(f"hook at {at:#x}: \"chain\" is possible only for the kinds \"word\" and \"b\"")
+    raise PatchError(f"hook at {at:#x}: found {word:#010x}, expected {expect:#010x} or the hook of a patch")
+
+
+def insert_settings_item(menu: bytes, key: int, label: int, after: int | None,
+                         template: int = SOUND_CHECK_KEY) -> bytes:
+    """The Settings menu with one more item: a copy of the item `template`, with `key` and `label`,
+    after the item `after` (or at the end, if the menu has no such item)."""
+    count = struct.unpack_from("<I", menu, 0)[0]
+    if len(menu) < 4 + 40 * count:
+        raise PatchError("The Settings menu is not complete.")
+    items = [bytearray(menu[4 + 40 * i:44 + 40 * i]) for i in range(count)]
+    keys = [struct.unpack_from("<I", it, 0x1C)[0] for it in items]
+    if key in keys:
+        raise PatchError(f"The Settings menu already has an item with the key {key:#x}.")
+    if template not in keys:
+        raise PatchError("The Settings menu is not the menu of firmware 1.3.")
+    item = bytearray(items[keys.index(template)])
+    struct.pack_into("<I", item, 0x18, label)
+    struct.pack_into("<I", item, 0x1C, key)
+    struct.pack_into("<I", item, 0x20, label)
+    items.insert(keys.index(after) + 1 if after in keys else len(items), item)
+    return struct.pack("<I", len(items)) + b"".join(items)
+
+
+def add_settings_items(out: bytearray, items: list[dict]) -> int:
+    """Add the items to the Settings menu. The menu can be the menu of an earlier build step (for
+    example Dark Mode): the resource table entry gives its place. The new menu goes after the end of
+    `out`, and the table entry then points to it. Returns the address of the new menu."""
+    main = resources.main_block(resources.scan(bytes(out)))
+    res = next((r for r in main.resources if r.type == "Menu" and r.id == SETTINGS_MENU_ID), None)
+    if res is None:
+        raise PatchError("The firmware has no Settings menu (Menu 24598).")
+    menu = bytes(out[main.abs(res):main.abs(res) + res.size])
+    for item in items:
+        after = int(item["after_key"], 16) if "after_key" in item else None
+        template = int(item.get("template_key", hex(SOUND_CHECK_KEY)), 16)
+        menu = insert_settings_item(menu, int(item["key"], 16), int(item["label_id"], 16), after, template)
+    menu_at = extended_base(bytes(out))
+    size = (menu_at + len(menu) + 0x7FF) // 0x800 * 0x800
+    if size > OSOS_LIMIT:
+        raise PatchError("No space for the Settings menu.")
+    out += bytes(size - len(out))
+    out[menu_at:menu_at + len(menu)] = menu
+    struct.pack_into("<II", out, res.table_pos + 4, menu_at - main.data_start, len(menu))
+    return menu_at
+
+
 def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int | None = None,
           symbols: dict[str, int] | None = None, original_sha256: str | None = None) -> tuple[bytes, dict]:
     """Return (patched osos, report). `max_size` is the largest size the osos image can have.
@@ -243,6 +325,12 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
         else:
             with tempfile.TemporaryDirectory() as tmp:
                 obj = compile_c(sources, Path(tmp))
+        chained = [h for h in spec.get("hooks", []) if "chain" in h]
+        if chained:
+            # The layout does not depend on the symbol values. Thus a first link gives the address of chain_default.
+            _, first = link(obj, base, {**fw_syms, **{h["chain"]: 0 for h in chained}})
+            for h in chained:
+                fw_syms[h["chain"]] = chain_target(h, osos, first)
         code, table = link(obj, base, fw_syms)
     end = base + len(code)
     if load_address is None and spec.get("load_address") == EXTENDED:
@@ -257,7 +345,7 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
         at = int(h["at"], 16)
         expect = int(h["expect"], 16)
         old, = struct.unpack_from("<I", out, at)
-        if old != expect:
+        if old != expect and "chain" not in h:      # chain_target examined a chained hook
             raise PatchError(f"hook at {at:#x}: found {old:#010x}, expected {expect:#010x}")
         target = table.get(h["to"]) if not h["to"].startswith("0x") else int(h["to"], 16)
         if target is None:
@@ -268,7 +356,13 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
     # keep the image size a multiple of 0x800, as in Apple's file
     size = max(len(osos), (end + 0x7FF) // 0x800 * 0x800)
     out += bytes(max(0, size - len(out)))
+    menu_at = None
+    if spec.get("settings_items"):
+        out = out[:size]
+        menu_at = add_settings_items(out, spec["settings_items"])
+        size = len(out)
     report = {"name": spec["name"], "code": [hex(base), hex(end)], "bytes": len(code),
               "map": {k: hex(v) for k, v in sorted(getattr(link, "last_map", {}).items(), key=lambda kv: kv[1])},
-              "symbols": {k: hex(v) for k, v in table.items()}, "hooks": len(spec.get("hooks", []))}
+              "symbols": {k: hex(v) for k, v in table.items()}, "hooks": len(spec.get("hooks", [])),
+              "settings_menu": hex(menu_at) if menu_at is not None else None}
     return bytes(out[:size]), report

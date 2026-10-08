@@ -872,7 +872,7 @@ final class PatcherOptionTests: XCTestCase {
         guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
         let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
-        let patch = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "row-marker" }!
+        let patch = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "album-art" }!
         let sha = ThemeImport.sha256(osos)
         XCTAssertThrowsError(try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7eb000))
         let out = try Patcher.apply(patch, to: osos, originalSHA256: sha, loadAddress: 0x7eb000, maxSize: 0x7F0000)
@@ -982,6 +982,64 @@ final class DarkModeTests: XCTestCase {
         let out = try Patcher.apply(probe, to: switched, originalSHA256: sha)
         XCTAssertGreaterThan(Int(le32(out, 0x6c8730)), info.patchAt)
         XCTAssertLessThanOrEqual(out.count, ThemeImport.ososLimit)
+    }
+
+    /// The example patch something-comforting: alone, and after "Switch on iPod". Its hooks chain to the
+    /// Dark Mode hooks, and the Settings menu has both items. Needs IPODFW_IPSW.
+    func testSomethingComfortingAloneAndAfterSwitchBuild() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let partition = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data)
+        let osos = try partition.image("osos")
+        let sha = ThemeImport.sha256(osos)
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        let all = Patcher.list(in: repo.appendingPathComponent("patches"))
+        let dark = all.first { $0.spec.name == "dark-mode" }!
+        let melody = all.filter { $0.spec.name == "something-comforting" }
+        XCTAssertEqual(melody.count, 1)
+        func keys(_ o: [UInt8]) throws -> [UInt32] {
+            let main = try Resources.mainBlock(Resources.scan(o, limit: Patcher.maxOSOSSize))
+            let r = main.resources.first { $0.type == "Menu" && $0.id == Patcher.settingsMenuID }!
+            let at = main.abs(r)
+            return (0..<Int(le32(o, at))).map { le32(o, at + 4 + 40 * $0 + 0x1C) }
+        }
+        // alone
+        let alone = try Patcher.apply(melody, to: osos, originalSHA256: sha)
+        var k = try keys(alone)
+        XCTAssertEqual(k[k.firstIndex(of: 0x6000_6088)! + 1], 0x6000_60E4)
+        XCTAssertGreaterThanOrEqual(le32(alone, 0x66c950), Patcher.patchAreaStart)
+        XCTAssertEqual(alone.count % 0x800, 0)
+        // after "Switch on iPod" with an empty theme
+        let theme = ImportedTheme(name: "empty", source_sha256: sha, osos_sha256: sha)
+        let (switched, info) = try DarkMode.build(partition: partition, osos: osos, theme: theme, patch: dark, originalSHA256: sha)
+        let darkSet = le32(switched, 0x66c950)
+        let out = try Patcher.apply(melody, to: switched, originalSHA256: sha)
+        k = try keys(out)
+        XCTAssertEqual(k.filter { $0 == DarkMode.darkKey }.count, 1)
+        XCTAssertEqual(k[k.firstIndex(of: 0x6000_6088)! + 1], 0x6000_60E4)
+        XCTAssertGreaterThan(Int(le32(out, 0x66c950)), info.patchAt)
+        XCTAssertNotEqual(le32(out, 0x66c950), darkSet)
+        XCTAssertLessThanOrEqual(out.count, ThemeImport.ososLimit)
+        // two times: the item exists already
+        XCTAssertThrowsError(try Patcher.apply(melody, to: out, originalSHA256: sha))
+        // a hook with "chain" is not a conflict; the same Settings item key is
+        XCTAssertTrue(Patcher.conflicts(melody + [dark]).isEmpty)
+        XCTAssertEqual(Patcher.conflicts(melody + melody).count, 1)
+    }
+
+    func testChainTargetRules() throws {
+        var osos = [UInt8](repeating: 0, count: 0x800)
+        let word = PatchSpec.Hook(kind: "word", at: "0x100", expect: "0x00190b00", to: "h", chain: "next")
+        put32(&osos, 0x100, 0x0019_0B00)
+        XCTAssertEqual(try Patcher.chainTarget(word, in: osos, patchSymbols: [:]), 0x0019_0B00)
+        put32(&osos, 0x100, 0x007E_B010)
+        XCTAssertEqual(try Patcher.chainTarget(word, in: osos, patchSymbols: [:]), 0x007E_B010)
+        put32(&osos, 0x100, 0x0012_3456)
+        XCTAssertThrowsError(try Patcher.chainTarget(word, in: osos, patchSymbols: [:]))
+        let b = PatchSpec.Hook(kind: "b", at: "0x200", expect: "0xe92d40f8", to: "h", chain: "next", chain_default: "orig")
+        put32(&osos, 0x200, 0xE92D_40F8)
+        XCTAssertEqual(try Patcher.chainTarget(b, in: osos, patchSymbols: ["orig": 0x7E_C000]), 0x7E_C000)
+        put32(&osos, 0x200, try Patcher.branch("b", at: 0x200, to: 0x7E_B100))
+        XCTAssertEqual(try Patcher.chainTarget(b, in: osos, patchSymbols: ["orig": 0x7E_C000]), 0x7E_B100)
     }
 
     func testSwitchTableSwitchesBothWaysAndKeepsEdits() {
@@ -1207,7 +1265,10 @@ final class PatchLibraryTests: XCTestCase {
 
     func testConflicts() {
         let all = library.list()
-        let pair = all.filter { ["album-art", "row-marker"].contains($0.spec.name) }
+        // a copy of album-art with another name: the same load address and the same hooks
+        var copy = all.first { $0.spec.name == "album-art" }!
+        copy.spec.name = "album-art-copy"
+        let pair = all.filter { $0.spec.name == "album-art" } + [copy]
         XCTAssertEqual(pair.count, 2)
         XCTAssertFalse(Patcher.conflicts(pair).isEmpty)
         let ok = all.filter { ["album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input", "backlight-60s"].contains($0.spec.name) }
