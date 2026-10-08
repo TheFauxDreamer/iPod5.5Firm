@@ -5,7 +5,9 @@
   "symbol": "moon.zzz",
   "category": "power",
   "version_letter": "s",
-  "description": "The Sleep item puts the iPod to sleep at once. The iPod saves the settings, switches the display and the storage off, and sleeps. On a charger or on USB power, Sleep works as in the Apple firmware. While a voice memo records, Sleep works as in the Apple firmware.",
+  "description": "The Sleep item puts the iPod to sleep immediately.",
+  "details": ["The iPod saves the settings.", "The iPod switches off the display and the storage.", "The iPod goes to sleep."],
+  "notes": ["On a charger or on USB power, Sleep operates as in the Apple firmware.", "While a voice memo records, Sleep operates as in the Apple firmware."],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }

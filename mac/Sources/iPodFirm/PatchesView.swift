@@ -308,13 +308,14 @@ struct PatchDetail: View {
             Section {
                 DetailHeader(title: patch.spec.displayTitle, subtitle: patch.spec.summary,
                              symbol: validSymbol(patch.spec.symbol), tint: patch.tint, patch: patch)
+                if let caution = patch.spec.caution {
+                    Label(caution, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                }
                 PatchSwitch(patch: patch, label: "Include in Firmware")
-            } footer: {
-                Text("iPodFirm includes the turned-on patches when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.")
+                    .help("iPodFirm includes the turned-on patches when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.")
             }
-            Section("About") {
-                Text(patch.spec.description ?? patch.spec.name).fixedSize(horizontal: false, vertical: true)
-            }
+            PatchAbout(spec: patch.spec)
             Section("Compatibility") {
                 PatchCompatibility(patch: patch)
                 ForEach(model.conflicts(patch), id: \.0.id) { other, place in
@@ -328,6 +329,62 @@ struct PatchDetail: View {
         }
         .formStyle(.grouped)
         .task(id: "\(patch.spec.name) \(model.currentIPod?.disk ?? "")") { model.loadPatchToggles(patch) }
+    }
+}
+
+/// The text of a patch in sections: What It Does, You Need and Good to Know.
+struct PatchAbout: View {
+    let spec: PatchSpec
+
+    var body: some View {
+        Section("What It Does") {
+            if let d = spec.description { Text(d).fixedSize(horizontal: false, vertical: true) }
+            ForEach(spec.details ?? [], id: \.self) { BulletRow(text: $0) }
+            if spec.description == nil && spec.details == nil { Text(spec.name).foregroundStyle(.secondary) }
+        }
+        if let items = spec.requires, !items.isEmpty {
+            Section("You Need") {
+                ForEach(items, id: \.self) { BulletRow(text: $0, symbol: "checkmark.circle", tint: .green) }
+            }
+        }
+        if let items = spec.notes, !items.isEmpty {
+            Section("Good to Know") {
+                ForEach(items, id: \.self) { BulletRow(text: $0, symbol: "info.circle", tint: .secondary) }
+            }
+        }
+    }
+}
+
+/// One item of a list: a symbol (or a bullet) and a text that wraps.
+struct BulletRow: View {
+    let text: String
+    var symbol: String?
+    var tint: Color = .accentColor
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Group {
+                if let symbol { Image(systemName: symbol) } else { Text("•").bold() }
+            }
+            .foregroundStyle(tint)
+            .frame(width: 14)
+            .accessibilityHidden(true)
+            Text(text).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// The text below a section of a form. It is left-aligned: macOS aligns a footer with more than one line at the right.
+struct FormFooter: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.callout).foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -410,7 +467,7 @@ struct AppearanceDetail: View {
             } header: {
                 Text("Appearance")
             } footer: {
-                Text("Light uses the Apple colours. Dark applies an imported dark theme when you save, flash, export an .ipsw or run the emulator. Switch on iPod adds a \"Dark Mode\" item to Settings on the iPod.")
+                FormFooter("Light uses the Apple colours. Dark applies an imported dark theme when you save, flash, export an .ipsw or run the emulator. Switch on iPod adds a \"Dark Mode\" item to Settings on the iPod.")
             }
             Section("Dark Theme") {
                 if model.themes.isEmpty {
@@ -445,7 +502,7 @@ struct AppearanceDetail: View {
             } header: {
                 Text("Import")
             } footer: {
-                Text("Select the theme file (a firmware file from iPodWizard), then the Apple firmware that the theme came from, for example iPod_25.1.2.1.ipsw. iPodFirm moves the pictures, colours and layouts of the theme to firmware 1.3.")
+                FormFooter("Select the theme file (a firmware file from iPodWizard), then the Apple firmware that the theme came from, for example iPod_25.1.2.1.ipsw. iPodFirm moves the pictures, colours and layouts of the theme to firmware 1.3.")
             }
         }
         .formStyle(.grouped)
@@ -491,7 +548,7 @@ struct VersionDetail: View {
             } header: {
                 Text("Version")
             } footer: {
-                Text("This changes only the text on the iPod. iTunes and Finder continue to see version 1.3.")
+                FormFooter("This changes only the text on the iPod. iTunes and Finder continue to see version 1.3.")
             }
             Section("Letters") {
                 ForEach(model.patches.filter { $0.spec.version_letter != nil }) { p in

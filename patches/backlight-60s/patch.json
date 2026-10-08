@@ -5,7 +5,9 @@
   "symbol": "lightbulb",
   "category": "display",
   "version_letter": "b",
-  "description": "The Backlight Timer menu has a 60 Seconds item. The 2 Seconds item is removed. The other items do not change.",
+  "description": "Adds a 60-second setting to the backlight timer.",
+  "details": ["Settings > Backlight Timer has a new item: 60 Seconds.", "The 2 Seconds item is removed.", "The other items do not change."],
+  "notes": ["The new item shows in all the languages of the iPod."],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }

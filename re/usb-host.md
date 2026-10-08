@@ -238,6 +238,29 @@ Version 0.1.72 with the dock and the card reader from the start. Frame list entr
 
 The bulk QHs (endpoints 1 and 2) of both storage devices are in the asynchronous list. Thus the PORT_POWER stall of the earlier tests was a result of the periodic bug. The complete chain works: USB-C mod, host mode, external hub, storage.
 
+## The USB-C EarPods through the dock (2026-10-08)
+
+Probe 0.1.72, the dock with its power supply, the USB-C EarPods on a USB-C port of the dock, the card reader removed.
+
+- The dock's hub (2109:2817) got the address 105. Its interrupt QH is in frame 0 and operates.
+- Hub port 2: the EarPods. Port status 0x0103: connected, enabled, power, full speed. Address 106.
+- Device descriptor: `12 01 01 02 EF 02 01 40`: USB 2.01, class 0xEF, subclass 2, protocol 1 (interface association), packet size 64. ID 05AC:110B.
+- "Add device" 0xd377c ran for the EarPods. No validate call to a class driver followed. Thus no driver in the registry 0x6bc3dc accepts device class 0xEF.
+- Hub port 3: 2537:1081 (the dock's card slot) to the storage driver. Hub port 5: the billboard 291A:8346, no driver.
+
+The class 0xEF with an interface association is normal for USB audio devices, and especially for UAC2. The configuration descriptor was not read. Thus the audio class version, the alternate settings and the sample rates are not known yet.
+
+## The driver selection for class 0xEF (Ghidra, 2026-10-08)
+
+"Add device" 0xd377c scores each registry entry with 0xc50ac and calls the validate of the best entry.
+
+- The vendor ID equal to the record +8: 1000 points.
+- The device class equal to the record +0x35: 100 points. The subclass equal to +0x36: 110. The protocol equal to the u16 at +0xe: 10 more.
+- The registry 0x6bc3dc has two composite entries with the same dispatch 0x1084a348. The record 0x1084a308 has class 0. The record 0x1084a360 has class 2 (communications).
+- The composite validate 0x108b6c returns 0 for each device.
+
+No entry matches class 0xEF. Thus the EarPods got no driver. The probe now changes the class bytes of the record 0x1084a360 to EF/02 before the host start. The EarPods then get 110 points and the composite driver. The probe also logs the received bytes of each GET_DESCRIPTOR configuration request. Emulator: the host start and both log writes are correct (the emulator has no USB device).
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).

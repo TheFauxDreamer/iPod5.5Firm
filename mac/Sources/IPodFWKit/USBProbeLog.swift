@@ -15,6 +15,7 @@ public enum USBProbeLog {
     static let addDeviceTag = 7 * 4, interruptEndpointTag = 8 * 4 + 1, interruptTransferTag = 8 * 4 + 2, interruptCompletionTag = 8 * 4 + 3
     static let queueTag = 7 * 4 + 1, endpointTag = 6 * 4 + 1, transferTag = 6 * 4 + 2, irqTag = 6 * 4 + 3, completionTag = 6 * 4
     static let entries = [1: "validate", 2: "initialize device", 3: "initialize interface"]
+    static let dataTag = 11 * 4
 
     public struct Entry: Hashable {
         public var driver: String
@@ -41,12 +42,30 @@ public enum USBProbeLog {
         guard data.count >= 8, Array(data[0..<4]) == Array("UL01".utf8) else { return nil }
         let count = Int(le32(data, 4))
         var out: [Entry] = []
+        var received: [UInt8] = [], dataKey: (UInt32, UInt32)?
         for i in 0..<count {
             let o = 8 + 64 * i
             guard o + 64 <= data.count, data[o] == 0xA5 else { break }
             let tag = Int(data[o + 1])
             let regs = (0..<4).map { le32(data, o + 4 + 4 * $0) }
             let atR1 = Array(data[o + 20..<o + 40]), atR2 = Array(data[o + 40..<o + 60])
+            if tag == dataTag {
+                // Records of 40 bytes of one GET_DESCRIPTOR configuration answer: r0 request, r1 buffer, r2 offset, r3 length.
+                let length = Int(regs[3]), offset = Int(regs[2])
+                if offset == 0 || dataKey.map({ $0 != (regs[0], regs[1]) }) ?? true { received = [] }
+                dataKey = (regs[0], regs[1])
+                let chunk = Array((atR1 + atR2).prefix(max(0, min(40, length - offset))))
+                if received.count == offset { received += chunk }
+                out.append(Entry(driver: "Data", call: String(format: "configuration descriptor, bytes %d–%d of %d: %@",
+                                                               offset, offset + chunk.count - 1, length, hex(chunk, 40)),
+                                 device: nil, interface: nil, registers: regs))
+                if offset + 40 >= length, received.count == length {
+                    for line in configurationText(received) {
+                        out.append(Entry(driver: "Configuration", call: line, device: nil, interface: nil, registers: regs))
+                    }
+                }
+                continue
+            }
             if tag == queueTag {
                 out.append(Entry(driver: "Queue", call: queueText(regs, atR1, atR2), device: nil, interface: nil, registers: regs))
                 continue
@@ -133,6 +152,47 @@ public enum USBProbeLog {
             out.append(e)
         }
         return out
+    }
+
+    /// The descriptors in a configuration descriptor, one line each. The answer can be shorter than
+    /// wTotalLength (the first request reads only 4 or 9 bytes).
+    static func configurationText(_ d: [UInt8]) -> [String] {
+        var lines: [String] = [], o = 0
+        while o + 2 <= d.count {
+            let len = Int(d[o]), type = d[o + 1]
+            guard len >= 2 else { break }
+            let b = Array(d[o..<min(d.count, o + len)])
+            func u16(_ i: Int) -> Int { i + 1 < b.count ? Int(b[i]) | Int(b[i + 1]) << 8 : 0 }
+            func u24(_ i: Int) -> Int { i + 2 < b.count ? Int(b[i]) | Int(b[i + 1]) << 8 | Int(b[i + 2]) << 16 : 0 }
+            var t: String
+            switch type {
+            case 2 where b.count >= 9:
+                t = "configuration \(b[5]): total length \(u16(2)), \(b[4]) interfaces, attributes 0x\(String(format: "%02X", b[7])), power \(Int(b[8]) * 2) mA"
+            case 4 where b.count >= 9:
+                t = "interface \(b[2]) alternate \(b[3]): \(b[4]) endpoints, class \(classText(b[5], b[6], b[7]))"
+                if b[5] == 1 { t += [1: " (control)", 2: " (streaming)", 3: " (MIDI)"][b[6]] ?? "" }
+                t += b[7] == 0x20 ? ", USB Audio Class 2" : (b[5] == 1 ? ", USB Audio Class 1" : "")
+            case 5 where b.count >= 7:
+                let attr = b[3], kinds = ["control", "isochronous", "bulk", "interrupt"], sync = ["", ", no sync", ", asynchronous", ", adaptive", ", synchronous"]
+                t = String(format: "endpoint 0x%02X (%@ %@%@), max packet %d, interval %d", b[2], b[2] & 0x80 != 0 ? "IN" : "OUT",
+                           kinds[Int(attr & 3)], attr & 3 == 1 ? sync[Int(attr >> 2 & 3) + 1] : "", u16(4), b[6])
+            case 11 where b.count >= 8:
+                t = "interface association: first interface \(b[2]), \(b[3]) interfaces, class \(classText(b[4], b[5], b[6]))"
+            case 0x24 where b.count >= 3:
+                t = "audio class interface descriptor, subtype \(b[2])"
+                if b[2] == 2, b.count >= 8, b[7] > 0, b.count >= 8 + 3 * Int(b[7]) {   // UAC1 FORMAT_TYPE I
+                    let rates = (0..<Int(b[7])).map { u24(8 + 3 * $0) }
+                    t += ": format type \(b[3]), \(b[4]) channels, \(b[5]) bytes per sample, \(b[6]) bits, rates \(rates.map(String.init).joined(separator: ", ")) Hz"
+                }
+            case 0x25 where b.count >= 3:
+                t = "audio class endpoint descriptor, subtype \(b[2])"
+            default:
+                t = "descriptor type 0x\(String(format: "%02X", type))"
+            }
+            lines.append(t + " — " + hex(b, 64))
+            o += len
+        }
+        return lines
     }
 
     /// A USB device descriptor (18 bytes, type 1): vendor:product and class.

@@ -126,7 +126,7 @@ struct AlbumArtSections: View {
         } header: {
             Text("Thumbnails")
         } footer: {
-            Text("You do not have to restart the iPod. The new thumbnails show after you scroll through a list.")
+            FormFooter("You do not have to restart the iPod. The new thumbnails show after you scroll through a list.")
         }
         .task(id: model.currentIPod?.disk) { await model.loadPlaylists() }
         if !model.playlistArt.isEmpty {
@@ -139,7 +139,7 @@ struct AlbumArtSections: View {
             } header: {
                 Text("Playlist Artwork")
             } footer: {
-                Text("A playlist without a custom image shows the covers of its first four albums. To set a custom image, click Choose Image or drag an image onto the playlist. iPodFirm keeps the custom images on the iPod.")
+                FormFooter("A playlist without a custom image shows the covers of its first four albums. To set a custom image, click Choose Image or drag an image onto the playlist. iPodFirm keeps the custom images on the iPod.")
             }
         }
     }
@@ -204,7 +204,13 @@ struct InstallPatchSheet: View {
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
+                        if let caution = spec.caution {
+                            Label(caution, systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                        }
                         if let d = spec.description { Text(d).fixedSize(horizontal: false, vertical: true) }
+                        ForEach(spec.details ?? [], id: \.self) { BulletRow(text: $0) }
+                        ForEach(spec.requires ?? [], id: \.self) { BulletRow(text: "You need: \($0)", symbol: "checkmark.circle", tint: .green) }
                         Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
                             GridRow { Text("Name").foregroundStyle(.secondary); Text(spec.name).monospaced() }
                             GridRow { Text("For").foregroundStyle(.secondary); Text(spec.targetText) }

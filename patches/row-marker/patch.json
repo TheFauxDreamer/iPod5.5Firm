@@ -5,7 +5,8 @@
   "symbol": "paintbrush.pointed",
   "category": "test",
   "version_letter": "r",
-  "description": "Test patch. Draws a coloured bar at the left of each label in a list.",
+  "description": "A test patch for developers. It has no use in normal operation.",
+  "details": ["Each label in a list gets a coloured bar at its left side."],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }

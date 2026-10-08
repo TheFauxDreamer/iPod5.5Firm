@@ -55,15 +55,16 @@ If a user patch with the same name is installed, the sheet shows **Replace**. Th
 
 1. Write the patch as in [Write a new patch](#write-a-new-patch). Use `"load_address": "extended"`, so that the patch does not use the area of another patch.
 2. Add `title`, `summary`, `symbol` and `category`.
-3. In the Patches pane, select the patch. Click **⋯** > Export Patch…. iPodFirm compiles `patch.o` and writes the `.ipodpatch` file. The C file stays in the file as the source.
-4. Give the `.ipodpatch` file to other people.
+3. Add `details`. Add `requires`, `notes` and `caution` if necessary. Do not put all the text in `description`.
+4. In the Patches pane, select the patch. Click **⋯** > Export Patch…. iPodFirm compiles `patch.o` and writes the `.ipodpatch` file. The C file stays in the file as the source.
+5. Give the `.ipodpatch` file to other people.
 
 ## The patch.json format
 
 | Key | Type | Content |
 |---|---|---|
 | `name` | string | The name. The app shows it in the Patches pane. |
-| `description` | string | The text in the Patches pane. |
+| `description` | string | One or two short sentences at the top of the section "What It Does" in the Patches pane. |
 | `osos_sha256` | string | The SHA-256 of the unchanged Apple osos image. For firmware 1.3 it is `784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251`. |
 | `targets` | array | The firmware builds that the patch is for. Each item has `model`, `firmware` and `osos_sha256`, for example `{ "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5…" }`. The app shows `model` and `firmware` in the Compatibility section and in the install sheet. The `osos_sha256` of each item must be the same as the `osos_sha256` of the patch. The installer refuses a different value. Without `targets`, the app uses its list of known builds (`PatchSpec.knownFirmware`). |
 | `load_address` | hex string | The osos offset where the code goes. |
@@ -74,6 +75,10 @@ If a user patch with the same name is installed, the sheet shows **Replace**. Th
 | `internal` | bool, optional | `true`: the patch is a part of a build step. The Patches pane does not show it. Only `dark-mode` uses this key. |
 | `title` | string | The name in the Patches pane, in title case, for example "Album Artwork". If it is missing, the pane shows `name`. |
 | `summary` | string | One line below the title in the list of patches. |
+| `details` | array of strings, optional | The changes that the owner sees on the iPod. The section "What It Does" shows each item as a bullet below `description`. Write one short sentence for each item. |
+| `requires` | array of strings, optional | The hardware or the files that the patch needs. The section "You Need" shows each item. |
+| `notes` | array of strings, optional | More information. The section "Good to Know" shows each item. |
+| `caution` | string, optional | A caution. The pane shows it in orange above the switch of the patch. The install sheet also shows it. |
 | `symbol` | string | The name of an SF Symbol, for example `photo.on.rectangle.angled`. Do not use emoji. |
 | `category` | string | The group in the list of patches: `display`, `power` or `test`. |
 
@@ -209,7 +214,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |
 | `row-marker` | 0x7358d0 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
-| `usb-host-probe` | `extended` | After all other data (7748 bytes; the 32 KB log buffer comes from the allocator) | Extended patch. Test patch on the branch `usb-audio-out`. |
+| `usb-host-probe` | `extended` | After all other data (8740 bytes; the 32 KB log buffer comes from the allocator) | Extended patch. Test patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
 

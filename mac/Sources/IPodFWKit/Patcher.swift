@@ -52,6 +52,14 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var title: String?
     /// One line for the list of patches.
     public var summary: String?
+    /// The changes that the owner sees on the iPod, one short sentence for each item ("What It Does").
+    public var details: [String]?
+    /// The hardware or the files that the patch needs ("You Need").
+    public var requires: [String]?
+    /// More information, one short sentence for each item ("Good to Know").
+    public var notes: [String]?
+    /// A caution that the Patches pane shows above the switch of the patch.
+    public var caution: String?
     /// The SF Symbol of the patch in the Patches pane.
     public var symbol: String?
     /// The group in the list of patches: one of `categories`.

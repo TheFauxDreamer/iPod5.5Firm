@@ -24,7 +24,7 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 | A card reader through a hub | **Works** | 0.1.72: 05E3:0749 (Genesys Logic) and 2537:1081 (Norelsys) through the dock: "Storage: initialize interface" (class 08/06/50), string descriptors, GET_MAX_LUN, bulk QHs for endpoints 1 and 2. The storage tone sounded. |
 | Billboard device of the dock | No driver (normal) | 291A:8346, class 0x11 |
 | Photo import screen | Accepts the storage | 0.1.72: the screen did not say "unsupported device" but a text like "ready for SD card" (the owner did not remember the exact words). Probably the dock's own empty card slot (2537:1081) or a state before the card was ready. Not examined further; it is not necessary for audio. |
-| An audio device (Apple USB-C headphone adapter, EarPods) | Not tested yet | No class driver for audio in the firmware |
+| An audio device (Apple USB-C EarPods) through the dock | **Enumerated, no driver** | 2026-10-08: 05AC:110B, USB 2.01, device class EF/02/01 (interface association), packet size 64, address 106, full speed. "Add device" ran, but no class driver accepted the device. The configuration descriptor was not read. |
 | Isochronous transfers | Not available | The UIM entries are stubs (0xd4820, 0xd4828) |
 
 ## The hardware of the tests
@@ -65,6 +65,7 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 | 0.1.70 (test B) | Dock; card reader connected after the first double beep | The same as test A: the status stage of the dock's hub stays active, no port change, the periodic scan finds one QH with only zeros. | The time of the connection does not matter. Theory: the periodic list blocks the controller after "periodic on". |
 | 0.1.71 | Dock, card reader from the start | Frame list entry 0 = 0x9363B682 (a block of zeros); Apple's table: the dock's interrupt QH at 0x93623080 (address 105, endpoint 1, correct). Experiment: periodic off for 2 s did not change the active PORT_POWER status stage. | **Firmware bug in 0xf5c80**: the frame list gets (r1 + 0x34), but the callers leave the QH only in r0. The status-change endpoint was never polled. The PORT_POWER stall is separate. |
 | 0.1.72 | Dock, card reader from the start | **The dock's hub reported its ports. The hub driver reset them, and three devices were enumerated: 05E3:0749 and 2537:1081 (both to the storage driver, class 08/06/50) and 291A:8346 (USB billboard, class 0x11, no driver). The storage driver sent GET_MAX_LUN. Many tones, including the storage sign.** | **The periodic fix was the missing part. The complete chain works: USB-C mod, host mode, external hub, storage.** |
+| Probe 0.1.72 (2026-10-08) | Dock; USB-C EarPods on a USB-C port of the dock; card reader removed | The dock's hub enumerated again (address 105). Port 2: **05AC:110B (the EarPods), class EF/02/01**, address 106. "Add device" ran, and then no driver call came. Port 3: the dock's own card slot 2537:1081 to the storage driver. Port 5: the billboard 291A:8346, no driver. The hub interrupt QH (S-mask 0x01, C-mask 0x1C) stays in frame 0. | The EarPods operate on the 5 V of the dock and answer at full speed. The firmware has no driver for device class 0xEF: the composite driver takes only class 0. |
 
 ## The causes found
 
@@ -83,6 +84,8 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 | 0x6c8820 | UIM dispatch table; isochronous entries 0x6c885c/0x6c8860 are stubs |
 | 0x6bc3dc | Class driver registry (44-byte entries; count at g + 0x1c) |
 | 0xd377c | "Add device": the driver selection for a new device |
+| 0xc50ac | Driver score: vendor ID 1000, device class 100 (+0x35 of the record), subclass 110 (+0x36) |
+| 0x1084a360 | The second composite driver record (class 2). The probe changes it to EF/02. |
 | 0xcb118 | Completion callback of a control transfer stage |
 | 0xe7980 | Root port status |
 | 0x18a83c, 0x127888, 0x1277d0 | Interrupt: install, disable, remove |
@@ -91,7 +94,7 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 
 ## The probe log
 
-Records in `iPod_Control/iTunes/iPodFirmUSBLog` (127 records, 8 KB). iPodFirm USB-C Test shows it ("Show USB Log", "Copy Log"):
+Records in `iPod_Control/iTunes/iPodFirmUSBLog` (511 records, 32 KB). iPodFirm shows it ("Show USB Log", "Copy Log"):
 
 - the class driver calls (validate, initialize device, initialize interface),
 - "add device" with the device descriptor,
@@ -99,9 +102,12 @@ Records in `iPod_Control/iTunes/iPodFirmUSBLog` (127 records, 8 KB). iPodFirm US
 - the completions of the device transfers,
 - the root port status changes,
 - the controller registers and the transfer queue,
-- the interrupt install steps.
+- the interrupt install steps,
+- the queue heads and Apple's periodic table,
+- the received bytes of each configuration descriptor, decoded (interfaces, endpoints, audio class descriptors).
 
 ## Next steps
 
-1. Test the Apple USB-C headphone adapter or the EarPods through a USB-C port of the dock. Expected: "add device" with class 0, the composite driver, and no interface driver for the audio class (1).
-2. Then Stages 2 and 3 of USB-AUDIO-OUT.md: the isochronous UIM entries and a USB audio class driver.
+1. Read the configuration descriptor of the EarPods (ready in the probe since 2026-10-08). The probe gives device class EF/02 to the composite driver (driver score 0xc50ac, record 0x1084a360). It logs the received configuration bytes, and the app decodes them. The result shows UAC1 or UAC2, the alternate settings, the sample rates and the isochronous endpoint.
+2. Optional bench test of the minimum voltage of the EarPods (refer to the hardware section).
+3. Then Stages 2 and 3 of USB-AUDIO-OUT.md: the isochronous UIM entries and a USB audio class driver.

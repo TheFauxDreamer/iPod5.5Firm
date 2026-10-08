@@ -53,6 +53,9 @@
  * entry 0 "completion": the callback 0xcb118 of a control transfer stage (r0 request | stage bit,
  * r1 status, 0 = correct, r2 bytes), with 20 bytes of the request block at +0 and at +0x20.
  *
+ * Number 11, entry 0: data. The received bytes of a GET_DESCRIPTOR configuration request, in
+ * records of 40 bytes (at_r1 and at_r2): r0 request, r1 buffer, r2 offset, r3 length (DATA_MAX).
+ *
  * Hooks:
  *  - bl at 0x1d8260 in the UI event handler 0x1d81cc (the call of the long-push timer 0x1d8570).
  *    The code after the site loads r0 again, thus the return value is not used.
@@ -85,6 +88,12 @@
 #define PERIODICBASE (*(volatile unsigned *)0xc5000154)
 #define TAG_PERIODIC_SOFT        (9 * 4 + 3)
 #define TAG_EXPERIMENT           (10 * 4 + 0)
+#define TAG_DATA                 (11 * 4 + 0)
+#define DATA_MAX   512                                  /* the maximum of bytes in one data dump */
+/* The second composite driver record (registry entry 0x6bc434) matches device class 2. 0xc50ac gives
+ * a driver 100 points if the device class is equal to the byte at +0x35 of the record, and 10 more
+ * if the subclass is equal to +0x36. The composite validate 0x108b6c accepts each device. */
+#define COMPOSITE2_CLASS ((volatile unsigned char *)0x1084a395)
 #define UIM_STATE  0x1084a778                           /* +0xc: the controller object of the UIM */
 #define TAG_REGISTERS            (7 * 4 + 3)
 #define TAG_QUEUE                (7 * 4 + 1)
@@ -141,6 +150,7 @@ static int checked, started;
 static unsigned root_hub_address = 0xffffffff;
 static unsigned completion_logs, interrupt_logs;
 static unsigned device_requests[4], next_request;       /* the request blocks of logged device transfers */
+static unsigned data_length[4], data_buffer[4];         /* GET_DESCRIPTOR configuration: wLength, buffer */
 static unsigned log_saved, port_logs, uim_logs, last_status = 0xffffffff, last_portsc = 0xffffffff;
 /* The log buffer (32 KB) comes from the allocator when the probe starts, not from the image:
  * with a large theme, the space after osos is only approximately 10 KB. */
@@ -302,6 +312,53 @@ static void copy_from(unsigned char *dst, unsigned src)
         dst[i] = ((const unsigned char *)src)[i];
 }
 
+/* Write the received data of a GET_DESCRIPTOR configuration request to the log: records of 40 bytes
+ * (at_r1 and at_r2 together). r0 request, r1 buffer, r2 offset, r3 length. */
+static void log_data(unsigned request, unsigned buffer, unsigned length)
+{
+    unsigned offset;
+    if (length > DATA_MAX)
+        length = DATA_MAX;
+    for (offset = 0; offset < length && L && L->count < LOG_MAX; offset += 40) {
+        struct record *r = &L->r[L->count];
+        int i;
+        for (i = 0; i < (int)(sizeof *r / 4); i++)
+            ((unsigned *)r)[i] = 0;
+        r->magic = 0xa5;
+        r->tag = TAG_DATA;
+        r->regs[0] = request;
+        r->regs[1] = buffer;
+        r->regs[2] = offset;
+        r->regs[3] = length;
+        copy_from(r->at_r1, buffer + offset);
+        copy_from(r->at_r2, buffer + offset + 20);
+        L->count++;
+    }
+}
+
+/* The configuration descriptors. The control transfer wrapper gets three calls: the setup stage
+ * (r2 = the setup packet), the data stage (r2 = the buffer) and the status stage (r2 = 0). The UIM
+ * then completes the request two times, and the third completion has the stage bit (r0 | 1). At
+ * that time the data is in the buffer. */
+static void track_data(int tag, const unsigned *regs, unsigned slot)
+{
+    if (tag == TAG_CONTROL_TRANSFER && regs[2]) {
+        unsigned char setup[20];
+        copy_from(setup, regs[2]);
+        if (data_length[slot] && !data_buffer[slot]) {
+            data_buffer[slot] = regs[2];                /* the data stage */
+        } else if (setup[0] == 0x80 && setup[1] == 6 && setup[3] == 2) {
+            data_length[slot] = setup[6] | setup[7] << 8;
+            data_buffer[slot] = 0;
+        }
+    } else if (tag == TAG_COMPLETION && (regs[0] & 1) && data_length[slot]) {
+        if (data_buffer[slot])
+            log_data(regs[0] & ~1u, data_buffer[slot], data_length[slot]);
+        data_length[slot] = 0;
+        data_buffer[slot] = 0;
+    }
+}
+
 /* Called by the wrappers with the saved r0-r3. Runs in the task of the USB host stack. */
 void log_call(int tag, const unsigned *regs)
 {
@@ -311,6 +368,24 @@ void log_call(int tag, const unsigned *regs)
         root_hub_address = regs[0];
     if (tag == TAG_CONTROL_TRANSFER && (root_hub_address == 0xffffffff || regs[5] == root_hub_address))
         return;
+    /* Follow each device request before the limit: the data dump needs all of them. */
+    if (tag == TAG_CONTROL_TRANSFER) {
+        unsigned request = regs[0] & ~1u, i, known = 0;
+        for (i = 0; i < 4; i++)
+            if (device_requests[i] == request)
+                known = 1;
+        if (!known) {
+            i = next_request;
+            device_requests[i] = request;
+            data_length[i] = 0;
+            data_buffer[i] = 0;
+            next_request = (next_request + 1) & 3;
+        } else {
+            for (i = 0; device_requests[i] != request; i++)
+                ;
+        }
+        track_data(tag, regs, i);
+    }
     if ((tag == TAG_CONTROL_ENDPOINT || tag == TAG_CONTROL_TRANSFER) && uim_logs++ >= UIM_LOGS)
         return;
     /* The root hub polls its port all the time, and each poll ends in a completion. Log only the
@@ -318,8 +393,10 @@ void log_call(int tag, const unsigned *regs)
     if (tag == TAG_COMPLETION) {
         unsigned request = regs[0] & ~1u, i, known = 0;
         for (i = 0; i < 4; i++)
-            if (device_requests[i] == request)
+            if (device_requests[i] == request) {
                 known = 1;
+                track_data(tag, regs, i);
+            }
         if (!known || completion_logs++ >= COMPLETION_LOGS)
             return;
     }
@@ -328,16 +405,6 @@ void log_call(int tag, const unsigned *regs)
     if ((tag == TAG_INTERRUPT_ENDPOINT || tag == TAG_INTERRUPT_TRANSFER)
         && (regs[0] == root_hub_address || uim_logs++ >= UIM_LOGS))
         return;
-    if (tag == TAG_CONTROL_TRANSFER) {
-        unsigned request = regs[0] & ~1u, i, known = 0;
-        for (i = 0; i < 4; i++)
-            if (device_requests[i] == request)
-                known = 1;
-        if (!known) {
-            device_requests[next_request] = request;
-            next_request = (next_request + 1) & 3;
-        }
-    }
     if (L && L->count < LOG_MAX) {
         struct record *r = &L->r[L->count];
         int i;
@@ -460,6 +527,13 @@ int hook_event(void *ui, void *event)
              * import screen says "unsupported device"). Nothing in the firmware sets it. With 2,
              * the test "1 < byte" is true for each hub. */
             USB_GLOBALS[0] = 2;
+            /* Give the device class EF/02 (interface association, for example USB audio) to the
+             * composite driver, so that it reads the configuration. The stock record has class 2/0
+             * (communications). Change it only if it has the expected values. */
+            if (COMPOSITE2_CLASS[0] == 2 && COMPOSITE2_CLASS[1] == 0) {
+                COMPOSITE2_CLASS[0] = 0xef;
+                COMPOSITE2_CLASS[1] = 2;
+            }
             host_start(0, 0, 0, 0);
             USB_GLOBALS[0] = 2;                         /* again: the host start clears parts of the block */
             log_registers();

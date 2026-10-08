@@ -101,7 +101,7 @@ struct EmulatorView: View {
                         }
                     }
                 } header: { Text("Emulator") } footer: {
-                    Text("Built from siggifly/ipod-emulator's source (Rust is installed into your home folder if needed). No sound or USB.")
+                    FormFooter("Built from siggifly/ipod-emulator's source (Rust is installed into your home folder if needed). No sound or USB.")
                 }
             }
             .formStyle(.grouped)

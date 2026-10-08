@@ -876,13 +876,13 @@ final class PatcherOptionTests: XCTestCase {
         XCTAssertGreaterThan(out.count, Patcher.maxOSOSSize)
         XCTAssertEqual(le32(out, 0x1d8260) & 0xFF00_0000, 0xEB00_0000)
         XCTAssertNotEqual(le32(out, 0x1d8260), le32(osos, 0x1d8260))
-        // the wrappers are in the probe code, which starts at 0x736800 and is shorter than 8 KB
-        for at in [0x6c8730, 0x6c878c] { XCTAssertTrue((Patcher.maxOSOSSize..<Patcher.maxOSOSSize + 0x2000).contains(Int(le32(out, at)))) }
+        // the wrappers are in the probe code, which starts at 0x736800 and is shorter than 12 KB
+        for at in [0x6c8730, 0x6c878c] { XCTAssertTrue((Patcher.maxOSOSSize..<Patcher.maxOSOSSize + 0x3000).contains(Int(le32(out, at)))) }
         // after other data (a theme and the Dark Mode items to 0x7eb123): the probe goes after it
         var filled = osos + [UInt8](repeating: 0, count: 0x7eb123 - osos.count)
         filled[0x7eb122] = 1
         let after = try Patcher.apply(probe, to: filled, originalSHA256: ThemeImport.sha256(osos))
-        XCTAssertTrue((0x7eb130..<0x7eb130 + 0x2000).contains(Int(le32(after, 0x6c8730))))
+        XCTAssertTrue((0x7eb130..<0x7eb130 + 0x3000).contains(Int(le32(after, 0x6c8730))))
         // with the other code patches: different areas and hook sites
         let names = ["album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input", "usb-host-probe"]
         _ = try Patcher.apply(all.filter { names.contains($0.spec.name) }, to: osos)
@@ -919,6 +919,32 @@ final class USBProbeLogTests: XCTestCase {
         XCTAssertEqual(USBProbeLog.stageText(1, [0, 5, 0x30, 0, 0, 0, 0, 0]), "setup: SET_ADDRESS 48")
         XCTAssertEqual(USBProbeLog.stageText(0, []), "status stage")
         XCTAssertEqual(USBProbeLog.stageText(1, [UInt8](repeating: 0, count: 12)), "data stage, buffer 000000000000000000000000")
+    }
+
+    /// Data records (tag 44): a configuration descriptor of 51 bytes in two records of 40 bytes.
+    func testConfigurationDescriptorData() {
+        let config: [UInt8] = [9, 2, 51, 0, 2, 1, 0, 0x80, 50,
+                               8, 11, 0, 2, 1, 0, 0x20, 0,                      // interface association, UAC2
+                               9, 4, 1, 1, 1, 1, 2, 0x20, 0,                    // interface 1 alternate 1, streaming
+                               7, 5, 0x01, 0x05, 0xC0, 0x00, 1,                 // endpoint 1 OUT isochronous, asynchronous
+                               11, 0x24, 2, 1, 2, 2, 16, 1, 0x44, 0xAC, 0,      // UAC1 format type I, 44100 Hz
+                               2, 0x24, 0, 0, 0, 0, 0]
+        var d = [UInt8]("UL01".utf8) + [2, 0, 0, 0]
+        for offset in stride(from: 0, to: config.count, by: 40) {
+            let chunk = Array(config[offset..<min(config.count, offset + 40)])
+            let regs = [UInt32(0x93C33E34), 0x93C40000, UInt32(offset), UInt32(config.count)]
+            d += [0xA5, 44, 0, 0] + regs.flatMap { v in (0..<4).map { UInt8(v >> (8 * $0) & 0xFF) } }
+            d += chunk + [UInt8](repeating: 0, count: 44 - chunk.count)
+        }
+        let log = USBProbeLog.parse(d)!
+        XCTAssertEqual(log[0].text, "Data: configuration descriptor, bytes 0–39 of 51: " + config.prefix(40).map { String(format: "%02X", $0) }.joined())
+        let lines = log.filter { $0.driver == "Configuration" }.map(\.call)
+        XCTAssertEqual(lines.count, 6)
+        XCTAssertTrue(lines[0].hasPrefix("configuration 1: total length 51, 2 interfaces, attributes 0x80, power 100 mA"))
+        XCTAssertTrue(lines[1].hasPrefix("interface association: first interface 0, 2 interfaces, class 01/00/20 (audio)"))
+        XCTAssertTrue(lines[2].hasPrefix("interface 1 alternate 1: 1 endpoints, class 01/02/20 (audio) (streaming), USB Audio Class 2"))
+        XCTAssertTrue(lines[3].hasPrefix("endpoint 0x01 (OUT isochronous, asynchronous), max packet 192, interval 1"))
+        XCTAssertTrue(lines[4].hasPrefix("audio class interface descriptor, subtype 2: format type 1, 2 channels, 2 bytes per sample, 16 bits, rates 44100 Hz"))
     }
 }
 
