@@ -207,6 +207,7 @@ struct InstallPatchSheet: View {
                         if let d = spec.description { Text(d).fixedSize(horizontal: false, vertical: true) }
                         Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
                             GridRow { Text("Name").foregroundStyle(.secondary); Text(spec.name).monospaced() }
+                            GridRow { Text("For").foregroundStyle(.secondary); Text(spec.targetText) }
                             GridRow { Text("Letter").foregroundStyle(.secondary); Text(candidate.assignedLetter ?? spec.version_letter ?? "-") }
                             GridRow { Text("Code").foregroundStyle(.secondary); Text(candidate.codeSize.map { "\($0) bytes" } ?? "No code (data only)") }
                             GridRow { Text("Changes").foregroundStyle(.secondary); Text("\(spec.hooks?.count ?? 0) hooks, \(spec.bytes?.count ?? 0) byte runs") }

@@ -337,13 +337,14 @@ struct PatchCompatibility: View {
     let patch: PatchInfo
 
     var body: some View {
+        LabeledContent("For", value: patch.spec.targetText)
         if model.editor == nil {
             Label("Open a firmware to examine this patch.", systemImage: "info.circle").foregroundStyle(.secondary)
         } else if model.isCompatible(patch) {
-            Label("Agrees with the open firmware (iPod Video 1.3).", systemImage: "checkmark.circle.fill")
+            Label("Agrees with the open firmware.", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         } else {
-            Label("Does not agree with the open firmware. The patch is only for the original Apple firmware 1.3. iPodFirm does not apply it.",
+            Label("Does not agree with the open firmware. The patch is only for the original Apple firmware of its target. iPodFirm does not apply it.",
                   systemImage: "xmark.octagon.fill")
                 .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
         }

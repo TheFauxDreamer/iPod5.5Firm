@@ -16,10 +16,25 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public struct Hook: Codable, Hashable { public var kind, at, expect, to: String }
     /// A data change: `expect` and `value` are hexadecimal bytes.
     public struct Bytes: Codable, Hashable { public var at, expect, value: String }
+    /// A firmware build that the patch is for: the iPod model and the firmware version, for display.
+    /// `osos_sha256` must be the same as the `osos_sha256` of the patch. The hash is the real check.
+    public struct Target: Codable, Hashable {
+        public var model: String
+        public var firmware: String
+        public var osos_sha256: String
+        public init(model: String, firmware: String, osos_sha256: String) {
+            self.model = model
+            self.firmware = firmware
+            self.osos_sha256 = osos_sha256
+        }
+        public var text: String { "\(model), firmware \(firmware)" }
+    }
     public var id: String { name }
     public var name: String
     public var description: String?
     public var osos_sha256: String
+    /// The firmware builds that the patch is for (display only). Refer to `Target`.
+    public var targets: [Target]?
     public var load_address: String?
     public var symbols: [String: String]?
     public var hooks: [Hook]?
@@ -49,6 +64,23 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     /// The ids of the built-in Swift tools that `ui.tools` can name (PatchTools.swift in the app).
     public static let knownTools = ["album-thumbnails", "usb-log"]
     public var displayTitle: String { title ?? name }
+
+    /// The osos builds that iPodFirm knows, by SHA-256.
+    public static let knownFirmware = [
+        Target(model: "iPod Video (5G/5.5G)", firmware: "1.3", osos_sha256: "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251"),
+    ]
+
+    /// The targets of the patch. Without `targets`, the known build with the same hash.
+    public var targetList: [Target] {
+        if let targets, !targets.isEmpty { return targets }
+        return Self.knownFirmware.filter { $0.osos_sha256 == osos_sha256 }
+    }
+
+    /// For example "iPod Video (5G/5.5G), firmware 1.3", or the start of the hash for an unknown build.
+    public var targetText: String {
+        let list = targetList
+        return list.isEmpty ? "An unknown firmware (osos SHA-256 \(osos_sha256.prefix(12))…)" : list.map(\.text).joined(separator: "; ")
+    }
 }
 
 /// The `ui` object of patch.json: buttons, switches and text in the Patches pane.

@@ -168,9 +168,13 @@ public struct PatchLibrary {
             }
         }
 
+        for t in spec.targets ?? [] where t.osos_sha256 != spec.osos_sha256 {
+            c.errors.append("The target \"\(t.text)\" has a different osos_sha256 than the patch. Each target must have the osos_sha256 of the patch.")
+        }
+
         // Notes.
         if spec.osos_sha256 != Self.firmware13OSOS {
-            c.notes.append("The patch is not for the Apple firmware 1.3. iPodFirm cannot apply it to firmware 1.3.")
+            c.notes.append("The patch is for \(spec.targetText), not for the Apple firmware 1.3. iPodFirm cannot apply it to firmware 1.3.")
         }
         let others = existing.filter { $0.spec.name != spec.name }
         let used = Set(others.compactMap(\.spec.version_letter))

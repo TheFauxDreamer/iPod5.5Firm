@@ -32,6 +32,7 @@ iPodFirm examines the patch (`PatchLibrary.inspect` in [PatchLibrary.swift](../m
 The install stops if one of these errors occurs:
 
 - `patch.json` does not decode, or the `name` has a character that is not a–z, 0–9 or "-".
+- A target has an `osos_sha256` that is not the `osos_sha256` of the patch.
 - A built-in patch has the same name.
 - The folder has a subfolder, more than one C file, or a file type that is not `.c`, `.o`, `.json`, `.md`, `.txt` or `.png`.
 - `patch.o` is not an ELF32 ARM object.
@@ -64,6 +65,7 @@ If a user patch with the same name is installed, the sheet shows **Replace**. Th
 | `name` | string | The name. The app shows it in the Patches pane. |
 | `description` | string | The text in the Patches pane. |
 | `osos_sha256` | string | The SHA-256 of the unchanged Apple osos image. For firmware 1.3 it is `784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251`. |
+| `targets` | array | The firmware builds that the patch is for. Each item has `model`, `firmware` and `osos_sha256`, for example `{ "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5…" }`. The app shows `model` and `firmware` in the Compatibility section and in the install sheet. The `osos_sha256` of each item must be the same as the `osos_sha256` of the patch. The installer refuses a different value. Without `targets`, the app uses its list of known builds (`PatchSpec.knownFirmware`). |
 | `load_address` | hex string | The osos offset where the code goes. |
 | `symbols` | object | Firmware addresses for the external functions and data that the C code uses. Name → hex address. |
 | `hooks` | array | The changes to the firmware. See [The hooks](#the-hooks). |
@@ -77,7 +79,7 @@ If a user patch with the same name is installed, the sheet shows **Replace**. Th
 
 | `ui` | object, optional | Controls in the Patches pane. Refer to [The ui object](#the-ui-object). |
 
-Each built-in patch that is not `internal` must have `title`, `summary`, `symbol` and `category`. The test `testPatchMetadata` makes sure of this. It also makes sure that macOS has the SF Symbol, that each tool exists and that each `ui` path is permitted.
+Each built-in patch that is not `internal` must have `title`, `summary`, `symbol`, `category` and `targets`. The test `testPatchMetadata` makes sure of this. It also makes sure that macOS has the SF Symbol, that each tool exists and that each `ui` path is permitted.
 
 ### The ui object
 

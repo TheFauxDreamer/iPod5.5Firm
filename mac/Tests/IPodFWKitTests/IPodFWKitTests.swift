@@ -532,6 +532,8 @@ final class PatchAndArtTests: XCTestCase {
             XCTAssertNotNil(NSImage(systemSymbolName: symbol, accessibilityDescription: nil), "\(p.spec.name): no SF Symbol \"\(symbol)\"")
             for t in p.spec.ui?.tools ?? [] { XCTAssertTrue(PatchSpec.knownTools.contains(t), "\(p.spec.name): unknown tool \(t)") }
             for path in p.spec.ui?.paths ?? [] { XCTAssertTrue(PatchUI.isSafePath(path), path) }
+            XCTAssertFalse(p.spec.targets?.isEmpty ?? true, "\(p.spec.name) has no targets in patch.json")
+            for t in p.spec.targets ?? [] { XCTAssertEqual(t.osos_sha256, p.spec.osos_sha256, p.spec.name) }
         }
     }
 
@@ -1068,6 +1070,8 @@ final class PatchLibraryTests: XCTestCase {
             let ui: [String: Any] = ["actions": [["title": "Go", "write": [["path": path, "text": "1"]]]]]
             XCTAssertFalse(try inspect(makePatch(spec("bad-path", ["ui": ui]), folder: "p\(path.count)")).canInstall, path)
         }
+        let wrong: [[String: Any]] = [["model": "iPod Video", "firmware": "1.2", "osos_sha256": String(repeating: "0", count: 64)]]
+        XCTAssertFalse(try inspect(makePatch(spec("bad-target", ["targets": wrong]))).canInstall)
         let big: [String: Any] = ["actions": [["title": "Go", "write": [["path": "iPod_Control/x", "zeros": PatchUI.maxWrite + 1]]]]]
         XCTAssertFalse(try inspect(makePatch(spec("big-write", ["ui": big]))).canInstall)
     }
@@ -1112,6 +1116,13 @@ final class PatchLibraryTests: XCTestCase {
         try library.remove(try XCTUnwrap(library.list().first { $0.spec.name == "data-patch" }))
         XCTAssertNil(library.list().first { $0.spec.name == "data-patch" })
         XCTAssertThrowsError(try library.remove(try XCTUnwrap(library.list().first { $0.spec.name == "sleep-now" })))
+    }
+
+    /// Without "targets", the text comes from the known builds.
+    func testTargetText() {
+        let s = PatchSpec(name: "x", osos_sha256: PatchLibrary.firmware13OSOS)
+        XCTAssertEqual(s.targetText, "iPod Video (5G/5.5G), firmware 1.3")
+        XCTAssertTrue(PatchSpec(name: "y", osos_sha256: String(repeating: "0", count: 64)).targetText.hasPrefix("An unknown firmware"))
     }
 
     func testConflicts() {

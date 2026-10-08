@@ -42,6 +42,9 @@
   "version_letter": "h",
   "description": "A one-shot test of the USB host mode through a USB-C mod (USB-AUDIO-OUT.md, Stage 0). Select \"Start the probe at the next restart\", eject and restart the iPod, then press a button. The iPod first plays each sign tone one time (long low, then high, low, high), then three short beeps and a silence. Then it starts its USB host stack one time, and the real signs follow. A long low tone: the host stack runs (a second one: the hub in the adapter). High, low, high: a USB flash drive or card reader was found. The iPod does not react for approximately 7 seconds during the tones. 10 seconds after the start, the iPod writes a log of the USB devices that it saw and gives two short low beeps. iPodFirm shows the log (Show USB Log). The next restart is normal again. CAUTION: While the probe runs, the USB port possibly does not operate with a computer. Restart the iPod (hold Menu and Select) to stop the probe.",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
   "load_address": "extended",
   "symbols": {
     "fw_memset0": "0x07ccd0",
