@@ -37,6 +37,15 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 | Storage | A USB card reader with a 128 GB SDXC card (FAT32, photos in DCIM) |
 | Audio devices for later | Apple EarPods (USB-C), Apple USB-C to 3.5 mm Headphone Jack Adapter |
 
+### The supply voltage for USB devices
+
+- The iPod has no 5 V source for USB. VBUS must come from outside (a dock or an adapter with a charger).
+- Dock pin 18 supplies 3.3 V accessory power. The iPod Camera Connector has its own step-up converter that changes this 3.3 V to 5 V for its USB port. Thus the iPod never supplied a low USB voltage.
+- The USB-C mod connects VBUS to the USB power input of the iPod, not to pin 18. The firmware has no output that it can switch to VBUS.
+- USB 2.0 devices must operate down to approximately 4.4 V. The minimum voltage of the USB-C EarPods is not known. No measurement is published.
+- Optional bench test (after the EarPods enumeration test): use a USB-C pass-through breakout with VBUS cut. Supply the data from a Mac and VBUS from an adjustable supply. Decrease the voltage in 0.1 V steps. Record the voltage where the audio stops.
+- If the EarPods operate at 3.3 V, a hardware change (pin 18 to VBUS through a switch) is possible. Else a 3.3 V to 5 V step-up converter is necessary.
+
 ## The tests
 
 | Version | Device | Result | Conclusion |

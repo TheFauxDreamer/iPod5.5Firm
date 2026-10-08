@@ -44,7 +44,8 @@ These are the results:
 - Stage 0 and Stage 1 (research notes, no code) go on main.
 - Stages 2–4 (code) go on the branch `usb-audio-out`.
 - Merge into main when a USB-C dongle plays on the real iPod and the normal USB functions pass the tests below.
-- If a gate stops the project, delete the branch.
+- If a gate stops the project, do not delete the branch. Keep the branch and all its documentation for future work.
+- Record the stop reason in patches/usb-host-probe/FINDINGS.md and in this document.
 
 ### The normal USB functions stay
 
