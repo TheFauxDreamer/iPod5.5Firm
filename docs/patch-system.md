@@ -121,7 +121,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |
 | `row-marker` | 0x7358d0 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
-| `usb-host-probe` | `extended` | After all other data (5592 bytes; the 32 KB log buffer comes from the allocator) | Extended patch. Test patch on the branch `usb-audio-out`. |
+| `usb-host-probe` | `extended` | After all other data (7748 bytes; the 32 KB log buffer comes from the allocator) | Extended patch. Test patch on the branch `usb-audio-out`. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
 

@@ -80,6 +80,12 @@
 #define TAG_INTERRUPT_ENDPOINT   (8 * 4 + 1)
 #define TAG_INTERRUPT_TRANSFER   (8 * 4 + 2)
 #define TAG_INTERRUPT_COMPLETION (8 * 4 + 3)
+#define TAG_ASYNC_QH             (9 * 4 + 1)
+#define TAG_PERIODIC_QH          (9 * 4 + 2)
+#define PERIODICBASE (*(volatile unsigned *)0xc5000154)
+#define TAG_PERIODIC_SOFT        (9 * 4 + 3)
+#define TAG_EXPERIMENT           (10 * 4 + 0)
+#define UIM_STATE  0x1084a778                           /* +0xc: the controller object of the UIM */
 #define TAG_REGISTERS            (7 * 4 + 3)
 #define TAG_QUEUE                (7 * 4 + 1)
 #define TAG_ADD_DEVICE           (7 * 4 + 0)
@@ -185,6 +191,72 @@ static int write_file(const char *name, const void *data, unsigned len)
     return err != 0 ? err : err2;
 }
 
+/* Read a word of the RAM. The USB hardware uses the uncached window (RAM | 0x80000000); read the
+ * same RAM through 0x10000000. Other addresses give 0 (the real iPod stops at a bad read). */
+static unsigned read32(unsigned a)
+{
+    if (a >= 0x90000000 && a < 0x94000000)
+        a -= 0x80000000;
+    if (a < 0x10000000 || a >= 0x14000000 || (a & 3))
+        return 0;
+    return *(volatile unsigned *)a;
+}
+
+static void log_qh(int tag, unsigned qh)
+{
+    unsigned regs[4];
+    regs[0] = qh;
+    regs[1] = read32(qh + 4);                           /* endpoint characteristics */
+    regs[2] = read32(qh + 8);                           /* endpoint capabilities: S-mask, C-mask, hub, port */
+    regs[3] = read32(qh + 0x18);                        /* the token of the overlay */
+    log_call(tag, regs);
+}
+
+/* Each queue head of the asynchronous list (control and bulk), and each queue head in the periodic
+ * frame list (interrupt), with its state. At most 8 of each. */
+static void log_queues(void)
+{
+    unsigned first = ASYNCLIST, qh = first, seen[8], n = 0, i, k, size, base, e, depth;
+    for (i = 0; i < 8 && qh; i++) {
+        log_qh(TAG_ASYNC_QH, qh);
+        qh = read32(qh) & ~0x1fu;
+        if (qh == first)
+            break;
+    }
+    size = 1024 >> ((USBCMD >> 2) & 3);
+    base = PERIODICBASE & ~0xfffu;
+    for (i = 0; i < size && n < 8; i++) {
+        e = read32(base + 4 * i);
+        for (depth = 0; depth < 4 && !(e & 1) && ((e >> 1) & 3) == 1 && n < 8; depth++) {
+            qh = e & ~0x1fu;
+            for (k = 0; k < n && seen[k] != qh; k++)
+                ;
+            if (k == n) {
+                seen[n++] = qh;
+                log_qh(TAG_PERIODIC_QH, qh);
+            }
+            e = read32(qh);
+        }
+    }
+}
+
+/* Apple's own periodic table (0xf5c80): the controller object +0x3c holds the processor address of
+ * the first queue head of each frame, +0x44 the frame list (controller addresses). Frames 0-7: the
+ * frame list word, the queue head, its hardware link and 20 bytes at +0 and +0x30 (the software
+ * next pointer, the interval byte +0x3c and the offset +0x3d). */
+static void log_periodic_table(void)
+{
+    unsigned ctrl = read32(UIM_STATE + 0xc), heads = read32(ctrl + 0x3c), frames = read32(ctrl + 0x44), i;
+    for (i = 0; i < 8; i++) {
+        unsigned regs[4];
+        regs[0] = i;
+        regs[1] = read32(frames + 4 * i);
+        regs[2] = read32(heads + 4 * i);
+        regs[3] = read32(regs[2]);
+        log_call(TAG_PERIODIC_SOFT, regs);
+    }
+}
+
 static void log_registers(void)
 {
     unsigned regs[4];
@@ -206,6 +278,8 @@ static int write_log(void)
     log_registers();
     if (!L)
         return -1;
+    log_queues();
+    log_periodic_table();
     log_saved = L->count;
     err = write_file(LOG_PATH, L, LOG_BYTES);
     if (err == 0)
@@ -275,7 +349,10 @@ void log_call(int tag, const unsigned *regs)
             r->regs[i] = regs[i];
         if (tag == TAG_CONTROL_TRANSFER)                /* the wrapper saved r0-r3, lr; then the stack arguments */
             r->regs[3] = regs[5];
-        if (tag == TAG_INTERRUPT_COMPLETION) {          /* the request block, as for a control completion */
+        if (tag == TAG_PERIODIC_SOFT) {                 /* the queue head of Apple's periodic table */
+            copy_from(r->at_r1, regs[2]);
+            copy_from(r->at_r2, regs[2] + 0x30);
+        } else if (tag == TAG_INTERRUPT_COMPLETION) {   /* the request block, as for a control completion */
             copy_from(r->at_r1, regs[0]);
             copy_from(r->at_r2, regs[0] + 0x20);
         } else if (tag == TAG_ADD_DEVICE) {                    /* the device descriptor is the 4th argument */
@@ -396,6 +473,21 @@ int hook_event(void *ui, void *event)
                 task_sleep(BEEP_MS);
                 tone(LOW, 60000);
             }
+            /* Experiment: switch the periodic schedule off for 2 s (USBCMD bit 4), then log the
+             * queues again. If a stopped asynchronous transfer then completes, the periodic list
+             * blocks the controller. Then switch it on again. */
+            {
+                unsigned regs[4];
+                regs[0] = USBCMD;
+                USBCMD = regs[0] & ~0x10u;
+                task_sleep(2000);
+                regs[1] = USBCMD;
+                regs[2] = USBSTS;
+                regs[3] = 0;
+                log_call(TAG_EXPERIMENT, regs);
+                log_queues();
+                USBCMD = USBCMD | 0x10u;
+            }
             /* A second write: the ports of a hub and the devices behind it take more time. */
             task_sleep(LOG_WAIT2_MS);
             if (write_log() == 0) {
@@ -455,6 +547,19 @@ __attribute__((naked)) void hook_completion(void)
  * (device, parent hub, port, device descriptor, power on the stack). It selects and loads the
  * class driver. Log each device that the stack offers to the drivers. */
 WRAP(hook_add_device, 28, expert_add_device)
+
+/* Firmware bug: the periodic insert 0xf5c80 makes the frame list word from its second argument:
+ * (r1 + 0x34) | 2. Both callers give the new queue head only in r0: 0x974ec ("create interrupt
+ * endpoint", call at 0x9761c) leaves r1 = the UIM controller object, and 0x96c44 (call at 0x96d14)
+ * leaves r1 unset. Thus the frame list pointed to the controller object's +0x34 (a block of zeros),
+ * and no interrupt endpoint was polled (real log of 2026-10-08: frame list 0x9363B682, the dock's hub
+ * QH at 0x93623080). The fix: r1 = r0, then continue in 0xf5c80. */
+__attribute__((naked)) void hook_periodic_insert(void)
+{
+    __asm__ volatile(
+        "mov  r1, r0\n"
+        "b    periodic_insert\n");
+}
 
 /* The completion callback 0xcba54 of the interrupt transfers (request, status, bytes), for example
  * the status-change endpoint of a hub. A "b" hook replaces "stmdb sp!, {r4-r8, lr}". */

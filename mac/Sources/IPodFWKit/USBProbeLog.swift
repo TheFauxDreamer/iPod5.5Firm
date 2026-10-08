@@ -11,6 +11,7 @@ public enum USBProbeLog {
     /// The size of the file that iPodFirm makes when it sets the trigger. The patch can only write to an existing file.
     public static let fileSize = 32768
     static let drivers = [0: "Hub", 1: "Composite device", 3: "Storage", 4: "ICA camera (Canon)", 5: "PTP camera"]
+    static let asyncQHTag = 9 * 4 + 1, periodicQHTag = 9 * 4 + 2, periodicSoftTag = 9 * 4 + 3, experimentTag = 10 * 4
     static let addDeviceTag = 7 * 4, interruptEndpointTag = 8 * 4 + 1, interruptTransferTag = 8 * 4 + 2, interruptCompletionTag = 8 * 4 + 3
     static let queueTag = 7 * 4 + 1, endpointTag = 6 * 4 + 1, transferTag = 6 * 4 + 2, irqTag = 6 * 4 + 3, completionTag = 6 * 4
     static let entries = [1: "validate", 2: "initialize device", 3: "initialize interface"]
@@ -48,6 +49,22 @@ public enum USBProbeLog {
             let atR1 = Array(data[o + 20..<o + 40]), atR2 = Array(data[o + 40..<o + 60])
             if tag == queueTag {
                 out.append(Entry(driver: "Queue", call: queueText(regs, atR1, atR2), device: nil, interface: nil, registers: regs))
+                continue
+            }
+            if tag == periodicSoftTag {
+                out.append(Entry(driver: "Periodic table", call: String(format: "frame %d: frame list 0x%08X, queue head 0x%08X (link 0x%08X), words %@, +0x30 %@",
+                                                                         regs[0], regs[1], regs[2], regs[3], hex(atR1, 20), hex(atR2, 16)),
+                                 device: nil, interface: nil, registers: regs))
+                continue
+            }
+            if tag == experimentTag {
+                out.append(Entry(driver: "Experiment", call: String(format: "periodic schedule off for 2 s: USBCMD 0x%08X -> 0x%08X, USBSTS 0x%08X (the queue heads follow)",
+                                                                     regs[0], regs[1], regs[2]),
+                                 device: nil, interface: nil, registers: regs))
+                continue
+            }
+            if tag == asyncQHTag || tag == periodicQHTag {
+                out.append(Entry(driver: tag == asyncQHTag ? "Async QH" : "Periodic QH", call: qhText(regs), device: nil, interface: nil, registers: regs))
                 continue
             }
             if tag == interruptCompletionTag {
@@ -198,6 +215,19 @@ public enum USBProbeLog {
         case 0x03: return "SET_FEATURE \(value)"
         default: return nil
         }
+    }
+
+    /// An EHCI queue head: r0 address, r1 endpoint characteristics, r2 capabilities, r3 overlay token.
+    static func qhText(_ r: [UInt32]) -> String {
+        let chars = r[1], caps = r[2], token = r[3]
+        let speed = ["full", "low", "high", "3"][Int(chars >> 12 & 3)]
+        let status = [(0x80, "active"), (0x40, "halted"), (0x20, "buffer error"), (0x10, "babble"),
+                      (0x08, "transaction error"), (0x04, "missed micro-frame"), (0x02, "split state"), (0x01, "ping")]
+            .filter { token & UInt32($0.0) != 0 }.map(\.1)
+        return String(format: "0x%08X — address %d, endpoint %d, %@ speed, max packet %d, S-mask 0x%02X, C-mask 0x%02X, hub %d port %d, token 0x%08X (%@, %d bytes left, PID %d)",
+                      r[0], Int(chars & 0x7F), Int(chars >> 8 & 0xF), speed, Int(chars >> 16 & 0x7FF),
+                      Int(caps & 0xFF), Int(caps >> 8 & 0xFF), Int(caps >> 16 & 0x7F), Int(caps >> 23 & 0x7F),
+                      token, status.isEmpty ? "none" : status.joined(separator: ", "), Int(token >> 16 & 0x7FFF), Int(token >> 8 & 3))
     }
 
     static func hex(_ b: [UInt8], _ n: Int) -> String { b.prefix(n).map { String(format: "%02X", $0) }.joined() }

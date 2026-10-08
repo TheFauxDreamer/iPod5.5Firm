@@ -197,6 +197,47 @@ The hub driver configured the dock's hub completely: SET_CONFIGURATION 1, the hu
 
 Open: does the dock's hub report a port change (an interrupt completion), and is it processed? The probe now logs the interrupt completion callback 0xcba54 (a `b` hook) and clears each record before use (the allocator does not clear the buffer: record 3 showed old text).
 
+## The eleventh real log: no report from the dock's hub (2026-10-08)
+
+Both log writes came. The interrupt completions (records 9, 12, 50, 100) all belong to the request 0x9361CCB0, the status pipe of the simulated root hub. The status-change transfer of the dock's hub (request 0x9361BF50, address 5, endpoint 1) did not complete in 30 s. The five SET_FEATURE PORT_POWER requests to the dock's hub have no completion records either, although each request before them had one.
+
+Possible causes: the asynchronous queue head of address 5 stopped (halted, or still active), or the periodic queue head of the interrupt endpoint is not polled correctly (full speed through the forced-full-speed root port: the split fields and the S-mask matter). The probe now logs each asynchronous and periodic queue head with its state before each log write.
+
+## Test A with the queue dump (2026-10-08)
+
+Async QH 0x93623040 (address 51 = the dock's hub, endpoint 0, full speed, packet 64, hub 0 port 1): overlay token 0x80008D80 = active, IN, 0 bytes, error count 3, data toggle 1, interrupt on complete. Thus a status stage of a control request without data stays active: the hub probably answers NAK without end. It is probably the first SET_PORT_FEATURE(PORT_POWER); the five PORT_POWER requests had no completions. The periodic frame list had only one QH, an empty anchor (all words 0); the interrupt QH of the dock's hub was not found. The probe reads through the cached window (0x1xxxxxxx), thus the values of a second dump can be old.
+
+## Test B (2026-10-08)
+
+The card reader was connected after the first double beep. The result is the same as test A: the status stage of the dock's hub (address 87) stays active, and no port change comes. The periodic scan again found one queue head with only zeros (0x90AB0680).
+
+Theory: the transfers to the dock completed until the periodic schedule was switched on (after "create interrupt endpoint"). If the periodic list has a link of 0, the controller follows it to address 0 in each frame and possibly never gets time for the asynchronous list. The UIM keeps for each queue head the processor address and, at +0x34, the controller address (processor address | 0x80000000); thus the probe reads the same memory as the UIM.
+
+The probe now logs Apple's own periodic table (frames 0–7) and does an experiment: after the first log write, it switches the periodic schedule off for 2 s and logs the queues again. Emulator: the frame list holds 1 (terminate) in each frame, and no queue heads.
+
+## The periodic schedule bug (2026-10-08)
+
+Version 0.1.71 with the dock and the card reader from the start:
+
+- Frame list entry 0: 0x9363B682, a QH pointer to 0x9363B680, which holds only zeros.
+- Apple's own table for frame 0: the QH at 0x93623080. Its words: link 0x00000001, endpoint characteristics 0x00010169 (address 105 = the dock's hub, endpoint 1, full speed, 1 byte), S-mask 0x01, C-mask 0x1C, its controller address at +0x34 = 0x93623081, interval byte 0x7F. Thus the QH is correct, but the frame list points to the wrong address.
+- The cause: 0xf5c80 makes the frame list word from `(r1 + 0x34) | 2`. At 0x9760c, "create interrupt endpoint" loads r1 = the UIM controller object (for a compare of +0x5e) and calls 0xf5c80 with the QH only in r0. The other caller (0x96d14) also leaves r1 unset. The frame list therefore pointed to the controller object +0x34. This is a firmware bug. With the Camera Connector, it was probably not seen: cameras use bulk transfers, and the root hub status pipe is simulated.
+- The experiment (periodic schedule off for 2 s) did not change the active status stage of the dock's hub. Thus the PORT_POWER stall has another cause, or the controller stays stopped after the bad periodic access.
+
+Fix in the probe: a wrapper at 0x9761c and 0x96d14 sets r1 = r0 and continues in 0xf5c80.
+
+## The periodic fix works (2026-10-08)
+
+Version 0.1.72 with the dock and the card reader from the start. Frame list entry 0 = 0x93623082 (the dock's hub interrupt QH, address 83). The hub sent its first port report, the PORT_POWER requests completed, and the hub driver read the port status (GET_STATUS 4 bytes), cleared the change bits (CLEAR_FEATURE 16, 20) and reset the ports (SET_FEATURE 4). Three devices were enumerated:
+
+| Device | Class | Result |
+|---|---|---|
+| 05E3:0749 (Genesys Logic) | 0, interface 08/06/50 | Composite driver, then "Storage: initialize interface"; string descriptors; GET_MAX_LUN (A1 FE) |
+| 2537:1081 (Norelsys) | 0, interface 08/06/50 | Composite driver, then "Storage: initialize interface" |
+| 291A:8346 | 0x11 (billboard) | "Add device", no driver |
+
+The bulk QHs (endpoints 1 and 2) of both storage devices are in the asynchronous list. Thus the PORT_POWER stall of the earlier tests was a result of the periodic bug. The complete chain works: USB-C mod, host mode, external hub, storage.
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).
