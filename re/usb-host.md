@@ -177,6 +177,26 @@ The probe now logs each call of the completion callback 0xcb118 (a `b` hook), wi
 
 The dock sequence was the same (GET_DESCRIPTOR 8, SET_ADDRESS 44, GET_DESCRIPTOR 18 with the hub descriptor, then no more requests). The 40 completion records were all used by the root hub: its status poll ends in a completion all the time (all with status 0). Thus the probe now logs only the completions of the request blocks of logged device transfers.
 
+## The eighth real log: the hub policy (2026-10-07)
+
+All three stages of the dock's 18-byte GET_DESCRIPTOR completed correctly (completion callback, status 0). Then the hub driver used the same request block for the root hub port poll again. Thus the stop is a decision.
+
+"Add device" 0xd377c (text "Add device: VID %d PID %d") refuses a hub after the root hub, unless g[0] (RAM 0x1083e0f8) is not 0. g[0] is 0 in the image, and no code sets it. Error 0x673 or 0x67d goes to 0xd9cec, and the photo import screen says "unsupported device". The probe now sets g[0] = 2 and logs "add device" (hook at 0x10c1d8). Emulator: g = 0x01000102 after the start (g[0] = 2, g[1] = 1); the root hub goes through "add device" to the hub driver.
+
+The complete picture is in [patches/usb-host-probe/FINDINGS.md](../patches/usb-host-probe/FINDINGS.md).
+
+## The ninth real log: the dock's hub is accepted (2026-10-07)
+
+With g[0] = 2, "add device" offered the dock's hub (2109:2817, VIA Labs VL817) to the hub driver: "Hub: validate", "Hub: initialize device". The hub driver read the configuration descriptor (25 bytes), sent SET_CONFIGURATION 1, read the hub descriptor and the hub status, and started the periodic schedule (USBCMD bit 4) for the status-change interrupt endpoint. The log then reached its limits (30 UIM records, 40 completions), thus the port steps of the dock's hub are not in the log.
+
+The probe now takes a 32 KB log buffer (511 records) from the allocator 0x25a974, logs the UIM interrupt endpoint and interrupt transfer calls, and writes the log at 10 s and again at 30 s.
+
+## The tenth real log: the ports of the dock (2026-10-08)
+
+The hub driver configured the dock's hub completely: SET_CONFIGURATION 1, the hub descriptor, GET_STATUS, then SET_FEATURE 8 (PORT_POWER) five times, then "create interrupt endpoint" (address 29, endpoint 1, interval 255) and the interrupt transfer for the status changes (callback 0xcba54). After that, no record: no port change of the dock's hub, thus no port reset and no "add device" for the card reader. The log has only the first write (the second write at 30 s is missing).
+
+Open: does the dock's hub report a port change (an interrupt completion), and is it processed? The probe now logs the interrupt completion callback 0xcba54 (a `b` hook) and clears each record before use (the allocator does not clear the buffer: record 3 showed old text).
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).

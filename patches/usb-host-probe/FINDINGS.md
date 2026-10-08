@@ -1,0 +1,91 @@
+# USB host probe: findings
+
+This document gives the full picture of the USB host exploration on the iPod 5.5G. Update it after each test. The plan is in [USB-AUDIO-OUT.md](../../USB-AUDIO-OUT.md). The research notes in the sequence of the work are in [re/usb-host.md](../../re/usb-host.md). The patch is described in [docs/modifications.md](../../docs/modifications.md#usb-host-probe).
+
+## The goal
+
+USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The probe is the first stage. It shows how far the Apple USB host stack gets with a device on the USB-C mod.
+
+## Summary of the status (2026-10-07)
+
+| Step | Status | Evidence |
+|---|---|---|
+| Start the USB host stack without a Camera Connector | Works | The host mode tone; log: UIM init, root hub set up |
+| VBUS (5 V) from a charger through an adapter or a dock | Works | OTGSC "VBUS valid" |
+| Connection and port reset | Works | Port status 0x0103 after the reset |
+| High speed | Connects, then no answer was processed | Log of 2026-10-07 (third log) |
+| Full speed (forced) | Works | PORTSC: PFSC set, PSPD 0 |
+| Transfer completion interrupt | Works after a fix | The device driver held the USB interrupt. The probe removes its handler. |
+| First requests to the device (GET_DESCRIPTOR, SET_ADDRESS, GET_DESCRIPTOR 18 bytes) | Works | The dock's hub descriptor: USB 2.1, class 09, packet size 64 |
+| Driver selection for an external hub | Works with the probe | "Add device" 0xd377c refuses a second hub unless g[0] != 0. With g[0] = 2, the dock's hub (2109:2817, VIA Labs VL817) was accepted, configured and its hub descriptor read. |
+| Ports of the external hub | Powered | The hub driver sent SET_FEATURE PORT_POWER five times and started the status-change interrupt transfer (0.1.68). |
+| Port changes of the external hub, devices behind it | Not seen | After the interrupt transfer started, no port change came. 0.1.69 logs the interrupt completions. |
+| A card reader through a hub | Not tested yet | Needs the hub fix |
+| An audio device (Apple USB-C headphone adapter, EarPods) | Not tested yet | No class driver for audio in the firmware |
+| Isochronous transfers | Not available | The UIM entries are stubs (0xd4820, 0xd4828) |
+
+## The hardware of the tests
+
+| Item | Details |
+|---|---|
+| iPod | iPod 5.5G, 64 MB RAM, 1 TB flash, USB-C mod (wired as a device) |
+| Adapter | 3-in-1 USB-C adapter: USB-A socket, 3.5 mm jack (a USB sound card), PD charging socket. It contains a hub. |
+| Dock | A USB-C dock with its own power supply. It contains a USB 2.1 hub. |
+| Storage | A USB card reader with a 128 GB SDXC card (FAT32, photos in DCIM) |
+| Audio devices for later | Apple EarPods (USB-C), Apple USB-C to 3.5 mm Headphone Jack Adapter |
+
+## The tests
+
+| Version | Device | Result | Conclusion |
+|---|---|---|---|
+| 0.1.56 | 3-in-1 adapter, card reader | Host mode tone. Photo import: "unsupported device", with and without a card. | Host mode starts. The card is not the cause. |
+| 0.1.59 | Dock | Log: only the simulated root hub (05AC:8031). | No device reached a driver. |
+| 0.1.60 | Dock | VBUS valid, connection, reset, high speed, transfers running. No driver call. | The hardware path works. |
+| 0.1.61 | Dock | Full speed forced. The same result. | Speed is not the cause. |
+| 0.1.62 | Dock | The probe stopped after the first tone. | A read in the 0x90000000 window stops the real iPod (the emulator allows it). Fixed in 0.1.63. |
+| 0.1.63 | Dock | The first qTD to the dock completed (token 0x8D00, no error), but no next request. | The "transfer done" interrupt did not reach the host stack. |
+| 0.1.64 | Dock | Device handler removed. GET_DESCRIPTOR 8, SET_ADDRESS, GET_DESCRIPTOR 18: the dock's hub descriptor. Then a stop. | The interrupt fix works. |
+| 0.1.66 | Dock | All three stages of the 18-byte read completed correctly. Then the hub driver went back to its port poll. | The stop is a decision in the software, not a transfer error. |
+| 0.1.67 | Dock | "Add device" for the dock's hub 2109:2817 → hub driver validate and initialize. Configuration, SET_CONFIGURATION 1, hub descriptor, hub status, periodic schedule on. Then the log limits were reached. One long low tone heard (the second came about 1 s later). | The hub policy was the cause. The hub driver runs on the dock's hub. |
+| 0.1.68 | Dock, card reader | The dock's hub configured: hub descriptor, GET_STATUS, PORT_POWER on five ports, interrupt endpoint 1 (interval 255) and the status-change transfer. Then no record. The second log write is missing. | The hub works up to the port power. The port change does not arrive or is not processed. |
+| 0.1.69 | — | (to test) Interrupt completions logged; clean records. | — |
+
+## The causes found
+
+1. **No host mode without a Camera Connector.** The stock firmware starts the host stack only after iAP lingo 6 with a Camera Connector (0x1fb50c). The probe calls the host start 0x2860e8 directly.
+2. **The USB interrupt belongs to the device driver.** The device driver installs its handler 0xcd8e0 for source 20 after each start. The UIM install of 0xffd1c (0x9741c) then has no effect. The probe removes the device handler (0x127888, 0x1277d0), installs 0xffd1c (0x18a83c) and enables the source.
+3. **External hubs are refused** (fixed in the probe; the dock's hub then works). In "add device" 0xd377c, a device of class 9 is accepted only if `g[0] > 1`, or if `g[1] < 3` and (`g[0] != 0` or `g[1] == 0`). g is the USB global block (RAM 0x1083e0f8); g[1] counts the loaded hubs (the root hub makes it 1). g[0] is 0 from the start, and no code sets it. The refusal reports error 0x673 or 0x67d (0xd9cec), and the photo import screen says "unsupported device". The probe sets g[0] = 2.
+4. **The emulator allows reads that the real iPod does not.** A read in the 0x90000000 window (the uncached view of the RAM, RAM | 0x80000000) stopped the probe on the real iPod. Read RAM only through 0x10000000–0x14000000.
+
+## Key addresses (osos 1.3)
+
+| Address | Function |
+|---|---|
+| 0x2860e8 | Host start (UIM init, tasks) |
+| 0x97300 | UIM init; 0x97364 chip check (full speed if 0); 0x9741c interrupt install |
+| 0x6c8820 | UIM dispatch table; isochronous entries 0x6c885c/0x6c8860 are stubs |
+| 0x6bc3dc | Class driver registry (44-byte entries; count at g + 0x1c) |
+| 0xd377c | "Add device": the driver selection for a new device |
+| 0xcb118 | Completion callback of a control transfer stage |
+| 0xe7980 | Root port status |
+| 0x18a83c, 0x127888, 0x1277d0 | Interrupt: install, disable, remove |
+| 0xcd8e0, 0xffd1c | Interrupt handlers: device driver, host (UIM) |
+| 0x1083e0f8 | USB global block g (byte 0: hub policy, byte 1: hub count) |
+
+## The probe log
+
+Records in `iPod_Control/iTunes/iPodFirmUSBLog` (127 records, 8 KB). iPodFirm USB-C Test shows it ("Show USB Log", "Copy Log"):
+
+- the class driver calls (validate, initialize device, initialize interface),
+- "add device" with the device descriptor,
+- the UIM calls (create control endpoint, control transfer with the setup packet),
+- the completions of the device transfers,
+- the root port status changes,
+- the controller registers and the transfer queue,
+- the interrupt install steps.
+
+## Next steps
+
+1. Test version 0.1.69 with the dock and the card reader. Look for an "interrupt completion" from the dock's hub (address 29 or similar), then GET_STATUS of a port, a port reset, and "add device" for the card reader. Wait for the second double beep.
+2. Test the Apple USB-C headphone adapter through the dock. Expected: "add device" with an audio class, then error 0x68c (no driver).
+3. Write the isochronous UIM entries and a USB audio class 1 driver (USB-AUDIO-OUT.md, Stages 2 and 3).

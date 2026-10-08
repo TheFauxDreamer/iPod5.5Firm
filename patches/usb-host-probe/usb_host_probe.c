@@ -68,14 +68,18 @@
 #define BEEP_MS    400                                  /* from one countdown beep to the next */
 #define SILENCE_MS 2000                                 /* after the countdown */
 #define LOG_WAIT_MS 10000                               /* from the host start to the first log write */
-#define LOG_MAX    127
-#define LOG_BYTES  (8 + LOG_MAX * 64)                   /* 8136: iPodFirm makes an 8192-byte file */
+#define LOG_WAIT2_MS 20000                              /* from the first to the second log write */
+#define LOG_MAX    511
+#define LOG_BYTES  (8 + LOG_MAX * 64)                   /* 32712: iPodFirm makes a 32768-byte file */
 #define TAG_HUB_INIT_DEVICE      (0 * 4 + 2)
 #define TAG_STORAGE_INIT_IFACE   (3 * 4 + 3)
 #define TAG_PORT_STATUS          (7 * 4 + 2)
-#define PORT_LOGS  24                                   /* the maximum of port records */
-#define UIM_LOGS   30                                   /* the maximum of UIM records */
-#define COMPLETION_LOGS 40                              /* the maximum of completion records */
+#define PORT_LOGS  40                                   /* the maximum of port records */
+#define UIM_LOGS   200                                  /* the maximum of UIM records */
+#define COMPLETION_LOGS 200                             /* the maximum of completion records */
+#define TAG_INTERRUPT_ENDPOINT   (8 * 4 + 1)
+#define TAG_INTERRUPT_TRANSFER   (8 * 4 + 2)
+#define TAG_INTERRUPT_COMPLETION (8 * 4 + 3)
 #define TAG_REGISTERS            (7 * 4 + 3)
 #define TAG_QUEUE                (7 * 4 + 1)
 #define TAG_ADD_DEVICE           (7 * 4 + 0)
@@ -117,6 +121,7 @@ void cache_flush(void *cache);                         /* 0x19ff0c: writes the d
 void sign_hub(void);
 void sign_storage(void);
 void log_call(int tag, const unsigned *regs);
+void *fw_new(unsigned size);                           /* 0x25a974: the allocator (operator new) */
 
 struct record {
     unsigned char magic, tag;
@@ -128,13 +133,16 @@ struct record {
 
 static int checked, started;
 static unsigned root_hub_address = 0xffffffff;
-static unsigned completion_logs;
+static unsigned completion_logs, interrupt_logs;
 static unsigned device_requests[4], next_request;       /* the request blocks of logged device transfers */
 static unsigned log_saved, port_logs, uim_logs, last_status = 0xffffffff, last_portsc = 0xffffffff;
-static struct {
+/* The log buffer (32 KB) comes from the allocator when the probe starts, not from the image:
+ * with a large theme, the space after osos is only approximately 10 KB. */
+struct usb_log {
     unsigned magic, count;
     struct record r[LOG_MAX];
-} usb_log;
+};
+static struct usb_log *L;
 
 static void make_path(unsigned *path, const char *name)
 {
@@ -196,8 +204,10 @@ static int write_log(void)
 {
     int err;
     log_registers();
-    log_saved = usb_log.count;
-    err = write_file(LOG_PATH, &usb_log, LOG_BYTES);
+    if (!L)
+        return -1;
+    log_saved = L->count;
+    err = write_file(LOG_PATH, L, LOG_BYTES);
     if (err == 0)
         cache_flush(cache_object());
     return err;
@@ -239,6 +249,11 @@ void log_call(int tag, const unsigned *regs)
         if (!known || completion_logs++ >= COMPLETION_LOGS)
             return;
     }
+    if (tag == TAG_INTERRUPT_COMPLETION && interrupt_logs++ >= 100)
+        return;
+    if ((tag == TAG_INTERRUPT_ENDPOINT || tag == TAG_INTERRUPT_TRANSFER)
+        && (regs[0] == root_hub_address || uim_logs++ >= UIM_LOGS))
+        return;
     if (tag == TAG_CONTROL_TRANSFER) {
         unsigned request = regs[0] & ~1u, i, known = 0;
         for (i = 0; i < 4; i++)
@@ -249,16 +264,21 @@ void log_call(int tag, const unsigned *regs)
             next_request = (next_request + 1) & 3;
         }
     }
-    if (usb_log.count < LOG_MAX) {
-        struct record *r = &usb_log.r[usb_log.count];
+    if (L && L->count < LOG_MAX) {
+        struct record *r = &L->r[L->count];
         int i;
+        for (i = 0; i < (int)(sizeof *r / 4); i++)      /* the allocator does not clear the buffer; */
+            ((unsigned *)r)[i] = 0;                     /* no firmware call: this can run in an interrupt */
         r->magic = 0xa5;
         r->tag = tag;
         for (i = 0; i < 4; i++)
             r->regs[i] = regs[i];
         if (tag == TAG_CONTROL_TRANSFER)                /* the wrapper saved r0-r3, lr; then the stack arguments */
             r->regs[3] = regs[5];
-        if (tag == TAG_ADD_DEVICE) {                    /* the device descriptor is the 4th argument */
+        if (tag == TAG_INTERRUPT_COMPLETION) {          /* the request block, as for a control completion */
+            copy_from(r->at_r1, regs[0]);
+            copy_from(r->at_r2, regs[0] + 0x20);
+        } else if (tag == TAG_ADD_DEVICE) {                    /* the device descriptor is the 4th argument */
             copy_from(r->at_r1, regs[3]);
         } else if (tag == TAG_COMPLETION) {             /* the request block: +10 address, +0x2c flags */
             copy_from(r->at_r1, regs[0] & ~1u);
@@ -267,7 +287,7 @@ void log_call(int tag, const unsigned *regs)
             copy_from(r->at_r1, regs[1]);
             copy_from(r->at_r2, regs[2]);
         }
-        usb_log.count++;
+        L->count++;
     }
     if (tag == TAG_HUB_INIT_DEVICE)
         sign_hub();
@@ -352,7 +372,11 @@ int hook_event(void *ui, void *event)
                 task_sleep(BEEP_MS);
             }
             task_sleep(SILENCE_MS);
-            usb_log.magic = 0x31304c55;                 /* "UL01" */
+            L = fw_new(sizeof *L);
+            if (L) {
+                L->magic = 0x31304c55;                  /* "UL01" */
+                L->count = 0;
+            }
             started = 1;
             /* Allow external hubs. "Add device" 0xd377c refuses a hub (class 9) after the root hub,
              * unless the byte at +0 of the global block is not 0 (error 0x673/0x67d, the photo
@@ -360,6 +384,7 @@ int hook_event(void *ui, void *event)
              * the test "1 < byte" is true for each hub. */
             USB_GLOBALS[0] = 2;
             host_start(0, 0, 0, 0);
+            USB_GLOBALS[0] = 2;                         /* again: the host start clears parts of the block */
             log_registers();
             /* The USB tasks find the devices during this wait. Then write the log here, because a
              * later button event possibly does not reach this hook: 0x1d81cc gives each event to
@@ -371,8 +396,15 @@ int hook_event(void *ui, void *event)
                 task_sleep(BEEP_MS);
                 tone(LOW, 60000);
             }
+            /* A second write: the ports of a hub and the devices behind it take more time. */
+            task_sleep(LOG_WAIT2_MS);
+            if (write_log() == 0) {
+                tone(LOW, 60000);
+                task_sleep(BEEP_MS);
+                tone(LOW, 60000);
+            }
         }
-    } else if (started && usb_log.count != log_saved) {
+    } else if (started && L && L->count != log_saved) {
         write_log();
     }
     return r;
@@ -423,7 +455,23 @@ __attribute__((naked)) void hook_completion(void)
  * (device, parent hub, port, device descriptor, power on the stack). It selects and loads the
  * class driver. Log each device that the stack offers to the drivers. */
 WRAP(hook_add_device, 28, expert_add_device)
+
+/* The completion callback 0xcba54 of the interrupt transfers (request, status, bytes), for example
+ * the status-change endpoint of a hub. A "b" hook replaces "stmdb sp!, {r4-r8, lr}". */
+__attribute__((naked)) void hook_interrupt_completion(void)
+{
+    __asm__ volatile(
+        "push {r0-r3, lr}\n"
+        "mov  r1, sp\n"
+        "mov  r0, #35\n"
+        "bl   log_call\n"
+        "pop  {r0-r3, lr}\n"
+        "stmdb sp!, {r4-r8, lr}\n"
+        "b    interrupt_completion_continue\n");
+}
 WRAP(hook_uim_control_endpoint, 25, uim_control_endpoint)
+WRAP(hook_uim_interrupt_endpoint, 33, uim_interrupt_endpoint)
+WRAP(hook_uim_interrupt_transfer, 34, uim_interrupt_transfer)
 WRAP(hook_uim_control_transfer, 26, uim_control_transfer)
 WRAP(hook_hub_validate, 1, hub_validate)
 WRAP(hook_hub_init, 2, hub_init_device)

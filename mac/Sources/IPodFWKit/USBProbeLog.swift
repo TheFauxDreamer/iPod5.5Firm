@@ -9,8 +9,9 @@ import Foundation
 /// Refer to patches/usb-host-probe/usb_host_probe.c.
 public enum USBProbeLog {
     /// The size of the file that iPodFirm makes when it sets the trigger. The patch can only write to an existing file.
-    public static let fileSize = 8192
+    public static let fileSize = 32768
     static let drivers = [0: "Hub", 1: "Composite device", 3: "Storage", 4: "ICA camera (Canon)", 5: "PTP camera"]
+    static let addDeviceTag = 7 * 4, interruptEndpointTag = 8 * 4 + 1, interruptTransferTag = 8 * 4 + 2, interruptCompletionTag = 8 * 4 + 3
     static let queueTag = 7 * 4 + 1, endpointTag = 6 * 4 + 1, transferTag = 6 * 4 + 2, irqTag = 6 * 4 + 3, completionTag = 6 * 4
     static let entries = [1: "validate", 2: "initialize device", 3: "initialize interface"]
 
@@ -47,6 +48,28 @@ public enum USBProbeLog {
             let atR1 = Array(data[o + 20..<o + 40]), atR2 = Array(data[o + 40..<o + 60])
             if tag == queueTag {
                 out.append(Entry(driver: "Queue", call: queueText(regs, atR1, atR2), device: nil, interface: nil, registers: regs))
+                continue
+            }
+            if tag == interruptCompletionTag {
+                let status = Int32(bitPattern: regs[1])
+                out.append(Entry(driver: "UIM", call: String(format: "interrupt completion — request 0x%08X, status %@, %d bytes, request bytes %@",
+                                                              regs[0], status == 0 ? "correct" : String(format: "error %d (0x%08X)", status, regs[1]),
+                                                              Int32(bitPattern: regs[2]), hex(atR1, 20)),
+                                 device: nil, interface: nil, registers: regs))
+                continue
+            }
+            if tag == interruptEndpointTag {
+                out.append(Entry(driver: "UIM", call: String(format: "create interrupt endpoint — address %d, endpoint %d, r2 %d, r3 %d",
+                                                              regs[0], regs[1], regs[2], regs[3]), device: nil, interface: nil, registers: regs))
+                continue
+            }
+            if tag == interruptTransferTag {
+                out.append(Entry(driver: "UIM", call: String(format: "interrupt transfer — address %d, endpoint %d, r2 0x%X, r3 0x%X",
+                                                              regs[0], regs[1], regs[2], regs[3]), device: nil, interface: nil, registers: regs))
+                continue
+            }
+            if tag == addDeviceTag {
+                out.append(Entry(driver: "Expert", call: "add device (driver selection), port \(regs[2])", device: deviceText(atR1), interface: nil, registers: regs))
                 continue
             }
             if tag == completionTag {
