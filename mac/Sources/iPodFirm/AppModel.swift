@@ -74,6 +74,8 @@ final class AppModel: ObservableObject {
     /// Increases when the app writes a theme file (an edit of a dark picture).
     @Published var themeRevision = 0
     @Published var thumbnailStatus: String?
+    /// The result of the last write of the Cover Flow file (cover-flow patch).
+    @Published var coverFlowStatus: String?
     /// The decoded USB log of the probe (nil: not read).
     @Published var usbProbeLog: [USBProbeLog.Entry]?
     /// The playlists of the connected iPod and their thumbnails (album-art patch).
@@ -645,6 +647,19 @@ final class AppModel: ObservableObject {
         } catch { fail("Cannot write the thumbnails", error) }
     }
 
+    /// iPod_Control/iTunes/iPodFirmCoverFlow on the mounted iPod, from its own library.
+    func writeCoverFlow() async {
+        guard currentIPod != nil else { return }
+        guard let volume = ipodMusicVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder, then try again.")
+            return
+        }
+        do {
+            let r = try await work("Making the Cover Flow covers from the music on the iPod…") { try MusicImport.writeCoverFlow(volume: volume) }
+            coverFlowStatus = "\(r.covers) of \(r.albums) albums have a cover (\(Date().formatted(date: .abbreviated, time: .shortened)))."
+        } catch { fail("Cannot write the Cover Flow covers", error) }
+    }
+
     /// The log of the usb-host-probe patch. The action in its patch.json makes it empty and writes the
     /// trigger file; the patch writes the log on the iPod.
     static let usbProbeLogFile = "iPod_Control/iTunes/iPodFirmUSBLog"
@@ -789,6 +804,7 @@ final class AppModel: ObservableObject {
         do {
             try await work("Ejecting \(ipod.volumeName ?? ipod.mediaName)…") { try Device.eject(ipod) }
             thumbnailStatus = nil
+            coverFlowStatus = nil
             playlistArt = []
             playlistArtChanged = false
             await refreshIPods()

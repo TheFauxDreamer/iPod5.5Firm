@@ -125,6 +125,33 @@ public enum MusicImport {
         return (albums.count, covers.count, ITunesDB.readPlaylists(db).count, art.count)
     }
 
+    /// Write iPod_Control/iTunes/iPodFirmCoverFlow on a mounted iPod, from its own database and
+    /// music files. The albums are in the order of the Albums list of the iPod.
+    public static func writeCoverFlow(volume: URL, progress: ((Int, Int) -> Void)? = nil) throws -> (albums: Int, covers: Int) {
+        let itunes = volume.appendingPathComponent("iPod_Control/iTunes")
+        let db = [UInt8](try Data(contentsOf: itunes.appendingPathComponent("iTunesDB")))
+        let tracks = ITunesDB.readTrackInfo(db)
+        guard !tracks.isEmpty else { throw FirmwareError("The iPod music database has no tracks, or iPodFirm cannot read it.") }
+        let order = CoverFlowFile.albumOrder(tracks: tracks, albumIndex: ITunesDB.readSortIndex(db, sortType: ITunesDB.albumSortType))
+        var byAlbum = [String: [ITunesDB.TrackInfo]]()
+        for t in tracks where !t.album.isEmpty { byAlbum[t.album, default: []].append(t) }
+        var albums: [CoverFlowFile.Album] = []
+        var covers = 0
+        for (i, name) in order.enumerated() {
+            progress?(i, order.count)
+            var c: Data?
+            let list = byAlbum[name, default: []]
+            for t in list.prefix(3) {
+                let rel = t.path.split(separator: ":").joined(separator: "/")
+                if let data = cover(volume.appendingPathComponent(rel)), ArtworkDB.image(data) != nil { c = data; break }
+            }
+            if c != nil { covers += 1 }
+            albums.append(CoverFlowFile.Album(name: name, artist: CoverFlowFile.artist(of: list), cover: c))
+        }
+        try Data(CoverFlowFile.build(albums)).write(to: itunes.appendingPathComponent(CoverFlowFile.fileName), options: .atomic)
+        return (order.count, covers)
+    }
+
     // MARK: playlist artwork
 
     /// A playlist on the iPod and the image that its row shows.

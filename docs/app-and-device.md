@@ -218,6 +218,7 @@ The app writes these files on the mounted iPod volume. A patch can also write fi
 | Path | Writer | Reader |
 |---|---|---|
 | `iPod_Control/iTunes/iPodFirmAlbumArt` | "Write Thumbnails to iPod" | `album-art` patch |
+| `iPod_Control/iTunes/iPodFirmCoverFlow` | "Write Cover Flow Covers to iPod" | `cover-flow` patch |
 | `iPod_Control/iTunes/iPodFirmPlaylistArt/*.png` | "Choose Image…" in Playlist Artwork | iPodFirm (the next thumbnail file) |
 | `iPod_Control/iTunes/iPodFirmDarkMode` | The `dark-mode` patch on the iPod | `dark-mode` patch |
 | `iPod_Control/iTunes/iPodFirmUSBProbe`, `iPod_Control/iTunes/iPodFirmUSBLog` | "Start the Probe at the Next Restart" (`ui.actions` of `usb-host-probe`) | `usb-host-probe` patch, "Show USB Log" |

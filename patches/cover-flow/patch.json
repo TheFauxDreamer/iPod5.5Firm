@@ -1,0 +1,50 @@
+{
+  "name": "cover-flow",
+  "title": "Cover Flow",
+  "summary": "Browse the album covers in 3D, as on the iPod classic.",
+  "symbol": "square.stack.3d.forward.dottedline",
+  "category": "display",
+  "ui": {
+    "tools": [
+      "cover-flow"
+    ]
+  },
+  "version_letter": "c",
+  "version": "0.2",
+  "description": "Shows the album covers as Cover Flow. Hold the Select button in the Albums list to open it.",
+  "details": ["Hold the Select button in the Albums list for half a second. Cover Flow opens at the selected album.", "Turn the click wheel to move through the covers. The album name and the artist show below the covers.", "Push Select to open the album at the centre.", "Push Menu to go back to the Albums list.", "A short push of Select in the list opens the album as usual.", "The background is white with the light theme and black with Dark Mode."],
+  "requires": ["A cover file on the iPod. Use the Cover Flow section below to write it after you flash the firmware."],
+  "notes": ["This is a test version. ", "In the Albums list, a long push of Select does not add the album to the On-The-Go playlist.", "iPodFirm writes the covers to the file iPod_Control/iTunes/iPodFirmCoverFlow on the iPod."],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "list_event": "0x23b704",
+    "ui_event": "0x1d81cc",
+    "display_damage": "0x17ef98",
+    "display_server": "0x1647c0",
+    "display_flush": "0x1650f8",
+    "display_bind": "0x164878",
+    "display_lock": "0x0c9a84",
+    "display_unlock": "0x0c9b58",
+    "view_invalidate": "0x21ac04",
+    "ui_context": "0x101800",
+    "dispatch_event": "0x13d524",
+    "ui_activity": "0x1d813c",
+    "fw_alloc": "0x25a974",
+    "fw_free": "0x25a8e4",
+    "fw_memset0": "0x07ccd0",
+    "fw_strcpy": "0x07cd6c",
+    "file_open": "0x08f38c",
+    "file_read": "0x08f464",
+    "file_seek": "0x08f5c4",
+    "file_close": "0x08f184"
+  },
+  "hooks": [
+    { "kind": "word", "at": "0x6772c0", "expect": "0x0023b704", "to": "hook_list_event" },
+    { "kind": "word", "at": "0x6701f0", "expect": "0x001d81cc", "to": "hook_ui_event" },
+    { "kind": "word", "at": "0x17ef8c", "expect": "0x0017ef98", "to": "hook_display_damage" }
+  ]
+}

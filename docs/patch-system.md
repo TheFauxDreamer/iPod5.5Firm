@@ -119,7 +119,7 @@ The `ui` object gives a patch controls in the Patches pane with no change to the
 | `toggles` | Switches. Each switch has `title`, `path`, `on` and `off`. The switch reads the file on the iPod and writes `on` or `off`. |
 | `steps_title`, `steps` | A numbered list in a disclosure group. The default title is "Procedure". |
 | `readme` | The name of a Markdown file in the patch folder. The pane shows it in the section "Read Me". |
-| `tools` | Built-in Swift tools, by id: `album-thumbnails` (the thumbnails and the playlist artwork) and `usb-log` (the USB log). `PatchSpec.knownTools` lists them. |
+| `tools` | Built-in Swift tools, by id: `album-thumbnails` (the thumbnails and the playlist artwork), `cover-flow` (the Cover Flow cover file) and `usb-log` (the USB log). `PatchSpec.knownTools` lists them. |
 
 Each `path` must start with `iPod_Control/` and must not contain `..`. A write can have a maximum of 1 MB (`PatchUI.maxWrite`).
 
@@ -238,6 +238,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `row-marker` | 0x7358d0 | The same area as `album-art`. | Test patch. You cannot use it with `album-art`. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
 | `usb-host-probe` | `extended` | After all other data (8740 bytes; the 32 KB log buffer comes from the allocator) | Extended patch. Test patch. |
+| `cover-flow` | `extended` | After all other data (7696 bytes; approximately 520 KB for the screen copy and the covers come from the allocator while Cover Flow shows) | Extended patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
 

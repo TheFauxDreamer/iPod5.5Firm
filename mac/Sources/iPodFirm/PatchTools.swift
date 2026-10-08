@@ -65,6 +65,7 @@ struct PatchTool: View {
     var body: some View {
         switch id {
         case "album-thumbnails": AlbumArtSections()
+        case "cover-flow": CoverFlowSection()
         case "usb-log": USBLogSection()
         default: EmptyView()
         }
@@ -105,6 +106,28 @@ struct USBLogSection: View {
             }
         } header: {
             Text("USB Log")
+        }
+    }
+}
+
+// MARK: cover-flow
+
+/// The cover file of the cover-flow patch.
+struct CoverFlowSection: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        Section {
+            Text("The iPod also needs a cover file made from its own music. Write it after you flash this patch. Write it again after each sync that adds albums.")
+                .fixedSize(horizontal: false, vertical: true)
+            IPodActionsRow {
+                Button("Write Cover Flow Covers to iPod") { Task { await model.writeCoverFlow() } }
+            }
+            if let s = model.coverFlowStatus { Label(s, systemImage: "checkmark.circle").font(.callout) }
+        } header: {
+            Text("Cover Flow")
+        } footer: {
+            FormFooter("You do not have to restart the iPod. Cover Flow reads the file each time it opens. An album without a cover shows a grey square with a music note.")
         }
     }
 }
