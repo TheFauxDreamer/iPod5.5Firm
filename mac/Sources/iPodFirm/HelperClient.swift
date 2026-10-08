@@ -23,7 +23,7 @@ enum HelperClient {
         ctx.localizedFallbackTitle = "Use Password"
         var error: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-            throw FirmwareError("This Mac can't authenticate you right now: \(error?.localizedDescription ?? "unknown error").")
+            throw FirmwareError("This Mac cannot do the authentication now: \(error?.localizedDescription ?? "unknown error").")
         }
         do {
             _ = try await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
@@ -50,7 +50,7 @@ enum HelperClient {
         return try await withCheckedThrowingContinuation { cont in
             let once = Once()
             let proxy = conn.remoteObjectProxyWithErrorHandler { error in
-                if once.take() { cont.resume(throwing: FirmwareError("The iPodFirm helper didn't respond: \(error.localizedDescription)")) }
+                if once.take() { cont.resume(throwing: FirmwareError("The iPodFirm helper did not respond: \(error.localizedDescription)")) }
             } as! HelperXPCProtocol
             body(proxy) { data in if once.take() { cont.resume(returning: data) } }
         }

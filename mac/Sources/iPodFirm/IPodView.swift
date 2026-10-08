@@ -9,16 +9,12 @@ struct IPodView: View {
     var body: some View {
         Form {
             Section {
-                HelperRow()
-                FullDiskAccessRow()
-                if model.helperStatus == .enabled {
-                    Toggle("Ask for Touch ID before flashing or restoring", isOn: $model.requireTouchID)
-                }
+                PermissionSummaryRow()
             } header: { Text("Permission") }
 
             Section {
                 if model.ipods.isEmpty {
-                    Label("No iPod connected. Plug it in (or put it in disk mode: hold Menu+Select to reset, then Select+Play).",
+                    Label("No iPod is connected. Connect the iPod. If the Mac does not find it, put it in disk mode: hold Menu and Select to reset it, then hold Select and Play.",
                           systemImage: "cable.connector.slash").foregroundStyle(.secondary)
                 } else {
                     Picker("iPod", selection: $model.selectedIPod) {
@@ -48,7 +44,7 @@ struct IPodView: View {
 
             Section {
                 if model.backups.isEmpty {
-                    Text("No backups yet. One is taken automatically before every flash, or use Back Up Now.")
+                    Text("There are no backups. iPodFirm makes a backup before each flash. You can also click Back Up Now.")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(model.backups) { b in BackupRow(backup: b) }
@@ -62,8 +58,8 @@ struct IPodView: View {
             } header: { Text("Backups") }
 
             Section {
-                Label("CAUTION: Charge the iPod before a recovery. An iPod with an empty battery does not show disk mode.",
-                      systemImage: "battery.25percent").foregroundStyle(.orange)
+                Label("Charge the iPod before a recovery. An iPod with an empty battery does not show disk mode.",
+                      systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 6) {
                     Step(n: 1, text: "Push and hold Menu and Select until the iPod restarts.")
                     Step(n: 2, text: "When the Apple logo shows, push and hold Select and Play until disk mode shows.")
@@ -82,11 +78,11 @@ struct IPodView: View {
             } header: { Text("Recovery") }
 
             Section {
-                SafetyRow(symbol: "externaldrive.badge.timemachine", text: "Every flash or restore first backs up the iPod's whole firmware partition. The very first backup is also kept as a permanent “Original”. Backups are read back to check them, and never overwritten.")
-                SafetyRow(symbol: "lock.shield", text: "The boot-flash updater (aupd), the only part that could brick the iPod, is never modified. Flashing is refused if it would change, or if any write would touch it.")
-                SafetyRow(symbol: "checklist", text: "The new firmware must pass its checksums and match the iPod's partition layout. You see a preview of exactly what will be written before anything happens.")
-                SafetyRow(symbol: "checkmark.circle", text: "Only changed blocks are written, and each is read back and compared.")
-                SafetyRow(symbol: "lifepreserver", text: "If the iPod won't start: hold Menu+Select to reset, then Select+Play for disk mode, and restore a backup here. Restoring in Finder also returns it to stock.")
+                SafetyRow(symbol: "externaldrive.badge.timemachine", text: "Before each flash or restore, iPodFirm makes a backup of the full firmware partition of the iPod. iPodFirm keeps the first backup as a permanent “Original”. iPodFirm reads each backup again to check it, and never overwrites a backup.")
+                SafetyRow(symbol: "lock.shield", text: "iPodFirm never changes the boot-flash updater (aupd). Only a change to aupd can make the iPod unusable. iPodFirm stops a flash that changes aupd or writes to aupd.")
+                SafetyRow(symbol: "checklist", text: "The new firmware must have correct checksums and agree with the partition layout of the iPod. Before a write, iPodFirm shows each part that it will write.")
+                SafetyRow(symbol: "checkmark.circle", text: "iPodFirm writes only the changed blocks. It reads each block again and compares it.")
+                SafetyRow(symbol: "lifepreserver", text: "If the iPod does not start, hold Menu and Select to reset it. Then hold Select and Play for disk mode, and restore a backup in iPodFirm. A restore in Finder also puts the Apple firmware on the iPod.")
             } header: { Text("Protections") }
         }
         .formStyle(.grouped)
@@ -112,7 +108,7 @@ struct BackupRow: View {
                 HStack(spacing: 6) {
                     Text(backup.created, format: .dateTime.year().month().day().hour().minute()).bold()
                     if backup.isOriginal {
-                        Text("ORIGINAL").font(.caption2.bold()).padding(.horizontal, 5).padding(.vertical, 1)
+                        Text("Original").font(.caption2.bold()).padding(.horizontal, 5).padding(.vertical, 1)
                             .background(.green.opacity(0.2), in: Capsule())
                     }
                 }
@@ -126,9 +122,10 @@ struct BackupRow: View {
                 .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported || backup.model == Backups.damagedModel)
                 .help(backup.model == Backups.damagedModel ? "This backup is a copy of a damaged firmware. You cannot restore it." : "")
             Button { NSWorkspace.shared.activateFileViewerSelecting([model.backupURL(backup)]) } label: {
-                Image(systemName: "magnifyingglass")
+                Image(systemName: "folder")
             }
             .help("Show in Finder")
+            .accessibilityLabel("Show in Finder")
         }
     }
 }
@@ -147,7 +144,7 @@ struct FlashConfirmSheet: View {
                 .font(.title3.bold())
             Text("Target: \(plan.ipod.volumeName ?? plan.ipod.mediaName) (/dev/\(plan.ipod.disk))")
             if plan.reason == "rescue" {
-                Label("WARNING: The firmware on the iPod is damaged. iPodFirm cannot compare the backup with it. iPodFirm compares the backup with the original backup, then writes the full backup.",
+                Label("The firmware on the iPod is damaged. iPodFirm cannot compare the backup with it. iPodFirm compares the backup with the original backup, then writes the full backup.",
                       systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
@@ -161,14 +158,14 @@ struct FlashConfirmSheet: View {
                 }
             }
             VStack(alignment: .leading, spacing: 6) {
-                Label("A backup of the iPod's current firmware is taken first.", systemImage: "externaldrive.badge.timemachine")
-                Label("\(ByteCountFormatter.string(fromByteCount: Int64(total), countStyle: .file)) will be written in \(ranges.count) place(s), then read back and verified.", systemImage: "square.and.pencil")
-                Label("The boot-flash updater (aupd) is not touched.", systemImage: "lock.shield")
+                Label("First, iPodFirm makes a backup of the current firmware on the iPod.", systemImage: "externaldrive.badge.timemachine")
+                Label("iPodFirm writes \(ByteCountFormatter.string(fromByteCount: Int64(total), countStyle: .file)) in \(ranges.count) place(s). Then it reads the data again and checks it.", systemImage: "square.and.pencil")
+                Label("iPodFirm does not change the boot-flash updater (aupd).", systemImage: "lock.shield")
             }
             .foregroundStyle(.secondary)
             Text(model.helperStatus == .enabled
-                 ? "Keep the iPod connected until this finishes.\(model.requireTouchID ? " You'll confirm with Touch ID." : "")"
-                 : "Keep the iPod connected until this finishes. macOS will ask for your administrator password.")
+                 ? "Keep the iPod connected until the operation is complete.\(model.requireTouchID ? " Touch ID asks for a confirmation." : "")"
+                 : "Keep the iPod connected until the operation is complete. macOS asks for your administrator password.")
                 .font(.callout)
             HStack {
                 Spacer()
@@ -190,7 +187,8 @@ struct FinderRestoreSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Label("Restore the Apple Firmware with Finder", systemImage: "lifepreserver").font(.title3.bold())
-            Text("CAUTION: Finder erases all the music and data on the iPod. Your backups in iPodFirm stay on the Mac.")
+            Label("Finder erases all the music and data on the iPod. Your backups in iPodFirm stay on the Mac.",
+                  systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 6) {
@@ -215,17 +213,40 @@ struct FinderRestoreSheet: View {
 
 struct FullDiskAccessRow: View {
     @EnvironmentObject var model: AppModel
+    var showHelp: () -> Void
     var body: some View {
         HStack {
             if model.hasFullDiskAccess {
-                Label("Full Disk Access granted: iPodFirm can read and write the iPod's firmware partition.", systemImage: "checkmark.shield.fill")
+                Label("Full Disk Access is on. iPodFirm can read and write the firmware partition of the iPod.", systemImage: "checkmark.shield.fill")
                     .foregroundStyle(.green)
             } else {
-                Label("Full Disk Access is needed for backups and flashing.", systemImage: "exclamationmark.shield.fill")
+                Label("Full Disk Access is necessary for backups and flashes.", systemImage: "exclamationmark.shield.fill")
                     .foregroundStyle(.orange)
                 Spacer()
+                Button("How to Allow…") { showHelp() }
+            }
+        }
+    }
+}
+
+/// The permission status in the iPod pane. The Settings window has the controls.
+struct PermissionSummaryRow: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        HStack {
+            if model.hasFullDiskAccess {
+                Label(model.helperStatus == .enabled ? "Full Disk Access and Touch ID are on." : "Full Disk Access is on.",
+                      systemImage: "checkmark.shield.fill")
+                    .foregroundStyle(.green)
+            } else {
+                Label("Full Disk Access is necessary for backups and flashes.", systemImage: "exclamationmark.shield.fill")
+                    .foregroundStyle(.orange)
+            }
+            Spacer()
+            if !model.hasFullDiskAccess {
                 Button("How to Allow…") { model.showFullDiskAccessHelp = true }
             }
+            SettingsLink { Text("Settings…") }
         }
     }
 }
@@ -236,13 +257,13 @@ struct FullDiskAccessSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Label("Allow Full Disk Access", systemImage: "lock.shield").font(.title3.bold())
-            Text("macOS blocks every app, even with your administrator password, from reading a removable disk directly unless the app has Full Disk Access. iPodFirm needs it to back up and flash the iPod's hidden firmware partition. It only ever reads or writes that partition.")
+            Text("macOS does not let an app read a removable disk directly without Full Disk Access. Your administrator password does not change this. iPodFirm needs Full Disk Access to back up and flash the hidden firmware partition of the iPod. It reads and writes only that partition.")
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 6) {
                 Step(n: 1, text: "Click Open Privacy Settings.")
-                Step(n: 2, text: "Turn on iPodFirm in the list. If it isn't listed, click +, choose Applications → iPodFirm.")
-                Step(n: 3, text: "Quit and reopen iPodFirm when macOS asks, then try again.")
-                Step(n: 4, text: "If the Touch ID helper is on and this still shows orange, also add the helper: click +, press ⌘⇧G and paste its path (Copy Helper Path below).")
+                Step(n: 2, text: "Turn on iPodFirm in the list. If the list does not show iPodFirm, click + and select Applications → iPodFirm.")
+                Step(n: 3, text: "When macOS asks, quit iPodFirm and open it again. Then do the operation again.")
+                Step(n: 4, text: "If the Touch ID helper is on and the status stays orange, add the helper too. Click +, press ⌘⇧G and paste the path from Copy Helper Path.")
             }
             HStack {
                 Button("Copy Helper Path") {
@@ -270,7 +291,7 @@ struct HelperRow: View {
         HStack {
             switch model.helperStatus {
             case .enabled:
-                Label("Touch ID helper is on: no password prompts.", systemImage: "touchid").foregroundStyle(.green)
+                Label("The Touch ID helper is on. macOS does not ask for your password.", systemImage: "touchid").foregroundStyle(.green)
                 Spacer()
                 Button("Turn Off") { model.removeHelper() }
             case .requiresApproval:
@@ -281,8 +302,8 @@ struct HelperRow: View {
                 Button("Check Again") { model.recheckFullDiskAccess() }
             default:
                 VStack(alignment: .leading, spacing: 2) {
-                    Label("Use Touch ID instead of typing your password.", systemImage: "touchid")
-                    Text("Installs a small helper that only iPodFirm can use. You approve it once.")
+                    Label("Use Touch ID, not your password.", systemImage: "touchid")
+                    Text("iPodFirm installs a small helper that only iPodFirm can use. You approve it one time.")
                         .font(.caption).foregroundStyle(.secondary)
                     if let err = model.helperSetupError { Text(err).font(.caption).foregroundStyle(.red) }
                 }

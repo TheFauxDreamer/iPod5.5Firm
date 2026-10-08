@@ -60,6 +60,8 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(versionLettersOn, forKey: "versionLettersOn") }
     }
     @Published var themeReport: ImportedTheme?
+    /// The selected row in the Patches pane: "appearance", "version" or the name of a patch.
+    @Published var patchSelection: String? = "appearance"
     /// The Pictures pane shows the pictures of the selected dark theme.
     @Published var picturesDark = false
     /// Increases when the app writes a theme file (an edit of a dark picture).
@@ -252,7 +254,7 @@ final class AppModel: ObservableObject {
             revision += 1
             section = .overview
         } catch {
-            fail("Couldn't open \(url.lastPathComponent)", error)
+            fail("Cannot open \(url.lastPathComponent)", error)
         }
     }
 
@@ -278,7 +280,7 @@ final class AppModel: ObservableObject {
         do {
             try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion)).write(to: url, options: .atomic)
             isDirty = false
-        } catch { fail("Couldn't save", error) }
+        } catch { fail("Cannot save", error) }
     }
 
     static let cachedAppleIPSW = supportDir.appendingPathComponent("Firmware/iPod_25.1.3.ipsw")
@@ -394,7 +396,7 @@ final class AppModel: ObservableObject {
         guard let file = selectedTheme else { return }
         var theme = file.theme
         theme.removeEdit(offset: item.picture.dataPos)
-        do { try saveTheme(theme, to: file.url) } catch { fail("Couldn't save the theme", error) }
+        do { try saveTheme(theme, to: file.url) } catch { fail("Cannot save the theme", error) }
     }
 
     private func saveTheme(_ theme: ImportedTheme, to url: URL) throws {
@@ -436,7 +438,7 @@ final class AppModel: ObservableObject {
                 themes = Self.loadThemes()
                 selectedThemeName = file.name
                 themeReport = file.theme
-            } catch { fail("Couldn't import the theme", error) }
+            } catch { fail("Cannot import the theme", error) }
         }
     }
 
@@ -508,7 +510,7 @@ final class AppModel: ObservableObject {
             let r = try await work("Making album and playlist thumbnails from the music on the iPod…") { try MusicImport.writeThumbnails(volume: volume) }
             thumbnailStatus = "\(r.covers) of \(r.albums) albums and \(r.playlistArt) of \(r.playlists) playlists have a thumbnail (\(Date().formatted(date: .abbreviated, time: .shortened)))."
             playlistArtChanged = false
-        } catch { fail("Couldn't write the thumbnails", error) }
+        } catch { fail("Cannot write the thumbnails", error) }
     }
 
     /// The trigger file of the usb-host-probe patch: '1' starts the USB host stack one time, at the
@@ -527,7 +529,7 @@ final class AppModel: ObservableObject {
             try Data("1".utf8).write(to: volume.appendingPathComponent(Self.usbProbeFile), options: .atomic)
             usbProbeLog = nil
             usbProbeStatus = "The probe starts at the first button press after the next restart of the iPod (\(Date().formatted(date: .omitted, time: .shortened)))."
-        } catch { fail("Couldn't write the probe file", error) }
+        } catch { fail("Cannot write the probe file", error) }
     }
 
     func readUSBProbeLog() {
@@ -561,7 +563,7 @@ final class AppModel: ObservableObject {
             try await work("Saving the image for “\(name)” on the iPod…") { try MusicImport.setPlaylistArt(volume: volume, name: name, image: url) }
             playlistArtChanged = true
             await loadPlaylists()
-        } catch { fail("Couldn't save the playlist image", error) }
+        } catch { fail("Cannot save the playlist image", error) }
     }
 
     func resetPlaylistArt(_ name: String) async {
@@ -570,7 +572,7 @@ final class AppModel: ObservableObject {
             try MusicImport.removePlaylistArt(volume: volume, name: name)
             playlistArtChanged = true
             await loadPlaylists()
-        } catch { fail("Couldn't remove the playlist image", error) }
+        } catch { fail("Cannot remove the playlist image", error) }
     }
 
     // MARK: pictures
@@ -581,7 +583,7 @@ final class AppModel: ObservableObject {
         p.allowedContentTypes = [.png]
         p.nameFieldStringValue = String(format: picturesDark ? "%04d_%d_dark.png" : "%04d_%d.png", item.index, item.resourceID)
         if p.runModal() == .OK, let url = p.url {
-            do { try data.write(to: url) } catch { fail("Couldn't export", error) }
+            do { try data.write(to: url) } catch { fail("Cannot export", error) }
         }
     }
 
@@ -597,7 +599,7 @@ final class AppModel: ObservableObject {
             } else if try editor.replacePicture(item, rgba: ImageCodec.rgba(img)) {
                 edited()
             }
-        } catch { fail("Couldn't replace picture", error) }
+        } catch { fail("Cannot replace the picture", error) }
     }
 
     func chooseReplacement(for item: PictureItem) {
@@ -649,7 +651,7 @@ final class AppModel: ObservableObject {
             if try editor.setStrings(blockIndex: blockIndex, values) { edited() }
             return true
         } catch {
-            fail("Couldn't apply text", error)
+            fail("Cannot apply the text", error)
             return false
         }
     }
@@ -661,7 +663,7 @@ final class AppModel: ObservableObject {
             ipods = try await Task.detached { try Device.findIPods() }.value
             if selectedIPod == nil || !ipods.contains(where: { $0.disk == selectedIPod }) { selectedIPod = ipods.first?.disk }
             unsupportedIPods.formIntersection(ipods)
-        } catch { fail("Couldn't list disks", error) }
+        } catch { fail("Cannot list disks", error) }
         refreshBackups()
     }
 
@@ -673,7 +675,7 @@ final class AppModel: ObservableObject {
             playlistArt = []
             playlistArtChanged = false
             await refreshIPods()
-        } catch { fail("Couldn't eject the iPod", error) }
+        } catch { fail("Cannot eject the iPod", error) }
     }
 
     func refreshBackups() { backups = Backups.list(in: Self.backupDir) }
@@ -714,20 +716,20 @@ final class AppModel: ObservableObject {
             } else {
                 flashPlan = FlashPlan(ipod: ipod, image: image, reason: reason, result: r)
             }
-        } catch { fail("Can't flash", error) }
+        } catch { fail("Cannot flash", error) }
     }
 
     /// Step 2: the helper backs up the current partition, writes only changed blocks, and verifies.
     func performFlash(_ plan: FlashPlan) async {
         flashPlan = nil
-        busy = "Backing up, writing and verifying… don't disconnect the iPod."
+        busy = "Backup, write and check in progress… Do not disconnect the iPod."
         defer { busy = nil; refreshBackups() }
         do {
             let r = try await runFlash(plan.ipod, image: plan.image, reason: plan.reason, dryRun: false)
             guard r.ok else { throw FirmwareError(r.message, code: r.code) }
             if plan.reason == "flash" { isDirty = false }
             alert = AlertInfo(title: plan.reason == "flash" ? "Flashed" : "Restored",
-                              message: "\(r.message)\nBackup taken first: \(r.backup?.file ?? "-")\n\nEject the iPod. If it doesn't start, reset it (hold Menu+Select), then hold Select+Play for disk mode and restore a backup here.")
+                              message: "\(r.message)\nBackup taken first: \(r.backup?.file ?? "-")\n\nEject the iPod. If the iPod does not start, reset it (hold Menu and Select). Then hold Select and Play for disk mode, and restore a backup in iPodFirm.")
         } catch { fail("Flash failed", error) }
     }
 
@@ -738,7 +740,7 @@ final class AppModel: ObservableObject {
             try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion)).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
-        } catch { fail("Can't flash", error) }
+        } catch { fail("Cannot flash", error) }
     }
 
     func restore(_ b: BackupInfo) async { await prepareFlash(image: backupURL(b), reason: "restore") }
@@ -749,7 +751,7 @@ final class AppModel: ObservableObject {
             let ipsw = try await ensureAppleIPSW()
             NSWorkspace.shared.activateFileViewerSelecting([ipsw])
             showFinderRestoreHelp = true
-        } catch { fail("Can't get the Apple firmware", error) }
+        } catch { fail("Cannot get the Apple firmware", error) }
     }
 
     // MARK: emulator
@@ -768,7 +770,7 @@ final class AppModel: ObservableObject {
                     try IPSW.repack(original: original, firmware: IPSW.firmware(original: original, withOSOS: osos), to: out)
                 }
                 NSWorkspace.shared.activateFileViewerSelecting([out])
-            } catch { fail("Couldn't write .ipsw", error) }
+            } catch { fail("Cannot write the .ipsw", error) }
         }
     }
 

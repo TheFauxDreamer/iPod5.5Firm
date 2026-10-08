@@ -62,7 +62,7 @@ final class EmulatorManager: ObservableObject {
         }
         do { try p.run() } catch {
             installing = false
-            append("Couldn't start the installer: \(error.localizedDescription)\n")
+            append("Cannot start the installer: \(error.localizedDescription)\n")
         }
     }
 

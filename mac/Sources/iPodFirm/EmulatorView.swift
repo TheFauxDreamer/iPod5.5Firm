@@ -13,7 +13,7 @@ struct EmulatorView: View {
     var body: some View {
         HSplitView {
             PreviewPanel()
-                .frame(minWidth: 380, idealWidth: 420)
+                .frame(minWidth: 400, idealWidth: 460, maxWidth: .infinity)
             Form {
                 Section {
                     HStack {
@@ -53,15 +53,15 @@ struct EmulatorView: View {
                         Label(model.appearance == .dark ? "Dark theme included: \(t.name)" : "Dark Mode item in Settings: \(t.name)", systemImage: "moon.fill")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    Text("Builds a drive from your current edits and boots it from cold, right here. It's a separate test iPod — your own emulator devices are left alone. Re-run after every change.")
+                    Text("iPodFirm makes a drive from your current changes and starts it from cold in this pane. The test iPod is separate, thus your own emulator devices do not change. Run it again after each change.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Button("Open Test iPod in the Emulator Window") {
                         Task {
                             session.stop()
                             do {
-                                if emu.lastRun == nil { throw FirmwareError("Run it here first so the test drive is built.") }
+                                if emu.lastRun == nil { throw FirmwareError("Click Run in Emulator first. This makes the test drive.") }
                                 try await emu.openWindow()
-                            } catch { model.fail("Couldn't open the emulator", error) }
+                            } catch { model.fail("Cannot open the emulator", error) }
                         }
                     }
                     .disabled(emu.installedVersion == nil)
@@ -83,7 +83,7 @@ struct EmulatorView: View {
                         if let v = emu.installedVersion {
                             Label("ipod-emulator \(v)", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                         } else {
-                            Label("The emulator isn't installed yet", systemImage: "exclamationmark.circle").foregroundStyle(.orange)
+                            Label("The emulator is not installed", systemImage: "exclamationmark.circle").foregroundStyle(.orange)
                         }
                         Spacer()
                         Button(emu.installedVersion == nil ? "Install Emulator" : "Update Emulator") { emu.install() }
@@ -105,7 +105,7 @@ struct EmulatorView: View {
                 }
             }
             .formStyle(.grouped)
-            .frame(minWidth: 320)
+            .frame(minWidth: 320, idealWidth: 380, maxWidth: 520)
         }
         .onAppear { emu.refresh() }
     }
@@ -115,8 +115,36 @@ struct PreviewPanel: View {
     @EnvironmentObject var session: EmulatorSession
     @FocusState private var focused: Bool
 
+    /// The size of the iPod body. The body does not stretch with the window.
+    static let bodySize = CGSize(width: 370, height: 620)
+
     var body: some View {
-        VStack(spacing: 18) {
+        GeometryReader { geo in
+            // A tall column shows the iPod larger, to a maximum of 1.4 times.
+            let scale = min(1.4, max(1, min((geo.size.width - 40) / Self.bodySize.width, (geo.size.height - 40) / Self.bodySize.height)))
+            device
+                .scaleEffect(scale)
+                .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .contentShape(Rectangle())
+        .focusable()
+        .focusEffectDisabled()
+        .focused($focused)
+        .onAppear { focused = true }
+        .onTapGesture { focused = true }
+        .onKeyPress(.upArrow) { session.wheel(-EmulatorSession.detentsPerItem); return .handled }
+        .onKeyPress(.downArrow) { session.wheel(EmulatorSession.detentsPerItem); return .handled }
+        .onKeyPress(.return) { session.press(.select); return .handled }
+        .onKeyPress(.escape) { session.press(.menu); return .handled }
+        .onKeyPress(.space) { session.press(.play); return .handled }
+        .onKeyPress(.leftArrow) { session.press(.prev); return .handled }
+        .onKeyPress(.rightArrow) { session.press(.next); return .handled }
+    }
+
+    /// The iPod: the screen and the click wheel on the body.
+    var device: some View {
+        VStack(spacing: 44) {
             ZStack {
                 RoundedRectangle(cornerRadius: 6).fill(Color.black)
                 if let img = session.screen {
@@ -132,25 +160,14 @@ struct PreviewPanel: View {
                 .opacity(session.phase == .running ? 1 : 0.45)
                 .disabled(session.phase != .running)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 34)
+        .frame(width: Self.bodySize.width, height: Self.bodySize.height, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: 28)
                 .fill(LinearGradient(colors: [Color(white: 0.97), Color(white: 0.88)], startPoint: .top, endPoint: .bottom))
-                .padding(12)
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
         )
-        .focusable()
-        .focusEffectDisabled()
-        .focused($focused)
-        .onAppear { focused = true }
-        .onTapGesture { focused = true }
-        .onKeyPress(.upArrow) { session.wheel(-EmulatorSession.detentsPerItem); return .handled }
-        .onKeyPress(.downArrow) { session.wheel(EmulatorSession.detentsPerItem); return .handled }
-        .onKeyPress(.return) { session.press(.select); return .handled }
-        .onKeyPress(.escape) { session.press(.menu); return .handled }
-        .onKeyPress(.space) { session.press(.play); return .handled }
-        .onKeyPress(.leftArrow) { session.press(.prev); return .handled }
-        .onKeyPress(.rightArrow) { session.press(.next); return .handled }
+        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.gray.opacity(0.3)))
     }
 
     @ViewBuilder var overlay: some View {
@@ -188,25 +205,27 @@ struct ClickWheel: View {
                 .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
                 .gesture(ringDrag)
                 .overlay(ScrollCatcher { dy in rotate(by: dy * 2) })
-            label("MENU", .menu).offset(y: -size * 0.37)
-            label("⏮", .prev).offset(x: -size * 0.37)
-            label("⏭", .next).offset(x: size * 0.37)
-            label("⏯", .play).offset(y: size * 0.37)
+            label(Text("MENU"), "Menu", .menu).offset(y: -size * 0.37)
+            label(Image(systemName: "backward.end.alt.fill"), "Previous", .prev).offset(x: -size * 0.37)
+            label(Image(systemName: "forward.end.alt.fill"), "Next", .next).offset(x: size * 0.37)
+            label(Image(systemName: "playpause.fill"), "Play/Pause", .play).offset(y: size * 0.37)
             Button { session.press(.select) } label: {
                 Circle().fill(Color(white: 0.93)).overlay(Circle().stroke(Color.gray.opacity(0.35)))
                     .frame(width: size * 0.36, height: size * 0.36)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Select")
         }
         .frame(width: size, height: size)
     }
 
-    func label(_ text: String, _ b: EmulatorSession.Button) -> some View {
+    func label(_ content: some View, _ name: String, _ b: EmulatorSession.Button) -> some View {
         Button { session.press(b) } label: {
-            Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(white: 0.55))
+            content.font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(white: 0.55))
                 .frame(width: 44, height: 30).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(name)
     }
 
     var ringDrag: some Gesture {

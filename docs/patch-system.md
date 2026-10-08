@@ -24,6 +24,12 @@ A patch is a folder in [patches/](../patches/). It holds two files:
 | `hdd_warning` | string, optional | A warning. The app shows it if the iPod probably has the original hard drive. |
 | `version_letter` | string | One letter a–z. Each patch must have a letter, but an `internal` patch has no letter. If the owner switches on "Add a letter for each switched-on patch", the About screen shows this letter after the version. Each patch has a different letter. |
 | `internal` | bool, optional | `true`: the patch is a part of a build step. The Patches pane does not show it. Only `dark-mode` uses this key. |
+| `title` | string | The name in the Patches pane, in title case, for example "Album Artwork". If it is missing, the pane shows `name`. |
+| `summary` | string | One line below the title in the list of patches. |
+| `symbol` | string | The name of an SF Symbol, for example `photo.on.rectangle.angled`. Do not use emoji. |
+| `category` | string | The group in the list of patches: `display`, `power` or `test`. |
+
+Each patch that is not `internal` must have `title`, `summary`, `symbol` and `category`. The test `testPatchMetadata` makes sure of this. It also makes sure that macOS has the SF Symbol.
 
 Example (a part of [patches/flash-keep-awake/patch.json](../patches/flash-keep-awake/patch.json)):
 

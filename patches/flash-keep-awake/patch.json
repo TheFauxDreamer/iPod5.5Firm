@@ -1,5 +1,9 @@
 {
   "name": "flash-keep-awake",
+  "title": "SSD Mode",
+  "summary": "Keeps flash storage on for 30 minutes after each use.",
+  "symbol": "bolt.horizontal",
+  "category": "power",
   "version_letter": "k",
   "description": "SSD mode for flash storage (iFlash, CompactFlash and SSD adapters). The iPod keeps the storage on for 30 minutes after each use, not for 1 second. When the iPod wakes from sleep, the iPod starts the storage at once. Thus the storage is ready when you choose a song. Before the storage power goes off, the iPod waits 0.5 seconds, so that the flash card can complete its writes. Use this patch only with flash storage.",
   "hdd_warning": "This patch is for flash storage. On the original hard drive, it keeps the disk turning for 30 minutes after each use. This uses more battery and causes more wear.",

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 @testable import IPodFWKit
 import XCTest
@@ -519,6 +520,17 @@ final class PatchAndArtTests: XCTestCase {
         let letters = all.compactMap(\.spec.version_letter)
         XCTAssertEqual(Set(letters).count, letters.count)
         for l in letters { XCTAssertTrue(l.count == 1 && ("a"..."z").contains(l), l) }
+    }
+
+    /// The Patches pane needs a title, a summary, a category and an SF Symbol for each patch.
+    func testPatchMetadata() {
+        for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) where p.spec.internal != true {
+            XCTAssertNotNil(p.spec.title, "\(p.spec.name) has no title in patch.json")
+            XCTAssertNotNil(p.spec.summary, "\(p.spec.name) has no summary in patch.json")
+            XCTAssertTrue(PatchSpec.categories.contains(p.spec.category ?? ""), "\(p.spec.name) has no valid category")
+            let symbol = p.spec.symbol ?? ""
+            XCTAssertNotNil(NSImage(systemSymbolName: symbol, accessibilityDescription: nil), "\(p.spec.name): no SF Symbol \"\(symbol)\"")
+        }
     }
 
     /// The original drives are 30, 60 and 80 GB. A size within 5 GB of one of them gives a warning.

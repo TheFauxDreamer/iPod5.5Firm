@@ -42,7 +42,6 @@ struct StringsView: View {
                     ForEach(blocks) { b in Text(label(b)).tag(Optional(b.index)) }
                 }
                 .frame(maxWidth: 380)
-                TextField("Search text or ID", text: $search).textFieldStyle(.roundedBorder).frame(width: 200)
                 Spacer()
                 BudgetGauge(used: budget.used, available: budget.available)
             }
@@ -61,7 +60,7 @@ struct StringsView: View {
             }
             Divider()
             HStack {
-                Text("Text can't take more space than the language already uses: to lengthen one string, shorten others.")
+                Text("The text cannot use more space than the language uses now. To make one string longer, make other strings shorter.")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Revert") { draft = [:] }.disabled(changes.isEmpty)
@@ -71,6 +70,7 @@ struct StringsView: View {
             }
             .padding(10)
         }
+        .searchable(text: $search, placement: .toolbar, prompt: "Text or ID")
         .onAppear {
             if blockIndex == nil { blockIndex = model.editor?.mainIndex }
             reload()

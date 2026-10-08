@@ -24,11 +24,22 @@ The app needs macOS 14 or later and an Apple silicon Mac (`--arch arm64`).
 | Firmware | The images, the checksums and the model of the open file. | [OverviewView.swift](../mac/Sources/iPodFirm/OverviewView.swift) |
 | Pictures | Show, export and replace pictures. Show the dark theme pictures. | [PicturesView.swift](../mac/Sources/iPodFirm/PicturesView.swift) |
 | Text | Change the strings of each language. | [StringsView.swift](../mac/Sources/iPodFirm/StringsView.swift) |
-| Patches | iPod Appearance, Software Version, the patches, the thumbnails and the playlist artwork. | [PatchesView.swift](../mac/Sources/iPodFirm/PatchesView.swift) |
-| iPod | Find the iPod, back up, flash, restore, eject, the recovery steps and the Touch ID helper. | [IPodView.swift](../mac/Sources/iPodFirm/IPodView.swift) |
+| Patches | A list at the left: iPod Appearance, Software Version and the patches (grouped by `category`). Each patch row has an SF Symbol, the title, the summary, the letter and a switch. The detail at the right shows the selected row: the description, the compatibility, the thumbnails and the playlist artwork (`album-art`), and the USB probe (`usb-host-probe`). | [PatchesView.swift](../mac/Sources/iPodFirm/PatchesView.swift) |
+| iPod | Find the iPod, back up, flash, restore, eject and the recovery steps. A row shows the permission status and opens the Settings window. | [IPodView.swift](../mac/Sources/iPodFirm/IPodView.swift) |
 | Emulator | Install the emulator, start the firmware, show the screen and send button pushes. | [EmulatorView.swift](../mac/Sources/iPodFirm/EmulatorView.swift) |
 
 [AppModel.swift](../mac/Sources/iPodFirm/AppModel.swift) holds the state and the actions of all panes.
+
+The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has the tab Permissions: the Touch ID helper, `requireTouchID` and Full Disk Access.
+
+The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
+
+| Menu | Commands |
+|---|---|
+| File | Open Firmware… (⌘O), Download Apple Firmware 1.3, Save Firmware As… (⇧⌘S), Export as .ipsw…, Export Pictures & Text…, Import Pictures & Text…, Import iPodWizard Theme… |
+| iPod | Flash to iPod… (⇧⌘F), Back Up iPod, Eject iPod (⌘E), Run in Emulator (⌘R) |
+
+The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the centre of its column. In a tall column, the iPod is larger, to a maximum of 1.4 times. The settings column has a maximum width of 520 points.
 
 ## The build of the app
 
@@ -70,7 +81,7 @@ The raw disk `/dev/rdiskN` needs root rights. The app itself never opens the raw
 
 ### Mode 1: the launchd daemon (Touch ID)
 
-1. The owner clicks "Set Up Touch ID" in the iPod pane.
+1. The owner clicks "Set Up Touch ID" in the Settings window (Permissions).
 2. The app registers the daemon with `SMAppService.daemon(plistName: "com.thefauxdreamer.ipodfirm.helper.plist")`.
 3. macOS asks the owner to approve the daemon in System Settings > General > Login Items.
 4. launchd starts `ipodfw-helper --daemon` when the app connects to the Mach service `com.thefauxdreamer.ipodfirm.helper`.

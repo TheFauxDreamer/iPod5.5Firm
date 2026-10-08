@@ -33,6 +33,17 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     /// true: the patch is part of a build step (for example the dark-mode switch) and is not shown
     /// in the list of patches.
     public var `internal`: Bool?
+    /// The name in the Patches pane, in title case. The pane shows `name` if there is no title.
+    public var title: String?
+    /// One line for the list of patches.
+    public var summary: String?
+    /// The SF Symbol of the patch in the Patches pane.
+    public var symbol: String?
+    /// The group in the list of patches: one of `categories`.
+    public var category: String?
+
+    public static let categories = ["display", "power", "test"]
+    public var displayTitle: String { title ?? name }
 }
 
 public struct PatchInfo: Identifiable, Hashable {

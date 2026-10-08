@@ -38,7 +38,6 @@ struct PicturesView: View {
                     Picker("Show", selection: $filter) { ForEach(Filter.allCases, id: \.self) { Text($0.rawValue) } }
                         .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 360)
                     Spacer()
-                    TextField("Index or ID", text: $search).textFieldStyle(.roundedBorder).frame(width: 140)
                 }
                 .padding(10)
                 if model.picturesDark && model.darkPictures == nil {
@@ -68,6 +67,7 @@ struct PicturesView: View {
             }
             .frame(minWidth: 300, idealWidth: 340, maxWidth: 460)
         }
+        .searchable(text: $search, placement: .toolbar, prompt: "Index or ID")
         .toolbar {
             ToolbarItemGroup(placement: .secondaryAction) {
                 Button("Export All…") { model.exportFolder() }.disabled(model.picturesDark)

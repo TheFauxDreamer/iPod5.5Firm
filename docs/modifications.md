@@ -66,7 +66,7 @@ An edit of a dark theme picture goes into the theme file, not into osos. Refer t
 
 ## Software version
 
-**User interface.** Patches pane > Software Version:
+**User interface.** Patches pane > Software Version. The section "Letters" shows the letter of each patch:
 
 - "Show a different version on the About screen", with a text field (for example `1.3.1`).
 - "Add a letter for each switched-on patch".
@@ -94,7 +94,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 ## backlight-60s
 
-**User interface.** Patches pane, letter `b`.
+**User interface.** Patches pane > 60-Second Backlight, letter `b`.
 
 **Effect.** Settings > Backlight Timer shows Off, 5, 10, 15, 20 and 60 Seconds, and Always On. The 2 Seconds item is removed.
 
@@ -116,10 +116,9 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 ## album-art
 
-**User interface.** Patches pane, letter `a`. Under the patch:
+**User interface.** Patches pane > Album Artwork, letter `a`. The detail of the patch has these sections:
 
-- "Write Thumbnails to iPod" writes the thumbnail file.
-- "Eject iPod" ejects the iPod.
+- "Thumbnails": "Write Thumbnails to iPod" writes the thumbnail file. "Eject iPod" ejects the iPod.
 - "Playlist Artwork" sets a custom image for each playlist ("Choose Image…", "Use Automatic", or drag an image).
 
 **Effect.** Each row in an album list and in a playlist list shows a 20 × 20 thumbnail at its left side.
@@ -210,7 +209,7 @@ The large artwork in Now Playing does not come from the patch. RetailOS reads `i
 
 ## sleep-now
 
-**User interface.** Patches pane, letter `s`.
+**User interface.** Patches pane > Sleep Now, letter `s`.
 
 **Effect.** The Sleep item puts the iPod to sleep at once. On a charger, on USB power or during a voice memo, Sleep operates as in the Apple firmware.
 
@@ -243,7 +242,7 @@ Outside a forced sleep, `hook_power_test` calls the Apple test 0x1ecc8c.
 
 ## flash-keep-awake
 
-**User interface.** Patches pane, letter `k`. The pane shows a warning if the iPod probably has the original hard drive. Refer to [Storage type](#storage-type).
+**User interface.** Patches pane > SSD Mode, letter `k`. The pane shows a warning if the iPod probably has the original hard drive. Refer to [Storage type](#storage-type).
 
 **Effect ("SSD mode").**
 
@@ -291,7 +290,7 @@ The fix has two parts: hook 1 does not change 0, 1 or 0xffffffff, and hook 3 ign
 
 ## flash-wake-on-input
 
-**User interface.** Patches pane, letter `w`. The pane shows the same storage warning as for `flash-keep-awake`.
+**User interface.** Patches pane > Wake Storage on Input, letter `w`. The pane shows the same storage warning as for `flash-keep-awake`.
 
 **Effect.** When you push a button after a long pause, the iPod starts the storage at once. A turn of the wheel does not start the storage.
 
@@ -319,7 +318,7 @@ The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 min
 
 ## usb-host-probe
 
-**User interface.** Patches pane, letter `h`. "Start the Probe at the Next Restart" writes '1' to `iPod_Control/iTunes/iPodFirmUSBProbe` and an empty 32768-byte `iPod_Control/iTunes/iPodFirmUSBLog` on the connected iPod. "Show USB Log" reads and decodes the log (`USBProbeLog` in [USBProbeLog.swift](../mac/Sources/IPodFWKit/USBProbeLog.swift)). The pane gives the test steps. This patch is a test for [USB-AUDIO-OUT.md](../USB-AUDIO-OUT.md) (Stage 0). It is only on the branch `usb-audio-out`.
+**User interface.** Patches pane > USB Host Probe, letter `h`. "Start the Probe at the Next Restart" writes '1' to `iPod_Control/iTunes/iPodFirmUSBProbe` and an empty 32768-byte `iPod_Control/iTunes/iPodFirmUSBLog` on the connected iPod. "Show USB Log" reads and decodes the log (`USBProbeLog` in [USBProbeLog.swift](../mac/Sources/IPodFWKit/USBProbeLog.swift)). The section "Test Procedure" (a disclosure group) gives the test steps. The section "USB Log" shows the log and has "Copy Log". This patch is a test for [USB-AUDIO-OUT.md](../USB-AUDIO-OUT.md) (Stage 0). It is only on the branch `usb-audio-out`.
 
 **Effect.** One time after the trigger, the iPod plays a demonstration of the signs and a countdown, starts its USB host stack, gives tones, and logs each call of a USB class driver. The next start is normal.
 
@@ -383,7 +382,7 @@ An earlier version read the ATA IDENTIFY data in the firmware (a hook at 0x142f9
 
 - "Import iPodWizard Theme…" (also in the File menu).
 - The appearance control: Light, Dark or Switch on iPod.
-- The "Dark theme" picker, "Show Import Report" and "Delete Theme".
+- The "Dark theme" picker, "Show Import Report" and "Delete Theme…". "Delete Theme…" asks for a confirmation.
 
 **Source.** An iPodWizard theme is a complete firmware partition for an older firmware, usually 1.2.1. iPodFirm needs the theme and the Apple firmware that the theme came from ("base"). The target is always the Apple firmware 1.3. Refer to [re/dark-theme.md](../re/dark-theme.md).
 

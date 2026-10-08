@@ -27,16 +27,18 @@ The app has these functions:
 - Show and replace the pictures in the firmware. Use PNG files that have the same size.
 - Show and change the text in the firmware. A gauge shows the bytes that are free in each language.
 - Make a backup of the firmware partition of the iPod.
-- Eject the iPod, so that you can disconnect it (iPod pane and Patches pane).
+- Eject the iPod, so that you can disconnect it (iPod pane, Patches pane and iPod menu).
 - Write the changed firmware to the iPod.
+- Export the changed firmware as an `.ipsw` file (File > Export as .ipsw…).
 - Restore a backup to the iPod. If the firmware on the iPod is damaged, the app does a rescue restore.
 - Show the recovery steps, and get the Apple firmware for a restore with Finder.
 - Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
-- Switch code patches on or off (Patches pane). The patches are in [patches/](patches/).
+- Switch code patches on or off (Patches pane). The pane shows a list of the patches at the left. Select a patch to see its description, its compatibility and its tools at the right. The patches are in [patches/](patches/).
 - Write the album and playlist thumbnail file to the iPod for the `album-art` patch.
 - Set a custom image for each playlist for the `album-art` patch.
 - Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane).
 - Show a different version on the About screen of the iPod, for example 1.3.1 (Patches pane). This setting is off by default. iTunes and Finder continue to see version 1.3.
+- Set up the Touch ID helper and examine Full Disk Access in the Settings window (iPodFirm > Settings…).
 
 ### Build and install the app
 
@@ -67,7 +69,7 @@ Two environment variables add more tests:
 The app must read and write the disk of the iPod directly. Thus, the app needs these permissions:
 
 1. Full Disk Access. Open System Settings > Privacy & Security > Full Disk Access. Then turn on iPodFirm.
-2. The Touch ID helper (optional). In the iPod pane, click "Set Up Touch ID". Then approve iPodFirm in System Settings > General > Login Items.
+2. The Touch ID helper (optional). Open iPodFirm > Settings…, then click "Set Up Touch ID". Then approve iPodFirm in System Settings > General > Login Items.
 
 If you do not set up the Touch ID helper, the app asks for your administrator password.
 
@@ -214,7 +216,7 @@ CAUTION: The theme files contain Apple code. Do not commit them to Git.
 4. Select the theme file.
 5. Select `iPod_25.1.2.1.ipsw`.
 6. Read the import report.
-7. In the Patches pane, under "iPod Appearance", click Dark or Switch on iPod.
+7. In the Patches pane, select "iPod Appearance". Then click Dark or Switch on iPod.
 
 iPodFirm applies the theme when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.
 
@@ -265,7 +267,7 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 
 The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary. After you disconnect the iPod from the computer, the patch examines the file again when an album list or a playlist list shows.
 
-A playlist gets a thumbnail too. The Patches pane shows the playlists of the connected iPod, below "Write Thumbnails to iPod":
+A playlist gets a thumbnail too. In the Patches pane, select "Album Artwork". The section "Playlist Artwork" shows the playlists of the connected iPod:
 
 - A playlist without a custom image shows a collage of the covers of its first four albums. If the playlist has fewer than four albums, it shows the cover of the first album.
 - To set a custom image, click "Choose Image…" or drag an image onto the playlist. iPodFirm uses the centre square of the image.
