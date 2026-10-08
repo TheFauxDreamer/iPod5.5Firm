@@ -333,7 +333,7 @@ The background is white with the light theme and black with the dark theme. On w
 
 A short push of Select opens the album as usual. Play/Pause operates as usual. If the iPod shows a new screen (for example Now Playing), Cover Flow closes.
 
-**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 7696 bytes. The framebuffer copy (153600 bytes), the cover cache (11 covers, 360448 bytes for 128 × 128 covers) and the caption buffer come from the allocator 0x25a974 when Cover Flow opens. They are released when it closes.
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 8104 bytes. The framebuffer copy (153600 bytes), the cover cache (11 covers, 360448 bytes for 128 × 128 covers) and the caption buffer come from the allocator 0x25a974 when Cover Flow opens. They are released when it closes.
 
 **Hooks.**
 
