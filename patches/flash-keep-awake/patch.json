@@ -5,6 +5,7 @@
   "symbol": "bolt.horizontal",
   "category": "power",
   "version_letter": "k",
+  "version": "1.0",
   "description": "Makes songs start faster on an iPod with flash storage.",
   "details": ["The iPod keeps the storage on for 30 minutes after each use. The Apple firmware switches it off after 1 second.", "When the iPod wakes from sleep, it starts the storage immediately.", "Thus the storage is ready when you choose a song.", "Before the iPod switches off the storage, it waits 0.5 seconds. This gives the flash card time to complete its writes."],
   "requires": ["Flash storage, for example an iFlash, CompactFlash or SSD adapter. Do not use this patch with the original hard drive."],

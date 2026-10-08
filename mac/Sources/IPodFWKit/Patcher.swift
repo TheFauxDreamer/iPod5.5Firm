@@ -45,6 +45,9 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var hdd_warning: String?
     /// One letter a–z that the About screen can show after the version (see FirmwareVersion.letters).
     public var version_letter: String?
+    /// The version of the patch, for example "1.2" (see PatchVersion). The install sheet compares it
+    /// with the installed version.
+    public var version: String?
     /// true: the patch is part of a build step (for example the dark-mode switch) and is not shown
     /// in the list of patches.
     public var `internal`: Bool?
@@ -72,6 +75,10 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     /// The ids of the built-in Swift tools that `ui.tools` can name (PatchTools.swift in the app).
     public static let knownTools = ["album-thumbnails", "usb-log"]
     public var displayTitle: String { title ?? name }
+    /// The version, or nil if `version` is missing or not valid.
+    public var parsedVersion: PatchVersion? { version.flatMap(PatchVersion.init) }
+    /// The version for display, for example "1.2", or "–" if the patch has no version.
+    public var versionText: String { version ?? "–" }
 
     /// The osos builds that iPodFirm knows, by SHA-256.
     public static let knownFirmware = [
@@ -88,6 +95,31 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var targetText: String {
         let list = targetList
         return list.isEmpty ? "An unknown firmware (osos SHA-256 \(osos_sha256.prefix(12))…)" : list.map(\.text).joined(separator: "; ")
+    }
+}
+
+/// The version of a patch: one to three numbers with dots, for example "1", "1.2" or "1.2.3".
+/// A missing part is 0, thus "1" and "1.0" are equal. A patch with no version is lower than all versions.
+public struct PatchVersion: Comparable, Hashable {
+    public let parts: [Int]
+
+    public init?(_ text: String) {
+        let items = text.split(separator: ".", omittingEmptySubsequences: false)
+        guard (1...3).contains(items.count),
+              items.allSatisfy({ !$0.isEmpty && $0.count <= 6 && $0.allSatisfy { ("0"..."9").contains($0) } }) else { return nil }
+        parts = items.map { Int($0)! } + Array(repeating: 0, count: 3 - items.count)
+    }
+
+    public static func < (a: PatchVersion, b: PatchVersion) -> Bool { a.parts.lexicographicallyPrecedes(b.parts) }
+
+    /// Compare two versions. nil (no version or not valid) is lower than all versions.
+    public static func isLower(_ a: PatchVersion?, than b: PatchVersion?) -> Bool {
+        switch (a, b) {
+        case (nil, nil): return false
+        case (nil, _): return true
+        case (_, nil): return false
+        case let (a?, b?): return a < b
+        }
     }
 }
 
@@ -141,6 +173,10 @@ public struct PatchInfo: Identifiable, Hashable {
     public var spec: PatchSpec
     public var folder: URL
     public var source: Source = .builtIn
+    /// true: a user patch with a higher version than the built-in patch of the same name. It replaces the built-in patch.
+    public var replacesBuiltIn = false
+    /// The version of the built-in patch that this user patch replaces.
+    public var builtInVersion: String?
     public init(spec: PatchSpec, folder: URL, source: Source = .builtIn) {
         self.spec = spec
         self.folder = folder

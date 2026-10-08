@@ -522,6 +522,22 @@ final class PatchAndArtTests: XCTestCase {
         for l in letters { XCTAssertTrue(l.count == 1 && ("a"..."z").contains(l), l) }
     }
 
+    /// Each patch in the Patches pane has a valid version.
+    func testPatchVersions() {
+        for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) where p.spec.internal != true {
+            XCTAssertNotNil(p.spec.parsedVersion, "\(p.spec.name) has no valid version in patch.json")
+        }
+    }
+
+    func testPatchVersionCompare() {
+        XCTAssertGreaterThan(PatchVersion("1.10")!, PatchVersion("1.9")!)
+        XCTAssertEqual(PatchVersion("1"), PatchVersion("1.0.0"))
+        XCTAssertLessThan(PatchVersion("1.2")!, PatchVersion("1.2.1")!)
+        for bad in ["", "1.a", "1..2", "1.2.3.4", "-1", " 1"] { XCTAssertNil(PatchVersion(bad), bad) }
+        XCTAssertTrue(PatchVersion.isLower(nil, than: PatchVersion("0")))
+        XCTAssertFalse(PatchVersion.isLower(nil, than: nil))
+    }
+
     /// The Patches pane needs a title, a summary, a category and an SF Symbol for each patch.
     func testPatchMetadata() {
         for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) where p.spec.internal != true {
@@ -1118,6 +1134,44 @@ final class PatchLibraryTests: XCTestCase {
         XCTAssertTrue(usedNow.contains("a"))
         let next = "abcdefghijklmnopqrstuvwxyz".map(String.init).first { !usedNow.contains($0) }
         XCTAssertEqual(try inspect(makePatch(spec("used-letter", ["version_letter": "a"]))).assignedLetter, next)
+    }
+
+    /// An update, a reinstall and a downgrade of a user patch.
+    func testVersionChange() throws {
+        let c1 = try inspect(makePatch(spec("versioned", ["version": "1.0"]), folder: "v1"))
+        XCTAssertEqual(c1.change, .new)
+        try library.install(c1)
+        let c2 = try inspect(makePatch(spec("versioned", ["version": "1.1"]), folder: "v2"))
+        XCTAssertTrue(c2.replaces)
+        XCTAssertEqual(c2.installedVersion, "1.0")
+        XCTAssertEqual(c2.change, .update)
+        try library.install(c2)
+        XCTAssertEqual(library.list().first { $0.spec.name == "versioned" }?.spec.version, "1.1")
+        XCTAssertEqual(try inspect(makePatch(spec("versioned", ["version": "1.1.0"]), folder: "v3")).change, .same)
+        let down = try inspect(makePatch(spec("versioned", ["version": "1.0"]), folder: "v4"))
+        XCTAssertEqual(down.change, .downgrade)
+        XCTAssertTrue(down.canInstall)
+        XCTAssertTrue(down.notes.contains { $0.contains("older version") })
+        XCTAssertFalse(try inspect(makePatch(spec("bad-version", ["version": "1.x"]))).canInstall)
+    }
+
+    /// A higher version replaces a built-in patch. A remove brings the built-in patch back.
+    func testReplaceBuiltIn() throws {
+        let builtIn = try XCTUnwrap(library.list().first { $0.spec.name == "sleep-now" })
+        XCTAssertEqual(builtIn.source, .builtIn)
+        XCTAssertFalse(try inspect(makePatch(spec("sleep-now", ["version": builtIn.spec.version!]), folder: "same")).canInstall)
+        XCTAssertFalse(try inspect(makePatch(spec("sleep-now", ["version": "0.9"]), folder: "lower")).canInstall)
+        let c = try inspect(makePatch(spec("sleep-now", ["version": "99.0"]), folder: "higher"))
+        XCTAssertTrue(c.canInstall, c.errors.joined())
+        XCTAssertTrue(c.replacesBuiltIn)
+        XCTAssertEqual(c.change, .update)
+        try library.install(c)
+        let user = try XCTUnwrap(library.list().first { $0.spec.name == "sleep-now" })
+        XCTAssertEqual(user.source, .user)
+        XCTAssertTrue(user.replacesBuiltIn)
+        XCTAssertEqual(user.builtInVersion, builtIn.spec.version)
+        try library.remove(user)
+        XCTAssertEqual(library.list().first { $0.spec.name == "sleep-now" }?.source, .builtIn)
     }
 
     func testInstallFolderZipAndRemove() throws {

@@ -504,7 +504,13 @@ final class AppModel: ObservableObject {
         do {
             try Self.patchLibrary.install(c)
             reloadPatches()
-            if let name = c.spec?.name { patchSelection = name }
+            if let name = c.spec?.name {
+                patchSelection = name
+                if enabledPatches.contains(name), c.change != .new {
+                    alert = AlertInfo(title: "Patch Installed",
+                                      message: "The iPod has the old version of this patch. Flash the iPod again to put version \(c.spec?.versionText ?? "–") on it.")
+                }
+            }
         } catch { fail("Cannot install the patch", error) }
     }
 

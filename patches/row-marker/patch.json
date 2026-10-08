@@ -5,6 +5,7 @@
   "symbol": "paintbrush.pointed",
   "category": "test",
   "version_letter": "r",
+  "version": "1.0",
   "description": "A test patch for developers. It has no use in normal operation.",
   "details": ["Each label in a list gets a coloured bar at its left side."],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",

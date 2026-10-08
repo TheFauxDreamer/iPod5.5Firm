@@ -5,6 +5,7 @@
   "symbol": "lightbulb",
   "category": "display",
   "version_letter": "b",
+  "version": "1.0",
   "description": "Adds a 60-second setting to the backlight timer.",
   "details": ["Settings > Backlight Timer has a new item: 60 Seconds.", "The 2 Seconds item is removed.", "The other items do not change."],
   "notes": ["The new item shows in all the languages of the iPod."],

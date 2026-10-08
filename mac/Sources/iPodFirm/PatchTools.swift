@@ -191,6 +191,33 @@ struct PlaylistArtRow: View {
 struct InstallPatchSheet: View {
     @EnvironmentObject var model: AppModel
     let candidate: PatchCandidate
+    @State private var confirmBuiltIn = false
+
+    /// For example "1.2", or "1.1 → 1.2" for an update.
+    func versionText(_ spec: PatchSpec) -> String {
+        candidate.change == .new ? spec.versionText : "\(candidate.installedVersion ?? "–") → \(spec.versionText)"
+    }
+
+    var buttonTitle: String {
+        if candidate.replacesBuiltIn { return "Replace Built-In Patch" }
+        switch candidate.change {
+        case .new: return "Install"
+        case .update: return "Update"
+        case .same: return "Reinstall"
+        case .downgrade: return "Downgrade"
+        }
+    }
+
+    /// A caution for a downgrade or for a patch that replaces a built-in patch.
+    var caution: String? {
+        if candidate.replacesBuiltIn {
+            return "This patch replaces a patch that is built into iPodFirm. Make sure that you trust the person that made it."
+        }
+        if candidate.change == .downgrade {
+            return "This file has an older version than the installed patch. The older version can have problems that the newer version corrects."
+        }
+        return nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -213,6 +240,7 @@ struct InstallPatchSheet: View {
                         ForEach(spec.requires ?? [], id: \.self) { BulletRow(text: "You need: \($0)", symbol: "checkmark.circle", tint: .green) }
                         Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
                             GridRow { Text("Name").foregroundStyle(.secondary); Text(spec.name).monospaced() }
+                            GridRow { Text("Version").foregroundStyle(.secondary); Text(versionText(spec)) }
                             GridRow { Text("For").foregroundStyle(.secondary); Text(spec.targetText) }
                             GridRow { Text("Letter").foregroundStyle(.secondary); Text(candidate.assignedLetter ?? spec.version_letter ?? "-") }
                             GridRow { Text("Code").foregroundStyle(.secondary); Text(candidate.codeSize.map { "\($0) bytes" } ?? "No code (data only)") }
@@ -233,6 +261,10 @@ struct InstallPatchSheet: View {
                 Label("iPodFirm cannot install this patch", systemImage: "xmark.octagon.fill").font(.title3.bold())
                 ForEach(candidate.errors, id: \.self) { e in Text(e).fixedSize(horizontal: false, vertical: true) }
             }
+            if candidate.canInstall, let caution {
+                Label(caution, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange).font(.callout).fixedSize(horizontal: false, vertical: true)
+            }
             if candidate.canInstall {
                 Label("A patch puts new code on your iPod. Install only patches from people that you trust. iPodFirm makes a backup before each flash.",
                       systemImage: "exclamationmark.triangle.fill")
@@ -242,13 +274,21 @@ struct InstallPatchSheet: View {
                 Spacer()
                 Button("Cancel") { model.cancelInstall(candidate) }.keyboardShortcut(.cancelAction)
                 if candidate.canInstall {
-                    Button(candidate.replaces ? "Replace" : "Install") { model.confirmInstall(candidate) }
-                        .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
+                    Button(buttonTitle) {
+                        if candidate.replacesBuiltIn { confirmBuiltIn = true } else { model.confirmInstall(candidate) }
+                    }
+                    .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
                 }
             }
         }
         .padding(22)
         .frame(width: 520)
+        .confirmationDialog("Replace the built-in patch \"\(candidate.spec?.displayTitle ?? "")\"?", isPresented: $confirmBuiltIn) {
+            Button("Replace Built-In Patch", role: .destructive) { model.confirmInstall(candidate) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("iPodFirm uses this patch in place of the built-in patch. To use the built-in patch again, remove this patch.")
+        }
     }
 }
 

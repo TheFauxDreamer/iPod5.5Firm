@@ -15,7 +15,9 @@ If the folder has `patch.o`, the patcher links `patch.o` and does not compile th
 There are two places for patches:
 
 - The built-in patches are in [patches/](../patches/). `mac/scripts/build-app.sh` copies each patch folder into `iPodFirm.app/Contents/Resources/patches/`. It does not copy `row-marker`, because that patch is only for tests.
-- The user patches are in `~/Library/Application Support/iPodFirm/Patches/`. The owner installs them in the app. A user patch with the name of a built-in patch is ignored (`PatchLibrary.list`).
+- The user patches are in `~/Library/Application Support/iPodFirm/Patches/`. The owner installs them in the app.
+
+A user patch with the name of a built-in patch replaces the built-in patch only if the user patch has a higher `version`. Otherwise the app ignores the user patch (`PatchLibrary.list`). Thus a later app with a higher built-in version uses its built-in patch again.
 
 ### The .ipodpatch file
 
@@ -33,7 +35,8 @@ The install stops if one of these errors occurs:
 
 - `patch.json` does not decode, or the `name` has a character that is not a–z, 0–9 or "-".
 - A target has an `osos_sha256` that is not the `osos_sha256` of the patch.
-- A built-in patch has the same name.
+- A built-in patch has the same name, and the file does not have a higher `version` than the built-in patch.
+- The `version` is not one to three numbers with dots.
 - The folder has a subfolder, more than one C file, or a file type that is not `.c`, `.o`, `.json`, `.md`, `.txt` or `.png`.
 - `patch.o` is not an ELF32 ARM object.
 - The patch has only a C file, and the Mac has no clang (`xcrun --find clang`).
@@ -45,11 +48,30 @@ The install continues with a note in these conditions:
 
 - The patch is not for the Apple firmware 1.3.
 - The patch has no `version_letter`, or another patch uses the letter. iPodFirm writes the first free letter into the installed `patch.json`.
+- The patch has no `version`.
+- The file has an older version than the installed patch (a downgrade).
+- The file replaces a built-in patch.
 - The patch has no `title`, `symbol` or `category`.
 - The patch changes the same place as another patch (`Patcher.conflicts`).
 - `ui` names a tool that the app does not have.
 
-If a user patch with the same name is installed, the sheet shows **Replace**. The old folder goes to the Trash. **−** below the list moves a user patch to the Trash. Built-in patches cannot be removed.
+### Versions and updates
+
+The install sheet compares the `version` of the file with the installed patch of the same name (`PatchCandidate.change`). It shows the two versions, for example "1.0 → 1.1". The button shows the result:
+
+| Button | Condition |
+|---|---|
+| **Install** | No patch has this name. |
+| **Update** | The file has a higher version. |
+| **Reinstall** | The two versions are equal. |
+| **Downgrade** | The file has a lower version. The sheet shows a caution. |
+| **Replace Built-In Patch** | The file has a higher version than a built-in patch. The sheet shows a caution, and a second dialog asks the owner to confirm. |
+
+A patch with no `version` is lower than all versions. The comparison uses numbers, thus "1.10" is higher than "1.9" (`PatchVersion`).
+
+The install moves the old folder to the Trash. The patch keeps its switch state, because the app records the switched-on patches by name. If the patch is switched on, an alert tells the owner to flash the iPod again.
+
+**−** below the list moves a user patch to the Trash. If the user patch replaced a built-in patch, the built-in patch comes back. Built-in patches cannot be removed.
 
 ### Make and share a patch
 
@@ -71,6 +93,7 @@ If a user patch with the same name is installed, the sheet shows **Replace**. Th
 | `symbols` | object | Firmware addresses for the external functions and data that the C code uses. Name → hex address. |
 | `hooks` | array | The changes to the firmware. See [The hooks](#the-hooks). |
 | `hdd_warning` | string, optional | A warning. The app shows it if the iPod probably has the original hard drive. |
+| `version` | string | The version of the patch: one to three numbers with dots, for example `1.2`. Each patch that is not `internal` must have a version. Increase it at each change, so that the install sheet shows an update. The test `testPatchVersions` makes sure of this. |
 | `version_letter` | string | One letter a–z. Each patch must have a letter, but an `internal` patch has no letter. If the owner switches on "Add a letter for each switched-on patch", the About screen shows this letter after the version. Each patch has a different letter. |
 | `internal` | bool, optional | `true`: the patch is a part of a build step. The Patches pane does not show it. Only `dark-mode` uses this key. |
 | `title` | string | The name in the Patches pane, in title case, for example "Album Artwork". If it is missing, the pane shows `name`. |

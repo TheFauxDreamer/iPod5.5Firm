@@ -170,6 +170,7 @@ struct PatchListRow: View {
                 HStack(spacing: 6) {
                     Text(patch.spec.displayTitle)
                     LetterBadge(patch: patch)
+                    if let v = patch.spec.version { Text(v).font(.caption).foregroundStyle(.secondary) }
                 }
                 if let summary = patch.spec.summary {
                     Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -323,7 +324,12 @@ struct PatchDetail: View {
                           systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                 }
+                LabeledContent("Version", value: patch.spec.versionText)
                 LabeledContent("Source", value: patch.source == .user ? "Installed by you" : "Included with iPodFirm")
+                if patch.replacesBuiltIn {
+                    Text("This patch replaces the built-in version \(patch.builtInVersion ?? "–"). To use the built-in patch again, remove this patch.")
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
             }
             PatchControls(patch: patch)
         }

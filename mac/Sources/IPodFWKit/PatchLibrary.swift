@@ -20,10 +20,24 @@ public struct PatchCandidate: Identifiable {
     public var codeSize: Int?
     /// true: a user patch with this name is installed. The install replaces it.
     public var replaces = false
+    /// true: the patch has a higher version than the built-in patch of the same name. The install replaces the built-in patch.
+    public var replacesBuiltIn = false
+    /// The version of the patch that the install replaces (user or built-in), or nil if that patch has no version.
+    public var installedVersion: String?
     /// The staging folder to delete after the install, for a .ipodpatch file.
     public var staging: URL?
 
     public var canInstall: Bool { errors.isEmpty && spec != nil }
+
+    /// The relation between this patch and the patch that the install replaces.
+    public enum VersionChange { case new, update, same, downgrade }
+    public var change: VersionChange {
+        guard replaces || replacesBuiltIn else { return .new }
+        let mine = spec?.parsedVersion, old = installedVersion.flatMap(PatchVersion.init)
+        if PatchVersion.isLower(old, than: mine) { return .update }
+        if PatchVersion.isLower(mine, than: old) { return .downgrade }
+        return .same
+    }
 }
 
 public struct PatchLibrary {
@@ -45,12 +59,20 @@ public struct PatchLibrary {
         self.stagingDir = stagingDir
     }
 
-    /// The built-in patches and the user patches. A user patch with the name of a built-in patch is ignored.
+    /// The built-in patches and the user patches. A user patch with the name of a built-in patch replaces
+    /// the built-in patch only if the user patch has a higher version. Otherwise the user patch is ignored.
     public func list() -> [PatchInfo] {
-        let builtIn = Patcher.list(in: builtInDir, source: .builtIn)
-        let names = Set(builtIn.map(\.spec.name))
-        let user = Patcher.list(in: userDir, source: .user).filter { !names.contains($0.spec.name) }
-        return (builtIn + user).sorted { $0.spec.name < $1.spec.name }
+        var byName = [String: PatchInfo]()
+        for p in Patcher.list(in: builtInDir, source: .builtIn) { byName[p.spec.name] = p }
+        for var p in Patcher.list(in: userDir, source: .user) {
+            if let b = byName[p.spec.name] {
+                guard b.source == .builtIn, PatchVersion.isLower(b.spec.parsedVersion, than: p.spec.parsedVersion) else { continue }
+                p.replacesBuiltIn = true
+                p.builtInVersion = b.spec.version
+            }
+            byName[p.spec.name] = p
+        }
+        return byName.values.sorted { $0.spec.name < $1.spec.name }
     }
 
     // MARK: inspect
@@ -107,12 +129,28 @@ public struct PatchLibrary {
         if spec.name.isEmpty || spec.name.unicodeScalars.contains(where: { !"abcdefghijklmnopqrstuvwxyz0123456789-".unicodeScalars.contains($0) }) {
             c.errors.append("The name \"\(spec.name)\" is not valid. Use only the letters a–z, the digits 0–9 and \"-\".")
         }
-        if let other = existing.first(where: { $0.spec.name == spec.name }) {
-            if other.source == .builtIn {
-                c.errors.append("iPodFirm already has a patch with the name \"\(spec.name)\". Give the patch a different name.")
+        if let v = spec.version, PatchVersion(v) == nil {
+            c.errors.append("The version \"\(v)\" is not valid. Use one to three numbers with dots, for example 1.2.")
+        }
+        if let builtIn = Patcher.list(in: builtInDir).first(where: { $0.spec.name == spec.name }) {
+            // A user patch can replace a built-in patch only with a higher version.
+            if PatchVersion.isLower(builtIn.spec.parsedVersion, than: spec.parsedVersion) {
+                c.replacesBuiltIn = true
+                c.replaces = existing.contains { $0.spec.name == spec.name && $0.source == .user }
+                c.installedVersion = existing.first { $0.spec.name == spec.name }?.spec.version
+                c.notes.append("iPodFirm has version \(builtIn.spec.versionText) of this patch built in. This patch replaces it. To use the built-in patch again, remove this patch.")
             } else {
-                c.replaces = true
+                c.errors.append("iPodFirm already has version \(builtIn.spec.versionText) of the patch \"\(spec.name)\". This file has version \(spec.versionText). Only a higher version can replace a built-in patch. Or give the patch a different name.")
             }
+        } else if let other = existing.first(where: { $0.spec.name == spec.name }) {
+            c.replaces = true
+            c.installedVersion = other.spec.version
+        }
+        if c.change == .downgrade {
+            c.notes.append("The installed version is \(c.installedVersion ?? "–"). This file has the older version \(spec.versionText).")
+        }
+        if spec.version == nil {
+            c.notes.append("The patch has no version in patch.json. iPodFirm cannot compare it with other versions of the patch.")
         }
         if spec.internal == true { c.errors.append("An internal patch cannot be installed.") }
 

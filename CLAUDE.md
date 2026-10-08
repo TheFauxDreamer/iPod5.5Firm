@@ -57,4 +57,6 @@ This rule is mandatory. Never publish a document, a page, a report or any other 
 - Each feature that operates on the iPod or on the firmware must have a user interface in the iPodFirm app. A command-line tool alone is not sufficient.
 - Each build of the iPodFirm app must increase the version number and the build number. `mac/scripts/build-app.sh` does this.
 - Give each new patch a `version_letter` in its `patch.json`. Use one letter a–z that no other patch uses. An `internal` patch does not get a letter. The test `testPatchVersionLetters` makes sure of this.
+- Give each patch a `version` in its `patch.json`, for example `"1.0"`. Use one to three numbers with dots. The test `testPatchVersions` makes sure of this.
+- Increase the `version` of a patch at each change to its `patch.json` or its code. Then the install sheet shows the new file as an update.
 - Do not commit Apple firmware files, `.ipsw` files or iPod backups.

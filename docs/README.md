@@ -35,8 +35,8 @@ Use this table to find the documents to update:
 
 | When you change | Update |
 |---|---|
-| A patch: `patches/*/patch.json` or its C file | [modifications.md](modifications.md) (hooks, size, logic, test status), [patch-system.md](patch-system.md) (free space table), [firmware-format.md](firmware-format.md) (osos memory map), [firmware-functions.md](firmware-functions.md) (new firmware addresses), [safety.md](safety.md) (test status) |
-| A new patch | All of the above, and the summary table in [modifications.md](modifications.md). Give it a `version_letter`. |
+| A patch: `patches/*/patch.json` or its C file | Increase the `version` in `patch.json`. [modifications.md](modifications.md) (hooks, size, logic, test status), [patch-system.md](patch-system.md) (free space table), [firmware-format.md](firmware-format.md) (osos memory map), [firmware-functions.md](firmware-functions.md) (new firmware addresses), [safety.md](safety.md) (test status) |
+| A new patch | All of the above, and the summary table in [modifications.md](modifications.md). Give it a `version_letter` and a `version`. |
 | `Patcher.swift` or `patcher.py` | [patch-system.md](patch-system.md) |
 | `Partition.swift`, `Resources.swift`, `Pictures.swift` or their Python versions | [firmware-format.md](firmware-format.md) |
 | `ThemeImport.swift`, `DarkMode.swift`, `FirmwareVersion.swift`, `AlbumArt.swift`, `ArtworkDB.swift`, `MusicImport.swift` | [modifications.md](modifications.md) |

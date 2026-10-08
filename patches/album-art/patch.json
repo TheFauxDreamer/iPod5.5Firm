@@ -10,6 +10,7 @@
     ]
   },
   "version_letter": "a",
+  "version": "1.0",
   "description": "Shows the album cover at the left of each album and each playlist in the lists of the iPod.",
   "details": ["Each album in a list shows a small picture of its cover.", "Each playlist shows a custom image, or the covers of its first four albums."],
   "requires": ["A thumbnail file on the iPod. Use the Thumbnails section below to write it after you flash the firmware."],

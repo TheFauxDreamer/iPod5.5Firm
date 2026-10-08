@@ -1,5 +1,6 @@
 {
   "name": "dark-mode",
+  "version": "1.0",
   "description": "Dark Mode On/Off in Settings. The build adds the switch table and the Settings item; iPodFirm uses this patch for the appearance \"Switch on iPod\".",
   "internal": true,
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",

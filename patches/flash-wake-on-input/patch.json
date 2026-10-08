@@ -5,6 +5,7 @@
   "symbol": "hand.point.up.left",
   "category": "power",
   "version_letter": "w",
+  "version": "1.0",
   "description": "Starts the flash storage when you press a button, so that the first song starts sooner.",
   "details": ["After a long pause, a button press starts the storage immediately.", "Thus the storage is ready when you choose a song.", "After a start, the iPod does not examine the storage again for 30 minutes.", "A turn of the click wheel does not start the storage."],
   "requires": ["Flash storage, for example an iFlash, CompactFlash or SSD adapter. Do not use this patch with the original hard drive."],
