@@ -103,7 +103,7 @@ The install moves the old folder to the Trash. The patch keeps its switch state,
 | `notes` | array of strings, optional | More information. The section "Good to Know" shows each item. |
 | `caution` | string, optional | A caution. The pane shows it in orange above the switch of the patch. The install sheet also shows it. |
 | `symbol` | string | The name of an SF Symbol, for example `photo.on.rectangle.angled`. Do not use emoji. |
-| `category` | string | The group in the list of patches: `display`, `power`, `fun` or `test`. |
+| `category` | string | The group in the list of patches: `display`, `power`, `audio` (the group "Sound"), `fun` or `test`. |
 | `settings_items` | array, optional | On/Off items that the patch adds to the Settings menu. Refer to [Settings items](#settings-items). |
 
 | `ui` | object, optional | Controls in the Patches pane. Refer to [The ui object](#the-ui-object). |

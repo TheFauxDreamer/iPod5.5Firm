@@ -194,6 +194,20 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | 0x094e08 | Keep-awake message type 4 ("sleep now"). Also used before a restart. | Static, Patch |
 | 0x001630 | Restart: writes 4 to `DEV_RS` (0x60006004). | Static, Emulator |
 
+### Volume and region
+
+Refer to [re/volume-limit.md](../re/volume-limit.md).
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0xa0348 | Returns bit 0 of the flags (device information +0x94): the EU volume limit. The patch `volume-unlimit` changes it. | Static, External (iPodWizard) |
+| 0x9f0f8 | Returns bits 1–2 of the flags (`flags & 6`). Only caller: 0x9bd88. Not the volume limit. | Static |
+| 0x9e958 | Returns the region code (device information `+0x92 & 0xff3f`). | Static |
+| 0x9bd88, 0x9bcd0 | Default values for settings +0xb3a and +0xb4e, from the region code. | Static |
+| 0xaf698 | Settings load. Writes the maximum volume to +0xb78: 0xd8 with the EU limit, 0x100 without it. | Static |
+| 0x88ff8 | Output volume: `level × maximum / 100`, with the maximum from +0xb78. | Static |
+| 0x1a3254 | iAP command handler. Case 0x24 replies 0x25 with the bit 0x1000000 if the EU limit is set. | Static |
+
 ### User events
 
 | Address | Function | Evidence |
@@ -340,6 +354,7 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | Application object | +0x444 | Backlight time in seconds |
 | Application object | +0x487 | "Sleep pending" flag |
 | Application object | +0x3e4 | Power controller |
+| Object of 0xaf698 and 0x88ff8 | +0xb78 | Maximum volume: 0x100, or 0xd8 with the EU limit |
 | Keep-awake message | +0x18 | Time in ms (type 2) |
 | Track | +0x28, +0x2c, +0x34, +0x3c, +0x40 | Pool indexes: title, artist, album, composer, genre |
 | Track | +0x30 | Index of the artist sort key (pool db + 0x10c) |
@@ -358,6 +373,7 @@ The physical address is 0x10000000 + the CPU address.
 | 0x1081ff2c, 0x1081ff30, 0x1081ff34 | Power pin monitor objects (byte +6 is the saved pin state). |
 | 0x108234ec | State of the USB audio streaming object. |
 | 0x1081ee48 | Audio route state. |
+| 0x108710dc | Device information object: +0x92 region code, +0x94 flags (bit 0 = EU volume limit). |
 | 0x1083de9c | SpiderMonkey opcode table. |
 
 The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No code refers to the area between the image end and 8 MB. The patches and the theme data use this area.

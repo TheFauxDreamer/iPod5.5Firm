@@ -35,7 +35,7 @@ struct PatchList: View {
     @State private var dropTargeted = false
     @State private var confirmRemove: PatchInfo?
 
-    static let groups = [("display", "Display"), ("power", "Power and Storage"), ("fun", "Fun"), ("test", "Tests")]
+    static let groups = [("display", "Display"), ("power", "Power and Storage"), ("audio", "Sound"), ("fun", "Fun"), ("test", "Tests")]
 
     var groups: [(title: String, patches: [PatchInfo])] {
         var result = Self.groups.map { key, title in (title, model.patches.filter { $0.spec.category == key }) }
@@ -257,6 +257,7 @@ extension PatchInfo {
         switch spec.category {
         case "display": .blue
         case "power": .green
+        case "audio": .orange
         case "fun": .pink
         default: .gray
         }

@@ -95,7 +95,7 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     /// Controls in the Patches pane that need no Swift code (see PatchUI).
     public var ui: PatchUI?
 
-    public static let categories = ["display", "power", "fun", "test"]
+    public static let categories = ["display", "power", "audio", "fun", "test"]
     /// The ids of the built-in Swift tools that `ui.tools` can name (PatchTools.swift in the app).
     public static let knownTools = ["album-thumbnails", "usb-log"]
     public var displayTitle: String { title ?? name }

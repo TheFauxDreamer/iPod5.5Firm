@@ -16,6 +16,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [sleep-now](#sleep-now) | Code patch | Patches | 1 vtable word and 2 `bl` | No |
 | [flash-keep-awake](#flash-keep-awake) | Code patch | Patches | 4 `bl` | Partly (an earlier version) |
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
+| [volume-unlimit](#volume-unlimit) | Data patch | Patches | 2 bytes | No |
 | [something-comforting](#something-comforting) | Code patch (example) | Patches | 1 `b` and 2 vtable words (all with `chain`), a Settings menu | No |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
@@ -367,6 +368,29 @@ The dispatch tables are RW data. The start code copies them to RAM with the chan
 17. 10 s after the host start, `hook_event` writes the buffer to the log file, flushes the disk cache (0x1a0120, then 0x19ff0c, as the sleep sequence does) and gives two short low beeps. 20 s later, it writes the log again, with two more beeps. The UI does not react during approximately 37 s. A later button or wheel event writes the log again if it has new records. A button event is not sufficient alone: 0x1d81cc gives each event to the active modal screen first (0x12d890, 0x12ddb8) and returns if the screen takes it, for example the photo import screen. On the real iPod, no log was written for this reason.
 
 **Test status.** Emulator: the demonstration and the countdown had the correct pauses. The host start ran 0x97300 and 0xd1288. The log had two records for the simulated root hub: hub validate and hub initialize device, device 05AC:8031, class 09, power 0xfa (500 mA). The menus worked after this. Real iPod: the host mode sign came. With the 3-in-1 adapter and a card reader, the photo import screen showed "unsupported device", with and without a card. No storage sign. With the dock, the port log showed VBUS valid, a connection, a correct reset and a high-speed device, but no driver call. The full-speed hook is for this result. Later tests (0.1.72–0.1.79) with the dock: the dock's hub, two storage devices and the USB-C EarPods enumerated. With the class change, the composite driver read the configuration of the EarPods (USB Audio Class 2). Caution: the probe reads DMA buffers through the cache, thus a second dump of the same buffer can show old bytes. Refer to [FINDINGS.md](../patches/usb-host-probe/FINDINGS.md).
+
+## volume-unlimit
+
+**User interface.** Patches pane > Sound > No EU Volume Limit, letter `v`. The pane shows a caution about hearing damage.
+
+**Effect.** On an iPod for the EU, the full position of the volume control gives the full volume. Without the patch, it gives 84% of the full volume. On other iPods, the patch changes nothing. The setting Settings > Volume Limit continues to operate.
+
+**Research.** Refer to [re/volume-limit.md](../re/volume-limit.md).
+
+- `0xa0348` returns bit 0 of the flags word +0x94 of the device information object (0x108710dc). This bit is the EU limit.
+- The settings load `0xaf698` writes the maximum volume to its object at +0xb78: 0xd8 (216) with the limit, 0x100 (256) without it.
+- `0x88ff8` calculates the output volume as `level × maximum / 100`.
+- The iAP reply 0x25 (`0x1a3254`, case 0x24) tells an accessory if the limit is set.
+
+**Change.** This patch has no C code. It uses the `bytes` key of `patch.json`. It is the same change as goPod and iPodWizard:
+
+| At | Expect | Value | Instruction after the change |
+|---|---|---|---|
+| 0xa0350 | `0100` | `0001` | `and r0, r0, #0` |
+
+Thus `0xa0348` always returns 0. The other match of the iPodWizard pattern, at 0x9f0f8, is a different function. The patch does not change it.
+
+**Test status.** A script applied the change to osos 1.3 and ran the iPodWizard search: "capped" before, "uncapped" after. The emulator cannot show the effect. Not tested on a real iPod. The test needs an iPod for the EU.
 
 ## something-comforting
 

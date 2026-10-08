@@ -228,7 +228,7 @@ The type 3 in this table agrees with the byte 3 at +0x07 of the 1.1.2 header in 
 ### What can help this project
 
 - Their method to keep the Ghidra analysis in Git without Apple code: they export the annotations as JSON lines (`ghidra/analysis/`) and import them again into a new project. This project keeps its Ghidra project only on the Mac of the owner.
-- Their patch list gives ideas for the iPod Video: the EU volume limit, Play Next, a custom EQ and the debug menu.
+- Their patch list gives ideas for the iPod Video: the EU volume limit, Play Next, a custom EQ and the debug menu. The EU volume limit now has a patch for the iPod Video: refer to [volume-limit.md](volume-limit.md).
 - Their approach to a decrypted firmware is a model if the owner wants classic support in the future. That work is a separate project.
 
 ## Recommendation

@@ -30,7 +30,7 @@ An earlier version of this note used the base address 0x10000000. This is the ph
 
 - **Resource blocks.** `ipodfw info -r` shows their offsets. The main block (BMap, Str, View, Menu) is at osos 0x331da0 in 1.3. Code that finds items in these tables by resource ID is a part of the user interface layer.
 - **Strings.** After `ipodfw unpack`, the English block is `work/strings/block24_main.json`. Search for a string ID as an immediate constant to find the screens that use it. Examples are the IDs of "Albums" and "Now Playing".
-- **The volume limit pattern of iPodWizard.** The pattern `08 00 9F E5 94 00 90 E5`, then a flag `01 00` or `00 01`, is a one-constant behaviour patch on 5G firmware. In 1.3 the pattern is at osos 0x9f0f8, but the bytes after it are `06 00`. Thus the old patch does not apply to 1.3. Disassemble the code before you change it.
+- **The volume limit pattern of iPodWizard.** The pattern `08 00 9F E5 94 00 90 E5`, then a flag `01 00` or `00 01`, is a one-constant patch on 5G firmware. In 1.3 the pattern occurs two times. At 0x9f0f8 the bytes after it are `06 00`, and iPodWizard skips this match. At 0xa0348 the bytes after it are `01 00`. This is the EU volume limit. Refer to [volume-limit.md](volume-limit.md).
 
 ## The Ghidra server of the emulator project
 
