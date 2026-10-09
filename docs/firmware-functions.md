@@ -130,7 +130,13 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 |---|---|---|
 | 0x2106e4 | Sets the colour of the graphics context: 4 bytes R, G, B, A. | Patch |
 | 0x210290 | Sets the draw mode. Apple code uses 0, 1, 8, 32, 33 and 34. Mode 0 replaces the pixels. Mode 1 darkens. | Patch, Emulator |
-| 0x211a00 | Fills a rectangle. | Patch |
+| 0x211a00 | Fills a rectangle. Adds the gc origin and calls 0xc01a4 with the bitmap of the gc. | Patch, Static |
+| 0xc01a4 | (bitmap descriptor, rect, colour, mode): fills a rectangle in a bitmap. Clips with the bounds of the bitmap, then marks the damage (0xe944c). | Static |
+| 0x210114 | Blit (gc, source gc, source rect, target rect). Adds the origins of the two gcs and calls 0x1216a0 with the clip at gc + 0x34. The row label draws its cached text images with it. | Static, Patch (`album-art`) |
+| 0x1216a0 | The blit core (source descriptor, target descriptor, source rect, target rect, colour, colour 2, mode, clip). If the two formats agree (mask 0xdfff) and the mode is 0, it copies the pixels. | Static |
+| 0x210638 | Sets a new gc to its start values (0x44 bytes). | Static |
+| 0x211a70 | (gc, bitmap): sets gc + 0x1c to the bitmap and the clip (gc + 0x34) to the bounds at bitmap + 0x98. | Static |
+| 0xe442c, 0xe944c | Before and after a draw into a bitmap: call the listeners at descriptor + 0x24, and add the rectangle to the damaged area. | Static |
 
 ### Text
 
@@ -349,7 +355,16 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | View | +0x5c | Left edge |
 | View | +0x74 | Graphics context |
 | View | +0x78, +0x7c, +0x80 | Child list, count, array pointer |
+| Graphics context | +0x10 | Byte: draw mode |
+| Graphics context | +0x11, +0x15 | Colour and second colour (R, G, B, A) |
+| Graphics context | +0x1c | The bitmap. The descriptor is at bitmap + 4. |
 | Graphics context | +0x2c, +0x30 | x origin, y origin |
+| Graphics context | +0x34 | Clip rectangle, in bitmap coordinates |
+| Bitmap descriptor (bitmap + 4) | +0x00, +0x04 | Pixel pointer; stride in bytes |
+| Bitmap descriptor | +0x08, +0x0c | Bits for each pixel (16); shift (x << shift is the bit offset) |
+| Bitmap descriptor | +0x10 | u16: format (0x565, 0x555, 0x1444, 0x1888; bit 0x2000 swaps the bytes) |
+| Bitmap descriptor | +0x14 … +0x20 | Bounds: top, left, bottom, right |
+| Bitmap descriptor | +0x24 | The draw listeners (damage) |
 | Rectangle | +0, +4, +8, +12 | top, left, bottom, right |
 | Application object | +0x444 | Backlight time in seconds |
 | Application object | +0x487 | "Sleep pending" flag |

@@ -35,7 +35,7 @@ The app has these functions:
 - Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
 - Install a patch from other people: double-click a `.ipodpatch` file, or drag it onto the list of patches. The app shows the version of each patch. It tells you if a file is an update or an older version. Export a patch as a `.ipodpatch` file with its compiled code, so that other people do not need Xcode. Refer to [docs/patch-system.md](docs/patch-system.md#the-ipodpatch-file).
 - Switch code patches on or off (Patches pane). The pane shows a list of the patches at the left. Select a patch to see its description, its compatibility and its tools at the right. A bar below the list shows the space that the theme and the patches use. It is red if the firmware is too large. The patches are in [patches/](patches/).
-- Write the album and playlist thumbnail file to the iPod for the `album-art` patch.
+- Write the playlist thumbnail file to the iPod for the `album-art` patch. The albums use the artwork that is on the iPod.
 - Set a custom image for each playlist for the `album-art` patch.
 - Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane).
 - Show a different version on the About screen of the iPod, for example 1.3.1 (Patches pane). This setting is off by default. iTunes and Finder continue to see version 1.3.
@@ -260,7 +260,7 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 
 | Patch | Function | Status |
 |---|---|---|
-| `album-art` | Shows a 20 × 20 thumbnail at the left of each album and each playlist in the lists. | Tested in the emulator with 200 real songs in 28 albums. Working on real iPod, bit buggy when a song name matches album name. |
+| `album-art` | Shows a 20 × 20 thumbnail at the left of each album and each playlist in the lists. The album thumbnails come from the artwork on the iPod. | Version 1.0: tested in the emulator and on a real iPod. Version 2.0: tested in the emulator with 138 albums. Not tested on a real iPod. |
 | `flash-keep-awake` | SSD mode for flash storage (iFlash, CompactFlash and SSD adapters). Keeps the storage on for 30 minutes after each access, not for 1 second. Starts the storage at once when the iPod wakes from sleep. Waits 0.5 s before the storage power goes off. On a hard drive, the patch does nothing. |
 | `flash-wake-on-input` | For flash storage. Starts the storage at once when you press a button after a long pause. After a start, it does not examine the storage again for 30 minutes. A turn of the wheel does not start the storage. Switch it on if the first song after a long pause starts late. |
 | `backlight-60s` | The Backlight Timer menu has a 60 Seconds item in place of 2 Seconds. | Menu tested in the emulator. Not tested on a real iPod. |
@@ -268,7 +268,7 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 | `something-comforting` | An example patch. A Settings item plays approximately 13 seconds of "Something Comforting" by Porter Robinson on the internal speaker of the iPod. It is in the Fun group. | Tested in the emulator (the item and the note calls; the emulator has no audio). Not tested on a real iPod. |
 | `usb-host-probe` | A one-shot test of the USB host mode through a USB-C mod, for [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md). Only on the branch `usb-audio-out`. | Host start tested in the emulator. Not tested on a real iPod. |
 
-The `album-art` patch reads the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds albums. A restart of the iPod is not necessary. After you disconnect the iPod from the computer, the patch examines the file again when an album list or a playlist list shows.
+The `album-art` patch gets the album thumbnails from the artwork that iTunes or Finder put on the iPod (`iPod_Control/Artwork`). The albums do not need a file. The playlists need the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds playlists. A restart of the iPod is not necessary. After you disconnect the iPod from the computer, the patch examines the file again when an album list or a playlist list shows.
 
 A playlist gets a thumbnail too. In the Patches pane, select "Album Artwork". The section "Playlist Artwork" shows the playlists of the connected iPod:
 

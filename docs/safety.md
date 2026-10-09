@@ -145,7 +145,7 @@ A test in the emulator is strong evidence, but not proof:
 | Restore of a backup | No (no USB) | Not recorded. Tested on a disk image (`IPODFW_DISK_TEST=1`). |
 | Rescue restore | No | Not recorded |
 | Dark theme and moved rsrc | Yes | Yes (2 October 2026) |
-| `album-art` | Yes | Yes |
+| `album-art` | Version 2.0: yes (9 October 2026) | Version 1.0: yes. Version 2.0: no |
 | `backlight-60s` | Menu only | No |
 | `sleep-now` | Up to the hardware sleep | No |
 | `flash-keep-awake` | Yes, without a sleep | 2-minute version only |

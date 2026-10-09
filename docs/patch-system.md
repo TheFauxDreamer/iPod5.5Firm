@@ -261,15 +261,16 @@ After the checks, iPodFirm writes the code and the hooks. It extends osos with z
 
 ## The free space
 
-Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker. Do not put code on them. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. After `flash-wake-on-input`, 124 bytes are free (0x736784–0x736800). A larger patch uses the extended area (see below).
+Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker. Do not put code on them. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. Two parts are free: 0x7358d0–0x73658c (3260 bytes; `album-art` used it before version 2.0) and 0x736784–0x736800 (124 bytes). A larger patch uses the extended area (see below).
 
 | Patch | Load address | Space | Notes |
 |---|---|---|---|
-| `album-art` | 0x7358d0 | 0x7358d0–0x73658c (3260 bytes) | Code, constants and variables use 3080 bytes. |
+| (free) | | 0x7358d0–0x73658c (3260 bytes) | `album-art` 1.0 used this area. |
 | `sleep-now` | 0x73658c | 0x73658c–0x736644 (184 bytes) | The code uses 181 bytes. |
 | `flash-keep-awake` | 0x736644 | 0x736644–0x736700 (188 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
 | `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
+| `album-art` | `extended` | After all other data (8020 bytes). Alone: 0x736800–0x738754. The album table, the thumbnails and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
 | `usb-host-probe` | `extended` | After all other data (8740 bytes; the 32 KB log buffer comes from the allocator) | Extended patch. Test patch. |
 | `something-comforting` | `extended` | After all other data (692 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736ab4, menu at 0x737000, osos end 0x737800 | Extended patch. Example patch. |
 

@@ -97,7 +97,7 @@ The rsrc image contains a FAT16 file system at offset 0x600. `ipodfw.fat16` read
 
 ## Result: the album-art patch
 
-The patch is in [patches/album-art/](../patches/album-art/). It is complete and has tests in the emulator.
+The patch is in [patches/album-art/](../patches/album-art/). It is complete and has tests in the emulator. Version 2.0 gets the album covers from the artwork of the iPod and draws with the firmware blit. Refer to [album-art-v2.md](album-art-v2.md).
 
 ### How it operates
 

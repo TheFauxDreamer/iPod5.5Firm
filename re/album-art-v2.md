@@ -1,0 +1,110 @@
+# Album artwork version 2: research notes
+
+This document records the research for version 2.0 of the `album-art` patch. The firmware is Apple RetailOS 1.3 for the iPod Video. The work started on 9 October 2026.
+
+Version 1.0 had two problems:
+
+- It drew each thumbnail with one `gc_set_color` call and one `gc_fill_rect` call for each run of pixels with the same colour. A cover has runs of approximately 1 pixel, thus a 20 × 20 thumbnail needed up to 400 pairs of calls.
+- It needed the file `iPodFirmAlbumArt`. The user had to write it with iPodFirm after each sync.
+
+Version 2.0 gets the album covers from the artwork of the iPod, and draws each thumbnail with one call of the firmware blit. The `cover-flow` patch found how to read the artwork (refer to the `cover-flow` branch, `re/cover-flow.md`, "Research: the built-in artwork").
+
+## Tools
+
+- Ghidra with the project `osos13` (refer to [../docs/ghidra-guide.md](../docs/ghidra-guide.md)), `DecompileAt.java`.
+- The instrumented emulator (refer to [emulator.md](emulator.md)), with `IPODFW_MARK_AT`, `evlog`, `peek`, `hold`, `wheel` and `shot`.
+- A debug copy of the patch, which kept a record of each label draw in a global array. `peek` read the array. The debug copy was not kept.
+
+## The graphics context and the bitmap
+
+Static results (Ghidra):
+
+| Address | Finding |
+|---|---|
+| 0x211a00 | `gc_fill_rect(gc, rect)` adds the origin (gc + 0x30 to top and bottom, gc + 0x2c to left and right) and calls 0xc01a4(gc + 0x1c → bitmap + 4, rect, gc + 0x11, mode at gc + 0x10). |
+| 0xc01a4 | Fills a rectangle in a bitmap. It clips with the bounds of the bitmap (0xc1e68), calls the draw listeners (0xe442c), fills, and adds the rectangle to the damaged area (0xe944c). |
+| 0x210114 | The blit (gc, source gc, source rect, target rect). It adds the origins of the two gcs and calls 0x1216a0(source bitmap + 4, target bitmap + 4, source rect, target rect, gc + 0x11, gc + 0x15, mode, gc + 0x34). The source is a gc, not a picture object. |
+| 0x1216a0 | The blit core. It clips the target rectangle with gc + 0x34, then clips both rectangles with the bounds of the two bitmaps. If the two format words agree (mask 0xdfff) and the mode is 0, it copies the pixels. It calls 0xe442c and 0xe944c for the target. |
+| 0x210638 | Sets a new gc to its start values: 0x44 bytes. |
+| 0x211a70 | (gc, bitmap): gc + 0x1c = bitmap; the clip gc + 0x34 = the bounds at bitmap + 0x98. |
+| 0x1bb260 | The list-row label draws its cached text images with 0x210114. Each image is a gc of 0x6c bytes in the label (label + (0x7b + 0x1b × i) × 4). |
+
+The bitmap descriptor starts at bitmap + 4:
+
+| Offset | Content |
+|---|---|
+| +0x00 | Pixel pointer |
+| +0x04 | Stride in bytes |
+| +0x08 | Bits for each pixel (16) |
+| +0x0c | Shift: x << shift is the bit offset of a pixel (4 for 16 bits) |
+| +0x10 | u16: the format. 0xc62b4 knows 0x555, 0x565, 0x1444 and 0x1888. Bit 0x2000 swaps the bytes. |
+| +0x14, +0x18, +0x1c, +0x20 | Bounds: top, left, bottom, right |
+| +0x24 | The draw listeners. Only the target of a draw uses them. |
+
+The blit core addresses the rows in 32-bit words. Thus the pixel pointer and the stride of a source must be multiples of 4.
+
+### The patch draw
+
+The patch makes a source gc on the stack: 0x44 bytes of zeros, with gc + 0x1c pointing to a bitmap of 10 words around the thumbnail. The format word is a copy of the format word of the target. Thus the blit copies the pixels and does not convert them. The firmware clips the blit and marks the damaged area.
+
+The patch draws runs of rectangles, as version 1.0 did, if one of these conditions is true:
+
+- The target is not 16 bits for each pixel.
+- The target format is not 0x565.
+- The thumbnail pointer is not a multiple of 4.
+- The thumbnail size is odd.
+
+In the emulator, the list rows used the blit. The screens of version 1.0 and version 2.0 agree, also for the highlighted row.
+
+## The album covers
+
+The patch makes a table of the albums with artwork at the first album or playlist label after a database load:
+
+1. For each track (database + 0x20, count at + 0x1c), it copies the album name from the album pool (database + 0x138) with 0x9eff8. It calculates the FNV-1a hash of the UTF-8 form of the name. The firmware gives the same UTF-8 text to the label, thus the hash of the label text agrees.
+2. It sorts the tracks by their dbid (track + 0x108).
+3. It reads `iPod_Control\Artwork\ArtworkDB` through a 32 KB window. For each image (mhii) of a known track, it keeps the hash, the number N of `F1028_N.ithmb` and the offset of the 100 × 100 image.
+4. It sorts the entries by the hash and keeps one entry for each album.
+
+At the first draw of an album row, the patch reads the 100 × 100 image (20000 bytes) and makes a 20 × 20 thumbnail with the average of each 5 × 5 square. `(sum × 2621 + 32768) >> 16` divides by 25. It keeps a maximum of 1 MB of thumbnails.
+
+## A delayed read does not operate
+
+The first test had a read budget: a maximum of one thumbnail in 30 ms. A row over the budget got the space of its thumbnail, and the patch called `view_invalidate` (0x21ac04) on the label to get a later draw. Results in the emulator:
+
+- The firmware did not draw the labels again. After 450 ms, the label hooks did not run again. Thus `view_invalidate` during a draw does not start a new draw.
+- The Albums list draws all its rows with the same label view (0x13c1b7fc in the emulator). Each row is a new draw of this view with a different text.
+- The rows after a row without a thumbnail had no space. The patch returned before `gc_prepare`, thus the gc origin stayed at the shifted position. The left-edge test (x ≤ 8) of the next row then failed.
+
+Thus version 2.0 has no read budget. It makes each thumbnail at its first draw, and it calls `gc_prepare` after each shifted draw.
+
+## Times in the emulator (9 October 2026)
+
+The library is the FolderLibrary of the Emulator pane: 1000 tracks, 138 albums, with ArtworkDB and `F1028_1.ithmb`. The drives had the database and the artwork, but no music files. The "old" drive also had the file `iPodFirmAlbumArt` (20 × 20).
+
+Markers (`IPODFW_MARK_AT`): the original label draws 0x1bb260 and 0x244924, and the LCD present 0x164f44. A paint is the time from the first label draw to the first present after the last label draw. The times are emulated ms (`USEC_TIMER`).
+
+| Case | No patch | Version 1.0 | Version 2.0 |
+|---|---|---|---|
+| Open Albums the first time | 365.35 | 412.56 | 457.11 |
+| Move the highlight one row (four tests) | 1.63, 2.09, 3.13, 3.45 | 3.82, 6.11, 7.19, 8.08 | 1.71, 2.33, 3.32, 3.67 |
+
+A second test split the time into single paints:
+
+| Case | No patch | Version 1.0 | Version 2.0 |
+|---|---|---|---|
+| Open Albums the first time: the paint of the list | 16.38 | 31.84 | 54.48 |
+| Scroll 10 rows: the paints that move the list (new rows show) | 12.68–19.76 | 33.04–39.70 | 18.22–29.20 |
+| Scroll 10 rows: all paints together | 118.58 | 170.69 | 130.43 |
+| Open Albums again: the paint of the list | 32.04 | 50.44 | 33.37 |
+
+- With the thumbnails in memory, version 2.0 needs 4–11 % more time than no patch. Version 1.0 needs 1.6–2.9 times the time of no patch.
+- A paint that shows a new row adds approximately 6–10 ms for one disk read and the 5 × 5 average. It is still faster than version 1.0.
+- The first paint of the Albums list makes the table (1000 tracks and ArtworkDB) and 8 thumbnails. It takes 38 ms more than no patch, one time after each database load.
+
+The emulator disk has no seek time. On a hard disk, each new thumbnail adds a seek. This is not measured.
+
+## Open items
+
+1. A test on the real iPod with a library from Finder or iTunes. Is format 1028 on the iPod? (The same open item as Cover Flow v0.4.)
+2. The time of the first open and of a long scroll on a hard disk.
+3. A name with a character outside the Basic Multilingual Plane: the patch makes 4-byte UTF-8. The firmware form of such a label text is not examined.

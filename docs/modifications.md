@@ -12,7 +12,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [Text replacement](#text-replacement) | Resource data | Text | One Str area | Not recorded |
 | [Software version](#software-version) | Code | Patches > Software Version | 2 instructions, or 1 function body | No |
 | [backlight-60s](#backlight-60s) | Data patch | Patches | 16 byte runs and 21 strings | No |
-| [album-art](#album-art) | Code patch | Patches | 2 vtable words | Yes |
+| [album-art](#album-art) | Code patch (extended) | Patches | 2 vtable words and 1 `bl` | Version 1.0: yes. Version 2.0: no |
 | [sleep-now](#sleep-now) | Code patch | Patches | 1 vtable word and 2 `bl` | No |
 | [flash-keep-awake](#flash-keep-awake) | Code patch | Patches | 4 `bl` | Partly (an earlier version) |
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
@@ -117,14 +117,22 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 ## album-art
 
-**User interface.** Patches pane > Album Artwork, letter `a`. `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
+**User interface.** Patches pane > Album Artwork, letter `a`, version 2.0. `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
 
-- "Thumbnails": "Write Thumbnails to iPod" writes the thumbnail file. "Eject iPod" ejects the iPod.
+- "Thumbnails": "Write Thumbnails to iPod" writes the thumbnail file. The albums do not need this file. "Eject iPod" ejects the iPod.
 - "Playlist Artwork" sets a custom image for each playlist ("Choose Image…", "Use Automatic", or drag an image).
 
 **Effect.** Each row in an album list and in a playlist list shows a 20 × 20 thumbnail at its left side.
 
-**Load address.** 0x7358d0. The compiled code is 3080 bytes. Its area ends at 0x73658c.
+**The thumbnails.**
+
+- An album gets its thumbnail from the artwork that iTunes or Finder put on the iPod: `iPod_Control/Artwork/ArtworkDB` and the 100 × 100 images (format 1028) in `F1028_N.ithmb`. The patch makes a 20 × 20 thumbnail with the average of each 5 × 5 square.
+- A playlist gets its thumbnail from the file `iPodFirmAlbumArt`. An album without artwork on the iPod also uses this file, if the file has it.
+- The file is optional. Without the file, the albums show their thumbnails and the playlists show none.
+
+The research is in [../re/album-art-v2.md](../re/album-art-v2.md).
+
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 8020 bytes. Version 1.0 used the fixed area 0x7358d0–0x73658c (3080 bytes). Thus a build with this patch moves rsrc.
 
 **Hooks.**
 
@@ -146,7 +154,10 @@ The list-row label scrolls a long title on the highlighted row from a cached ima
 | 0x21a27c | `gc_prepare` | Sets the origin and the clip of the graphics context for a view |
 | 0x2106e4 | `gc_set_color` | Sets the fill colour (R, G, B, A bytes) |
 | 0x210290 | `gc_set_mode` | Sets the draw mode |
-| 0x211a00 | `gc_fill_rect` | Fills a rectangle |
+| 0x211a00 | `gc_fill_rect` | Fills a rectangle (only if the target is not RGB565) |
+| 0x210114 | `gc_blit` | Copies the pixels of a source gc into a gc |
+| 0x09bc6c | `lib_resolve` | Resolves the library reference of the main provider |
+| 0x09eff8 | `pool_copy` | Copies the UTF-16 text of a string pool entry |
 | 0x25a974, 0x25a8e4 | `fw_alloc`, `fw_free` | Memory from the pool at 0x1081da00 |
 | 0x07ccd0, 0x07cd6c | `fw_memset0`, `fw_strcpy` | Memory and string functions |
 | 0x08f38c, 0x08f464, 0x08f5c4, 0x08f184 | `file_open`, `file_read`, `file_seek`, `file_close` | File access on the iPod disk |
@@ -155,21 +166,39 @@ The list-row label scrolls a long title on the highlighted row from a cached ima
 **Runtime logic.** For each draw of a label, the wrapper does these steps:
 
 1. If the parent of the label (view + 0x10) does not have the class 0x66b4dc (a list cell), call the original method and stop. This rule applies only to the general label. It prevents a thumbnail in Now Playing.
-2. Load the thumbnail file if it is not loaded.
-3. Read the element ID at view + 0x1c. Continue only for 0x6421 (album name) or 0x6425 (playlist name).
-4. Make sure that the label is at the left edge (x ≤ 8) and has the height of a list row.
+2. Read the element ID at view + 0x1c. Continue only for 0x6421 (album name) or 0x6425 (playlist name).
+3. Make the album table if it is not made. Load the thumbnail file if it is not loaded.
+4. Make sure that the label is at the left edge (x ≤ 8).
 5. Calculate the FNV-1a hash of the text. For a playlist, start the hash with the byte 0x01.
-6. Find the hash in the sorted index (binary search).
-7. Add 24 pixels to the left edge of the label (view + 0x5c). Call the original method. Subtract the 24 pixels again.
-8. Call `gc_prepare`. Then draw the thumbnail as runs of filled rectangles, one run for each group of pixels with the same colour.
+6. For an album, find the hash in the album table (binary search). If the thumbnail is not in memory, read the 100 × 100 image and make the thumbnail.
+7. If there is no thumbnail from the artwork, find the hash in the index of the file.
+8. Make sure that the label has the height of a list row.
+9. Add 24 pixels to the left edge of the label (view + 0x5c). Call the original method. Subtract the 24 pixels again.
+10. Call `gc_prepare`. Then draw the thumbnail with one call of the blit 0x210114.
+
+**The album table.** At the first album or playlist label after a database load, the patch makes the table:
+
+1. For each track in the RAM database (db + 0x20, count at db + 0x1c), it calculates the FNV-1a hash of the UTF-8 form of the album name (pool db + 0x138). This is the same hash as the hash of the label text.
+2. It sorts the tracks by their dbid (track + 0x108).
+3. It reads ArtworkDB through a 32 KB window. For each image (mhii) of a track with an album, it keeps the hash, the file number N and the offset of the format-1028 image.
+4. It sorts the entries by the hash and keeps one entry for each album.
+
+The table has 12 bytes for each album with artwork. While the table is made, the patch also uses 12 bytes for each track and the 32 KB window.
+
+**The draw.** The blit gets a source gc: a 0x44-byte gc with zero origins, with a bitmap descriptor around the thumbnail. The descriptor has the same format word as the target, so the blit copies the pixels and does not convert them. The firmware clips with gc + 0x34 and marks the damaged area. If the target is not 16 bits for each pixel with the format 0x565, the patch draws runs of filled rectangles, as version 1.0 did.
 
 Some draws of a highlighted row pass a structure, not text. The first byte of the structure is less than 0x20. Then the patch uses the thumbnail of the last draw of the same view (32 view slots).
 
 **Draw mode.** The patch uses mode 0, which replaces the pixels. Mode 1 darkens. With mode 1 the thumbnails were not visible on the dark theme.
 
-**Reload after a sync.** The firmware loads the music database at the start and after each USB session. The hook at 0xb4ad4 in this load sets a flag. At the next album label or playlist label, the patch clears the flag and reads the 16-byte header again. If the header changed, it frees the old data and loads the file again. If there was no file, the patch tries to load it again. Without a USB session, the patch does not read the file again.
+**Reload after a sync.** The firmware loads the music database at the start and after each USB session. The hook at 0xb4ad4 in this load sets a flag. At the next album label or playlist label, the patch clears the flag, makes the album table again and reads the 16-byte header of the file again. If the header changed, it frees the old data and loads the file again. If there was no file, the patch tries to load it again. Without a USB session, the patch does not read the file again.
 
-**Memory.** If all the thumbnails are 1 MB or less, the patch loads all of them. Otherwise it keeps a cache of 64 thumbnails. It reads a thumbnail from the disk when the cache does not have it.
+**Memory.**
+
+- The artwork: the patch makes each thumbnail at its first draw (one read of 20000 bytes) and keeps it. It keeps a maximum of 1 MB of thumbnails (1310 albums). Above this limit, a new thumbnail replaces the oldest one.
+- The file: if all its thumbnails are 1 MB or less, the patch loads all of them. Otherwise it keeps a cache of 64 thumbnails.
+
+A mark of the label for a new draw (`view_invalidate` 0x21ac04) during a draw does not start a new draw. Thus the patch cannot delay a read to a later draw. It reads each thumbnail at its first draw.
 
 ### The thumbnail file
 
@@ -206,7 +235,7 @@ The large artwork in Now Playing does not come from the patch. RetailOS reads `i
 - A song row never gets a thumbnail, also if the song has the same name as an album.
 - Two names with the same FNV-1a hash share one thumbnail. The second name is ignored.
 
-**Test status.** Tested in the emulator and on a real iPod 5.5G, with the light theme and with the dark theme.
+**Test status.** Version 1.0: tested in the emulator and on a real iPod 5.5G, with the light theme and with the dark theme. Version 2.0: tested in the emulator (refer to [../re/album-art-v2.md](../re/album-art-v2.md)). Not tested on a real iPod.
 
 ## sleep-now
 
