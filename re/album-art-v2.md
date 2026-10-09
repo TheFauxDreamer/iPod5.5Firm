@@ -108,3 +108,59 @@ The emulator disk has no seek time. On a hard disk, each new thumbnail adds a se
 1. A test on the real iPod with a library from Finder or iTunes. Is format 1028 on the iPod? (The same open item as Cover Flow v0.4.)
 2. The time of the first open and of a long scroll on a hard disk.
 3. A name with a character outside the Basic Multilingual Plane: the patch makes 4-byte UTF-8. The firmware form of such a label text is not examined.
+
+## Next steps: version 2.1 (not done)
+
+The owner asked for more speed on 9 October 2026. This section keeps the plan for later. No code is changed for it yet.
+
+### Where the time goes
+
+Emulator test on 9 October 2026, with the FolderLibrary (1000 tracks, 138 albums). The markers were on the file functions, on `pool_copy` (0x9eff8), on the hook and on the present (0x164f44).
+
+| Part | Emulated time | When |
+|---|---|---|
+| The album hash of each track (1000 calls of `pool_copy`) | Approximately 10 ms | The first Albums paint after a start or a sync |
+| The ArtworkDB parse (23 reads of 32 KB, a byte copy from the window) | 37.6 ms | The same |
+| A thumbnail fill: open, seek, read 20000 bytes, close | Approximately 3.2 ms | Each new row |
+| The 5 × 5 average, the blit and the label draw | Approximately 2.3 ms | Each new row |
+
+### Step 1: make the table in the database task (research first)
+
+The hook `hook_db_loaded` (the `bl` at 0xb4ad4) runs in the task that loads the music database. If this task makes the table, the UI task does not wait for it.
+
+1. In Ghidra, decompile 0xb4a64 after 0xb4ad4. Also decompile 0xa2310 and 0x1edb9c. Find out if the track array (database + 0x20) and the library of the main provider (RAM 0x1081da18 + 0x1c) are complete when 0xb4ad4 runs.
+2. In the emulator, set `IPODFW_REGS_AT` at 0xb4ad4. Then `peek` these values at the start and after a reload.
+3. If both values are complete, call `build_art` from `hook_db_loaded`:
+   - Make the table in local variables. Set `art_state = 1` only at the end.
+   - Set a variable `art_busy` during the build. The draw hook does not draw album thumbnails while `art_busy` is 1.
+4. If a value is not complete, keep the build in the draw hook. Record the result here.
+
+### Step 2: a faster ArtworkDB parse
+
+1. Change `db_read` so that it returns a pointer into the window. Do not copy the bytes.
+2. Stop the parse when each album with tracks has an image.
+3. The target is less than half of 37.6 ms.
+
+### Step 3: a faster 5 × 5 average
+
+1. Spread each pixel with `(c | c << 16) & 0x07E0F81F`. Blue goes to bits 0–4, red to bits 11–15 and green to bits 21–26.
+2. Add the 25 pixels in one register. The sums do not overlap: blue is a maximum of 775 (bits 0–9), red is a maximum of 775 (bits 11–20) and green is a maximum of 1575 (bits 21–31).
+3. Divide each channel with `(x × 2621 + 32768) >> 16`.
+4. Make sure with a host test in C that the result agrees, pixel for pixel, with the current `shrink`.
+
+### Step 4: fewer file opens (only if the measurement supports it)
+
+Measure the parts of the 3.2 ms: open, seek, read and close. If the open uses more than half, keep the `F1028_N.ithmb` handle open between fills.
+
+CAUTION: The patch has no hook at the start of a USB session. An open file during disk mode is a risk. Do this step only if you find a safe point to close the file.
+
+### Verification
+
+1. Run `uv run pytest` and `swift test` with `IPODFW_IPSW`.
+2. Make sure that the emulator screenshots agree with version 2.0.
+3. Record the first open, a scroll of 10 rows and the second open, for no patch, version 2.0 and version 2.1.
+4. Do a reload test with a new library.
+
+### Documents for that change
+
+Update this note, `docs/modifications.md`, `docs/patch-system.md` and `docs/firmware-functions.md`. Set `version` to 2.1 in `patch.json`. Build the app with `mac/scripts/build-app.sh`.

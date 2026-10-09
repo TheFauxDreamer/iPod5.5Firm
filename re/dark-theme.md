@@ -172,6 +172,7 @@ Two problems were found and corrected:
 - Test on a real iPod.
 - The Settings list keeps a blue highlight in dark mode. Since 6 October 2026 all lists keep the blue highlight (see "The highlight bar").
 - The first screen after a start shows "Press Center to dismiss" in the title bar. This comes from the theme: the original theme on 1.2.1 has it too.
+- With a large theme, the switch table uses most of the space below 0x7F0000. A compressed table is possibly a solution. Refer to [dark-mode-compression.md](dark-mode-compression.md).
 
 ## The highlight bar
 
