@@ -359,6 +359,20 @@ final class AppModel: ObservableObject {
 
     func isCompatible(_ t: ImportedTheme) -> Bool { editor?.originalOSOSHash == t.osos_sha256 }
 
+    private var switchSizeCache: (key: String, size: Int?)?
+
+    /// The bytes that "Switch on iPod" adds to the firmware: the theme data, the switch table, the
+    /// Settings menu and the dark-mode code. Nil if no theme agrees with the open firmware.
+    var switchOnIPodSize: Int? {
+        guard let editor, let file = selectedTheme, isCompatible(file.theme), let patch = Self.darkModePatch else { return nil }
+        let key = "\(revision) \(themeRevision) \(file.name)"
+        if let c = switchSizeCache, c.key == key { return c.size }
+        let size = try? DarkMode.addedSize(partition: editor.partition, osos: editor.osos, theme: file.theme,
+                                           codeSize: patch.spec.size ?? 0)
+        switchSizeCache = (key, size)
+        return size
+    }
+
     // MARK: dark theme pictures
 
     private var darkCache: (key: String, osos: [UInt8], items: [PictureItem])?
@@ -457,6 +471,13 @@ final class AppModel: ObservableObject {
     }
 
     // MARK: patches
+
+    /// Record the size of each user patch that an earlier version installed without a size. One time at the start.
+    func recordMissingPatchSizes() async {
+        let library = Self.patchLibrary
+        let changed = await Task.detached { library.recordMissingSizes() }.value
+        if !changed.isEmpty { reloadPatches() }
+    }
 
     func reloadPatches() {
         patches = Self.patchLibrary.list().filter { $0.spec.internal != true }

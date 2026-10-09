@@ -34,10 +34,10 @@ The app has these functions:
 - Show the recovery steps, and get the Apple firmware for a restore with Finder.
 - Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
 - Install a patch from other people: double-click a `.ipodpatch` file, or drag it onto the list of patches. The app shows the version of each patch. It tells you if a file is an update or an older version. Export a patch as a `.ipodpatch` file with its compiled code, so that other people do not need Xcode. Refer to [docs/patch-system.md](docs/patch-system.md#the-ipodpatch-file).
-- Switch code patches on or off (Patches pane). The pane shows a list of the patches at the left. Select a patch to see its description, its compatibility and its tools at the right. A bar below the list shows the space that the theme and the patches use. It is red if the firmware is too large. The patches are in [patches/](patches/).
+- Switch code patches on or off (Patches pane). The pane shows a list of the patches at the left. Select a patch to see its description, its compatibility, its size on the iPod and its tools at the right. A bar below the list shows the space that the theme and the patches use. It is red if the firmware is too large. The patches are in [patches/](patches/).
 - Write the playlist thumbnail file to the iPod for the `album-art` patch. The albums use the artwork that is on the iPod.
 - Set a custom image for each playlist for the `album-art` patch.
-- Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane).
+- Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane). The pane shows the size that each appearance adds to the firmware.
 - Show a different version on the About screen of the iPod, for example 1.3.1 (Patches pane). This setting is off by default. iTunes and Finder continue to see version 1.3.
 - Set up the Touch ID helper and examine Full Disk Access in the Settings window (iPodFirm > Settings…).
 

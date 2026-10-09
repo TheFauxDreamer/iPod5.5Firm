@@ -244,6 +244,7 @@ struct InstallPatchSheet: View {
                             GridRow { Text("For").foregroundStyle(.secondary); Text(spec.targetText) }
                             GridRow { Text("Letter").foregroundStyle(.secondary); Text(candidate.assignedLetter ?? spec.version_letter ?? "-") }
                             GridRow { Text("Code").foregroundStyle(.secondary); Text(candidate.codeSize.map { "\($0) bytes" } ?? "No code (data only)") }
+                            GridRow { Text("Size on iPod").foregroundStyle(.secondary); Text((candidate.assignedSize ?? spec.size).map(PatchSpec.byteText) ?? "–") }
                             GridRow { Text("Changes").foregroundStyle(.secondary); Text("\(spec.hooks?.count ?? 0) hooks, \(spec.bytes?.count ?? 0) byte runs") }
                         }
                         .font(.callout)

@@ -554,6 +554,13 @@ The switch table has this format (little-endian):
 
 The XOR data switches the bytes in both directions. A change that the owner edited is left out.
 
+**Size.** Patches pane > iPod Appearance > Dark Theme shows the new space for each appearance:
+
+- "Size on iPod (Dark)": the theme data after 0x736800 (`ImportedTheme.addedSize`).
+- "Size on iPod (Switch on iPod)": items 1 to 4 above, with the alignment (`DarkMode.addedSize`). It needs the open firmware 1.3.
+
+The text below the two values gives the bytes inside osos that the theme changes (`ImportedTheme.changedSize`). These changes use no new space. The measured values for the theme "Dark Gray" are 38,428 bytes (Dark), 738,593 bytes (Switch on iPod) and 660,678 changed bytes. The limit of the area is 759,808 bytes (0x736800–0x7F0000). The test `testExtendedPatchAfterSwitchBuild` makes sure that `DarkMode.addedSize` agrees with `DarkMode.build`.
+
 The new Settings menu is a copy of the Apple menu with one more item after Clicker (key 0x60006088). The new item is a copy of the Sound Check item (key 0x600060b7) with the key 0x600060e0 and the label ID 0x7e00.
 
 **Hooks.**

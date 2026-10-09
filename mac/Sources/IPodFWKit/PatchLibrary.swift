@@ -18,6 +18,8 @@ public struct PatchCandidate: Identifiable {
     public var assignedLetter: String?
     /// The size of the linked code in bytes, or nil for a data patch.
     public var codeSize: Int?
+    /// The size that the install writes into patch.json (the size was missing or not the measured size).
+    public var assignedSize: Int?
     /// true: a user patch with this name is installed. The install replaces it.
     public var replaces = false
     /// true: the patch has a higher version than the built-in patch of the same name. The install replaces the built-in patch.
@@ -206,6 +208,15 @@ public struct PatchLibrary {
             }
         }
 
+        // The size in patch.json must be the measured size: the Patches pane shows it.
+        // The install writes the measured size if it is missing or different.
+        if c.errors.isEmpty, let measured = c.codeSize ?? (hasObject || !sources.isEmpty ? nil : 0), spec.size != measured {
+            c.assignedSize = measured
+            c.notes.append(spec.size == nil
+                           ? "The patch does not record its size. iPodFirm records the measured size, \(measured) bytes."
+                           : "patch.json gives the size \(spec.size!) bytes, but the measured size is \(measured) bytes. iPodFirm records the measured size.")
+        }
+
         for t in spec.targets ?? [] where t.osos_sha256 != spec.osos_sha256 {
             c.errors.append("The target \"\(t.text)\" has a different osos_sha256 than the patch. Each target must have the osos_sha256 of the patch.")
         }
@@ -242,6 +253,19 @@ public struct PatchLibrary {
         (try? run("/usr/bin/xcrun", ["--find", "clang"])) != nil
     }
 
+    // MARK: sizes
+
+    /// Write the measured size into each user patch that has no `size` (a patch that an earlier
+    /// version of iPodFirm installed). The version does not change. A patch that does not link keeps
+    /// no size. Returns the names of the changed patches.
+    @discardableResult
+    public func recordMissingSizes() -> [String] {
+        Patcher.list(in: userDir, source: .user).filter { $0.spec.size == nil }.compactMap { p in
+            guard let size = try? Patcher.codeSize(p), (try? Self.updateJSON(in: p.folder, ["size": size])) != nil else { return nil }
+            return p.spec.name
+        }
+    }
+
     // MARK: install, remove, export
 
     /// Copy the patch to the user folder. Returns the installed folder.
@@ -253,15 +277,10 @@ public struct PatchLibrary {
         let dest = userDir.appendingPathComponent(spec.name)
         if fm.fileExists(atPath: dest.path) { try fm.trashItem(at: dest, resultingItemURL: nil) }
         try fm.copyItem(at: c.folder, to: dest)
-        if let letter = c.assignedLetter {
-            let file = dest.appendingPathComponent("patch.json")
-            guard var json = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any] else {
-                throw PatchError("iPodFirm cannot write the letter into patch.json.")
-            }
-            json["version_letter"] = letter
-            try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
-                .write(to: file, options: .atomic)
-        }
+        var changes = [String: Any]()
+        if let letter = c.assignedLetter { changes["version_letter"] = letter }
+        if let size = c.assignedSize { changes["size"] = size }
+        try Self.updateJSON(in: dest, changes)
         if let staging = c.staging { cleanStaging(staging) }
         return dest
     }
@@ -285,8 +304,23 @@ public struct PatchLibrary {
         if Patcher.hasCode(copy) && !fm.fileExists(atPath: obj.path) {
             try Data(try Patcher.compile(copy)).write(to: obj)
         }
+        let size = try Patcher.codeSize(PatchInfo(spec: patch.spec, folder: copy))
+        // The exported file records the measured size.
+        if patch.spec.size != size { try Self.updateJSON(in: copy, ["size": size]) }
         if fm.fileExists(atPath: url.path) { try fm.trashItem(at: url, resultingItemURL: nil) }
         try Self.run("/usr/bin/ditto", ["-c", "-k", "--keepParent", copy.path, url.path])
+    }
+
+    /// Write `changes` into the patch.json of `folder`. Nothing changes if `changes` is empty.
+    static func updateJSON(in folder: URL, _ changes: [String: Any]) throws {
+        guard !changes.isEmpty else { return }
+        let file = folder.appendingPathComponent("patch.json")
+        guard var json = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any] else {
+            throw PatchError("iPodFirm cannot write into patch.json.")
+        }
+        json.merge(changes) { $1 }
+        try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+            .write(to: file, options: .atomic)
     }
 
     // MARK: staging

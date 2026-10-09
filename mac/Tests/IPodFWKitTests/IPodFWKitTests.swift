@@ -529,6 +529,14 @@ final class PatchAndArtTests: XCTestCase {
         }
     }
 
+    /// Each patch records its size on the iPod in patch.json, and the value is the measured size.
+    func testPatchSizes() throws {
+        for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) {
+            let measured = try Patcher.codeSize(p, symbols: ["dark_table": 0])   // the Dark Mode build gives dark_table
+            XCTAssertEqual(p.spec.size, measured, "\(p.spec.name): set \"size\": \(measured) in patch.json")
+        }
+    }
+
     func testPatchVersionCompare() {
         XCTAssertGreaterThan(PatchVersion("1.10")!, PatchVersion("1.9")!)
         XCTAssertEqual(PatchVersion("1"), PatchVersion("1.0.0"))
@@ -653,6 +661,7 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertEqual(f.count, 16 + 16 + 2 * 4 * 4 * 2)
         XCTAssertEqual(le32(f, 12), 0x55763f97)                 // stamp: same value as the Python version
     }
+
 }
 
 final class EmulatorDriveTests: XCTestCase {
@@ -997,6 +1006,11 @@ final class DarkModeTests: XCTestCase {
         let dark = all.first { $0.spec.name == "dark-mode" }!
         let theme = try ImportedTheme.load(URL(fileURLWithPath: themePath))
         let (switched, info) = try DarkMode.build(partition: partition, osos: osos, theme: theme, patch: dark, originalSHA256: sha)
+        // The size in the Patches pane is the end of the dark-mode code after the build.
+        let size = try DarkMode.addedSize(partition: partition, osos: osos, theme: theme, codeSize: dark.spec.size!)
+        XCTAssertEqual(Patcher.maxOSOSSize + size, info.patchAt + dark.spec.size!)
+        XCTAssertTrue(switched[(info.patchAt + dark.spec.size!)...].allSatisfy { $0 == 0 })
+        XCTAssertLessThanOrEqual(theme.addedSize, size)
         let probe = all.filter { $0.spec.name == "usb-host-probe" }
         let out = try Patcher.apply(probe, to: switched, originalSHA256: sha)
         XCTAssertGreaterThan(Int(le32(out, 0x6c8730)), info.patchAt)
@@ -1211,6 +1225,64 @@ final class PatchLibraryTests: XCTestCase {
         XCTAssertTrue(usedNow.contains("a"))
         let next = "abcdefghijklmnopqrstuvwxyz".map(String.init).first { !usedNow.contains($0) }
         XCTAssertEqual(try inspect(makePatch(spec("used-letter", ["version_letter": "a"]))).assignedLetter, next)
+    }
+
+    /// A missing or wrong size gets a note, and the install writes the measured size into patch.json.
+    func testSize() throws {
+        func candidate(_ extra: [String: Any], _ folder: String) throws -> PatchCandidate {
+            try inspect(makePatch(spec("sized", extra), folder: folder))
+        }
+        let missing = try candidate([:], "s1"), correct = try candidate(["size": 0], "s2"), wrong = try candidate(["size": 5], "s3")
+        XCTAssertEqual(missing.assignedSize, 0)
+        XCTAssertNil(correct.assignedSize)
+        XCTAssertEqual(wrong.assignedSize, 0)
+        for c in [missing, correct, wrong] { XCTAssertEqual(c.notes.filter { $0.contains("size") }.count, c.assignedSize == nil ? 0 : 1) }
+        try library.install(wrong)
+        XCTAssertEqual(library.list().first { $0.spec.name == "sized" }?.spec.size, 0)
+    }
+
+    /// A user patch that an earlier version installed without a size gets the measured size. The version does not change.
+    func testRecordMissingSizes() throws {
+        let src = try String(contentsOf: Self.repo.appendingPathComponent("patches/sleep-now/sleep_now.c"), encoding: .utf8)
+        let builtIn = Patcher.list(in: Self.repo.appendingPathComponent("patches")).first { $0.spec.name == "sleep-now" }!
+        let extra: [String: Any] = ["load_address": "extended", "symbols": builtIn.spec.symbols ?? [:], "version": "2.0"]
+        let old = library.userDir.appendingPathComponent("old-code")
+        try FileManager.default.createDirectory(at: library.userDir, withIntermediateDirectories: true)
+        try FileManager.default.moveItem(at: makePatch(spec("old-code", extra), files: ["sleep_now.c": src]), to: old)
+        try FileManager.default.moveItem(at: makePatch(spec("old-data", ["version": "1.0"])), to: library.userDir.appendingPathComponent("old-data"))
+        try FileManager.default.moveItem(at: makePatch(spec("old-sized", ["size": 7])), to: library.userDir.appendingPathComponent("old-sized"))
+        let changed = library.recordMissingSizes()
+        let list = library.list()
+        func size(_ n: String) -> Int? { list.first { $0.spec.name == n }?.spec.size }
+        XCTAssertEqual(size("old-data"), 0)
+        XCTAssertEqual(size("old-sized"), 7)   // not examined: only missing sizes
+        XCTAssertEqual(list.first { $0.spec.name == "old-code" }?.spec.version, "2.0")
+        if PatchLibrary.hasCompiler() {
+            XCTAssertEqual(Set(changed), ["old-code", "old-data"])
+            XCTAssertEqual(size("old-code"), builtIn.spec.size)
+        }
+        XCTAssertEqual(library.recordMissingSizes(), [])
+    }
+
+    /// The install and the export of a code patch record the measured size.
+    func testSizeOfCodePatch() throws {
+        let src = try String(contentsOf: Self.repo.appendingPathComponent("patches/sleep-now/sleep_now.c"), encoding: .utf8)
+        let builtIn = Patcher.list(in: Self.repo.appendingPathComponent("patches")).first { $0.spec.name == "sleep-now" }!
+        let extra: [String: Any] = ["load_address": "extended", "symbols": builtIn.spec.symbols ?? [:]]
+        let c = try inspect(makePatch(spec("sized-code", extra), files: ["sleep_now.c": src]))
+        guard c.canInstall else { throw XCTSkip("the patch does not compile here: \(c.errors)") }
+        XCTAssertEqual(c.assignedSize, builtIn.spec.size)
+        let dest = try library.install(c)
+        let installed = try JSONDecoder().decode(PatchSpec.self, from: Data(contentsOf: dest.appendingPathComponent("patch.json")))
+        XCTAssertEqual(installed.size, builtIn.spec.size)
+        // An export with a wrong size: the file records the measured size.
+        var wrong = PatchInfo(spec: installed, folder: c.folder, source: .user)
+        wrong.spec.size = 1
+        let zip = tmp.appendingPathComponent("sized-code.ipodpatch"), out = tmp.appendingPathComponent("unzipped-size")
+        try library.export(wrong, to: zip)
+        try PatchLibrary.run("/usr/bin/ditto", ["-x", "-k", zip.path, out.path])
+        let exported = try JSONDecoder().decode(PatchSpec.self, from: Data(contentsOf: out.appendingPathComponent("sized-code/patch.json")))
+        XCTAssertEqual(exported.size, builtIn.spec.size)
     }
 
     /// An update, a reinstall and a downgrade of a user patch.

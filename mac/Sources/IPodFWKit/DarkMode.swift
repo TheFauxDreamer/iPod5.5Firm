@@ -82,28 +82,50 @@ public enum DarkMode {
         return try Patcher.insertSettingsItem(menu, key: darkKey, label: labelID, after: insertAfterKey, template: templateKey)
     }
 
+    /// The positions of the items after the theme data (refer to the comment at the top).
+    static func layout(themeEnd: Int, table: Int, menu: Int) -> (tableAt: Int, menuAt: Int, patchAt: Int) {
+        let tableAt = align(themeEnd, 16)
+        let menuAt = align(tableAt + table, 16)
+        return (tableAt, menuAt, align(menuAt + menu, 16))
+    }
+
+    /// The end of the theme data after the end of osos, or `patchAreaEnd` if there is none.
+    static func themeEnd(_ theme: ImportedTheme, osos: [UInt8]) -> Int {
+        theme.effectiveChanges.filter { $0.offset + $0.old.count > osos.count }.map { $0.offset + $0.new.count }
+            .reduce(patchAreaEnd, max)
+    }
+
+    /// Menu 24598 with the Dark Mode item, and its resource table entry.
+    static func settingsMenu(partition: FirmwarePartition, osos: [UInt8]) throws -> ([UInt8], Resource, ResourceBlock) {
+        let image = try ThemeImport.Image(partition)
+        guard let entry = image.res[settingsMenu] else { throw ThemeError("The firmware has no Settings menu (Menu 24598).") }
+        let (res, block) = entry
+        return (try settingsMenu(Array(osos[block.abs(res)..<block.abs(res) + Int(res.size)])), res, block)
+    }
+
+    /// The bytes that "Switch on iPod" adds after the end of osos (`patchAreaEnd`): the theme data, the
+    /// switch table, the Settings menu and the code of the patch (`codeSize`, the `size` in patch.json).
+    /// The value is the same as the layout of `build`. The Patches pane shows it.
+    public static func addedSize(partition: FirmwarePartition, osos: [UInt8], theme: ImportedTheme, codeSize: Int) throws -> Int {
+        let menu = try settingsMenu(partition: partition, osos: osos).0
+        let at = layout(themeEnd: themeEnd(theme, osos: osos), table: switchTable(theme, osos: osos).table.count, menu: menu.count)
+        return at.patchAt + codeSize - patchAreaEnd
+    }
+
     /// The osos for "Switch on iPod". `osos` can have edits of the owner; `partition` gives its resources.
     public static func build(partition: FirmwarePartition, osos: [UInt8], theme: ImportedTheme, patch: PatchInfo,
                              originalSHA256: String) throws -> ([UInt8], Info) {
         guard originalSHA256 == theme.osos_sha256 else { throw ThemeError("The theme \"\(theme.name)\" is for a different firmware.") }
         var out = osos
         // 1. theme data outside osos: in both modes
-        var end = patchAreaEnd
         for c in theme.effectiveChanges where c.offset + c.old.count > osos.count {
             if out.count < c.offset + c.new.count { out += [UInt8](repeating: 0, count: c.offset + c.new.count - out.count) }
             out.replaceSubrange(c.offset..<c.offset + c.new.count, with: c.new)
-            end = max(end, c.offset + c.new.count)
         }
-        // 2. the switch table
+        // 2. the switch table and 3. the Settings menu
         let (table, leftOut) = switchTable(theme, osos: osos)
-        let tableAt = align(end, 16)
-        // 3. the Settings menu
-        let image = try ThemeImport.Image(partition)
-        guard let entry = image.res[settingsMenu] else { throw ThemeError("The firmware has no Settings menu (Menu 24598).") }
-        let (res, block) = entry
-        let menu = try settingsMenu(Array(osos[block.abs(res)..<block.abs(res) + Int(res.size)]))
-        let menuAt = align(tableAt + table.count, 16)
-        let patchAt = align(menuAt + menu.count, 16)
+        let (menu, res, block) = try settingsMenu(partition: partition, osos: osos)
+        let (tableAt, menuAt, patchAt) = layout(themeEnd: themeEnd(theme, osos: osos), table: table.count, menu: menu.count)
         // 4. the patch, then the table and the menu
         out = try Patcher.apply(patch, to: out, originalSHA256: originalSHA256, loadAddress: UInt32(patchAt),
                                 symbols: ["dark_table": UInt32(tableAt)], maxSize: ThemeImport.ososLimit)

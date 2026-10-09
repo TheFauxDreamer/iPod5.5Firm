@@ -170,6 +170,7 @@ struct ContentView: View {
         .sheet(isPresented: $model.showFullDiskAccessHelp) { FullDiskAccessSheet() }
         .sheet(isPresented: $model.showFinderRestoreHelp) { FinderRestoreSheet() }
         .task { await model.refreshIPods() }
+        .task { await model.recordMissingPatchSizes() }
     }
 
     var title: String {

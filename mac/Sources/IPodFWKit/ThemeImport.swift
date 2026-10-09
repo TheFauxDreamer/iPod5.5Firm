@@ -124,6 +124,18 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
         edits.removeAll { $0.offset == offset }
     }
 
+    /// The bytes that the theme adds after the end of osos (`Patcher.maxOSOSSize`): the pictures
+    /// that the theme made larger. The Patches pane shows this size.
+    public var addedSize: Int {
+        let ends = effectiveChanges.filter { $0.offset >= Patcher.maxOSOSSize }.map { $0.offset + $0.new.count }
+        return max(0, (ends.max() ?? 0) - Patcher.maxOSOSSize)
+    }
+
+    /// The bytes inside osos that the theme changes. They use no new space.
+    public var changedSize: Int {
+        effectiveChanges.filter { $0.offset < Patcher.maxOSOSSize }.reduce(0) { $0 + $1.new.count }
+    }
+
     /// The changes to apply: without ThemeImport.keepApple, with Apple's highlight colours, and with
     /// the edits of the owner in place of the theme changes in the same bytes.
     public var effectiveChanges: [ThemeChange] {

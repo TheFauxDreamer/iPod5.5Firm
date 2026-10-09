@@ -210,6 +210,7 @@ struct PatchListRow: View {
                     Text(patch.spec.displayTitle)
                     LetterBadge(patch: patch)
                     if let v = patch.spec.version { Text(v).font(.caption).foregroundStyle(.secondary) }
+                    if let n = patch.spec.size { Text(n.formatted(.byteCount(style: .memory))).font(.caption).foregroundStyle(.secondary) }
                 }
                 if let summary = patch.spec.summary {
                     Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -366,6 +367,11 @@ struct PatchDetail: View {
                         .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                 }
                 LabeledContent("Version", value: patch.spec.versionText)
+                LabeledContent("Size on iPod", value: patch.spec.sizeText)
+                if patch.spec.size == 0 {
+                    Text("The patch adds no code. It changes only bytes that are already in the firmware.")
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
                 LabeledContent("Source", value: patch.source == .user ? "Installed by you" : "Included with iPodFirm")
                 if patch.replacesBuiltIn {
                     Text("This patch replaces the built-in version \(patch.builtInVersion ?? "–"). To use the built-in patch again, remove this patch.")
@@ -533,6 +539,11 @@ struct AppearanceDetail: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
+                    LabeledContent("Size on iPod (Dark)", value: PatchSpec.byteText(current.theme.addedSize))
+                    LabeledContent("Size on iPod (Switch on iPod)",
+                                   value: model.switchOnIPodSize.map(PatchSpec.byteText) ?? "Open the firmware 1.3 to calculate")
+                    Text("The size is the new space after the end of the iPod software. The theme also changes \(PatchSpec.byteText(current.theme.changedSize)) of the Apple pictures and layouts. These changes use no new space. Switch on iPod also adds the Dark Mode switch table, the Settings item and the code (\(AppModel.darkModePatch?.spec.sizeText ?? "–")).")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     if model.appearance != .light {
                         Text("The theme makes the iPod software larger. iPodFirm moves the rsrc image (fonts and video firmware) to free space in the firmware partition. It does not move or change aupd or hibe.")
                             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

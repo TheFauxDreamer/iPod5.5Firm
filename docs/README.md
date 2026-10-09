@@ -35,8 +35,8 @@ Use this table to find the documents to update:
 
 | When you change | Update |
 |---|---|
-| A patch: `patches/*/patch.json` or its C file | Increase the `version` in `patch.json`. [modifications.md](modifications.md) (hooks, size, logic, test status), [patch-system.md](patch-system.md) (free space table), [firmware-format.md](firmware-format.md) (osos memory map), [firmware-functions.md](firmware-functions.md) (new firmware addresses), [safety.md](safety.md) (test status) |
-| A new patch | All of the above, and the summary table in [modifications.md](modifications.md). Give it a `version_letter` and a `version`. |
+| A patch: `patches/*/patch.json` or its C file | Increase the `version` in `patch.json`. Measure the code again and update `size` in `patch.json` (the test `testPatchSizes` gives the value). [modifications.md](modifications.md) (hooks, size, logic, test status), [patch-system.md](patch-system.md) (free space table), [firmware-format.md](firmware-format.md) (osos memory map), [firmware-functions.md](firmware-functions.md) (new firmware addresses), [safety.md](safety.md) (test status) |
+| A new patch | All of the above, and the summary table in [modifications.md](modifications.md). Give it a `version_letter`, a `version` and a `size`. |
 | `Patcher.swift` or `patcher.py` | [patch-system.md](patch-system.md) |
 | `Partition.swift`, `Resources.swift`, `Pictures.swift` or their Python versions | [firmware-format.md](firmware-format.md) |
 | `ThemeImport.swift`, `DarkMode.swift`, `FirmwareVersion.swift`, `AlbumArt.swift`, `ArtworkDB.swift`, `MusicImport.swift` | [modifications.md](modifications.md) |
@@ -50,7 +50,7 @@ Use this table to find the documents to update:
 | A hook site of a patch | The appendix of [ghidra-guide.md](ghidra-guide.md): make the signature again with `MakeSignature.java` |
 | A test on the real iPod | [safety.md](safety.md) (test status), [modifications.md](modifications.md) (test status), the note in [../re/](../re/) |
 
-To find the size of a compiled patch, build it with `uv run ipodfw` or examine the result of `Patcher.link`. Do not estimate the size.
+To find the size of a compiled patch, run `swift test --filter testPatchSizes` in `mac/`. A wrong `size` gives a failure with the measured value. Do not estimate the size.
 
 ## The address rule
 

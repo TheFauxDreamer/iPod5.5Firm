@@ -59,4 +59,8 @@ This rule is mandatory. Never publish a document, a page, a report or any other 
 - Give each new patch a `version_letter` in its `patch.json`. Use one letter a–z that no other patch uses. An `internal` patch does not get a letter. The test `testPatchVersionLetters` makes sure of this.
 - Give each patch a `version` in its `patch.json`, for example `"1.0"`. Use one to three numbers with dots. The test `testPatchVersions` makes sure of this.
 - Increase the `version` of a patch at each change to its `patch.json` or its code. Then the install sheet shows the new file as an update.
+- Record the size of each patch on the iPod in its `patch.json`, for example `"size": 3080`. This includes `internal` patches such as `dark-mode`. Measure the value. Do not estimate it. The test `testPatchSizes` makes sure of this.
+- Update `"size"` at each change to the code of a patch. A patch with no code has `"size": 0`.
+- An installed patch must also have a correct size. The install and **Export Patch…** write the measured size into `patch.json` if the value is missing or wrong. At the start, the app records the size of each installed patch that has no size. Keep this behaviour.
+- The app shows the size of each patch and of the dark theme in the Patches pane. Each new item that adds data to the firmware must also show its size there.
 - Do not commit Apple firmware files, `.ipsw` files or iPod backups.

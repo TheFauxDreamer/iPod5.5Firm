@@ -72,6 +72,10 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     /// The version of the patch, for example "1.2" (see PatchVersion). The install sheet compares it
     /// with the installed version.
     public var version: String?
+    /// The bytes that the patch adds to the firmware on the iPod: the linked code, constants and
+    /// variables. 0 for a patch with no code (it changes only bytes that are already there).
+    /// The test `testPatchSizes` measures the value.
+    public var size: Int?
     /// true: the patch is part of a build step (for example the dark-mode switch) and is not shown
     /// in the list of patches.
     public var `internal`: Bool?
@@ -103,6 +107,15 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var parsedVersion: PatchVersion? { version.flatMap(PatchVersion.init) }
     /// The version for display, for example "1.2", or "–" if the patch has no version.
     public var versionText: String { version ?? "–" }
+
+    /// The size for display, for example "3,080 bytes (3.0 KB)", or "–" if the patch has no size.
+    public var sizeText: String { size.map(Self.byteText) ?? "–" }
+
+    /// For example "3,080 bytes (3.0 KB)", or "188 bytes".
+    public static func byteText(_ n: Int) -> String {
+        let bytes = "\(n.formatted()) \(n == 1 ? "byte" : "bytes")"
+        return n < 1024 ? bytes : bytes + " (" + ByteCountFormatter.string(fromByteCount: Int64(n), countStyle: .binary) + ")"
+    }
 
     /// The osos builds that iPodFirm knows, by SHA-256.
     public static let knownFirmware = [
@@ -231,10 +244,11 @@ public enum Patcher {
     }
 
     /// The bytes of code and data of a patch (0 for a patch without code). The size does not
-    /// depend on the load address.
-    public static func codeSize(_ patch: PatchInfo) throws -> Int {
+    /// depend on the load address. `symbols` adds addresses that the build decides, as in `apply`.
+    /// The `size` in patch.json must be this value.
+    public static func codeSize(_ patch: PatchInfo, symbols: [String: UInt32] = [:]) throws -> Int {
         guard hasCode(patch.folder) else { return 0 }
-        var fw = [String: UInt32]()
+        var fw = symbols
         for (k, v) in patch.spec.symbols ?? [:] { fw[k] = try hex(v) }
         for h in patch.spec.hooks ?? [] { if let c = h.chain { fw[c] = 0 } }
         return try link(objectCode(patch.folder), base: UInt32(maxOSOSSize), firmware: fw).0.count

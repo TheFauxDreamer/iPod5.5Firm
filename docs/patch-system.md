@@ -54,6 +54,7 @@ The install continues with a note in these conditions:
 - The patch has no `title`, `symbol` or `category`.
 - The patch changes the same place as another patch (`Patcher.conflicts`).
 - `ui` names a tool that the app does not have.
+- `patch.json` has no `size`, or the `size` is not the measured size of the code. iPodFirm writes the measured size into the installed `patch.json`. The install sheet shows it in the row "Size on iPod".
 
 ### Versions and updates
 
@@ -78,8 +79,9 @@ The install moves the old folder to the Trash. The patch keeps its switch state,
 1. Write the patch as in [Write a new patch](#write-a-new-patch). Use `"load_address": "extended"`, so that the patch does not use the area of another patch.
 2. Add `title`, `summary`, `symbol` and `category`.
 3. Add `details`. Add `requires`, `notes` and `caution` if necessary. Do not put all the text in `description`.
-4. In the Patches pane, select the patch. Click **⋯** > Export Patch…. iPodFirm compiles `patch.o` and writes the `.ipodpatch` file. The C file stays in the file as the source.
-5. Give the `.ipodpatch` file to other people.
+4. Add `size`. If you do not add it, the export and the install record the measured size.
+5. In the Patches pane, select the patch. Click **⋯** > Export Patch…. iPodFirm compiles `patch.o`, records the measured `size` and writes the `.ipodpatch` file. The C file stays in the file as the source.
+6. Give the `.ipodpatch` file to other people.
 
 ## The patch.json format
 
@@ -94,6 +96,7 @@ The install moves the old folder to the Trash. The patch keeps its switch state,
 | `hooks` | array | The changes to the firmware. See [The hooks](#the-hooks). |
 | `hdd_warning` | string, optional | A warning. The app shows it if the iPod probably has the original hard drive. |
 | `version` | string | The version of the patch: one to three numbers with dots, for example `1.2`. Each patch that is not `internal` must have a version. Increase it at each change, so that the install sheet shows an update. The test `testPatchVersions` makes sure of this. |
+| `size` | number | The bytes that the patch adds to the firmware on the iPod: the linked code, constants and variables. A patch with no code has `0`, because it changes only bytes that are already there. Each patch must have a size, also an `internal` patch. The Patches pane shows it. The test `testPatchSizes` links each patch and makes sure that the value is the measured size. Update it at each change to the code. |
 | `version_letter` | string | One letter a–z. Each patch must have a letter, but an `internal` patch has no letter. If the owner switches on "Add a letter for each switched-on patch", the About screen shows this letter after the version. Each patch has a different letter. |
 | `internal` | bool, optional | `true`: the patch is a part of a build step. The Patches pane does not show it. Only `dark-mode` uses this key. |
 | `title` | string | The name in the Patches pane, in title case, for example "Album Artwork". If it is missing, the pane shows `name`. |
@@ -275,6 +278,8 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `something-comforting` | `extended` | After all other data (692 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736ab4, menu at 0x737000, osos end 0x737800 | Extended patch. Example patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
+
+Each `patch.json` records the size of its code in `size`. The Patches pane shows it in the list and in the detail ("Size on iPod"). The install and **Export Patch…** link the code and write the measured size into `patch.json` if the value is missing or wrong. A user patch that an earlier version of iPodFirm installed can have no size. At each start, the app measures each user patch with no `size` and writes the value into its `patch.json` (`PatchLibrary.recordMissingSizes`). The `version` does not change. If the link fails, for example because the Mac has no clang, the patch keeps no size and the pane shows "–".
 
 ### The extended area
 
