@@ -594,7 +594,7 @@ An earlier version read the ATA IDENTIFY data in the firmware (a hook at 0x142f9
    - Pass 2: the shift of the nearest mapped resource of the same type.
 4. For each changed resource, it makes a list of byte changes (`ThemeChange`: offset, old bytes, new bytes):
    - **BMap** with the same header: the changed pixel runs.
-   - **BMap** that the theme made larger: the picture goes into the free area after the end of osos, below 0x7F0000 (`ThemeImport.ososLimit`). If all pixels are grey, iPodFirm stores a 4-bit grey copy. Then the resource table entry gets the new offset and size.
+   - **BMap** that the theme made larger: the picture goes into the free area after the end of osos, below 0x7F8000 (`ThemeImport.ososLimit`). If all pixels are grey, iPodFirm stores a 4-bit grey copy. Then the resource table entry gets the new offset and size.
    - **View**: the changed fields of each element. A field changes only if the target has the base value. The import translates the resource IDs in the fields.
    - **Type**: each changed 32-bit word, only if the target has the base value.
    - Other types (for example `TCmd` and `Menu`): skipped.
@@ -650,7 +650,7 @@ In the Pictures pane, the "Dark Theme" switch shows the theme pictures. "Replace
 
 **Why a restart is necessary.** RetailOS makes its main screens one time, at the start, from the View resources. The views copy the positions, the heights and the colours when the firmware makes them (`FUN_0021a4f4`). A language change does not make the screens again. Thus the patch applies the dark changes at the start, before the first View is read.
 
-**Build.** `DarkMode.build` in [DarkMode.swift](../mac/Sources/IPodFWKit/DarkMode.swift) puts these items after 0x736800, below 0x7F0000:
+**Build.** `DarkMode.build` in [DarkMode.swift](../mac/Sources/IPodFWKit/DarkMode.swift) puts these items after 0x736800, below 0x7F8000:
 
 1. The theme data outside osos (for example the background picture). It is in the image for both modes.
 2. The switch table, aligned to 16 bytes.
@@ -674,7 +674,7 @@ The XOR data switches the bytes in both directions. A change that the owner edit
 - "Size on iPod (Dark)": the theme data after 0x736800 (`ImportedTheme.addedSize`).
 - "Size on iPod (Switch on iPod)": items 1 to 4 above, with the alignment (`DarkMode.addedSize`). It needs the open firmware 1.3.
 
-The text below the two values gives the bytes inside osos that the theme changes (`ImportedTheme.changedSize`). These changes use no new space. The measured values for the theme "Dark Gray" are 38,428 bytes (Dark), 738,593 bytes (Switch on iPod) and 660,678 changed bytes. The limit of the area is 759,808 bytes (0x736800–0x7F0000). The test `testExtendedPatchAfterSwitchBuild` makes sure that `DarkMode.addedSize` agrees with `DarkMode.build`.
+The text below the two values gives the bytes inside osos that the theme changes (`ImportedTheme.changedSize`). These changes use no new space. The measured values for the theme "Dark Gray" are 38,428 bytes (Dark), 738,593 bytes (Switch on iPod) and 660,678 changed bytes. The limit of the area is 792,576 bytes (0x736800–0x7F8000; 759,808 bytes before 9 October 2026). The test `testExtendedPatchAfterSwitchBuild` makes sure that `DarkMode.addedSize` agrees with `DarkMode.build`.
 
 The new Settings menu is a copy of the Apple menu with one more item after Clicker (key 0x60006088). The new item is a copy of the Sound Check item (key 0x600060b7) with the key 0x600060e0 and the label ID 0x7e00.
 

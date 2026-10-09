@@ -65,7 +65,7 @@ PATCH_AREA_END = 0x736800
 PATCH_AREA_START = 0x7358D0        # a hook that points at or after this address is the hook of a patch
 SETTINGS_MENU_ID = 24598
 SOUND_CHECK_KEY = 0x600060B7       # the Sound Check item: an On/Off item
-OSOS_LIMIT = 0x7F0000
+OSOS_LIMIT = 0x7F8000               # the same as themeimport.OSOS_LIMIT
 
 
 # The precompiled object of a patch. If it is in the folder, apply() links it and does not compile.

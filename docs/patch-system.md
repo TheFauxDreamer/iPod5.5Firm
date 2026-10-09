@@ -254,7 +254,7 @@ The settings object calls the "get" method (vtable 0x66c94c) for the value text 
 `Patcher.apply` stops with an error if one of these conditions is true:
 
 1. The SHA-256 of the original osos is not `osos_sha256`. iPodFirm uses the hash of the osos as it was first opened. Thus picture and text edits do not stop a patch.
-2. The code ends after `maxSize`. The default is 0x736800, the start of rsrc in Apple's layout. The Dark Mode build and an extended patch use 0x7F0000 (`ThemeImport.ososLimit`).
+2. The code ends after `maxSize`. The default is 0x736800, the start of rsrc in Apple's layout. The Dark Mode build and an extended patch use 0x7F8000 (`ThemeImport.ososLimit`).
 3. The code area is not all zero. Two patches possibly use the same area.
 4. A hook word does not have its `expect` value. Another change or another firmware version is in that location. A hook with `chain` also accepts the hook of an earlier patch.
 5. The `kind` is not known, or the `to` function is not a global function of the patch.
@@ -272,7 +272,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `sleep-now` | 0x73658c | 0x73658c–0x736644 (184 bytes) | The code uses 181 bytes. |
 | `flash-keep-awake` | 0x736644 | 0x736644–0x736700 (188 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
 | `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |
-| `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
+| `dark-mode` | Set by the build | After the theme data, below 0x7F8000 | The value 0x7eb000 in `patch.json` is not used. |
 | `album-art` | `extended` | After all other data (8020 bytes). Alone: 0x736800–0x738754. The album table, the thumbnails and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
 | `usb-host-probe` | `extended` | After all other data (8740 bytes; the 32 KB log buffer comes from the allocator) | Extended patch. Test patch. |
 | `something-comforting` | `extended` | After all other data (692 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736ab4, menu at 0x737000, osos end 0x737800 | Extended patch. Example patch. |
@@ -284,7 +284,7 @@ Each `patch.json` records the size of its code in `size`. The Patches pane shows
 
 ### The extended area
 
-A patch that is too large for the area before 0x736800 uses `"load_address": "extended"`. The build then puts the patch after all the data that is already in the image: the end of osos, at least 0x736800, aligned to 16 bytes (`Patcher.extendedBase`, Python `extended_base`). Thus the patch goes after a theme, the Dark Mode switch table, the Settings menu, the dark-mode code and the extended patches before it. The limit is 0x7F0000 (`ThemeImport.ososLimit`), because the reset code of RetailOS stops if the image end is after 8 MB (0x800004). The osos image gets larger than 0x736800, thus the build moves rsrc (`FirmwarePartition.makeRoom`), as for a theme.
+A patch that is too large for the area before 0x736800 uses `"load_address": "extended"`. The build then puts the patch after all the data that is already in the image: the end of osos, at least 0x736800, aligned to 16 bytes (`Patcher.extendedBase`, Python `extended_base`). Thus the patch goes after a theme, the Dark Mode switch table, the Settings menu, the dark-mode code and the extended patches before it. The limit is 0x7F8000 (`ThemeImport.ososLimit`), because the reset code of RetailOS stops if the image end is after 8 MB (0x800004). The 32 KB below 8 MB stay empty as a margin. Before 9 October 2026 the limit was 0x7F0000. The osos image gets larger than 0x736800, thus the build moves rsrc (`FirmwarePartition.makeRoom`), as for a theme.
 
 The address of an extended patch changes with the theme and the other patches. Thus an extended patch must not use a fixed address of its own code or data in another patch.
 
