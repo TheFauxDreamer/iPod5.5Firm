@@ -130,6 +130,25 @@ def test_usb_host_probe_extended_area():
 
 
 @pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_cover_flow():
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    out, report = patcher.apply(osos, REPO / "patches/cover-flow", 0x736800)
+    assert report["code"][0] == "0x736800"                     # extended: after the end of osos
+    # three word hooks: the browse-list event slot, the UI handler slot and the damage literal
+    for at, old, name in ((0x6772c0, 0x23b704, "hook_list_event"), (0x6701f0, 0x1d81cc, "hook_ui_event"),
+                          (0x17ef8c, 0x17ef98, "hook_display_damage")):
+        assert struct.unpack_from("<I", osos, at)[0] == old
+        assert struct.unpack_from("<I", out, at)[0] == int(report["symbols"][name], 16)
+    code = out[0x736800:0x736800 + report["bytes"]]
+    assert struct.pack("<I", 0x60005010) in code                    # USEC_TIMER
+    # with the other code patches: all use different areas and hook sites
+    original = hashlib.sha256(osos).hexdigest()
+    every = osos
+    for name in ("album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input", "usb-host-probe", "cover-flow"):
+        every, _ = patcher.apply(every, REPO / "patches" / name, 0x736800, original_sha256=original)
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
 def test_precompiled_object(tmp_path):
     """A patch folder with patch.o and no C file gives the same bytes as the compiled C file."""
     import shutil

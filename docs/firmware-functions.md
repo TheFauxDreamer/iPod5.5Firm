@@ -138,6 +138,56 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | 0x211a70 | (gc, bitmap): sets gc + 0x1c to the bitmap and the clip (gc + 0x34) to the bounds at bitmap + 0x98. | Static |
 | 0xe442c, 0xe944c | Before and after a draw into a bitmap: call the listeners at descriptor + 0x24, and add the rectangle to the damaged area. | Static |
 
+### The music database in RAM
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x9bc6c | Resolves a library reference: type byte 1 is the library, type 2 has it at + 0xc9c. | Static |
+| 0x9c838 | (track list, sort, reverse, i): the item at sorted position i. Builds a missing sorted array with 0x1120bc. | Static |
+| 0x9cb7c | Example: the title of track i of the list of all tracks. | Static |
+| 0x9c9fc | The album name of row i of the Albums list: 0x9eff8(db + 0x138, (library + 0xc60)[i]). | Static, Emulator, Patch (`cover-flow`) |
+| 0x9cabc | The artist name of row i of the Artists list (library + 0xc48, pool db + 0xe0). | Static |
+| 0x9eff8 | (pool, index, buffer, &length, maximum): copies the UTF-16 text of a pool entry. | Static |
+| 0x885ec | Stores a string in a pool. | Static |
+| 0x10a15c | Converts an mhod-52 sort type to a slot (album 4 → 6). | Static |
+| 0x1e804c | The property method of the main provider (class 0x670f54) for the music screens. | Static |
+| 0x21f254 | (provider, type, ID): asks the provider and its parents for a property (vtable + 0x5c). | Static |
+
+### Text drawing
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x2438bc | Draws the text of a label (called by 0x244924). | Static |
+| 0x2115a4 | Measures a UTF-8 text (gc, text, width). | Static |
+| 0x2106ec, 0x2113c0 | Draw a UTF-8 text into a rectangle with the font of the graphics context. | Static |
+
+A label draws in the rectangle at view + 0x58 (top, left, bottom, right in its parent). The `cover-flow` patch draws its caption with the album label (element 0x6421) of the list's template cell: it attaches the label to the top view, sets the rectangle, calls 0x244924, and puts the fields back. The label draws at the left with the font and the colour of the list rows. (Patch)
+
+### Artwork
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0xa1ff0 | Opens `iPod_Control\Artwork\ArtworkDB` when the music database loads (0xb4a64). | Static |
+| 0x205cfc, 0x205db4 | Starts the task `ArtworkLoadTask`, and its task function: a request queue, an image cache and reference-counted image objects. | Static |
+| 0x88094 | Writes `Thumbs\F%d_%d.ithmb` of the Photos database. | Static |
+
+### The display
+
+The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co-processor. Refer to [../re/cover-flow.md](../re/cover-flow.md#the-screen).
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x1647c0 | Returns the display server (RAM 0x10882c3c). | Static, Emulator |
+| 0x164610 | Returns layer N (server, N): server + 0x110 + N × 0x90, for N < 11. | Static |
+| 0x164878 | Binds layer N (server, N). Waits while server + 0x6c4 is not 0, then writes the layer to server + 0x6c4. | Static, Patch (`cover-flow`) |
+| 0x164d0c | Task: after each flush, sends the update to the BCM and writes 0 to server + 0x6c4. | Static |
+| 0x1650f8 | Flush (server, N). If layer N is bound, calls the present 0x164f44 with the layer and server + 0x6b0. | Static, Patch |
+| 0x164f44 | Present: sends the dirty rows of the CPU framebuffer to the BCM surface and changes the two surfaces. | Static, Emulator |
+| 0x17ef98 | Damage callback (unused, rectangle, 0): sets the dirty rows. If the byte at RAM 0x1081ec54 is not 0, it binds the layer first. Registered at the start by 0x17eeb0 from the literal 0x17ef8c. | Static, Patch |
+| 0x169718 | Example of a full update: bind, set the update, flush. | Static |
+| 0x0c9a84, 0x0c9b58 | Lock and unlock a mutex (the display uses server + 0x6c8). | Static, Patch |
+| 0x21ac04 | Marks the rectangle of a view as damaged, so that the firmware draws it again. | Static, Patch |
+
 ### Text
 
 | Address | Function | Evidence |
@@ -223,6 +273,31 @@ Refer to [re/volume-limit.md](../re/volume-limit.md).
 | 0x1d8264 | UI event handler part: calls 0x94bbc(4) and then 0x94d80(4, 3000) while the storage is on. | Static |
 | 0x1d8570 | 5000 ms timer of key 0x6e (a long push of Play). Posts screen 0x63f2. The handler 0x1d81cc calls it at 0x1d8260 for each event; the code after the call does not use r0. | Static, Patch (`usb-host-probe`) |
 | 0x283e10 | Backlight function. Only the sleep and wake paths call it. | Static |
+| 0x13d524 | Event dispatcher (event, target). Gives the event to the filter objects (slot +0x34), then to the target or to the focused object and its parents (slot +0x30), then deletes it (event slot +4). | Static, Emulator |
+| 0x23b704 | Event method of the browse lists (class 0x677290 and two other classes). Handles the push (type 4) and the wheel (type 0xf). | Emulator, Patch (`cover-flow`) |
+| 0x23a04c | Method +0x138 of a browse list: sets the selected row and posts the property event "LstS". | Static |
+| 0x1d3348 | Event method of the application object (class 0x66a510). Sends events to handlers in maps, for example 0x1d81cc. | Static, Emulator |
+| 0x1d8aa4 | Key actions of the UI handler (called for the types 4–7). | Static |
+| 0xa69dc | The click of the lists. Reads the Clicker setting (RAM 0x1081d9c4): bit 1 speaker (piezo message), bit 2 headphones (audio click 0x1b9168). No arguments. | Static, Emulator, Patch (`cover-flow`) |
+| 0x1b9168 | Plays the click on the audio path. Then, if the byte at 0x10882440 + 0x3e has bit 0, the piezo tone 0xcd430(0x55, 3000) at 0x1b91fc. | Static, Emulator |
+
+The first argument of 0x1d81cc and of 0x1d813c is the UI object (0x13e358a4 in the emulator). It is not the application object.
+
+Key events and key codes (emulator, refer to [../re/cover-flow.md](../re/cover-flow.md#the-events)):
+
+| Type | Meaning |
+|---|---|
+| 4 | Key push. The UI handler 0x1d81cc gets it first, then the focused list and its parents. |
+| 5 | Key repeat |
+| 6 | Key held for 0.5 s. Only the UI handler gets it. |
+| 7 | Key release. Only the UI handler gets it. The firmware acts on Menu at type 6 or 7. |
+| 0xf | Wheel step. Event + 0xc is +1 or −1, 0 at the end. |
+
+| Key | Code (bits 16–23 of event + 0x10) |
+|---|---|
+| Select | 0x6f |
+| Menu | 0x6e |
+| Play/Pause | 0x10 |
 
 ### Storage power and keep-awake
 
@@ -345,6 +420,12 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | 0x670720 | Vtable of the power controller. +0x6c: display on/off. +0x70: sleep. +0xb4: external power. |
 | 0x69fd2c | A table entry that points to the Sleep item handler 0x1d83fc. |
 | 0x666920, 0x666958 | Vtables of the USB audio control and streaming objects. |
+| 0x677290 | Vtable of a browse list (for example Albums and Artists). +0x30 (0x6772c0): event method 0x23b704. +0x138 (0x6773c8): set the selection. |
+| 0x6701f0 | Slot of the UI event handler 0x1d81cc. |
+| 0x66a510 | Vtable of the application object. +0x30: event method 0x1d3348. |
+| 0x676974 | Vtable of a key event. +4: delete. +0x14: type check. |
+| 0x677aec | Vtable of a wheel event. |
+| 0x17ef8c | Literal (not a vtable): the damage callback 0x17ef98. |
 
 ## Object layouts
 
@@ -374,6 +455,26 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | Track | +0x28, +0x2c, +0x34, +0x3c, +0x40 | Pool indexes: title, artist, album, composer, genre |
 | Track | +0x30 | Index of the artist sort key (pool db + 0x10c) |
 | Music database | +0xb4, +0xe0, +0x138, +0x190 | String pools: titles, artists and composers, albums, genres |
+| Music database | +0xd2c, +0xd14 | The open file `iPod_Control\Artwork\ArtworkDB` (0xa1ff0) |
+| Track | +0x108, +0x10c | dbid (mhit + 0x70). ArtworkDB links an image to this ID. |
+| Track | +0x00, +0x04 | The database; the next track |
+| Music database | +0x1c, +0x20 | Track count; the track array (0x110 bytes for each track) |
+| String pool (`strc`) | +0x08, +0x10, +0x14 | Handle to the entries {offset, length}; handle to the UTF-16 text; entry count |
+| Library | +0xcf0, +0xcf8 | A track list (0 while the Albums list shows); the database |
+| Library | +0xc60, +0xc6c | The album list: the album pool index of each row of the Albums list (without "All"), in its order; the count |
+| Library | +0xc48, +0xc50 | The artist list (artist pool), filled when the Artists list opens |
+| Track list | +0x2fc + 4 × slot | Sorted array of items (the item at + 0x10 + 4 × i; item + 0x20 is the track). Slot 6: by album. |
+| Main provider | +0x1c, +0xc0 … +0xdc | The library; the row counts of the browse lists |
+| Track | +0x8b | Bit 1: mhit + 0xa5. This is not the artwork flag (libgpod: mhit + 0xa4 "has artwork"). |
+| View | +0x20 | Flags. (flags & 0x1800) == 0x800 if the view is visible. |
+| Browse list | +0xa4 | An object. Its word at +0x14 is the selected row. |
+| Browse list | +0xb8 | The number of rows |
+| Event | +0x04, +0x0c, +0x10 | Type; wheel direction; key code in bits 16–23 |
+| UI object | +0x44 | Byte: the count of keys down |
+| Display server | +0x110 | Layer 0 (each layer has 0x90 bytes) |
+| Display server | +0x6be, +0x6c0, +0x6c2 | Update: 1 = send rows; u16 first row; u16 end row |
+| Display server | +0x6c4, +0x6c8 | The bound layer (0 between updates); the mutex |
+| Display layer | +0x00, +0x04, +0x0c | Byte 1 if valid; the CPU framebuffer (RGB565, 320 × 240); the BCM surface (+0x10: stride 640) |
 
 ## RAM addresses
 
@@ -390,6 +491,11 @@ The physical address is 0x10000000 + the CPU address.
 | 0x1081ee48 | Audio route state. |
 | 0x108710dc | Device information object: +0x92 region code, +0x94 flags (bit 0 = EU volume limit). |
 | 0x1083de9c | SpiderMonkey opcode table. |
+| 0x10882c3c | The display server. |
+| 0x1081e0d4 | The layer index of the display (0). |
+| 0x1081ec54 | Byte: the damage callback binds the layer if it is not 0. |
+| 0x1081da80 | Pointer to the application object (class 0x66a510). |
+| 0x1081d9c4 | The Clicker setting: bit 1 speaker, bit 2 headphones. |
 
 The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No code refers to the area between the image end and 8 MB. The patches and the theme data use this area.
 
@@ -439,6 +545,8 @@ The emulator found these element IDs (view + 0x1c):
 | Menu item | 0x301 |
 | ">" arrow | 0x5ecc |
 | Speaker icon in a song row | 0x63eb |
+| The Albums list (the list view itself) | 0x6382 |
+| The Artists list (the list view itself) | 0x6387 |
 
 ## Settings keys
 
@@ -456,6 +564,7 @@ The emulator found these element IDs (view + 0x1c):
 - The style of the rating stars in Now Playing. The table at 0x336190 gives a style object (0x192448 + 16 × n) for each Type ID.
 - Why the stock firmware defers Sleep after a computer session.
 - The path of a long push of Play.
+- The key code 0x6e: the emulator gives it for the button `menu`, but the note on 0x1d8570 says "a long push of Play". A test on the real iPod can answer which is correct.
 - The function of the audio route flags at 0x1081ee48 + 0 and + 1.
 - The UIM interrupt handler that completes the periodic USB host transfers.
 - The cause of the empty artwork frame in Now Playing with the unchanged firmware in the emulator.

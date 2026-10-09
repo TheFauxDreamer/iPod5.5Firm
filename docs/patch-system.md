@@ -276,6 +276,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `album-art` | `extended` | After all other data (9104 bytes). Alone: 0x736800–0x738b90. The album table, the thumbnails and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
 | `usb-host-probe` | `extended` | After all other data (8740 bytes; the 32 KB log buffer comes from the allocator) | Extended patch. Test patch. |
 | `something-comforting` | `extended` | After all other data (692 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736ab4, menu at 0x737000, osos end 0x737800 | Extended patch. Example patch. |
+| `cover-flow` | `extended` | After all other data (10676 bytes; approximately 600 KB for the screen copy, the covers and the read buffer come from the allocator while Cover Flow shows) | Extended patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
 
