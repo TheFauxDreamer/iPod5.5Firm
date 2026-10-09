@@ -98,7 +98,8 @@ Results for Stages 2 and 3:
 
 - The OUT endpoint is synchronous. Thus the iPod sends a fixed number of samples in each frame (1 ms), and no feedback endpoint is necessary.
 - The simplest format is interface 1, alternate 2: 16 bits, 2 channels, 192 bytes each frame at 48 kHz. At 44.1 kHz: 44 or 45 samples (176 or 180 bytes) each frame.
-- The sample rate is set with a UAC2 request (SET_CUR, sampling frequency) to the clock source. The supported rates are not known yet (UAC2 GET RANGE).
+- The sample rate is set with a UAC2 request (SET_CUR, sampling frequency) to the clock source. The probe did not read the rate range (UAC2 GET RANGE).
+- An external test ([Mac Otakara](https://www.macotakara.jp/accessories/entry-45311.html), on a Mac) gives the same product ID 0x110B, full speed (12 Mbps) and the rates "16 bit/44.1 kHz to 24 bit/48 kHz" for playback and for the microphone. Thus the EarPods probably accept 44.1 kHz. Then the iPod can send its music without a rate conversion: 44 or 45 samples each frame. The firmware version is 26.81.
 - The host stack must make isochronous transfers (Stage 2). At full speed through the hub, the controller uses split transactions (siTD), as for the hub's interrupt endpoint (C-mask 0x1C).
 - The HID interfaces are probably the buttons of the remote (volume, play). They are not necessary for audio.
 
@@ -136,6 +137,6 @@ Records in `iPod_Control/iTunes/iPodFirmUSBLog` (511 records, 32 KB). iPodFirm s
 ## Next steps
 
 1. Done: the configuration of the EarPods (UAC2, refer to "The USB-C EarPods").
-2. Optional: read configurations 2 and 3 and the clock ranges (UAC2 GET RANGE). The probe must read each buffer only one time, or clean the cache first.
+2. Optional: read configurations 2 and 3 and the clock ranges (UAC2 GET RANGE). The external test above makes this less important: the Stage 3 driver can try 44.1 kHz and use 48 kHz if the EarPods refuse it. The probe must read each buffer only one time, or clean the cache first.
 3. Optional bench test of the minimum voltage of the EarPods (refer to the hardware section).
 4. Then Stages 2 and 3 of USB-AUDIO-OUT.md: the isochronous UIM entries and a USB audio class driver.
