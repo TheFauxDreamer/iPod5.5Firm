@@ -121,7 +121,7 @@ The `ui` object gives a patch controls in the Patches pane with no change to the
 |---|---|
 | `actions` | Buttons in the section "On the iPod". Each action has `title`, `write` and an optional `status`. Each item of `write` has `path`, and `text` or `zeros` (a number of zero bytes). |
 | `toggles` | Switches. Each switch has `title`, `path`, `on` and `off`. The switch reads the file on the iPod and writes `on` or `off`. |
-| `steps_title`, `steps` | A numbered list in a disclosure group. The default title is "Procedure". |
+| `steps_title`, `steps` | A numbered list in a disclosure group. The default title is "Procedure". A click on the title or on the chevron opens and closes the list (`TitleDisclosure`). |
 | `readme` | The name of a Markdown file in the patch folder. The pane shows it in the section "Read Me". |
 | `tools` | Built-in Swift tools, by id: `album-thumbnails` (the thumbnails and the playlist artwork) and `usb-log` (the USB log). `PatchSpec.knownTools` lists them. |
 

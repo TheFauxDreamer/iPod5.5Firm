@@ -3,6 +3,22 @@ import IPodFWKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// A disclosure group that opens and closes with a click on the title, not only on the chevron.
+struct TitleDisclosure<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+    @State private var expanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded, content: content) {
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation { expanded.toggle() } }
+        }
+    }
+}
+
 /// The controls of a patch from the "ui" object of its patch.json: actions, switches, steps, a readme
 /// and built-in tools. A new patch gets these controls with no change to the Swift code.
 struct PatchControls: View {
@@ -35,13 +51,14 @@ struct PatchControls: View {
             }
             if let steps = ui.steps, !steps.isEmpty {
                 Section {
-                    DisclosureGroup(ui.steps_title ?? "Procedure") {
+                    TitleDisclosure(title: ui.steps_title ?? "Procedure") {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(Array(steps.enumerated()), id: \.offset) { i, text in Step(n: i + 1, text: text) }
                         }
                         .font(.callout)
                         .padding(.top, 4)
                     }
+                    .id(patch.spec.name)   // each patch starts closed
                 }
             }
             if let file = ui.readme, !file.contains("/"),
