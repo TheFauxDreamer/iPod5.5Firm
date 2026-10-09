@@ -165,8 +165,11 @@ static int light;                         /* 1: the firmware shows the light the
 static int rows_match;                    /* 1: the list has "All" and the albums of the file */
 static int pos;                           /* the position, in 1/256 of a cover */
 static int target;                        /* the album at the centre after the movement */
-static unsigned recip[MAX_SIZE * 2];      /* (size << 16) / h */
+static unsigned *recip;                   /* (size << 16) / h, MAX_SIZE * 2 entries */
 static unsigned short grey[16];
+
+/* Code that runs once for each event or each open: small code. The draw loops stay fast. */
+#define COLD __attribute__((minsize))
 
 /* ---------- helpers ---------- */
 
@@ -198,7 +201,7 @@ static int sdiv(int n, int d)
     return neg ? -(int)q : (int)q;
 }
 
-static int open_path(unsigned *fh, const char *path, int number)
+COLD static int open_path(unsigned *fh, const char *path, int number)
 {
     unsigned record[0x108 / 4];
     char *p = (char *)record + 4;
@@ -216,7 +219,7 @@ static int open_path(unsigned *fh, const char *path, int number)
     return file_open(record, fh, 0, MODE_DATA);
 }
 
-static int read_at(unsigned *fh, unsigned offset, void *buf, unsigned len)
+COLD static int read_at(unsigned *fh, unsigned offset, void *buf, unsigned len)
 {
     unsigned got = len;
     if (file_seek(fh, 0, offset) != 0 || file_read(fh, &got, buf) != 0)
@@ -226,7 +229,7 @@ static int read_at(unsigned *fh, unsigned offset, void *buf, unsigned len)
 
 /* ---------- the albums and their artwork ---------- */
 
-static void free_albums(void)
+COLD static void free_albums(void)
 {
     fw_free(album_track);
     fw_free(art_offset);
@@ -238,7 +241,7 @@ static void free_albums(void)
     built_list = 0;
 }
 
-static unsigned get32(const unsigned char *b)
+COLD static unsigned get32(const unsigned char *b)
 {
     return b[0] | b[1] << 8 | b[2] << 16 | (unsigned)b[3] << 24;
 }
@@ -250,7 +253,7 @@ typedef struct { unsigned lo, hi, row; } TrackKey;
 static TrackKey *keys;
 static unsigned key_count;
 
-static int album_of(unsigned lo, unsigned hi)
+COLD static int album_of(unsigned lo, unsigned hi)
 {
     unsigned a = 0, b = key_count;
     while (a < b) {
@@ -271,7 +274,7 @@ static int album_of(unsigned lo, unsigned hi)
 static unsigned char *window;
 static unsigned window_pos, window_len;
 
-static int db_read(unsigned *fh, unsigned pos, void *dst, unsigned len)
+COLD static int db_read(unsigned *fh, unsigned pos, void *dst, unsigned len)
 {
     unsigned k;
     if (pos < window_pos || pos + len > window_pos + window_len) {
@@ -289,10 +292,10 @@ static int db_read(unsigned *fh, unsigned pos, void *dst, unsigned len)
     return 0;
 }
 
-static void find_artwork(void)
+COLD static void find_artwork(void)
 {
     unsigned fh[0x30 / 4];
-    unsigned char h[0x30];
+    unsigned char h[0x40];                 /* the largest read is 0x24 + 2 * 12 bytes (a file name) */
     unsigned pos, end;
     if (key_count == 0 || !(window = fw_alloc(WINDOW)))
         return;
@@ -375,7 +378,7 @@ done:
     window = 0;
 }
 
-static unsigned name_hash(char *db, int index)
+COLD static unsigned name_hash(char *db, int index)
 {
     unsigned short name[NAME_MAX / 2];
     unsigned h = 2166136261u;
@@ -392,7 +395,7 @@ static unsigned name_hash(char *db, int index)
 
 /* Makes the album table from the album list of the library (the rows of the Albums list without
  * "All"). Returns the album count. */
-static unsigned build_albums(void)
+COLD static unsigned build_albums(void)
 {
     char *library, *db;
     int *rows, *track;
@@ -490,7 +493,7 @@ static unsigned build_albums(void)
 
 /* The same steps as 0x169718. Do not call the damage function 0x17ef98 here: if the flag at
    0x1081ec54 is set, it binds the layer again and waits for the end of this update. */
-static void send_screen(void)
+COLD static void send_screen(void)
 {
     char *server = display_server();
     display_bind(server, LAYER_INDEX);    /* waits for the end of the last update */
@@ -512,7 +515,7 @@ static void clear(void)
 
 /* The theme of the firmware, from the copy of its screen: the left margin of the list rows (x = 2,
    below the title bar). Most of these pixels have the list background; one row has the highlight. */
-static int is_light(const unsigned short *screen)
+COLD static int is_light(const unsigned short *screen)
 {
     int y, bright = 0, all = 0;
     for (y = 40; y < H; y += 8, all++)
@@ -535,7 +538,7 @@ typedef struct { int x0, x1, h0, h1; } Place;
 
 /* A cover at `k` covers right of the centre (k >= 0, in 1/256). The outer edge of a side cover is
  * nearer to the viewer, thus it is higher than the inner edge. */
-static void place_right(int k, Place *p)
+COLD static void place_right(int k, Place *p)
 {
     static const short x0[] = { 96, 232, 262, 292, 322, 352 };
     static const short x1[] = { 224, 284, 314, 344, 374, 404 };
@@ -552,7 +555,7 @@ static void place_right(int k, Place *p)
     p->h1 = h1[i] + (((h1[i + 1] - h1[i]) * f) >> 8);
 }
 
-static void place(int d, Place *p)
+COLD static void place(int d, Place *p)
 {
     Place q;
     if (d >= 0) {
@@ -566,7 +569,8 @@ static void place(int d, Place *p)
     p->h1 = q.h0;
 }
 
-static void draw_cover(const unsigned short *tex, const Place *p, int side)
+/* Not inlined: the draw loop stays fast code, not small code. */
+__attribute__((noinline)) static void draw_cover(const unsigned short *tex, const Place *p, int side)
 {
     int w = p->x1 - p->x0, c, end;
     int ustep, hstep, u, h;
@@ -608,7 +612,7 @@ static void draw_cover(const unsigned short *tex, const Place *p, int side)
     }
 }
 
-static const unsigned short *cover(int i)
+COLD static const unsigned short *cover(int i)
 {
     int s, far = -1, far_d = -1;
     for (s = 0; s < CACHE_SLOTS; s++)
@@ -641,7 +645,7 @@ static const unsigned short *cover(int i)
 }
 
 /* UTF-16 to UTF-8, with a 0 at the end. */
-static void utf8(const unsigned short *in, int bytes, char *out, int max)
+COLD static void utf8(const unsigned short *in, int bytes, char *out, int max)
 {
     int i, o = 0;
     for (i = 0; i < bytes / 2; i++) {
@@ -662,7 +666,7 @@ static void utf8(const unsigned short *in, int bytes, char *out, int max)
 }
 
 /* The album label of the template cell of the list: it has the font and the colours of the rows. */
-static int *row_label(void)
+COLD static int *row_label(void)
 {
     int *cell = (int *)cf_list[LIST_CELL], k, n;
     int **kids;
@@ -679,7 +683,7 @@ static int *row_label(void)
 /* Moves the text between the rows `top` and `bottom` to the centre of the screen. The background
  * is exactly white or black, so each other pixel is text. `dim`: mix the text halfway to the
  * background (a grey artist line). */
-static void centre_line(int top, int bottom, int dim_text)
+COLD static void centre_line(int top, int bottom, int dim_text)
 {
     unsigned short bg = light ? 0xffff : 0;
     int x, y, min = W, max = -1, shift;
@@ -693,7 +697,7 @@ static void centre_line(int top, int bottom, int dim_text)
             }
     if (max < 0)
         return;
-    shift = (W - (max - min + 1)) / 2 - min;
+    shift = ((W - (max - min + 1)) >> 1) - min;  /* no "/": minsize code calls a library for it */
     for (y = top; y < bottom; y++) {
         unsigned short *row = fb + y * W;
         if (shift > 0) {
@@ -711,7 +715,7 @@ static void centre_line(int top, int bottom, int dim_text)
 
 /* Draws a text with the label between `top` and `bottom` of the screen. The label goes on
  * the top view for this draw; then all the changed fields go back. */
-static void label_text(int *label, const char *text, int top, int bottom)
+COLD static void label_text(int *label, const char *text, int top, int bottom)
 {
     int *root = cf_list, saved_rect[4], k;
     void *saved_parent = *(void **)((char *)label + VIEW_PARENT);
@@ -737,7 +741,7 @@ static void label_text(int *label, const char *text, int top, int bottom)
 }
 
 /* The album name and the artist below the covers, with the font of the list rows. */
-static void draw_caption(int i)
+COLD static void draw_caption(int i)
 {
     unsigned short name[TEXT_MAX / 2];
     char text[TEXT_MAX * 3 / 2 + 1];
@@ -758,7 +762,7 @@ static void draw_caption(int i)
     centre_line(ARTIST_TOP, H, 1);
 }
 
-static void render(void)
+COLD static void render(void)
 {
     int center = (pos + 128) >> 8, k, i;
     clear();
@@ -783,11 +787,13 @@ static void render(void)
 
 /* ---------- open and close ---------- */
 
-static void release(void)
+COLD static void release(void)
 {
     fw_free(saved);
     fw_free(pixels);
     fw_free(placeholder);
+    fw_free(recip);
+    recip = 0;
     saved = 0;
     pixels = 0;
     placeholder = 0;
@@ -796,7 +802,7 @@ static void release(void)
 }
 
 /* Returns 1 if Cover Flow shows. */
-static int open_cover_flow(int *list)
+COLD static int open_cover_flow(int *list)
 {
     unsigned i, rows, sel;
     int *layer;
@@ -814,7 +820,8 @@ static int open_cover_flow(int *list)
     saved = fw_alloc(W * H * 2);
     pixels = fw_alloc(CACHE_SLOTS * size * size * 2);
     placeholder = fw_alloc(size * size * 2);
-    if (!saved || !pixels || !placeholder) {
+    recip = fw_alloc(MAX_SIZE * 2 * 4);
+    if (!saved || !pixels || !placeholder || !recip) {
         release();
         return 0;
     }
@@ -849,7 +856,7 @@ static int open_cover_flow(int *list)
 
 /* Puts the screen of the firmware back. `send`: send it to the LCD now. In the damage hook the
    firmware sends it itself. */
-static void close_cover_flow(int send)
+COLD static void close_cover_flow(int send)
 {
     unsigned i;
     int *view = cf_list;
@@ -869,7 +876,7 @@ static void close_cover_flow(int send)
 
 static unsigned last_step;
 
-static void step(int dir)
+COLD static void step(int dir)
 {
     int start = pos, f, frames = FRAMES;
     unsigned dt = USEC_TIMER - last_step;
@@ -893,7 +900,7 @@ static void step(int dir)
 
 /* ---------- the copy of a push of Select ---------- */
 
-static void ev_keep(int *ev)
+COLD static void ev_keep(int *ev)
 {
     (void)ev;                             /* the dispatcher deletes an event with slot +4 */
 }
@@ -903,7 +910,7 @@ static void *copy_vtable[6];
 static int copy_event[EVENT_WORDS];
 static int kept[EVENT_WORDS];             /* the kept push of Select */
 
-static void send_copy(int *ev, int type)
+COLD static void send_copy(int *ev, int type)
 {
     int i;
     void **vt = *(void ***)ev;
@@ -922,13 +929,13 @@ static void send_copy(int *ev, int type)
 /* ---------- hooks ---------- */
 
 
-static int is_albums_list(int *list)
+COLD static int is_albums_list(int *list)
 {
     return *(unsigned short *)((char *)list + VIEW_ELEMENT_ID) == ALBUMS_LIST_ID &&
            (list[VIEW_FLAGS] & 0x1800) == 0x800;
 }
 
-static int active_event(int *list, int *ev, void *a3, int a4)
+COLD static int active_event(int *list, int *ev, void *a3, int a4)
 {
     int type = ev[1];
     if (type == EV_WHEEL) {
@@ -963,7 +970,7 @@ static int active_event(int *list, int *ev, void *a3, int a4)
 
 /* Replaces the event method of the browse-list class (slot +0x30, at 0x6772c0). The list gets the
  * push of a key (type 4) and the wheel. It does not get the release: refer to hook_ui_event. */
-int hook_list_event(int *list, int *ev, void *a3, int a4)
+COLD int hook_list_event(int *list, int *ev, void *a3, int a4)
 {
     int type = ev[1];
 
@@ -993,7 +1000,7 @@ int hook_list_event(int *list, int *ev, void *a3, int a4)
 }
 
 /* The release of a key in the UI handler: the same as 0x1d820c. */
-static void key_released(void *ui)
+COLD static void key_released(void *ui)
 {
     unsigned char *keys_down = (unsigned char *)ui + UI_KEYS_DOWN;
     if (*keys_down)
@@ -1003,7 +1010,7 @@ static void key_released(void *ui)
 /* Replaces the UI event handler 0x1d81cc (slot at 0x6701f0). The UI handler gets each key event
  * before the list, and it gets the events after the push (types 5, 6 and 7) alone. The firmware
  * acts on Menu at type 6 or 7 here. */
-int hook_ui_event(void *ui, int *ev)
+COLD int hook_ui_event(void *ui, int *ev)
 {
     int type = ev[1], key;
 
@@ -1045,7 +1052,7 @@ int hook_ui_event(void *ui, int *ev)
 }
 
 /* Replaces the damage function 0x17ef98 (literal at 0x17ef8c). */
-int hook_display_damage(void *unused, Rect *r, int zero)
+COLD int hook_display_damage(void *unused, Rect *r, int zero)
 {
     if (active) {
         char *context = ui_context();
