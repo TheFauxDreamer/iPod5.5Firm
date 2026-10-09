@@ -229,6 +229,7 @@ The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not ch
 | `UserDefaults` key | Content |
 |---|---|
 | `enabledPatches` | The names of the switched-on patches. |
+| `patchOptions` | The selected choice of each patch option: patch name → option `id` → value (refer to [patch-system.md](patch-system.md#options)). |
 | `appearance` | `light`, `dark` or `switch`. |
 | `darkTheme` | The name of the selected theme. |
 | `customVersionOn`, `customVersion` | The custom version. |

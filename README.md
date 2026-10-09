@@ -35,7 +35,8 @@ The app has these functions:
 - Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
 - Install a patch from other people: double-click a `.ipodpatch` file, or drag it onto the list of patches. The app shows the version of each patch. It tells you if a file is an update or an older version. Export a patch as a `.ipodpatch` file with its compiled code, so that other people do not need Xcode. Refer to [docs/patch-system.md](docs/patch-system.md#the-ipodpatch-file).
 - Switch code patches on or off (Patches pane). The pane shows a list of the patches at the left. Select a patch to see its description, its compatibility, its size on the iPod and its tools at the right. A bar below the list shows the space that the theme and the patches use. It is red if the firmware is too large. The patches are in [patches/](patches/).
-- Write the playlist thumbnail file to the iPod for the `album-art` patch. The albums use the artwork that is on the iPod.
+- Select the options of a patch, for example the thumbnail source of `album-art` (Patches pane).
+- Write the playlist thumbnail file to the iPod for the `album-art` patch. The albums use the artwork that is on the iPod, or the file if you select it.
 - Set a custom image for each playlist for the `album-art` patch.
 - Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane). The pane shows the size that each appearance adds to the firmware.
 - Show a different version on the About screen of the iPod, for example 1.3.1 (Patches pane). This setting is off by default. iTunes and Finder continue to see version 1.3.
@@ -260,7 +261,7 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 
 | Patch | Function | Status |
 |---|---|---|
-| `album-art` | Shows a 20 × 20 thumbnail at the left of each album and each playlist in the lists. The album thumbnails come from the artwork on the iPod. | Version 1.0: tested in the emulator and on a real iPod. Version 2.0: tested in the emulator with 138 albums. Version 2.1: installed on a real iPod; the Albums list scrolls slowly. Version 2.2 is a measurement build. |
+| `album-art` | Shows a 20 × 20 thumbnail at the left of each album and each playlist in the lists. The album thumbnails come from the artwork on the iPod. | Version 1.0: tested in the emulator and on a real iPod. Version 2.0: tested in the emulator with 138 albums. Version 2.1: installed on a real iPod; the Albums list scrolls slowly. Versions 2.2 and 2.3 are measurement builds. Version 2.3 has the option "Album Thumbnail Source". |
 | `flash-keep-awake` | SSD mode for flash storage (iFlash, CompactFlash and SSD adapters). Keeps the storage on for 30 minutes after each access, not for 1 second. Starts the storage at once when the iPod wakes from sleep. Waits 0.5 s before the storage power goes off. On a hard drive, the patch does nothing. |
 | `flash-wake-on-input` | For flash storage. Starts the storage at once when you press a button after a long pause. After a start, it does not examine the storage again for 30 minutes. A turn of the wheel does not start the storage. Switch it on if the first song after a long pause starts late. |
 | `backlight-60s` | The Backlight Timer menu has a 60 Seconds item in place of 2 Seconds. | Menu tested in the emulator. Not tested on a real iPod. |

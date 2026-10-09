@@ -182,6 +182,53 @@ Conclusions:
 4. The first Albums list after a start or a sync stops for approximately 0.8 s (`build_art`).
 5. The patch reads the ithmb file, also if the thumbnail of the album is in memory from `iPodFirmAlbumArt`. The order in `draw_with_thumbnail` is: the artwork first, then the file.
 
+## Version 2.3: the thumbnail source
+
+Version 2.3 adds the option "source" (`options` in `patch.json`). The owner selects it in the Patches pane before a build:
+
+- 0, "iPod Artwork": the artwork first, then the file (the order of version 2.2).
+- 1, "iPodFirm Thumbnail File": the file first, then the artwork.
+
+The patcher writes the value into the variable `option_source`. In both modes, the patch makes the album table only at the first album row that needs the artwork.
+
+Emulator test on 9 October 2026 with `source` 1 and the FolderLibrary (138 albums, `iPodFirmAlbumArt` with 138 thumbnails): each album row used the file (`file_all_hits`). There was no fill from the ithmb file. An album row took 1592–2426 µs, the same as the firmware draw. `build_art` still ran one time (37 ms): the row "All" is not in the file, thus the patch looked for it in the artwork.
+
+## Research: a late fill with the wheel event (9 October 2026)
+
+The aim is a smooth scroll in the mode "iPod Artwork". Cover Flow 0.6 loads at most one cover in each frame, and loads the next covers when the movement stops ([cover-flow.md](cover-flow.md), "Version 0.6").
+
+### The list timer is not necessary
+
+The browse-list constructor 0x23b97c makes two timers with 0x13d7c8 (owner, timer, 0, 0): list + 0xcc (100 ms, the key repeat) and list + 0x104 (2000 ms). A timer that the patch makes itself is not safe. The destructor of the list does not stop it, thus it can send an event to a deleted list.
+
+The wheel event gives the end of a movement. The event method 0x23b704 of the list gets type 0xf with +0x0c = +1 or −1 for each step, and 0 at the end ([cover-flow.md](cover-flow.md), "The events"). Thus the patch needs no timer.
+
+### The prototype
+
+A prototype (not in the repository) added these changes to version 2.3:
+
+1. A `word` hook on the event method of the browse list (0x6772c0, expect 0x0023b704). The hook sets `moving` to 1 at a step and to 0 at the end. At the end, if a row waited, it calls `view_invalidate` (0x21ac04) on the list.
+2. In the draw: if `moving` is 1 and the thumbnail of the album is not in memory, the row gets a grey square of 20 × 20 and no fill.
+
+Emulator test with the FolderLibrary without `iPodFirmAlbumArt`. The script scrolled 120 detents (20 ms apart), then 300 down, 300 up, 300 down and 300 up:
+
+| Value | Result |
+|---|---|
+| Rows with a grey square | 1326 draws |
+| End events / redraws | 4 / 4 |
+| Fills from the ithmb file | 26 (17 at the open, 9 after the first stop) |
+| Fills with version 2.2 and the same type of scroll | Approximately 140 |
+
+During the scroll, the rows showed grey squares. After the stop, the visible rows showed their covers. An album that went past during a fast scroll had no fill.
+
+### Open items for version 2.4
+
+1. Cover Flow also hooks 0x6772c0 without `chain`. Both patches must use `chain` on this word. Then Cover Flow needs a new version.
+2. If the end event does not come (for example a screen change during a movement), `moving` stays 1. Use a time limit: a step that is older than approximately 0.5 s does not count.
+3. After the stop, the redraw fills all visible rows in one paint. On the real iPod this is approximately 9 × 22 ms = 0.2 s.
+4. A test on the real iPod: does the real wheel send the end event (+0x0c = 0)?
+5. The colour of the empty square with the dark theme.
+
 ## Next steps for speed (not done)
 
 The owner asked for more speed on 9 October 2026. This section keeps the plan for later. No code is changed for it yet. Do the measurement on the real iPod first (refer to the section above).

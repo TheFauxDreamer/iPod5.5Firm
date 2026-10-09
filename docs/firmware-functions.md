@@ -247,6 +247,10 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x2823bc | Power-state entry (modes 1, 2, 3, 5). | Static |
 | 0x1c1f5c | Returns the voice recorder object (component 0x3d00). Byte +0x66 is 1 during a recording. | Static |
 | 0x151c98 | Stops a timer. | Patch |
+| 0x151c24 | Sets the interval of a timer in ms (timer, ms). Stops the timer first. | Static, Patch (`cover-flow`) |
+| 0x151694 | Starts a timer. Its event goes to the owner of the timer. | Static, Patch (`cover-flow`) |
+| 0x13d7c8 | Initializes a timer (owner, timer, 0, 0). The browse-list constructor 0x23b97c calls it for its two timers. | Static |
+| 0x23b97c | Constructor of a browse list. Makes the timer at list + 0xcc (100 ms, the key repeat) and the timer at list + 0x104 (2000 ms). | Static |
 | 0x094e08 | Keep-awake message type 4 ("sleep now"). Also used before a restart. | Static, Patch |
 | 0x001630 | Restart: writes 4 to `DEV_RS` (0x60006004). | Static, Emulator |
 
@@ -274,7 +278,7 @@ Refer to [re/volume-limit.md](../re/volume-limit.md).
 | 0x1d8570 | 5000 ms timer of key 0x6e (a long push of Play). Posts screen 0x63f2. The handler 0x1d81cc calls it at 0x1d8260 for each event; the code after the call does not use r0. | Static, Patch (`usb-host-probe`) |
 | 0x283e10 | Backlight function. Only the sleep and wake paths call it. | Static |
 | 0x13d524 | Event dispatcher (event, target). Gives the event to the filter objects (slot +0x34), then to the target or to the focused object and its parents (slot +0x30), then deletes it (event slot +4). | Static, Emulator |
-| 0x23b704 | Event method of the browse lists (class 0x677290 and two other classes). Handles the push (type 4) and the wheel (type 0xf). | Emulator, Patch (`cover-flow`) |
+| 0x23b704 | Event method of the browse lists (class 0x677290 and two other classes). Handles the push (type 4) and the wheel (type 0xf). A wheel event has +0x0c = +1 or −1 for each step, and 0 at the end of a movement. In the Albums list, `view_invalidate` (0x21ac04) on the list at the end event draws the visible rows again. | Emulator, Patch (`cover-flow`) |
 | 0x23a04c | Method +0x138 of a browse list: sets the selected row and posts the property event "LstS". | Static |
 | 0x1d3348 | Event method of the application object (class 0x66a510). Sends events to handlers in maps, for example 0x1d81cc. | Static, Emulator |
 | 0x1d8aa4 | Key actions of the UI handler (called for the types 4–7). | Static |

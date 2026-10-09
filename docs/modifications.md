@@ -118,7 +118,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 ## album-art
 
-**User interface.** Patches pane > Album Artwork, letter `a`, version 2.2. `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
+**User interface.** Patches pane > Album Artwork, letter `a`, version 2.3. The section "Album Thumbnail Source" selects the option `source` (refer to [The thumbnails](#album-art)). `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
 
 - "Thumbnails": "Write Thumbnails to iPod" writes the thumbnail file. The albums do not need this file. "Eject iPod" ejects the iPod.
 - "Playlist Artwork" sets a custom image for each playlist ("Choose Image…", "Use Automatic", or drag an image).
@@ -130,10 +130,12 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 - An album gets its thumbnail from the artwork that iTunes or Finder put on the iPod: `iPod_Control/Artwork/ArtworkDB` and the 100 × 100 images (format 1028) in `F1028_N.ithmb`. The patch makes a 20 × 20 thumbnail with the average of each 5 × 5 square.
 - A playlist gets its thumbnail from the file `iPodFirmAlbumArt`. An album without artwork on the iPod also uses this file, if the file has it.
 - The file is optional. Without the file, the albums show their thumbnails and the playlists show none.
+- The option `source` sets the order for an album. "iPod Artwork" (0, the default): the artwork first, then the file. "iPodFirm Thumbnail File" (1): the file first, then the artwork. The file is in memory, thus mode 1 reads the disk only for an album that is not in the file. After a sync that adds albums, write the file again.
+- The patch makes the album table only at the first album row that needs the artwork.
 
 The research is in [../re/album-art-v2.md](../re/album-art-v2.md).
 
-**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 9104 bytes. Version 1.0 used the fixed area 0x7358d0–0x73658c (3080 bytes). Thus a build with this patch moves rsrc.
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 9356 bytes. Version 1.0 used the fixed area 0x7358d0–0x73658c (3080 bytes). Thus a build with this patch moves rsrc.
 
 **Hooks.**
 
@@ -238,7 +240,7 @@ The large artwork in Now Playing does not come from the patch. RetailOS reads `i
 
 **Test status.** Version 1.0: tested in the emulator and on a real iPod 5.5G, with the light theme and with the dark theme. Version 2.0: tested in the emulator (refer to [../re/album-art-v2.md](../re/album-art-v2.md)). Version 2.1: installed on a real iPod 5.5G with flash storage. The owner reports that the Albums list scrolls more slowly than without the patch, also on the second pass (9 October 2026). Version 2.2: measured on the same iPod on 9 October 2026. Each new album reads its image from the disk in approximately 22 ms, and the first Albums list stops for approximately 0.8 s. With the thumbnails in memory, the patch adds approximately 4–5 % to each row. Refer to [../re/album-art-v2.md](../re/album-art-v2.md).
 
-**Measurement build (version 2.2).** The patch times its parts with `USEC_TIMER` (`ALBUM_ART_STATS 1` in `album_art.c`). After each 256 album or playlist row draws, it writes one record to `iPod_Control/iTunes/iPodFirmAlbumArtStats` with `file_open_rw` (0x08f3f8) and `file_write` (0x08f6f4). The script [../re/album-art-stats.py](../re/album-art-stats.py) shows the records. The write can stop the scroll for a short time. Version 2.2 is for the test only. Remove the measurement in the next version.
+**Measurement build (versions 2.2 and 2.3).** The patch times its parts with `USEC_TIMER` (`ALBUM_ART_STATS 1` in `album_art.c`). After each 256 album or playlist row draws, it writes one record to `iPod_Control/iTunes/iPodFirmAlbumArtStats` with `file_open_rw` (0x08f3f8) and `file_write` (0x08f6f4). The script [../re/album-art-stats.py](../re/album-art-stats.py) shows the records. The write can stop the scroll for a short time. Version 2.3 also records the value of `source`. The measurement is for the test only. Remove it in a later version.
 
 ## sleep-now
 
