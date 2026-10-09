@@ -18,6 +18,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
 | [volume-unlimit](#volume-unlimit) | Data patch | Patches | 2 bytes | No |
 | [something-comforting](#something-comforting) | Code patch (example) | Patches | 1 `b` and 2 vtable words (all with `chain`), a Settings menu | No |
+| [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | No |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
 | [Dark Mode switch](#dark-mode-switch) | Code and data | Patches > iPod Appearance | 1 `b` and 2 vtable words, a table and a menu | No |
@@ -345,6 +346,120 @@ The fix has two parts: hook 1 does not change 0, 1 or 0xffffffff, and hook 3 ign
 The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 minutes).
 
 **Test status.** Emulator: one button push turned on the storage power 0.05 ms later. 60 wheel steps did not run the hook. Not tested on a real iPod.
+
+## cover-flow
+
+**User interface.** Patches pane > Cover Flow, letter `c`, version 0.6. The patch needs no file of iPodFirm: it uses the albums, the names and the artwork that the iPod already has. The research is in [../re/cover-flow.md](../re/cover-flow.md).
+
+**Effect.**
+
+1. Hold Select in the Albums list for 0.5 s. Cover Flow opens at the selected album.
+2. Turn the click wheel. Each wheel step moves the target one cover and gives the click of the lists, as the Clicker setting gives. A timer moves the covers smoothly to the target: a fast turn catches up quickly, and each stop slows down softly.
+3. The centre cover is flat. Four covers at each side are slanted and a little darker. Each cover has a reflection. The album name and the artist (grey) show below the covers, centred, in the font of the list rows.
+4. Push Select. The album at the centre opens, as from the list.
+5. Push Menu. The Albums list shows again.
+
+The background is white with the light theme and black with the dark theme. On white, the reflections fade to white. The text has the colour of the list rows of the theme.
+
+A short push of Select opens the album as usual. Play/Pause operates as usual. If the iPod shows a new screen (for example Now Playing), Cover Flow closes.
+
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 10676 bytes. The functions that run once for each event or each open have `__attribute__((minsize))`; the pixel loop `draw_cover` stays fast code. The framebuffer copy (153600 bytes), the cover cache (11 covers of 128 × 128, 360448 bytes), the read buffer (80000 bytes), the caption copy (26880 bytes) and the placeholder cover come from the allocator 0x25a974 when Cover Flow opens. They are released when it closes. The album table (about 9 bytes for each album) stays in memory while the database does not change. While the table is made, the patch also uses 12 bytes for each track and a 32 KB read window.
+
+**Hooks.**
+
+| Kind | At | Expect | To | Replaced |
+|---|---|---|---|---|
+| `word` | 0x6772c0 | 0x0023b704 | `hook_list_event` | Event method (slot +0x30) of the browse-list class 0x677290 |
+| `word` | 0x6701f0 | 0x001d81cc | `hook_ui_event` | The UI event handler 0x1d81cc |
+| `word` | 0x17ef8c | 0x0017ef98 | `hook_display_damage` | The literal of the damage callback, which the display registers at the start |
+
+**Firmware functions.**
+
+| Address | Name in the patch | Function |
+|---|---|---|
+| 0x23b704 | `list_event` | Original event method of the browse lists |
+| 0x1d81cc | `ui_event` | Original UI event handler |
+| 0x17ef98 | `display_damage` | Original damage callback |
+| 0x1647c0 | `display_server` | Returns the display server |
+| 0x164878 | `display_bind` | Binds a layer of the display |
+| 0x1650f8 | `display_flush` | Sends the dirty rows to the LCD |
+| 0x0c9a84, 0x0c9b58 | `display_lock`, `display_unlock` | The mutex of the display server |
+| 0x21ac04 | `view_invalidate` | Marks a view for a new draw |
+| 0x13d524 | `dispatch_event` | Event dispatcher |
+| 0x1d813c | `ui_activity` | Starts the idle timer again and turns the display on |
+| 0x0a69dc | `ui_click` | The click of the lists (follows the Clicker setting) |
+| 0x09bc6c | `lib_resolve` | Resolves the library reference of the main provider |
+| 0x09eff8 | `pool_copy` | Copies a UTF-16 string from a string pool of the database |
+| 0x244924 | `label_draw` | Draws the text of a label (the caption) |
+| 0x25a974, 0x25a8e4 | `fw_alloc`, `fw_free` | Memory from the pool |
+| 0x07ccd0, 0x07cd6c | `fw_memset0`, `fw_strcpy` | Memory and string functions |
+| 0x08f38c, 0x08f464, 0x08f5c4, 0x08f184 | `file_open`, `file_read`, `file_seek`, `file_close` | File access on the iPod disk |
+
+**Runtime logic.**
+
+1. `hook_ui_event` records its first argument (the UI object). The UI handler gets each key event before the list.
+2. A push of Select (type 4, key 0x6f) in the Albums list (element ID 0x6382, visible) goes to `hook_list_event`. The hook keeps a copy of the event and does not give it to the firmware.
+3. When the firmware reports the hold (type 6 at `hook_ui_event`, 0.5 s after the push), the patch opens Cover Flow. If no type 6 comes, an event at the list 0.7 s after the push (usually its timer, type 9) also opens it. If the release (type 7) comes first, the hook sends the kept push through the dispatcher 0x13d524. The copy has its own vtable with an empty delete slot. `hook_ui_event` skips the copy of the push, because the UI handler had the original. Then the album opens as usual.
+4. To open, the patch makes the album table (only the first time, or after the database changed), allocates the memory and copies the framebuffer. It starts at the selected row − 1 (row 0 is "All") if the list has one row more than the table has albums. Else it starts at the first album.
+5. Each frame: clear the framebuffer, draw the covers from the farthest to the centre, draw the caption, then bind the layer, set the dirty rows 0–240 under the lock, and flush. The patch does not call the damage callback, because the callback can bind the layer again and wait for itself.
+6. While Cover Flow shows, `hook_display_damage` ignores the damage of the firmware. If the Albums list is not visible, it closes Cover Flow and gives the damage to the firmware.
+7. A wheel event (type 0xf) moves the target one cover in its direction (event + 0xc) and calls the click 0xa69dc. It does not draw (only the first frame of a movement), so the event handler returns at once.
+8. The animation uses the timer of the list (list word 0x33, 100 ms for the list): stop 0x151c98, set 0x151c24 (15 ms), start 0x151694. Each timer event (type 9, event word 2 = the timer) goes to `hook_list_event`. Each tick starts the timer again first, then moves the position 5/8 of the remaining distance (at least 20/256 of a cover) and draws one frame. When the position is at the target, each tick loads one more cover near the centre (centre ± 4), then the timer stops. Each frame loads at most one new cover; a cover that is not loaded yet shows the grey square for that frame. The caption is drawn one time for each centre album and copied in the other frames. On close, the patch stops the timer and sets 100 ms again. A timer event that comes after the close is swallowed if the repeat count of the list (byte list + 0xf8) is 0, because the list would count down from 255. The patch takes the wheel events, thus it calls 0x1d813c for each of them, as the UI handler does. Then the backlight and the sleep timer start again. The UI handler gets the key events, so it does this for them itself.
+9. Select (type 4, key 0x6f) opens the centre album: the patch calls the method +0x138 of the list (0x23a04c, set the selected row) with the row of the album (the album index + 1, because row 0 is "All"). Then it closes Cover Flow and gives the push to the original list method. The push then goes on through the chain, and the firmware opens the selected album. If the list does not have one row more than the table has albums, Select does nothing.
+10. The theme: at the open, the patch examines the left margin of the list rows (x = 2, every 8 rows below y = 40) in the copy of the screen. If most pixels are bright (green ≥ 32 of 63), the background is white. Else it is black.
+11. Menu (type 4, key 0x6e) closes Cover Flow: the patch puts the framebuffer copy back, sends it, and marks the top view of the list for a new draw (0x21ac04). The UI handler acts on Menu at type 6 or 7, thus `hook_ui_event` swallows these events of the key and decreases the key count at UI object + 0x44 at the release, as 0x1d820c does.
+
+The draw uses no division instruction (the ARM7TDMI has none). `udiv` is a shift-and-subtract loop. A table gives (S << 16) / h for each cover height.
+
+### The data
+
+The album table:
+
+1. The library is `lib_resolve(*(provider + 0x1c))`, with the main provider at RAM 0x1081da18. Library + 0xcf8 is the database.
+2. Library + 0xc60 points to the album list of the firmware: one album pool index for each row of the Albums list without "All", in the order of the list. Library + 0xc6c is the count. Thus the patch has the order of the firmware, also for names that start with punctuation or digits.
+3. The album pool (db + 0x138) has one UTF-16 entry for each track. The patch makes an FNV-1a hash of the name of each row, and of the album name of each track (the track list starts at db + 0x20, the count is at db + 0x1c, the next track is at track + 4). A binary search over the hashes of the rows gives the row of each track. The first track of a row gives the artist (pool db + 0xe0, index at track + 0x2c).
+4. The patch keeps the dbid (track + 0x108) and the row of each track, sorted by the dbid.
+
+The artwork:
+
+1. The patch reads `iPod_Control/Artwork/ArtworkDB` through a 32 KB window: mhfd, mhsd (type 1), mhli, then each mhii. An mhii has the dbid of its track at + 0x14.
+2. If the dbid belongs to an album without a 200 × 200 cover, the patch looks at the children of the mhii: a container mhod (type 2) with an mhni gives the offset in the .ithmb file (mhni + 0x14). The patch takes format 1029 (200 × 200, size 80000, the Now Playing artwork). It takes format 1028 (100 × 100, size 20000) only if the album has no 1029 image. The file name (`:F1029_N.ithmb`, UTF-16, in the mhod after the mhni) gives N.
+3. At each new cover, the patch reads the image from `iPod_Control/Artwork/F1029_N.ithmb` (or `F1028_N.ithmb`) into the read buffer. Then it makes a 128 × 128 texture, the size of the centre cover. From 200 × 200: the average of 2 × 2 pixels, in packed RGB565. From 100 × 100: bilinear filtering. Thus the centre cover shows 1:1 without steps. An album without artwork gets a grey square with a lighter frame.
+
+Version 0.4 used the 100 × 100 image and enlarged it without filtering. The covers then had visible steps. Emulator times for each new cover (one for each wheel step): the read of 80 KB takes 9.5 ms, and the 2 × 2 average 7.1 ms (a bilinear filter took 15.7 ms). The first frame at the open (5 covers) took 144 ms with the bilinear filter.
+
+The caption:
+
+1. The patch takes the album label (element 0x6421) of the template cell of the list (list word 0x2a, children at + 0x80, count at + 0x7c).
+2. For the draw, it attaches the label to the top view and sets its rectangle (view + 0x58: top, left, bottom, right) to the line below the covers. It calls 0x244924 with the name in UTF-8. Then it puts back the parent, the rectangle, the flags and the byte at + 0x1b8.
+3. The label draws at the left. The patch then moves the text pixels of the line to the centre. The background is exactly white or black, so each other pixel is text. For the artist line, it also mixes each text pixel halfway to the background (grey).
+
+Before version 0.4, iPodFirm wrote a cover file (`iPod_Control/iTunes/iPodFirmCoverFlow`, 12 MB for 326 albums). Version 0.4 does not read it. You can delete it from the iPod.
+
+**Limits.**
+
+- In the Albums list, a long push of Select does not add the album to the On-The-Go playlist.
+- In the album list of one artist, Cover Flow starts at the first album and shows all the albums.
+- In the album list of one artist, Select does nothing.
+- If the iPod has no image in format 1029 or 1028 for an album, the album shows the grey square.
+- If two album names have the same hash, the second album gets no artwork and no artist.
+
+**Test status.** Emulator (8 October 2026), with the emulator test library (6 albums) and a cover file from `MusicImport.writeCoverFlow`:
+
+- A hold of Select opened Cover Flow at the hold event (0.506 s), at the selected album.
+- The wheel moved the covers. The covers stopped at the first and at the last album.
+- Menu closed Cover Flow. The Albums list showed again, with the highlight.
+- A short push of Select (0.3 s) opened the album as usual. A short push of Menu went back as usual.
+
+Real iPod 5.5G (owner, 8 October 2026, version 0.1, 326 albums): a hold of Select opened Cover Flow, the wheel moved the covers, and Menu went back to the Albums list. It also operated with Dark Mode.
+
+Emulator (8 October 2026), version 0.4, with the FolderLibrary (1000 tracks, 138 albums, ArtworkDB with formats 1028 and 1029, no cover file):
+
+- The first 8 rows of the table were "(III)", "<I°_°I>", "1:15 - Single", "10,000 gecs", "2019", "A Brief Inquiry Into On…", "After Laughter", "Ai Need Your Love - Sin…": the order of the Albums list.
+- The real covers showed. The caption showed the album name and the artist in the font of the list rows, centred.
+- The first open made the table in 35 ms (emulated time; the emulated disk is fast). The next open took no time.
+
+Not tested: version 0.4 on the real iPod, a pop-up or a new screen while Cover Flow shows, and a database from iTunes or Finder.
 
 ## usb-host-probe
 

@@ -662,6 +662,23 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertEqual(le32(f, 12), 0x55763f97)                 // stamp: same value as the Python version
     }
 
+    /// The cover-flow patch: three word hooks into the extended area. It fits with the other patches.
+    func testCoverFlow() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        let flow = all.filter { $0.spec.name == "cover-flow" }
+        XCTAssertEqual(flow.count, 1)
+        let out = try Patcher.apply(flow, to: osos)
+        for (at, old) in [(0x6772c0, 0x0023b704), (0x6701f0, 0x001d81cc), (0x17ef8c, 0x0017ef98)] as [(Int, UInt32)] {
+            XCTAssertEqual(le32(osos, at), old)
+            XCTAssertGreaterThanOrEqual(le32(out, at), 0x736800)       // a function in the extended area
+        }
+        let others = ["album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input", "backlight-60s", "usb-host-probe", "cover-flow"]
+        let set = all.filter { others.contains($0.spec.name) }
+        XCTAssertTrue(Patcher.conflicts(set).isEmpty)
+        _ = try Patcher.apply(set, to: osos)
+    }
 }
 
 final class EmulatorDriveTests: XCTestCase {

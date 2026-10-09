@@ -266,9 +266,12 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 | `backlight-60s` | The Backlight Timer menu has a 60 Seconds item in place of 2 Seconds. | Menu tested in the emulator. Not tested on a real iPod. |
 | `volume-unlimit` | Removes the volume limit of iPods for the EU. The full position of the volume control gives the full volume, not 84% of it. On other iPods it changes nothing. It is in the Sound group. For the research, refer to [re/volume-limit.md](re/volume-limit.md). | Byte change checked with the iPodWizard search. Not tested on a real iPod. |
 | `something-comforting` | An example patch. A Settings item plays approximately 13 seconds of "Something Comforting" by Porter Robinson on the internal speaker of the iPod. It is in the Fun group. | Tested in the emulator (the item and the note calls; the emulator has no audio). Not tested on a real iPod. |
+| `cover-flow` | Cover Flow: hold Select in the Albums list to browse the album covers in 3D, with the click of the lists. Turn the wheel to move. Push Select to open the album at the centre. Push Menu to go back. White background with the light theme, black with Dark Mode. It uses the artwork and the album names that the iPod already has. | Tested in the emulator. Version 0.1 tested on a real iPod (open, wheel, Menu, Dark Mode). |
 | `usb-host-probe` | A one-shot test of the USB host mode through a USB-C mod, for [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md). Only on the branch `usb-audio-out`. | Host start tested in the emulator. Not tested on a real iPod. |
 
 The `album-art` patch gets the album thumbnails from the artwork that iTunes or Finder put on the iPod (`iPod_Control/Artwork`). The albums do not need a file. The playlists need the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds playlists. A restart of the iPod is not necessary. After you disconnect the iPod from the computer, the patch examines the file again when an album list or a playlist list shows.
+
+The `cover-flow` patch needs no file of iPodFirm. It reads the album list of the iPod and the artwork that iTunes or Finder put on the iPod (`iPod_Control/Artwork`). After a sync, Cover Flow shows the new albums. Versions before 0.4 used the file `iPod_Control/iTunes/iPodFirmCoverFlow`. You can delete that file.
 
 A playlist gets a thumbnail too. In the Patches pane, select "Album Artwork". The section "Playlist Artwork" shows the playlists of the connected iPod:
 
