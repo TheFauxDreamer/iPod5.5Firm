@@ -294,14 +294,31 @@ def add_settings_items(out: bytearray, items: list[dict]) -> int:
     return menu_at
 
 
+def set_options(spec: dict, values: dict[str, int], code: bytearray, base: int, table: dict[str, int]) -> None:
+    """Write the selected value of each option ("options" in patch.json) into its variable in the code.
+
+    A missing value uses "default", or the first choice.
+    """
+    for o in spec.get("options", []):
+        choices = [c["value"] for c in o["choices"]]
+        value = values.get(o["id"], o.get("default", choices[0] if choices else 0))
+        if value not in choices:
+            raise PatchError(f"option {o['id']!r} has no choice with the value {value}")
+        at = table.get(o["symbol"])
+        if at is None or at < base or at - base + 4 > len(code) or at & 3:
+            raise PatchError(f"option {o['id']!r}: {o['symbol']} is not a global 32-bit variable of the patch")
+        struct.pack_into("<I", code, at - base, value & 0xFFFFFFFF)
+
+
 def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int | None = None,
-          symbols: dict[str, int] | None = None, original_sha256: str | None = None) -> tuple[bytes, dict]:
+          symbols: dict[str, int] | None = None, original_sha256: str | None = None,
+          options: dict[str, int] | None = None) -> tuple[bytes, dict]:
     """Return (patched osos, report). `max_size` is the largest size the osos image can have.
 
     `load_address` replaces the address in patch.json. `symbols` adds addresses that the build
     decides (for example the address of a table that the build puts in the osos image).
     `original_sha256` is the SHA-256 of the osos before other changes (pictures, text, a theme);
-    without it, osos itself must be Apple's.
+    without it, osos itself must be Apple's. `options` gives the selected value of each option, by id.
     """
     patch_dir = Path(patch_dir)
     spec = json.loads((patch_dir / "patch.json").read_text())
@@ -332,6 +349,9 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
             for h in chained:
                 fw_syms[h["chain"]] = chain_target(h, osos, first)
         code, table = link(obj, base, fw_syms)
+        code = bytearray(code)
+        set_options(spec, options or {}, code, base, table)
+        code = bytes(code)
     end = base + len(code)
     if load_address is None and spec.get("load_address") == EXTENDED:
         max_size = OSOS_LIMIT

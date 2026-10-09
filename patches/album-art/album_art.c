@@ -14,9 +14,14 @@
  *  - Albums: the artwork that iTunes or Finder put on the iPod. iPod_Control\Artwork\ArtworkDB
  *    links each image (mhii) to the dbid of a track (track + 0x108). The patch reads the 100 x 100
  *    image (format 1028, RGB565) from F1028_N.ithmb and makes a 20 x 20 thumbnail with a 5 x 5
- *    average. The table of the albums is made at the first album label after a database load.
+ *    average. The table of the albums is made at the first album row that needs the artwork after
+ *    a database load.
  *  - Playlists, and albums without artwork on the iPod: the optional thumbnail file
  *    iPod_Control\iTunes\iPodFirmAlbumArt, which iPodFirm writes.
+ * The option "source" (patch.json) sets the order for an album. SOURCE_ARTWORK: the artwork
+ * first, then the file. SOURCE_FILE: the file first, then the artwork. The file is in memory, so
+ * SOURCE_FILE reads the disk only for an album that is not in the file. iPodFirm writes the value
+ * into option_source when it applies the patch.
  * The hash of a playlist name starts with the byte 0x01, thus a playlist and an album with the
  * same name have different thumbnails.
  *
@@ -91,6 +96,8 @@ int file_write(void *fh, unsigned *len, const void *buf);
 #define VIEW_ELEMENT_ID 0x1c              /* u16: the layout element of a view, also its data property */
 #define ALBUM_NAME_ID   0x6421            /* element of the album name in an album list row */
 #define PLAYLIST_NAME_ID 0x6425           /* element of the playlist name in a playlist list row */
+#define SOURCE_ARTWORK  0                 /* option_source: the artwork of the iPod first */
+#define SOURCE_FILE     1                 /* option_source: the thumbnail file first */
 #define FNV_BASIS       2166136261u
 #define FNV_PRIME       16777619u
 #define PLAYLIST_BASIS  ((FNV_BASIS ^ 1u) * FNV_PRIME)   /* the FNV-1a state after the byte 0x01 */
@@ -120,6 +127,9 @@ typedef struct { unsigned hash, offset; } Entry;
 
 /* An album with artwork. `slot` is its thumbnail in art_pixels, NO_SLOT or FAILED. */
 typedef struct { unsigned hash, offset; unsigned short slot; unsigned char file, pad; } Art;
+
+/* The option "source" in patch.json. The patcher writes the selected value. */
+unsigned option_source = SOURCE_ARTWORK;
 
 /* The thumbnail file. */
 static int state;                         /* 0 = not loaded, 1 = loaded, -1 = no file */
@@ -169,13 +179,13 @@ enum {
 };
 typedef struct { unsigned count, total_us, max_us; } Timer;
 static struct {
-    unsigned magic, version, record, time_us;     /* "AAST", 1, the record number, USEC_TIMER */
+    unsigned magic, version, record, time_us;     /* "AAST", 2, the record number, USEC_TIMER */
     Timer t[T_COUNT];
     unsigned art_hits, art_failed, file_all_hits, file_cache_hits, db_loaded_calls;
     unsigned alloc_failed;                        /* a bit for each allocation that failed */
     unsigned art_state, art_count, art_slots;
     unsigned file_state, file_count, file_size, file_all, file_cache;
-    unsigned write_errors;
+    unsigned write_errors, source;
 } stats;
 
 static void stat_add(int i, unsigned start)
@@ -825,7 +835,7 @@ COLD static void write_stats(void)
     unsigned path[0x108 / 4], fh[0x30 / 4], len = sizeof stats, offset;
     int err;
     stats.magic = 0x54534141u;            /* "AAST" */
-    stats.version = 1;
+    stats.version = 2;                    /* 2: with `source` (version 2.3 of the patch) */
     stats.time_us = USEC_TIMER;
     stats.art_state = (unsigned)art_state;
     stats.art_count = art_count;
@@ -835,6 +845,7 @@ COLD static void write_stats(void)
     stats.file_size = size;
     stats.file_all = all_pixels != 0;
     stats.file_cache = cache_pixels != 0;
+    stats.source = option_source;
     offset = stats.record * sizeof stats;
     fw_memset0(path, sizeof path);
     fw_strcpy((char *)path + 4, STATS_PATH);
@@ -903,8 +914,6 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
         else if (state == -1)
             state = 0;
     }
-    if (art_state == 0)
-        build_art();
     load();
     view_bounds(view, &r);
     height = r.bottom - r.top;
@@ -918,11 +927,19 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
             h = slot_hash[i];
         }
     }
-    if (h && id == ALBUM_NAME_ID && (n = art_find(h)) >= 0) {
-        px = art_thumb(n);
-        ts = TH;
+    if (h && option_source == SOURCE_FILE && (e = find(h)) != 0) {
+        px = pixels(e);
+        ts = (int)size;
     }
-    if (h && !px && (e = find(h)) != 0) {
+    if (h && !px && id == ALBUM_NAME_ID) {
+        if (art_state == 0)
+            build_art();                  /* only if an album needs the artwork */
+        if ((n = art_find(h)) >= 0) {
+            px = art_thumb(n);
+            ts = TH;
+        }
+    }
+    if (h && !px && option_source != SOURCE_FILE && (e = find(h)) != 0) {
         px = pixels(e);
         ts = (int)size;
     }

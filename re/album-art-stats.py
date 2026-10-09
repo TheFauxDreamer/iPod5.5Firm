@@ -1,4 +1,4 @@
-"""Show the measurement of the album-art patch version 2.2.
+"""Show the measurement of the album-art patch version 2.3 (record version 2).
 
 Usage: python3 re/album-art-stats.py [path to iPodFirmAlbumArtStats]
 
@@ -19,7 +19,7 @@ TIMERS = [
 ]
 COUNTERS = ["art_hits", "art_failed", "file_all_hits", "file_cache_hits", "db_loaded_calls"]
 STATE = ["alloc_failed", "art_state", "art_count", "art_slots", "file_state", "file_count",
-         "file_size", "file_all", "file_cache", "write_errors"]
+         "file_size", "file_all", "file_cache", "write_errors", "source"]
 WORDS = 4 + 3 * len(TIMERS) + len(COUNTERS) + len(STATE)
 MAGIC = 0x54534141                                         # "AAST"
 ALLOCATIONS = ["index", "all_pixels", "cache_pixels", "name", "keys", "art", "window",
@@ -40,7 +40,7 @@ def records(data: bytes) -> list[dict]:
     out = []
     for offset in range(0, len(data) - WORDS * 4 + 1, WORDS * 4):
         w = struct.unpack_from(f"<{WORDS}I", data, offset)
-        if w[0] != MAGIC or w[1] != 1 or w[2] != len(out):
+        if w[0] != MAGIC or w[1] != 2 or w[2] != len(out):
             break
         if out and (w[3] < out[-1]["time"] or w[4] < out[-1]["timers"][0][0]):
             break                                          # a record of an earlier session

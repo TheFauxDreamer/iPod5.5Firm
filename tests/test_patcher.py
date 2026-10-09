@@ -201,3 +201,17 @@ def test_chain_target_rules():
     assert patcher.chain_target(b, bytes(osos), {"orig": 0x7EC000}) == 0x7EC000
     struct.pack_into("<I", osos, 0x200, patcher.branch("b", 0x200, 0x7EB100))
     assert patcher.chain_target(b, bytes(osos), {"orig": 0x7EC000}) == 0x7EB100
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_patch_option():
+    """The album-art option "source": the patcher writes the value into option_source."""
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    artwork, report = patcher.apply(osos, REPO / "patches/album-art", 0x736800)
+    file, _ = patcher.apply(osos, REPO / "patches/album-art", 0x736800, options={"source": 1})
+    at = int(report["symbols"]["option_source"], 16)
+    assert struct.unpack_from("<I", artwork, at)[0] == 0
+    assert struct.unpack_from("<I", file, at)[0] == 1
+    assert [i for i in range(len(file)) if file[i] != artwork[i]] == [at]
+    with pytest.raises(patcher.PatchError, match="no choice"):
+        patcher.apply(osos, REPO / "patches/album-art", 0x736800, options={"source": 7})
