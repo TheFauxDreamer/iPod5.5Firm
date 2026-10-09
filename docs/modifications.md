@@ -12,7 +12,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [Text replacement](#text-replacement) | Resource data | Text | One Str area | Not recorded |
 | [Software version](#software-version) | Code | Patches > Software Version | 2 instructions, or 1 function body | No |
 | [backlight-60s](#backlight-60s) | Data patch | Patches | 16 byte runs and 21 strings | No |
-| [album-art](#album-art) | Code patch (extended) | Patches | 2 vtable words and 1 `bl` | Version 1.0: yes. Version 2.0: no |
+| [album-art](#album-art) | Code patch (extended) | Patches | 2 vtable words and 1 `bl` | Version 1.0: yes. Version 2.1: installed, the scroll is slow |
 | [sleep-now](#sleep-now) | Code patch | Patches | 1 vtable word and 2 `bl` | No |
 | [flash-keep-awake](#flash-keep-awake) | Code patch | Patches | 4 `bl` | Partly (an earlier version) |
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
@@ -117,7 +117,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 ## album-art
 
-**User interface.** Patches pane > Album Artwork, letter `a`, version 2.0. `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
+**User interface.** Patches pane > Album Artwork, letter `a`, version 2.2. `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
 
 - "Thumbnails": "Write Thumbnails to iPod" writes the thumbnail file. The albums do not need this file. "Eject iPod" ejects the iPod.
 - "Playlist Artwork" sets a custom image for each playlist ("Choose Image…", "Use Automatic", or drag an image).
@@ -132,7 +132,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 The research is in [../re/album-art-v2.md](../re/album-art-v2.md).
 
-**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 8020 bytes. Version 1.0 used the fixed area 0x7358d0–0x73658c (3080 bytes). Thus a build with this patch moves rsrc.
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 9104 bytes. Version 1.0 used the fixed area 0x7358d0–0x73658c (3080 bytes). Thus a build with this patch moves rsrc.
 
 **Hooks.**
 
@@ -235,7 +235,9 @@ The large artwork in Now Playing does not come from the patch. RetailOS reads `i
 - A song row never gets a thumbnail, also if the song has the same name as an album.
 - Two names with the same FNV-1a hash share one thumbnail. The second name is ignored.
 
-**Test status.** Version 1.0: tested in the emulator and on a real iPod 5.5G, with the light theme and with the dark theme. Version 2.0: tested in the emulator (refer to [../re/album-art-v2.md](../re/album-art-v2.md)). Not tested on a real iPod.
+**Test status.** Version 1.0: tested in the emulator and on a real iPod 5.5G, with the light theme and with the dark theme. Version 2.0: tested in the emulator (refer to [../re/album-art-v2.md](../re/album-art-v2.md)). Version 2.1: installed on a real iPod 5.5G with flash storage. The owner reports that the Albums list scrolls more slowly than without the patch, also on the second pass (9 October 2026).
+
+**Measurement build (version 2.2).** The patch times its parts with `USEC_TIMER` (`ALBUM_ART_STATS 1` in `album_art.c`). After each 256 album or playlist row draws, it writes one record to `iPod_Control/iTunes/iPodFirmAlbumArtStats` with `file_open_rw` (0x08f3f8) and `file_write` (0x08f6f4). The script [../re/album-art-stats.py](../re/album-art-stats.py) shows the records. The write can stop the scroll for a short time. Version 2.2 is for the test only. Remove the measurement in the next version.
 
 ## sleep-now
 

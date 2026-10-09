@@ -109,9 +109,57 @@ The emulator disk has no seek time. On a hard disk, each new thumbnail adds a se
 2. The time of the first open and of a long scroll on a hard disk.
 3. A name with a character outside the Basic Multilingual Plane: the patch makes 4-byte UTF-8. The firmware form of such a label text is not examined.
 
-## Next steps: version 2.1 (not done)
+## The slow scroll on the real iPod (version 2.2)
 
-The owner asked for more speed on 9 October 2026. This section keeps the plan for later. No code is changed for it yet.
+On 9 October 2026, the owner reported that the Albums list scrolls much more smoothly without the patch. The iPod has flash storage. The library has approximately 377 albums and 5123 tracks. The second pass through the list is also slow. All thumbnails fit in the 1 MB memory (1310 slots), so a second pass must not read the disk.
+
+Version 2.2 is a measurement build. With `ALBUM_ART_STATS 1`, the patch times its parts with `USEC_TIMER`. After each 256 album or playlist row draws, it writes one record of 208 bytes to `iPod_Control\iTunes\iPodFirmAlbumArtStats`. Record N is at offset N × 208. Each start of the iPod writes from record 0 again. [album-art-stats.py](album-art-stats.py) shows the change between two records.
+
+The measurement records these items:
+
+- the time of each album or playlist row, of the original draw (with a thumbnail and without), of `build_art`, of `load`, of `check_for_new_file`, of a fill from `F1028_N.ithmb`, of a read from `iPodFirmAlbumArt`, of the blit and of `draw_runs`;
+- the hits in memory, the failed artwork reads, the calls of `hook_db_loaded` and a bit for each failed allocation;
+- the state: `art_state`, `art_count`, `art_slots` and the state of the thumbnail file.
+
+### Results in the emulator
+
+Emulator test on 9 October 2026 with the FolderLibrary (138 albums). The script opened Albums and scrolled 300 detents down, 300 up, 300 down and 300 up. Three builds were measured. The variants were temporary and are not in the repository.
+
+| Build | Original draw of an album row | All of the album row |
+|---|---|---|
+| Version 2.2 | 1733–2343 µs | 1478–2845 µs |
+| The left edge does not move (the thumbnail covers the text) | 1779–2401 µs | 1508–2831 µs |
+| No thumbnail (`px = 0`) | 1542–2259 µs | 1641–2529 µs |
+
+The values are the mean of each record of 256 rows. Record 0 is not in the table, because it includes `build_art` and the first fills. Other values of version 2.2:
+
+| Part | Time | When |
+|---|---|---|
+| A different list row (the Music menu), original draw | Approximately 650 µs | Each draw |
+| The blit of a thumbnail | Approximately 115 µs | Each album row |
+| A fill from `F1028_1.ithmb` (open, read 20000 bytes, 5 × 5 average) | 4.8–5.3 ms, a maximum of 20 ms | Each new album |
+| `build_art` | Approximately 52 ms | One time after a database load |
+| `load` of `iPodFirmAlbumArt` | Approximately 5 ms | One time |
+
+Conclusions:
+
+1. The firmware draw of an album row takes approximately 2 ms, also without a thumbnail. The patch does not make it slower.
+2. The moved left edge does not make the draw slower. Possible cause 4 (the label draws its text again) is not correct.
+3. With the thumbnails in memory, the patch adds approximately 120 µs for each row. This is approximately 6 %.
+4. The second pass had no fills, no `build_art` and no failed allocation. The emulator does not show the slow second pass. The cause is on the real iPod only.
+
+### Possible causes on the real iPod
+
+The stats file from the real iPod shows which cause is correct:
+
+1. A failed allocation (`alloc_failed`). Then the thumbnails are not in memory.
+2. ArtworkDB has no format 1028 image (`art_count` is 0 or `art_failed` increases). Then each album reads the file `iPodFirmAlbumArt`.
+3. `build_art` or `hook_db_loaded` more than one time.
+4. `draw_runs` instead of the blit.
+
+## Next steps for speed (not done)
+
+The owner asked for more speed on 9 October 2026. This section keeps the plan for later. No code is changed for it yet. Do the measurement on the real iPod first (refer to the section above).
 
 ### Where the time goes
 

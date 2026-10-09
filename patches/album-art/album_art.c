@@ -67,6 +67,8 @@ int file_read(void *fh, unsigned *len, void *buf);
 int file_seek(void *fh, int unused, unsigned long long position);
 int file_close(void *fh);
 void log_event(void *log, int event, int value);
+int file_open_rw(void *path_record, void *fh, unsigned buffer, unsigned mode);
+int file_write(void *fh, unsigned *len, const void *buf);
 
 /* Code that runs once for each load or each label: small code. The pixel loops stay fast. */
 #define COLD __attribute__((minsize))
@@ -140,6 +142,73 @@ static unsigned short *slot_owner;        /* the index in `art` of each slot, or
 static unsigned art_slots, art_next;
 static unsigned short *art_buffer;        /* one 100 x 100 image */
 
+/* ---------- the measurement (temporary, version 2.2) ----------
+ * The scroll of the Albums list is slow on the real iPod, also with all thumbnails in memory. The
+ * emulator does not show this. With ALBUM_ART_STATS 1, the patch counts and times its parts with
+ * USEC_TIMER. After each STATS_EVERY album or playlist row draws, it writes one record to the file
+ * STATS_PATH. Record N is at offset N * sizeof stats, thus the file shows the change in time.
+ * re/album-art-stats.py reads the file. Set ALBUM_ART_STATS to 0 to remove the measurement. */
+#define ALBUM_ART_STATS 1
+#if ALBUM_ART_STATS
+#define USEC_TIMER    (*(volatile unsigned *)0x60005010)
+#define STATS_PATH    "iPod_Control\\iTunes\\iPodFirmAlbumArtStats"
+#define STATS_EVERY   256                 /* a power of 2 */
+#define STATS_RECORDS 128
+
+/* The timed parts. re/album-art-stats.py uses the same order. */
+enum {
+    T_ALBUM_ROW,                          /* all of draw_with_thumbnail for an album or playlist row */
+    T_OTHER_ROW,                          /* the original draw of a different list row (reference) */
+    T_ORIGINAL_SHIFTED,                   /* the original draw with the left edge moved */
+    T_ORIGINAL_PLAIN,                     /* the original draw of an album row with no thumbnail */
+    T_BUILD_ART, T_LOAD, T_CHECK_FILE,
+    T_ART_FILL,                           /* a thumbnail from the ithmb file: read and average */
+    T_FILE_READ,                          /* a thumbnail read from the iPodFirmAlbumArt file */
+    T_BLIT, T_RUNS,
+    T_COUNT
+};
+typedef struct { unsigned count, total_us, max_us; } Timer;
+static struct {
+    unsigned magic, version, record, time_us;     /* "AAST", 1, the record number, USEC_TIMER */
+    Timer t[T_COUNT];
+    unsigned art_hits, art_failed, file_all_hits, file_cache_hits, db_loaded_calls;
+    unsigned alloc_failed;                        /* a bit for each allocation that failed */
+    unsigned art_state, art_count, art_slots;
+    unsigned file_state, file_count, file_size, file_all, file_cache;
+    unsigned write_errors;
+} stats;
+
+static void stat_add(int i, unsigned start)
+{
+    unsigned d = USEC_TIMER - start;
+    Timer *t = &stats.t[i];
+    t->count++;
+    t->total_us += d;
+    if (d > t->max_us)
+        t->max_us = d;
+}
+#define STAT_NOW()         USEC_TIMER
+#define STAT_ADD(i, start) stat_add(i, start)
+#define STAT_COUNT(field)  (stats.field++)
+#else
+#define STAT_NOW()         0u
+#define STAT_ADD(i, start) ((void)(start))
+#define STAT_COUNT(field)  ((void)0)
+#endif
+
+/* fw_alloc. The measurement records a failed allocation with the bit `id`. */
+COLD static void *alloc(unsigned size, unsigned id)
+{
+    void *p = fw_alloc(size);
+#if ALBUM_ART_STATS
+    if (!p)
+        stats.alloc_failed |= id;
+#else
+    (void)id;
+#endif
+    return p;
+}
+
 static unsigned fnv1a(unsigned h, const char *s)
 {
     while (*s) {
@@ -210,13 +279,11 @@ COLD static void unload(void)
     state = 0;
 }
 
-COLD static void load(void)
+COLD static void load_file(void)
 {
     unsigned header[4];
     int i;
 
-    if (state != 0)
-        return;
     unload();                             /* memory of an earlier load that failed */
     state = -1;
     if (read_file(0, header, sizeof header) != 0 || header[0] != 0x54414649u)   /* "IFAT" */
@@ -229,38 +296,48 @@ COLD static void load(void)
     count = header[2];
     if (size == 0 || size > MAX_SIZE || count == 0 || count > 100000)
         return;
-    index = fw_alloc(count * sizeof(Entry));
+    index = alloc(count * sizeof(Entry), 1);
     if (!index || read_file(16, index, count * sizeof(Entry)) != 0)
         return;
     data_start = 16 + count * sizeof(Entry);
     if (count * size * size * 2 <= LOAD_ALL_MAX) {
-        all_pixels = fw_alloc(count * size * size * 2);
+        all_pixels = alloc(count * size * size * 2, 2);
         if (all_pixels && read_file(data_start, all_pixels, count * size * size * 2) != 0) {
             fw_free(all_pixels);
             all_pixels = 0;
         }
     }
     if (!all_pixels) {
-        cache_pixels = fw_alloc(CACHE_SLOTS * size * size * 2);
+        cache_pixels = alloc(CACHE_SLOTS * size * size * 2, 4);
         if (!cache_pixels)
             return;
     }
     state = 1;
 }
 
+COLD static void load(void)
+{
+    unsigned t0;
+    if (state != 0)
+        return;
+    t0 = STAT_NOW();
+    load_file();
+    STAT_ADD(T_LOAD, t0);
+}
+
 /* Reads the header again. If the file changed, releases it so that the next load reads the new
  * file. */
 COLD static void check_for_new_file(void)
 {
-    unsigned header[4];
+    unsigned header[4], t0 = STAT_NOW();
     int i;
-    if (read_file(0, header, sizeof header) != 0)
-        return;                           /* no file now: keep the loaded thumbnails */
-    for (i = 0; i < 4; i++)
-        if (header[i] != loaded_header[i]) {
-            unload();
-            return;
-        }
+    if (read_file(0, header, sizeof header) == 0)  /* no file now: keep the loaded thumbnails */
+        for (i = 0; i < 4; i++)
+            if (header[i] != loaded_header[i]) {
+                unload();
+                break;
+            }
+    STAT_ADD(T_CHECK_FILE, t0);
 }
 
 COLD static const Entry *find(unsigned hash)
@@ -281,16 +358,24 @@ COLD static const Entry *find(unsigned hash)
 COLD static const unsigned short *pixels(const Entry *e)
 {
     unsigned n = size * size;
-    unsigned i;
-    if (all_pixels)
+    unsigned i, t0;
+    int err;
+    if (all_pixels) {
+        STAT_COUNT(file_all_hits);
         return all_pixels + ((e->offset - data_start) >> 1);
+    }
     for (i = 0; i < CACHE_SLOTS; i++)
-        if (cache_hash[i] == e->hash && e->hash != 0)
+        if (cache_hash[i] == e->hash && e->hash != 0) {
+            STAT_COUNT(file_cache_hits);
             return cache_pixels + i * n;
+        }
     i = cache_next;
     cache_next = (cache_next + 1) & (CACHE_SLOTS - 1);
     cache_hash[i] = 0;
-    if (read_file(e->offset, cache_pixels + i * n, n * 2) != 0)
+    t0 = STAT_NOW();
+    err = read_file(e->offset, cache_pixels + i * n, n * 2);
+    STAT_ADD(T_FILE_READ, t0);
+    if (err != 0)
         return 0;
     cache_hash[i] = e->hash;
     return cache_pixels + i * n;
@@ -487,7 +572,7 @@ done:
 }
 
 /* Makes the table of the albums with artwork. Sets art_state to 1 or -1. */
-COLD static void build_art(void)
+COLD static void make_art_table(void)
 {
     char *library, *db;
     int *track;
@@ -504,10 +589,10 @@ COLD static void build_art(void)
     tracks = *(unsigned *)(db + DB_TRACK_COUNT);
     if (tracks == 0 || tracks > 0xfff0)
         return;
-    name = fw_alloc(NAME_BYTES);
-    keys = fw_alloc(tracks * sizeof(TrackKey));
-    art = fw_alloc(tracks * sizeof(Art));
-    window = fw_alloc(WINDOW);
+    name = alloc(NAME_BYTES, 8);
+    keys = alloc(tracks * sizeof(TrackKey), 16);
+    art = alloc(tracks * sizeof(Art), 32);
+    window = alloc(WINDOW, 64);
     key_count = 0;
     if (name && keys && art && window) {
         /* Each track with an album: its dbid and the hash of its album. */
@@ -559,9 +644,9 @@ COLD static void build_art(void)
         return;
     }
     art_slots = art_count < ART_MAX_SLOTS ? art_count : ART_MAX_SLOTS;
-    art_pixels = fw_alloc(art_slots * TH * TH * 2);
-    slot_owner = fw_alloc(art_slots * 2);
-    art_buffer = fw_alloc(ART_SIZE * ART_SIZE * 2);
+    art_pixels = alloc(art_slots * TH * TH * 2, 128);
+    slot_owner = alloc(art_slots * 2, 256);
+    art_buffer = alloc(ART_SIZE * ART_SIZE * 2, 512);
     if (!art_pixels || !slot_owner || !art_buffer) {
         free_art();
         art_state = -1;
@@ -570,6 +655,13 @@ COLD static void build_art(void)
     for (i = 0; i < art_slots; i++)
         slot_owner[i] = NO_SLOT;
     art_state = 1;
+}
+
+COLD static void build_art(void)
+{
+    unsigned t0 = STAT_NOW();
+    make_art_table();
+    STAT_ADD(T_BUILD_ART, t0);
 }
 
 /* The index of the album in `art`, or -1. */
@@ -615,12 +707,17 @@ COLD static const unsigned short *art_thumb(int n)
 {
     Art *a = &art[n];
     unsigned fh[0x30 / 4];
-    unsigned s;
+    unsigned s, t0;
     int bad;
-    if (a->slot < art_slots)
+    if (a->slot < art_slots) {
+        STAT_COUNT(art_hits);
         return art_pixels + a->slot * TH * TH;
-    if (a->slot == FAILED)
+    }
+    if (a->slot == FAILED) {
+        STAT_COUNT(art_failed);
         return 0;
+    }
+    t0 = STAT_NOW();
     s = art_next;
     art_next = art_next + 1 == art_slots ? 0 : art_next + 1;
     if (slot_owner[s] != NO_SLOT)               /* the oldest thumbnail gives its slot */
@@ -633,9 +730,11 @@ COLD static const unsigned short *art_thumb(int n)
     }
     if (bad) {
         a->slot = FAILED;
+        STAT_COUNT(art_failed);
         return 0;
     }
     shrink(art_buffer, art_pixels + s * TH * TH);
+    STAT_ADD(T_ART_FILL, t0);
     slot_owner[s] = (unsigned short)n;
     a->slot = (unsigned short)s;
     return art_pixels + s * TH * TH;
@@ -681,6 +780,7 @@ COLD static void draw_thumbnail(void *gc, const unsigned short *px, int ts, int 
 {
     int *target = *(int **)((char *)gc + GC_BITMAP);
     int bitmap[10], source[GC_WORDS], k;
+    unsigned t0 = STAT_NOW();
     Rect s, d;
 
     /* Mode 0 replaces the pixels. Mode 1 blends with the background, so on a dark theme the
@@ -688,6 +788,7 @@ COLD static void draw_thumbnail(void *gc, const unsigned short *px, int ts, int 
     gc_set_mode(gc, 0);
     if (!target || target[3] != 16 || (target[5] & 0xdfff) != 0x565 || ((unsigned)px & 3) || (ts & 1)) {
         draw_runs(gc, px, ts, top, left);
+        STAT_ADD(T_RUNS, t0);
         return;
     }
     for (k = 0; k < GC_WORDS; k++)
@@ -712,9 +813,46 @@ COLD static void draw_thumbnail(void *gc, const unsigned short *px, int ts, int 
     d.bottom = top + ts;
     d.right = left + ts;
     gc_blit(gc, source, &s, &d);
+    STAT_ADD(T_BLIT, t0);
 }
 
 typedef void (*draw_fn)(void *view, const char *text, void *a3);
+
+#if ALBUM_ART_STATS
+/* Writes one record of the measurement to STATS_PATH at the offset of the record. */
+COLD static void write_stats(void)
+{
+    unsigned path[0x108 / 4], fh[0x30 / 4], len = sizeof stats, offset;
+    int err;
+    stats.magic = 0x54534141u;            /* "AAST" */
+    stats.version = 1;
+    stats.time_us = USEC_TIMER;
+    stats.art_state = (unsigned)art_state;
+    stats.art_count = art_count;
+    stats.art_slots = art_slots;
+    stats.file_state = (unsigned)state;
+    stats.file_count = count;
+    stats.file_size = size;
+    stats.file_all = all_pixels != 0;
+    stats.file_cache = cache_pixels != 0;
+    offset = stats.record * sizeof stats;
+    fw_memset0(path, sizeof path);
+    fw_strcpy((char *)path + 4, STATS_PATH);
+    fw_memset0(fh, sizeof fh);
+    err = file_open_rw(path, fh, 0x1000, MODE_DATA);
+    if (err == 0) {
+        err = file_seek(fh, 0, offset);
+        if (err == 0)
+            err = file_write(fh, &len, &stats);
+        if (file_close(fh) != 0)
+            err = -1;
+    }
+    if (err != 0)
+        stats.write_errors++;             /* the next record shows it */
+    if (stats.record + 1 < STATS_RECORDS)
+        stats.record++;
+}
+#endif
 
 /* The hash of each label view, from its last draw with text. The highlighted row with a long
  * title scrolls the title: these draws come without text (the label uses a cached image of
@@ -749,9 +887,11 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
     unsigned h = 0;
     int height, *left, i, n, ts = 0;
     unsigned id = *(unsigned short *)((char *)view + VIEW_ELEMENT_ID);
+    unsigned t0 = STAT_NOW(), t1;
 
     if (id != ALBUM_NAME_ID && id != PLAYLIST_NAME_ID) {
         original(view, text, a3);
+        STAT_ADD(T_OTHER_ROW, t0);
         return;
     }
     /* After a USB session the database, the artwork and the file can be new or changed. */
@@ -788,15 +928,24 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
     }
     /* A list row has the height of the thumbnail and a margin. */
     if (!px || height < ts || height > ts + 12) {
+        t1 = STAT_NOW();
         original(view, text, a3);
-        return;
+        STAT_ADD(T_ORIGINAL_PLAIN, t1);
+    } else {
+        left = (int *)((char *)view + VIEW_LEFT);
+        *left += ts + GAP;
+        t1 = STAT_NOW();
+        original(view, text, a3);
+        STAT_ADD(T_ORIGINAL_SHIFTED, t1);
+        *left -= ts + GAP;
+        gc_prepare(view, gc);             /* set the origin and the clip for the original bounds */
+        draw_thumbnail(gc, px, ts, r.top + ((height - ts) >> 1), r.left + 1);
     }
-    left = (int *)((char *)view + VIEW_LEFT);
-    *left += ts + GAP;
-    original(view, text, a3);
-    *left -= ts + GAP;
-    gc_prepare(view, gc);                 /* set the origin and the clip for the original bounds */
-    draw_thumbnail(gc, px, ts, r.top + ((height - ts) >> 1), r.left + 1);
+#if ALBUM_ART_STATS
+    stat_add(T_ALBUM_ROW, t0);
+    if ((stats.t[T_ALBUM_ROW].count & (STATS_EVERY - 1)) == 0)
+        write_stats();                    /* after the timed part */
+#endif
 }
 
 void hook_row_label_draw(void *view, const char *text, void *a3)
@@ -820,5 +969,6 @@ void hook_label_draw(void *view, const char *text, void *a3)
 void hook_db_loaded(void *log, int event, int value)
 {
     log_event(log, event, value);
+    STAT_COUNT(db_loaded_calls);
     db_loaded = 1;
 }
