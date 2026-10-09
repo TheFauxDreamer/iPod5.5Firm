@@ -219,7 +219,7 @@ The aim is to show the covers that iTunes or Finder put on the iPod (`iPod_Contr
 | 0x205cfc | Starts the task `ArtworkLoadTask` (string 0x2aa7fc). The task function is 0x205db4. | Static |
 | 0x205db4 | The artwork load task. It takes requests from a queue (task + 0x50), keeps an image cache (task + 0x8c), and makes reference-counted image objects. | Static |
 | 0x88094 | Writes `Thumbs\F%d_%d.ithmb`. This is the Photos database, not the music artwork. | Static |
-| 0xd7888 | Track parser. It stores the dbid of the track (mhit + 0x70) at track + 0x108 and + 0x10c, and the "has artwork" byte (mhit + 0xa5) in bit 1 of track + 0x8b. It does not use mhit + 0x160. | Static |
+| 0xd7888 | Track parser. It stores the dbid of the track (mhit + 0x70) at track + 0x108 and + 0x10c, and the byte mhit + 0xa5 in bit 1 of track + 0x8b. It does not use mhit + 0x160. Correction: mhit + 0xa5 is not the artwork flag. The artwork flag is mhit + 0xa4 (libgpod), and the emulator library sets only that byte. The patch therefore does not use track + 0x8b. | Static, Emulator |
 
 Conclusions:
 
@@ -244,7 +244,30 @@ Conclusions:
 
 The label draw 0x244924 calls 0x2438bc(view, gc = view + 0x74, …, text, …, colour, …). That function measures the text with 0x2115a4(gc, text, width) and draws it with 0x2106ec or 0x2113c0(gc, text, …, rect, …). The text is UTF-8. The font comes from the graphics context, and 0x21a27c sets the origin and the clip of the context for one view.
 
+### The album list of the library (version 0.4)
+
+The library object has the list that the Albums screen shows. 0x9c9fc gives the name of row i: `0x9eff8(db + 0x138, (library + 0xc60)[i], …)`, with the count at library + 0xc6c. Emulator: library + 0xc60 = 0x13b75e84, library + 0xc6c = 138 for the FolderLibrary. The patch read the first 8 names: "(III)", "<I°_°I>", "1:15 - Single", "10,000 gecs", "2019", "A Brief Inquiry Into On…", "After Laughter", "Ai Need Your Love - Sin…". This is the order of the screen. Thus the patch does not sort. The sorted track lists (0x9c838, slot 6) are not necessary, and library + 0xcf0 was 0 in the Albums screen.
+
+The artist list (library + 0xc48, + 0xc50) and the composer list (+ 0xc54, + 0xc5c) are filled only when their screens open.
+
+### The caption with the firmware font (version 0.4)
+
+The template cell of the Albums list (list word 0x2a, class 0x66b4dc) has two children: the album label (element 0x6421, vtable 0x677920) and the ">" picture (0x5ecc). For each caption line, the patch:
+
+1. attaches the album label to the top view (view + 0x10) and sets its rectangle (view + 0x58) to the line;
+2. calls the label draw 0x244924 with the UTF-8 text;
+3. puts back the parent, the rectangle, the flags and the byte at + 0x1b8.
+
+Results:
+
+- The text has the font and the colour of the list rows (also with the dark theme, because the colours come from the theme).
+- The alignment flags (view + 0x20, bits 0x8000000 and 0x1000000) had no effect in this draw path, and a grey copy of the colour (view + 0xc8 + 8) was not used. The patch therefore moves the text pixels to the centre itself and mixes the artist line halfway to the background.
+
+### Version 0.4 in the emulator
+
+With the FolderLibrary (no cover file): the real covers, the album names and the artists showed, in the order of the Albums list. The first open made the table in 35 ms of emulated time. The read window (32 KB) reduces the count of reads of ArtworkDB on the real disk.
+
 Open items:
 
-1. Confirm that the distinct albums in the album-sorted track list (slot 6) are in the order of the Albums list, also with a database that has mhod 52.
-2. Draw the caption with the firmware font: find how a graphics context gets its font, and how to draw outside the bounds of the view.
+1. A test on the real iPod with a database and artwork from Finder (format 1028 must be present).
+2. The time of the first open on the real iPod with a large library.

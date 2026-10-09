@@ -654,82 +654,6 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertEqual(le32(f, 12), 0x55763f97)                 // stamp: same value as the Python version
     }
 
-    /// The Cover Flow file: header, name hashes, records of cover pixels and caption.
-    func testCoverFlowFile() throws {
-        let img = ImageCodec.cgImage(rgba: [255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255], width: 2, height: 2)!
-        let png = ImageCodec.pngData(img)!
-        let albums = [CoverFlowFile.Album(name: "Charm", artist: "Danny Brown", cover: png),
-                      CoverFlowFile.Album(name: "Burials", artist: "AFI", cover: nil)]
-        let f = CoverFlowFile.build(albums, size: 4)
-        let record = 4 * 4 * 2 + 320 * 32 / 2
-        XCTAssertEqual(Array(f[0..<4]), Array("IFCF".utf8))
-        XCTAssertEqual(le16(f, 4), 1)
-        XCTAssertEqual(le16(f, 6), 4)
-        XCTAssertEqual(le32(f, 8), 2)
-        XCTAssertEqual(le16(f, 16), 320)
-        XCTAssertEqual(le16(f, 18), 32)
-        XCTAssertEqual(Int(le32(f, 20)), record)
-        XCTAssertEqual(Int(le32(f, 24)), 0x20 + 8)
-        XCTAssertEqual(le32(f, 0x20), AlbumArt.fnv1a("Charm"))         // the order of the input, not sorted
-        XCTAssertEqual(le32(f, 0x24), AlbumArt.fnv1a("Burials"))
-        XCTAssertEqual(f.count, 0x28 + 2 * record)
-        XCTAssertEqual(le16(f, 0x28), 0xF800)                           // pure red in RGB565
-        XCTAssertNotEqual(le16(f, 0x28 + record), 0xF800)               // the placeholder is grey
-        var body: UInt32 = 2_166_136_261
-        for b in f[0x20...] { body = (body ^ UInt32(b)) &* 16_777_619 }
-        XCTAssertEqual(le32(f, 12), body)
-        // the caption has white pixels (the album name) and grey pixels (the artist)
-        let caption = f[(0x28 + 4 * 4 * 2)..<(0x28 + record)]
-        XCTAssertTrue(caption.contains { $0 >> 4 == 15 })
-        XCTAssertTrue(caption.contains { $0 >> 4 > 0 && $0 >> 4 < 13 })
-    }
-
-    /// The album order: the album sort index (mhod 52) if it has all the tracks, else alphabetical.
-    func testCoverFlowAlbumOrder() {
-        func t(_ album: String, _ artist: String = "A", _ albumArtist: String = "") -> ITunesDB.TrackInfo {
-            ITunesDB.TrackInfo(album: album, artist: artist, albumArtist: albumArtist, path: "")
-        }
-        let tracks = [t("beta"), t("Alpha"), t(""), t("Élan"), t("Alpha"), t("charm")]
-        XCTAssertEqual(CoverFlowFile.albumOrder(tracks: tracks, albumIndex: nil), ["Alpha", "beta", "charm", "Élan"])
-        XCTAssertEqual(CoverFlowFile.albumOrder(tracks: tracks, albumIndex: [5, 3, 2, 0, 1, 4]), ["charm", "Élan", "beta", "Alpha"])
-        // an index with fewer entries than tracks is not used
-        XCTAssertEqual(CoverFlowFile.albumOrder(tracks: tracks, albumIndex: [5, 3]), ["Alpha", "beta", "charm", "Élan"])
-        XCTAssertEqual(CoverFlowFile.artist(of: [t("x", "A"), t("x", "B")]), "Various Artists")
-        XCTAssertEqual(CoverFlowFile.artist(of: [t("x", "A"), t("x", "B", "The Band")]), "The Band")
-        XCTAssertEqual(CoverFlowFile.artist(of: [t("x", "A"), t("x", "A")]), "A")
-    }
-
-    /// readTrackInfo and readSortIndex: an mhod 52 at the end of the master playlist.
-    func testReadSortIndex() {
-        let tracks = (0..<3).map { DBTrack(title: "Song \($0)", artist: "Artist \($0)", album: "Album \(2 - $0)", path: ":iPod_Control:Music:F00:T\($0).m4a", size: 1, lengthMS: 1, albumArtist: $0 == 1 ? "AA" : "") }
-        var db = ITunesDB.build(tracks, playlists: [(name: "Mix", tracks: [1])])
-        XCTAssertNil(ITunesDB.readSortIndex(db, sortType: ITunesDB.albumSortType))
-        let info = ITunesDB.readTrackInfo(db)
-        XCTAssertEqual(info.map(\.album), ["Album 2", "Album 1", "Album 0"])
-        XCTAssertEqual(info.map(\.artist), ["Artist 0", "Artist 1", "Artist 2"])
-        XCTAssertEqual(info[1].albumArtist, "AA")                      // the writer uses the artist if it has no album artist
-        XCTAssertEqual(info[0].path, ":iPod_Control:Music:F00:T0.m4a")
-        // the master playlist is the first mhyp in the mhsd of type 2
-        guard let (start, _) = ITunesDB.section(db, type: 2) else { return XCTFail("no playlists") }
-        let mhyp = start + Int(le32(db, start + 4))
-        let mhsd = (0..<start).last { Array(db[$0..<$0 + 4]) == Array("mhsd".utf8) }!
-        XCTAssertEqual(String(decoding: db[mhsd..<mhsd + 4], as: UTF8.self), "mhsd")
-        let at = mhyp + Int(le32(db, mhyp + 8))
-        var w = ITunesDB.Writer()
-        w.tag("mhod"); w.u32(0x18); w.u32(0x48 + 12); w.u32(52); w.zeros(8)
-        w.u32(ITunesDB.albumSortType); w.u32(3); w.zeros(40)
-        w.u32(2); w.u32(1); w.u32(0)
-        db.insert(contentsOf: w.b, at: at)
-        for chunk in [0, mhsd, mhyp] {
-            let v = le32(db, chunk + 8) + UInt32(w.b.count)
-            for i in 0..<4 { db[chunk + 8 + i] = UInt8(v >> (8 * UInt32(i)) & 0xFF) }
-        }
-        XCTAssertEqual(ITunesDB.readSortIndex(db, sortType: ITunesDB.albumSortType), [2, 1, 0])
-        XCTAssertNil(ITunesDB.readSortIndex(db, sortType: 5))
-        XCTAssertEqual(ITunesDB.readPlaylists(db).map(\.name), ["Mix"])
-        XCTAssertEqual(CoverFlowFile.albumOrder(tracks: ITunesDB.readTrackInfo(db), albumIndex: [2, 1, 0]), ["Album 0", "Album 1", "Album 2"])
-    }
-
     /// The cover-flow patch: three word hooks into the extended area. It fits with the other patches.
     func testCoverFlow() throws {
         guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
@@ -949,16 +873,6 @@ final class ArtworkDBTests: XCTestCase {
 /// Writes a library from IPODFW_MUSIC to IPODFW_MUSIC_LIBRARY_OUT with the Swift writers, as the
 /// Emulator pane does (for a check of the artwork in the emulator).
 final class MusicLibraryOutputTests: XCTestCase {
-    /// Writes iPodFirmCoverFlow for the iPod_Control folder below IPODFW_COVERFLOW_VOLUME (for
-    /// example a copy of the emulator test library).
-    func testWriteCoverFlow() throws {
-        guard let volume = ProcessInfo.processInfo.environment["IPODFW_COVERFLOW_VOLUME"] else { throw XCTSkip("set IPODFW_COVERFLOW_VOLUME") }
-        let r = try MusicImport.writeCoverFlow(volume: URL(fileURLWithPath: volume))
-        XCTAssertGreaterThan(r.albums, 0)
-        let f = [UInt8](try Data(contentsOf: URL(fileURLWithPath: volume + "/iPod_Control/iTunes/" + CoverFlowFile.fileName)))
-        XCTAssertEqual(Int(le32(f, 8)), r.albums)
-    }
-
     func testWriteMusicLibrary() throws {
         let env = ProcessInfo.processInfo.environment
         guard let music = env["IPODFW_MUSIC"], let out = env["IPODFW_MUSIC_LIBRARY_OUT"] else {

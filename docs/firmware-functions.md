@@ -139,6 +139,8 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | 0x9bc6c | Resolves a library reference: type byte 1 is the library, type 2 has it at + 0xc9c. | Static |
 | 0x9c838 | (track list, sort, reverse, i): the item at sorted position i. Builds a missing sorted array with 0x1120bc. | Static |
 | 0x9cb7c | Example: the title of track i of the list of all tracks. | Static |
+| 0x9c9fc | The album name of row i of the Albums list: 0x9eff8(db + 0x138, (library + 0xc60)[i]). | Static, Emulator, Patch (`cover-flow`) |
+| 0x9cabc | The artist name of row i of the Artists list (library + 0xc48, pool db + 0xe0). | Static |
 | 0x9eff8 | (pool, index, buffer, &length, maximum): copies the UTF-16 text of a pool entry. | Static |
 | 0x885ec | Stores a string in a pool. | Static |
 | 0x10a15c | Converts an mhod-52 sort type to a slot (album 4 → 6). | Static |
@@ -152,6 +154,8 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | 0x2438bc | Draws the text of a label (called by 0x244924). | Static |
 | 0x2115a4 | Measures a UTF-8 text (gc, text, width). | Static |
 | 0x2106ec, 0x2113c0 | Draw a UTF-8 text into a rectangle with the font of the graphics context. | Static |
+
+A label draws in the rectangle at view + 0x58 (top, left, bottom, right in its parent). The `cover-flow` patch draws its caption with the album label (element 0x6421) of the list's template cell: it attaches the label to the top view, sets the rectangle, calls 0x244924, and puts the fields back. The label draws at the left with the font and the colour of the list rows. (Patch)
 
 ### Artwork
 
@@ -424,10 +428,12 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | Track | +0x00, +0x04 | The database; the next track |
 | Music database | +0x1c, +0x20 | Track count; the track array (0x110 bytes for each track) |
 | String pool (`strc`) | +0x08, +0x10, +0x14 | Handle to the entries {offset, length}; handle to the UTF-16 text; entry count |
-| Library | +0xcf0, +0xcf8 | The list of all tracks; the database |
+| Library | +0xcf0, +0xcf8 | A track list (0 while the Albums list shows); the database |
+| Library | +0xc60, +0xc6c | The album list: the album pool index of each row of the Albums list (without "All"), in its order; the count |
+| Library | +0xc48, +0xc50 | The artist list (artist pool), filled when the Artists list opens |
 | Track list | +0x2fc + 4 × slot | Sorted array of items (the item at + 0x10 + 4 × i; item + 0x20 is the track). Slot 6: by album. |
 | Main provider | +0x1c, +0xc0 … +0xdc | The library; the row counts of the browse lists |
-| Track | +0x8b | Bit 1: the track has artwork (mhit + 0xa5) |
+| Track | +0x8b | Bit 1: mhit + 0xa5. This is not the artwork flag (libgpod: mhit + 0xa4 "has artwork"). |
 | View | +0x20 | Flags. (flags & 0x1800) == 0x800 if the view is visible. |
 | Browse list | +0xa4 | An object. Its word at +0x14 is the selected row. |
 | Browse list | +0xb8 | The number of rows |
