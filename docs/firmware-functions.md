@@ -114,7 +114,7 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | Address | Function | Evidence |
 |---|---|---|
 | 0x244924 | Draw method of the general label class (type 0x1580). Arguments: view, text, a3. | Emulator, Patch (`album-art`) |
-| 0x1bb260 | Draw method of the list-row label class (type 0x3180). Scrolls a long title from a cached image of the text. In the emulator, one album row (0x1bb260 or 0x244924) takes approximately 2 ms (refer to [../re/album-art-v2.md](../re/album-art-v2.md)). | Emulator, Patch |
+| 0x1bb260 | Draw method of the list-row label class (type 0x3180). Scrolls a long title from a cached image of the text. One album row (0x1bb260 or 0x244924) takes approximately 2 ms in the emulator and approximately 7 ms on the real iPod (refer to [../re/album-art-v2.md](../re/album-art-v2.md)). | Emulator, Patch |
 | 0x255ac4 | Gets the rectangle of a view: {top, left, bottom, right}. | Patch |
 | 0x21a27c | Prepares the graphics context of a view: origin and clip. | Patch |
 | 0x21a4f4 | Makes a view from a View resource. Copies the positions, heights and highlight colours of the elements. | Static |

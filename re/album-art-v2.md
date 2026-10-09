@@ -150,12 +150,37 @@ Conclusions:
 
 ### Possible causes on the real iPod
 
-The stats file from the real iPod shows which cause is correct:
+Before the test on the real iPod, these causes were possible:
 
 1. A failed allocation (`alloc_failed`). Then the thumbnails are not in memory.
 2. ArtworkDB has no format 1028 image (`art_count` is 0 or `art_failed` increases). Then each album reads the file `iPodFirmAlbumArt`.
 3. `build_art` or `hook_db_loaded` more than one time.
 4. `draw_runs` instead of the blit.
+
+### Results on the real iPod
+
+Test on 9 October 2026 on the iPod 5.5G of the owner, with flash storage, version 2.2 and the light theme. The owner opened Albums and scrolled down and up. Then the owner scrolled in Songs and again in Albums. The file had 12 records.
+
+State: `art_count` 326, `art_slots` 326, no failed allocation, no failed read. The file `iPodFirmAlbumArt` had 328 thumbnails of 20 × 20. All of them were in memory (`file_all` 1). `build_art` and `hook_db_loaded` ran one time. The patch used the blit for each thumbnail. Thus causes 1–4 are not correct.
+
+| Part | Real iPod | Emulator |
+|---|---|---|
+| `build_art` (5123 tracks) | 769 ms | 52 ms (1000 tracks) |
+| `load` of `iPodFirmAlbumArt` | 36 ms | 5 ms |
+| A fill from `F1028_N.ithmb` | 21.8–23.2 ms (mean), 38 ms (maximum) | 4.8–5.3 ms |
+| The blit of a thumbnail | 278–293 µs | Approximately 115 µs |
+| A row of the Music menu, original draw | 2236 µs | Approximately 650 µs |
+| A row of Songs, original draw | 5289 µs | Not measured |
+| An album row, original draw (records 6–11, no fill) | 6695–8161 µs | 1733–2343 µs |
+| All of an album row (records 6–11, no fill) | 6901–8502 µs | 1478–2845 µs |
+
+Conclusions:
+
+1. The real iPod draws approximately 3.4 times more slowly than the emulator. A fill from the ithmb file is 4.4 times more slow.
+2. With all thumbnails in memory, the patch adds approximately 330–345 µs to each album row. This is approximately 4–5 %.
+3. The slow scroll comes from the fills. Records 0–5 had 305 fills of approximately 22 ms. In record 1, 122 fills used approximately 2.7 s of 8.9 s. A fast scroll does not draw each row. Thus many albums get their first draw on the second pass.
+4. The first Albums list after a start or a sync stops for approximately 0.8 s (`build_art`).
+5. The patch reads the ithmb file, also if the thumbnail of the album is in memory from `iPodFirmAlbumArt`. The order in `draw_with_thumbnail` is: the artwork first, then the file.
 
 ## Next steps for speed (not done)
 
