@@ -271,3 +271,42 @@ Open items:
 
 1. A test on the real iPod with a database and artwork from Finder (format 1028 must be present).
 2. The time of the first open on the real iPod with a large library.
+
+## Version 0.5: the 200 × 200 artwork
+
+The owner saw steps in the covers, but smooth artwork in Now Playing. Version 0.4 read the 100 × 100 image (format 1028) and enlarged it to 128 × 128 with the nearest texel. Now Playing uses the 200 × 200 image (format 1029).
+
+Version 0.5 reads format 1029 (else 1028) and makes a 128 × 128 texture one time, when the cover enters the cache. Emulator times (FolderLibrary, `USEC_TIMER` marks):
+
+| Step | Time |
+|---|---|
+| Read 80 KB from `F1029_1.ithmb` | 9.3–10.0 ms |
+| Bilinear filter 200 → 128 (first version) | 15.7 ms |
+| 2 × 2 average in packed RGB565 (`((a ^ b) & 0xf7de) >> 1) + (a & b)`) | 7.1 ms |
+| First frame at the open, 5 covers, bilinear | 144 ms |
+
+The frame draw does not change: its time depends on the screen pixels, not on the source size.
+
+## How other Cover Flow programs do it
+
+Rockbox PictureFlow (`apps/plugins/pictureflow/pictureflow.c`, read on 9 October 2026):
+
+- It prepares each slide one time: it scales the album art (with the aspect ratio), adds the reflection, and keeps the result in a disk cache (`.pfraw` files, name from a hash of the album and the artist). It builds the cache at the first start.
+- At run time, a background thread loads the slides into a RAM cache of 64 slides (LRU). An empty slide shows while a slide loads, so the wheel never waits.
+- The draw is column by column, with a perspective projection in fixed point (`PFREAL_SHIFT` 10), a sine table and a tilt of 70°. Side slides fade with an alpha table. The reflection fades with a table.
+
+Possible next steps for this patch, from this list: load the covers in the background (a firmware task, for example as `ArtworkLoadTask` 0x205cfc does), and show the grey square until a cover is ready.
+
+## Version 0.6: a smooth animation
+
+The owner found the scroll slow. Emulator times of one frame of version 0.5: clear 2 ms, covers 10–15 ms (about 30 ms with a cover load), caption 5.8 ms, send 0.2–1 ms. Each wheel step drew up to 4 frames in the event handler, so the next wheel events waited.
+
+Version 0.6:
+
+- A wheel event only sets the target and clicks. The timer of the list (list + 0xcc, functions 0x151c98, 0x151c24, 0x151694) draws the frames. Its events are type 9 with the timer in event word 2 (0x23b704 compares it with list + 0xcc).
+- Each tick moves 5/8 of the remaining distance (at least 20/256 of a cover). The timer starts before the draw, so the frames follow each other.
+- The caption is drawn one time for each centre album and copied.
+- At most one cover load for each frame. A cover outside the screen is not loaded. When the movement stops, the ticks load the covers at centre ± 4.
+- 0x23b704 handles a timer event of its own timer with the repeat count at list + 0xf8. With a count of 0 it would count down from 255 and repeat the key action. The patch swallows such an event after the close.
+
+Emulator times of version 0.6: 18–19 ms for each frame without a cover load (about 53 frames each second), about 40 ms with a load. A single step took 5 frames.

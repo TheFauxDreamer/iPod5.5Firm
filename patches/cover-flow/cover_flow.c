@@ -29,7 +29,8 @@
  *    + 0xc6c). This is the Albums list without "All", in its order. The patch finds the tracks of
  *    each album with a hash of the album name (album pool db + 0x138).
  *  - The artwork: iPod_Control\Artwork\ArtworkDB links each image (mhii) to the dbid of a track
- *    (track + 0x108). The patch reads the 100 x 100 image (format 1028, RGB565) from F1028_N.ithmb.
+ *    (track + 0x108). The patch reads the 200 x 200 image (format 1029, RGB565) from F1029_N.ithmb,
+ *    or else the 100 x 100 image (format 1028), and scales it to TEX x TEX with filtering.
  */
 
 typedef struct { int top, left, bottom, right; } Rect;
@@ -49,6 +50,9 @@ void ui_click(void);
 int dispatch_event(int *ev, void *target);
 void ui_activity(void *ui, int button);
 void *lib_resolve(void *ref);
+void timer_stop(void *timer);
+void timer_set(void *timer, int ms);
+void timer_start(void *timer);
 void label_draw(void *view, const char *text, void *a3);
 int pool_copy(void *pool, int index, void *buffer, int *length, int maximum);
 void *fw_alloc(unsigned size);
@@ -61,9 +65,14 @@ int file_seek(void *fh, int unused, unsigned long long position);
 int file_close(void *fh);
 
 #define ART_DB_PATH    "iPod_Control\\Artwork\\ArtworkDB"
-#define ITHMB_PATH     "iPod_Control\\Artwork\\F1028_"     /* + N + ".ithmb" */
-#define ART_FORMAT     1028               /* 100 x 100 RGB565 */
-#define ART_SIZE       100
+#define SMALL_PATH     "iPod_Control\\Artwork\\F1028_"     /* + N + ".ithmb" */
+#define LARGE_PATH     "iPod_Control\\Artwork\\F1029_"
+#define SMALL_FORMAT   1028               /* 100 x 100 RGB565 (the list thumbnails) */
+#define LARGE_FORMAT   1029               /* 200 x 200 RGB565 (Now Playing) */
+#define SMALL_SIDE     100
+#define LARGE_SIDE     200
+#define LARGE_FLAG     0x80               /* art_file: bit 7 = 200 x 200, bits 0-6 = N */
+#define TEX            128                /* the cover texture: the size of the centre cover */
 #define PROVIDER       (*(char **)0x1081da18) /* the main provider of the music screens */
 #define PROVIDER_LIBRARY 0x1c
 #define LIBRARY_TRACKS 0xcf0              /* the list of all tracks */
@@ -128,9 +137,13 @@ int file_close(void *fh);
 #define MAX_SIZE       160                /* largest cover height on the screen / 2 */
 #define CACHE_SLOTS    11
 #define SIDE           4                  /* covers at each side of the centre */
-#define FRAMES         4                  /* frames for each step of the wheel */
-#define FAST_US        80000              /* a step sooner than this after the last one: 1 frame */
-#define QUICK_US       200000             /* a step sooner than this after the last one: 2 frames */
+#define TICK_MS        15                 /* the animation timer */
+#define LIST_TIMER     0x33               /* word index: the timer of the list (100 ms, 0x23b97c) */
+#define LIST_TIMER_MS  100
+#define LIST_REPEATS   0xf8               /* byte: the repeat count of the list timer (list word 0x3e) */
+#define EV_TIMER       9                  /* word 2: the timer */
+#define SNAP           20                 /* in 1/256 of a cover: the smallest move of a frame */
+#define PRELOAD        SIDE               /* when the movement stops, load the covers to centre +/- this */
 #define CENTER_Y       100                /* the middle line of the covers */
 #define REFLECT_END    198                /* the reflections end above the caption */
 #define ALBUM_TOP      198                /* the album line: 198-220, the artist line: 220-240 */
@@ -152,12 +165,19 @@ static unsigned short *saved;             /* the copy of the framebuffer */
 static unsigned short *pixels;            /* CACHE_SLOTS covers */
 static unsigned short *placeholder;       /* the cover of an album without artwork */
 static int cache_index[CACHE_SLOTS];
-static unsigned count, size = ART_SIZE;
+static unsigned count, size = TEX;
+static unsigned short *source;            /* the image from the .ithmb file (up to 200 x 200) */
+static unsigned short *caption_pixels;    /* the caption rows of the screen, for caption_album */
+static int caption_album = -1;
+static int loads_left;                    /* cover loads that this frame can do */
+static int missing;                       /* 1: a cover of this frame is not loaded yet */
+static int animating;                     /* 1: the timer runs */
+static void *list_timer(void);
 
 /* The albums. They stay in memory while the database does not change. */
 static int **album_track;                 /* the first track of each album */
 static unsigned *art_offset;              /* the offset in F1028_N.ithmb, or 0xffffffff */
-static unsigned char *art_file;           /* N */
+static unsigned char *art_file;           /* N, and LARGE_FLAG */
 static int *built_list;
 static unsigned built_tracks;
 static char *album_db;                    /* the database of the table */
@@ -329,8 +349,8 @@ COLD static void find_artwork(void)
                 ilen = get32(h + 8);
                 children = get32(h + 12);
                 album = album_of(get32(h + 0x14), get32(h + 0x18));
-                if (album >= 0 && art_offset[album] != 0xffffffffu)
-                    album = -1;                   /* the album has a cover already */
+                if (album >= 0 && (art_file[album] & LARGE_FLAG))
+                    album = -1;                   /* the album has a 200 x 200 cover already */
                 q = p + get32(h + 4);
                 for (c = 0; album >= 0 && c < children; c++) {
                     unsigned mlen, ni;
@@ -339,11 +359,13 @@ COLD static void find_artwork(void)
                     mlen = get32(h + 8);
                     ni = q + get32(h + 4);
                     if ((get32(h + 12) & 0xffff) == 2 && db_read(fh, ni, h, 0x24) == 0 &&
-                        get32(h) == TAG('m', 'h', 'n', 'i') && get32(h + 0x10) == ART_FORMAT &&
-                        get32(h + 0x18) == ART_SIZE * ART_SIZE * 2) {
+                        get32(h) == TAG('m', 'h', 'n', 'i') &&
+                        ((get32(h + 0x10) == LARGE_FORMAT && get32(h + 0x18) == LARGE_SIDE * LARGE_SIDE * 2) ||
+                         (get32(h + 0x10) == SMALL_FORMAT && get32(h + 0x18) == SMALL_SIDE * SMALL_SIDE * 2 &&
+                          art_offset[album] == 0xffffffffu))) {
                         unsigned offset = get32(h + 0x14), name = ni + get32(h + 4);
-                        int number = 1;
-                        /* the file name ":F1028_N.ithmb" (UTF-16): the digits after '_' */
+                        int number = 1, large = get32(h + 0x10) == LARGE_FORMAT;
+                        /* the file name ":F1029_N.ithmb" (UTF-16): the digits after '_' */
                         if (db_read(fh, name, h, 0x24 + 2 * 12) == 0 && get32(h) == TAG('m', 'h', 'o', 'd')) {
                             int x, d = 0, seen = 0;
                             for (x = 0x24; x < 0x24 + 2 * 12; x += 2) {
@@ -358,8 +380,9 @@ COLD static void find_artwork(void)
                                 number = d;
                         }
                         art_offset[album] = offset;
-                        art_file[album] = (unsigned char)number;
-                        break;
+                        art_file[album] = (unsigned char)(number | (large ? LARGE_FLAG : 0));
+                        if (large)
+                            break;                /* the best format: no more search */
                     }
                     if (mlen == 0)
                         break;
@@ -432,6 +455,7 @@ COLD static unsigned build_albums(void)
     for (i = 0; i < albums; i++) {
         album_track[i] = 0;
         art_offset[i] = 0xffffffffu;
+        art_file[i] = 0;
         hash[i] = name_hash(db, rows[i]);
         order[i] = i;
     }
@@ -591,7 +615,7 @@ __attribute__((noinline)) static void draw_cover(const unsigned short *tex, cons
         vstep = (int)recip[hh];
         out = fb + top * W + c;
         for (y = 0; y < hh; y++, v += vstep, out += W) {
-            unsigned short px = col[(v >> 16) * size];
+            unsigned short px = col[(v >> 16) << 7];
             if (side)                     /* a side cover is a little darker */
                 px = ((px >> 1) & 0x7bef) + ((px >> 2) & 0x39e7);
             *out = px;
@@ -605,9 +629,58 @@ __attribute__((noinline)) static void draw_cover(const unsigned short *tex, cons
         v = (hh - 1) * vstep;
         for (y = 0; y < rl; y++, v -= vstep, out += W) {
             int level = y < b1 ? 0 : y < b2 ? 1 : 2;
-            unsigned short px = col[(v >> 16) * size];
+            unsigned short px = col[(v >> 16) << 7];
             /* On white, the reflection fades to white: the same as a fade of the inverse to black. */
             *out = light ? (unsigned short)~dim((unsigned short)~px, level) : dim(px, level);
+        }
+    }
+}
+
+/* Makes the TEX x TEX texture from a side x side image. Smaller (200): the average of 2 x 2
+ * pixels. Larger (100): bilinear filtering in each RGB565 channel. The step is side / TEX in 16.16 fixed point: side << 9. Not
+ * small code: it runs for each new cover. */
+__attribute__((noinline)) static void scale_cover(const unsigned short *src, int side, unsigned short *dst)
+{
+    short x0[TEX], fx[TEX];
+    int step = side << 9, x, y, last = side - 1;
+    for (x = 0; x < TEX; x++) {
+        int sx = x * step + (step >> 1) - 0x8000;
+        if (sx < 0)
+            sx = 0;
+        x0[x] = (short)(sx >> 16);
+        fx[x] = (short)((sx >> 8) & 255);
+    }
+    if (side > TEX) {
+        /* Smaller: the average of 2 x 2 source pixels, in packed RGB565 (no multiplication). */
+        for (y = 0; y < TEX; y++) {
+            int sy = (y * step) >> 16;
+            const unsigned short *r0 = src + sy * side, *r1 = sy < last ? r0 + side : r0;
+            for (x = 0; x < TEX; x++) {
+                int a = (x * step) >> 16, b = a < last ? a + 1 : a;
+                unsigned top = (((r0[a] ^ r0[b]) & 0xf7de) >> 1) + (r0[a] & r0[b]);
+                unsigned bottom = (((r1[a] ^ r1[b]) & 0xf7de) >> 1) + (r1[a] & r1[b]);
+                dst[y * TEX + x] = (unsigned short)((((top ^ bottom) & 0xf7de) >> 1) + (top & bottom));
+            }
+        }
+        return;
+    }
+    for (y = 0; y < TEX; y++) {
+        int sy = y * step + (step >> 1) - 0x8000, fy, y0;
+        const unsigned short *r0, *r1;
+        if (sy < 0)
+            sy = 0;
+        y0 = sy >> 16;
+        fy = (sy >> 8) & 255;
+        r0 = src + y0 * side;
+        r1 = y0 < last ? r0 + side : r0;
+        for (x = 0; x < TEX; x++) {
+            int a = x0[x], b = a < last ? a + 1 : a, wx = fx[x];
+            unsigned p = r0[a], q = r0[b], u = r1[a], v = r1[b];
+            unsigned w00 = (256 - wx) * (256 - fy), w01 = wx * (256 - fy), w10 = (256 - wx) * fy, w11 = wx * fy;
+            unsigned rr = ((p >> 11) * w00 + (q >> 11) * w01 + (u >> 11) * w10 + (v >> 11) * w11) >> 16;
+            unsigned gg = (((p >> 5) & 63) * w00 + ((q >> 5) & 63) * w01 + ((u >> 5) & 63) * w10 + ((v >> 5) & 63) * w11) >> 16;
+            unsigned bb = ((p & 31) * w00 + (q & 31) * w01 + (u & 31) * w10 + (v & 31) * w11) >> 16;
+            dst[y * TEX + x] = (unsigned short)(rr << 11 | gg << 5 | bb);
         }
     }
 }
@@ -618,6 +691,11 @@ COLD static const unsigned short *cover(int i)
     for (s = 0; s < CACHE_SLOTS; s++)
         if (cache_index[s] == i)
             return pixels + s * size * size;
+    if (loads_left <= 0) {                /* load it in a later frame */
+        missing = 1;
+        return placeholder;
+    }
+    loads_left--;
     for (s = 0; s < CACHE_SLOTS; s++) {   /* replace the cover that is farthest from the target */
         int d = cache_index[s] < 0 ? 0x7fffffff : cache_index[s] - target;
         if (d < 0)
@@ -632,13 +710,14 @@ COLD static const unsigned short *cover(int i)
         return placeholder;
     {
         unsigned fh[0x30 / 4];
-        int bad;
-        if (open_path(fh, ITHMB_PATH, art_file[i]) != 0)
+        int bad, large = art_file[i] & LARGE_FLAG, side = large ? LARGE_SIDE : SMALL_SIDE;
+        if (open_path(fh, large ? LARGE_PATH : SMALL_PATH, art_file[i] & ~LARGE_FLAG) != 0)
             return placeholder;
-        bad = read_at(fh, art_offset[i], pixels + far * size * size, size * size * 2);
+        bad = read_at(fh, art_offset[i], source, side * side * 2);
         file_close(fh);
         if (bad)
             return placeholder;
+        scale_cover(source, side, pixels + far * size * size);
     }
     cache_index[far] = i;
     return pixels + far * size * size;
@@ -765,6 +844,8 @@ COLD static void draw_caption(int i)
 COLD static void render(void)
 {
     int center = (pos + 128) >> 8, k, i;
+    loads_left = 1;
+    missing = 0;
     clear();
     /* the farthest covers first, the centre cover last */
     for (k = SIDE; k >= 0; k--) {
@@ -774,14 +855,25 @@ COLD static void render(void)
             int d = i * 256 - pos;
             if (i < 0 || i >= (int)count || d > (SIDE + 1) * 256 || d < -(SIDE + 1) * 256)
                 continue;
+            place(d, &p);
+            if (p.x0 >= W || p.x1 <= 0)
+                continue;                 /* outside the screen: do not load it */
             tex = cover(i);
             if (!tex)
                 continue;
-            place(d, &p);
             draw_cover(tex, &p, d > 128 || d < -128);
         }
     }
-    draw_caption(center);
+    /* The caption: draw it once for each centre album, then copy it. */
+    if (center != caption_album) {
+        draw_caption(center);
+        for (i = 0; i < (H - ALBUM_TOP) * W; i++)
+            caption_pixels[i] = fb[ALBUM_TOP * W + i];
+        caption_album = center;
+    } else {
+        for (i = 0; i < (H - ALBUM_TOP) * W; i++)
+            fb[ALBUM_TOP * W + i] = caption_pixels[i];
+    }
     send_screen();
 }
 
@@ -793,7 +885,11 @@ COLD static void release(void)
     fw_free(pixels);
     fw_free(placeholder);
     fw_free(recip);
+    fw_free(source);
+    fw_free(caption_pixels);
     recip = 0;
+    source = 0;
+    caption_pixels = 0;
     saved = 0;
     pixels = 0;
     placeholder = 0;
@@ -821,7 +917,9 @@ COLD static int open_cover_flow(int *list)
     pixels = fw_alloc(CACHE_SLOTS * size * size * 2);
     placeholder = fw_alloc(size * size * 2);
     recip = fw_alloc(MAX_SIZE * 2 * 4);
-    if (!saved || !pixels || !placeholder || !recip) {
+    source = fw_alloc(LARGE_SIDE * LARGE_SIDE * 2);
+    caption_pixels = fw_alloc((H - ALBUM_TOP) * W * 2);
+    if (!saved || !pixels || !placeholder || !recip || !source || !caption_pixels) {
         release();
         return 0;
     }
@@ -849,6 +947,8 @@ COLD static int open_cover_flow(int *list)
     target = (rows_match && sel >= 1 && sel <= count) ? (int)sel - 1 : 0;
     pos = target * 256;
     cf_list = list;
+    caption_album = -1;
+    animating = 0;
     active = 1;
     render();
     return 1;
@@ -864,6 +964,9 @@ COLD static void close_cover_flow(int send)
         return;
     for (i = 0; i < W * H / 2; i++)
         ((unsigned *)fb)[i] = ((unsigned *)saved)[i];
+    timer_stop(list_timer());                 /* give the timer back to the list */
+    timer_set(list_timer(), LIST_TIMER_MS);
+    animating = 0;
     release();
     if (send)
         send_screen();
@@ -874,27 +977,79 @@ COLD static void close_cover_flow(int send)
     view_invalidate(view);
 }
 
-static unsigned last_step;
+static void *list_timer(void)
+{
+    return cf_list + LIST_TIMER;
+}
 
+static void arm_timer(void)
+{
+    timer_stop(list_timer());
+    timer_set(list_timer(), TICK_MS);
+    timer_start(list_timer());
+}
+
+/* When the movement stops: load one more cover near the centre (the next ones of a wheel step).
+ * Returns 1 if it loaded a cover. */
+COLD static int preload(void)
+{
+    int k, i;
+    for (k = 1; k <= PRELOAD; k++)
+        for (i = target - k; i <= target + k; i += 2 * k)
+            if (i >= 0 && i < (int)count) {
+                int s, cached = 0;
+                for (s = 0; s < CACHE_SLOTS; s++)
+                    if (cache_index[s] == i)
+                        cached = 1;
+                if (!cached && art_offset[i] != 0xffffffffu) {
+                    loads_left = 1;
+                    cover(i);
+                    return 1;
+                }
+            }
+    return 0;
+}
+
+/* One frame of the animation: the position moves 5/8 of the remaining distance (at least SNAP),
+ * so a fast turn catches up quickly and each stop slows down softly. The timer starts before the
+ * draw, so the frames follow each other without a pause. */
+COLD static void tick(void)
+{
+    int diff = target * 256 - pos;
+    if (pos == target * 256 && !missing) {
+        animating = preload();            /* stopped: use the time to load the next covers */
+        if (animating)
+            arm_timer();
+        return;
+    }
+    arm_timer();
+    if (diff > -SNAP && diff < SNAP)
+        pos = target * 256;
+    else {
+        int move = (diff * 5) >> 3;
+        if (move > -SNAP && move < SNAP)
+            move = diff > 0 ? SNAP : -SNAP;
+        pos += move;
+    }
+    render();
+    animating = 1;                        /* the next tick draws again, or preloads, or stops */
+}
+
+/* A wheel step: only a new target and the click. The timer makes the frames. */
 COLD static void step(int dir)
 {
-    int start = pos, f, frames = FRAMES;
-    unsigned dt = USEC_TIMER - last_step;
-    last_step = USEC_TIMER;
-    if (dt < FAST_US)                     /* a fast turn of the wheel: do not lag behind it */
-        frames = 1;
-    else if (dt < QUICK_US)
-        frames = 2;
+    int old = target;
     target += dir;
     if (target < 0)
         target = 0;
     if (target >= (int)count)
         target = count - 1;
-    if (target * 256 != start)
-        ui_click();                       /* the click of the lists, as the Clicker setting gives */
-    for (f = 1; f <= frames; f++) {
-        pos = start + sdiv((target * 256 - start) * f, frames);
-        render();
+    if (target == old)
+        return;
+    ui_click();                           /* the click of the lists, as the Clicker setting gives */
+    if (!animating) {
+        animating = 1;
+        tick();                           /* the first frame now, the next ones from the timer */
     }
 }
 
@@ -938,6 +1093,11 @@ COLD static int is_albums_list(int *list)
 COLD static int active_event(int *list, int *ev, void *a3, int a4)
 {
     int type = ev[1];
+    if (type == EV_TIMER && ev[2] == (int)list_timer()) {
+        if (animating)
+            tick();
+        return 1;
+    }
     if (type == EV_WHEEL) {
         if (ui_object)
             ui_activity(ui_object, 0);
@@ -978,6 +1138,10 @@ COLD int hook_list_event(int *list, int *ev, void *a3, int a4)
         return list_event(list, ev, a3, a4);
     if (active)
         return list == cf_list ? active_event(list, ev, a3, a4) : list_event(list, ev, a3, a4);
+    /* A tick of the Cover Flow animation that came after the close. The list starts its timer only
+       with a repeat count; with the count 0 it would count down from 255 and repeat (0x23b704). */
+    if (type == EV_TIMER && ev[2] == (int)(list + LIST_TIMER) && *((unsigned char *)list + LIST_REPEATS) == 0)
+        return 1;
     if (pending && list == pending_list && USEC_TIMER - push_time >= HOLD_US) {
         /* The list gets timer events (type 9) while the button is held. */
         pending = 0;
