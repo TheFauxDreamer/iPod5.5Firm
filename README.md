@@ -34,7 +34,7 @@ The app has these functions:
 - Show the recovery steps, and get the Apple firmware for a restore with Finder.
 - Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
 - Install a patch from other people: double-click a `.ipodpatch` file, or drag it onto the list of patches. The app shows the version of each patch. It tells you if a file is an update or an older version. Export a patch as a `.ipodpatch` file with its compiled code, so that other people do not need Xcode. Refer to [docs/patch-system.md](docs/patch-system.md#the-ipodpatch-file).
-- Switch code patches on or off (Patches pane). The pane shows a list of the patches at the left. Select a patch to see its description, its compatibility and its tools at the right. The patches are in [patches/](patches/).
+- Switch code patches on or off (Patches pane). The pane shows a list of the patches at the left. Select a patch to see its description, its compatibility and its tools at the right. A bar below the list shows the space that the theme and the patches use. It is red if the firmware is too large. The patches are in [patches/](patches/).
 - Write the album and playlist thumbnail file to the iPod for the `album-art` patch.
 - Set a custom image for each playlist for the `album-art` patch.
 - Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane).

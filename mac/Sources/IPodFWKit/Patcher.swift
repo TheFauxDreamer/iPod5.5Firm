@@ -230,6 +230,42 @@ public enum Patcher {
         UInt32((max(osos.count, maxOSOSSize) + 15) & ~15)
     }
 
+    /// The bytes of code and data of a patch (0 for a patch without code). The size does not
+    /// depend on the load address.
+    public static func codeSize(_ patch: PatchInfo) throws -> Int {
+        guard hasCode(patch.folder) else { return 0 }
+        var fw = [String: UInt32]()
+        for (k, v) in patch.spec.symbols ?? [:] { fw[k] = try hex(v) }
+        for h in patch.spec.hooks ?? [] { if let c = h.chain { fw[c] = 0 } }
+        return try link(objectCode(patch.folder), base: UInt32(maxOSOSSize), firmware: fw).0.count
+    }
+
+    /// The use of the area after Apple's image (`maxOSOSSize` to `ThemeImport.ososLimit`). The
+    /// theme, the Dark Mode items and the extended patches share this area.
+    public struct SpaceUse: Equatable {
+        /// The end of the image after the build.
+        public let end: Int
+        public static let start = maxOSOSSize
+        public static let limit = ThemeImport.ososLimit
+        public var used: Int { max(0, end - Self.start) }
+        public var total: Int { Self.limit - Self.start }
+        public var fits: Bool { end <= Self.limit }
+        public init(end: Int) { self.end = end }
+    }
+
+    /// The space that a build uses: `imageCount` is the size of the image after the appearance;
+    /// `patches` are the switched-on patches in build order with their code sizes. The layout is
+    /// the same as `apply`: an extended patch starts at `extendedBase`, and each apply makes the
+    /// image a multiple of 0x800 bytes.
+    public static func spaceUse(imageCount: Int, patches: [(patch: PatchInfo, size: Int)]) -> SpaceUse {
+        var count = imageCount
+        for (p, size) in patches where p.spec.load_address == extendedLoadAddress && size > 0 {
+            let base = (max(count, maxOSOSSize) + 15) & ~15
+            count = max(count, (base + size + 0x7FF) / 0x800 * 0x800)
+        }
+        return SpaceUse(end: count)
+    }
+
     public static func list(in folder: URL, source: PatchInfo.Source = .builtIn) -> [PatchInfo] {
         let dirs = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
         return dirs.compactMap { dir in
@@ -336,7 +372,9 @@ public enum Patcher {
             (code, table) = try link(object, base: base, firmware: fw)
         }
         let end = Int(base) + code.count
-        guard end <= maxSize else { throw PatchError("The patch code ends at \(String(end, radix: 16)); the maximum is \(String(maxSize, radix: 16)).") }
+        guard end <= maxSize else {
+            throw PatchError("The firmware is too large: the code of \"\(spec.displayTitle)\" ends at \(String(end, radix: 16)), but the maximum is \(String(maxSize, radix: 16)) (\(end - maxSize) bytes too many). Switch off a patch. The bar below the list of patches shows the space.")
+        }
         var out = current
         let size = max(out.count, (end + 0x7FF) / 0x800 * 0x800)
         if out.count < size { out += [UInt8](repeating: 0, count: size - out.count) }

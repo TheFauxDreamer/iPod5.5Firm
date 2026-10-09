@@ -30,6 +30,44 @@ struct PatchesView: View {
 
 // MARK: the list
 
+/// The space for the theme and the patches after Apple's image. It changes when a patch or the
+/// appearance changes, so the owner sees before a flash if the firmware is too large.
+struct SpaceUseRow: View {
+    @EnvironmentObject var model: AppModel
+
+    var key: String {
+        "\(model.enabledPatches.sorted())|\(model.appearance)|\(model.selectedThemeName ?? "")|\(model.editor.map { ObjectIdentifier($0).hashValue } ?? 0)|\(model.patches.count)"
+    }
+
+    var body: some View {
+        Group {
+            if let s = model.spaceUse {
+                VStack(alignment: .leading, spacing: 3) {
+                    ProgressView(value: Double(min(s.used, s.total)), total: Double(s.total))
+                        .tint(!s.fits ? .red : Double(s.used) > 0.9 * Double(s.total) ? .orange : .accentColor)
+                        .accessibilityLabel("Space used")
+                    if s.fits {
+                        Text("Space for the theme and the patches: \(kb(s.used)) of \(kb(s.total)) used, \(kb(s.total - s.used)) free.")
+                    } else {
+                        Label("The firmware is too large by \(kb(s.end - Patcher.SpaceUse.limit)). Switch off a patch, or choose Light.", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+            } else if model.editor != nil {
+                Text("Measuring the space…")
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .task(id: key) {
+            try? await Task.sleep(nanoseconds: 300_000_000)    // wait for more changes
+            guard !Task.isCancelled else { return }
+            await model.refreshSpaceUse()
+        }
+    }
+
+    func kb(_ bytes: Int) -> String { String(format: "%.1f KB", Double(bytes) / 1024) }
+}
+
 struct PatchList: View {
     @EnvironmentObject var model: AppModel
     @State private var dropTargeted = false
@@ -104,6 +142,7 @@ struct PatchList: View {
             .padding(.horizontal, 8).padding(.vertical, 4)
             Divider()
             VStack(alignment: .leading, spacing: 4) {
+                SpaceUseRow()
                 Text("Turned-on patches: \(model.activePatches.count)")
                 Text("To install a patch, drag a .ipodpatch file here.")
                 if model.editor == nil {

@@ -582,6 +582,36 @@ final class AppModel: ObservableObject {
         } catch { fail("Cannot write the file on the iPod", error) }
     }
 
+    /// The space after Apple's image for the switched-on patches and the appearance (nil: not known).
+    @Published var spaceUse: Patcher.SpaceUse?
+    /// The code size of each patch, by folder and version: the app compiles each patch one time.
+    private var codeSizes = [String: Int]()
+
+    /// Measure the space of the current selection: build the appearance, and add the code sizes of
+    /// the switched-on patches. The Patches pane calls this after each change.
+    func refreshSpaceUse() async {
+        guard let editor else { spaceUse = nil; return }
+        let patches = activePatches, appearance = activeAppearance, known = codeSizes
+        let result = try? await Task.detached(priority: .utility) { () -> ([String: Int], Patcher.SpaceUse) in
+            let osos = try Self.outputOSOS(editor, [], appearance: appearance, version: nil)
+            var sizes = known, list = [(patch: PatchInfo, size: Int)]()
+            for p in patches {
+                let key = p.folder.path + "|" + (p.spec.version ?? "")
+                let size = try sizes[key] ?? Patcher.codeSize(p)
+                sizes[key] = size
+                list.append((p, size))
+            }
+            return (sizes, Patcher.spaceUse(imageCount: osos.count, patches: list))
+        }.value
+        guard !Task.isCancelled else { return }
+        if let result {
+            codeSizes = result.0
+            spaceUse = result.1
+        } else {
+            spaceUse = nil
+        }
+    }
+
     var activePatches: [PatchInfo] {
         patches.filter { enabledPatches.contains($0.spec.name) }
     }

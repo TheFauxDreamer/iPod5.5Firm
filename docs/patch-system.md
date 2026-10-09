@@ -281,6 +281,10 @@ A patch that is too large for the area before 0x736800 uses `"load_address": "ex
 
 The address of an extended patch changes with the theme and the other patches. Thus an extended patch must not use a fixed address of its own code or data in another patch.
 
+The Patches pane shows the use of this area while you switch patches on and off. `Patcher.spaceUse` copies the layout of `Patcher.apply`: each extended patch starts at `extendedBase` of the image before it, and each apply makes the image a multiple of 0x800 bytes. The test `testSpaceUse` makes sure that the result is the size of a real build. If a build is too large, the error gives the patch and the count of bytes too many.
+
+To make a large patch smaller, put `__attribute__((minsize))` on the functions that run only once for each event (for example a table build). Keep the pixel loops as fast code, and mark them `noinline` if a `minsize` function calls them. With `minsize`, the compiler can call a library function for a division by a constant. The patch has no library, so use a shift.
+
 A first version (6 October 2026) reserved the fixed area 0x7E8000–0x7F0000. It failed with the "Switch on iPod" build of a large theme: the switch table of "Dark Gray" ends at approximately 0x7ea700, thus the dark-mode code went into the reserved area.
 
 ## Write a new patch
