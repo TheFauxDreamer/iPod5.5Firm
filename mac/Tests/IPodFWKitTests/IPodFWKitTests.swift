@@ -1027,6 +1027,18 @@ final class USBProbeLogTests: XCTestCase {
         XCTAssertTrue(lines[3].hasPrefix("endpoint 0x01 (OUT isochronous, asynchronous), max packet 192, interval 1"))
         XCTAssertTrue(lines[4].hasPrefix("audio class interface descriptor, subtype 2: format type 1, 2 channels, 2 bytes per sample, 16 bits, rates 44100 Hz"))
     }
+
+    /// The records of the isochronous test (tags 48–51).
+    func testAudioRecords() {
+        XCTAssertEqual(USBProbeLog.audioText(48, [116, 0x020201, 192, 9]),
+                       "device found — address 116, interface 1 alternate 2, endpoint 2 OUT, max packet 192, clock source 9")
+        XCTAssertEqual(USBProbeLog.audioText(49, [0x0002_0B01, 1, 0x0008_0E00, 0x8000_0D00]),
+                       "SET_INTERFACE 1 alternate 2: correct, setup token 0x00080E00, status token 0x80000D00")
+        XCTAssertEqual(USBProbeLog.audioText(49, [0x0100_0121, 0x0004_0900, 0x0008_0E00, 0x8000_0D40]),
+                       "SET_CUR sampling frequency, clock 9: stall or error (0x40), setup token 0x00080E00, status token 0x80000D40")
+        XCTAssertEqual(USBProbeLog.audioText(50, [1240, 3, 0x0000_0008, 0x0200_0010]),
+                       "1 kHz tone: 1240 frames sent, 3 frames with an error, last error 0x00000008, frames 16 to 512")
+    }
 }
 
 final class DarkModeTests: XCTestCase {

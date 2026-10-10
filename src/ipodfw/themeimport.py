@@ -42,8 +42,9 @@ ID_SHIFTS = range(-8, 9)  # the IDs of a type move by a small amount between ver
 ELEMENT_ID_TYPE = {"BMap": "BMap", "Draw": "BMap", "Str ": "Str ", "None": "View"}
 # The reset code of RetailOS stops if the end of the OS image is after 8 MB (0x800004).
 # A picture that the theme makes larger goes after the current end of osos, below this limit.
-# Extended patches ("load_address": "extended") also stay below this limit.
-OSOS_LIMIT = 0x7F0000
+# Extended patches ("load_address": "extended") also stay below this limit. The 32 KB below 8 MB
+# stay empty as a margin (64 KB before 9 October 2026). Keep the same value in patcher.py.
+OSOS_LIMIT = 0x7F8000
 # Resources of the target that keep the Apple version: the progress bar in Now Playing (1.3).
 # The dark themes make it almost black, so it is not visible.
 KEEP_APPLE = {"BMap 24342": "Apple's progress bar stays (the theme makes it almost invisible).",

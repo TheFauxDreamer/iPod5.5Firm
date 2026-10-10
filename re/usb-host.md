@@ -273,6 +273,52 @@ iPodFirm 0.1.79, the dock with its power supply, the EarPods on a USB-C port of 
 
 Raw bytes of configuration 1: refer to the log file copy of the owner (iPodFirmUSBLog, records 379–391).
 
+## Stage 2: the isochronous test (Ghidra and emulator, 2026-10-09)
+
+The UIM has no isochronous transfers, thus the probe (version 1.2) makes them without the UIM. The facts from Ghidra:
+
+- 0xad80c(size, 1) gives the memory of the UIM. The frame list (0xe5540) and the queue head pool (0xe4238) come from it.
+- 0xa7164 (the cache operation for a buffer) is empty, and 0x9e2d4 (the physical address) gives the same address back. Thus the CPU and the controller use the same address in the window 0x9xxxxxxx.
+- A queue head of the UIM keeps the controller address at +0x34. Real logs: it is equal to the queue head address. Thus the stop of version 0.1.62 was probably a read at a bad address, not a read in this window.
+- The frame list has 1024 entries (USBCMD bits 3:2 = 0, controller object +0x5c = 0x400). An empty entry is 1. The UIM puts an interrupt queue head into the frames offset, offset + interval, and so on.
+- The full-speed queue heads of the UIM use hub 0, port 1 (the transaction translator in the controller). The interrupt queue head of the dock's hub uses S-mask 0x01 and C-mask 0x1C.
+
+The test: refer to [docs/modifications.md](../docs/modifications.md#usb-host-probe), item 16. Each frame gets an siTD: OUT, hub 0, port 1, S-mask 0x03, total 192 bytes, TP "begin", T-count 2. The siTD is before the old entry of the frame. The control requests use a queue head of the probe after the queue head in ASYNCLISTADDR.
+
+Offline test: the device finder `find_audio`, compiled for the Mac, found address 116, interface 1, alternate 2, endpoint 2, 192 bytes and clock 9 in the EarPods log of 2026-10-08.
+
+Emulator (a variant with these values forced): the memory was at 0x93B53000 and 0x93B4A740, the frame list at 0x93B59000. ASYNCLISTADDR is 0 in the emulator, thus the guard stopped the control requests. The siTDs were linked for 5 s and removed. The second log write came, and the menus worked.
+
+## The first tone test did not start (probe 1.2, 2026-10-09)
+
+The EarPods enumerated and the composite driver read the configurations, as before. No audio record was in the log, and no tone came.
+
+- The log had 511 records (full) before the audio test.
+- The dump of configuration 1 began with 16 zero bytes. The probe had read the same buffer before (the three 4-byte reads), through the 0x1xxxxxxx window. The cache kept that line. Thus the device finder (from the log) found no configuration.
+- Result: the 0x1xxxxxxx window is in the cache. The 0x9xxxxxxx window is not in the cache, because the firmware reads the same buffers correctly there.
+
+Probe 1.3: it reads 0x9xxxxxxx addresses directly, finds the audio interface in the buffer at the completion, and keeps the last 16 log records for the test. Emulator: correct.
+
+## The first USB audio from the iPod (probe 1.3, 2026-10-10)
+
+The dock with its power supply, the USB-C EarPods on a USB-C port of the dock. The owner heard the 1 kHz tone in the EarPods.
+
+| Record | Value |
+|---|---|
+| Device | Address 67, interface 1 alternate 2, endpoint 2 OUT, 192 bytes, clock source 9 |
+| Memory (0xad80c) | Control page 0x9365A000, siTDs 0x936519A0. Frame list 0x93662000. ASYNCLISTADDR 0x93664380. |
+| SET_INTERFACE 1, alternate 2 | Setup token 0x80000E00, status token 0x00000D00: correct |
+| SET_CUR sampling frequency 48000, clock 9 | Correct |
+| Stream | 5105 frames correct, 0 errors, frame 412 to frame 399 (about 5.1 s) |
+| SET_INTERFACE 1, alternate 0 | Correct |
+
+Results:
+
+- The siTD format of the EHCI specification operates on the ARC controller: OUT, hub 0, port 1, S-mask 0x03, T-count 2, TP "begin", 192 bytes.
+- A control queue head of the probe in the asynchronous list operates beside the queue heads of the UIM.
+- The EarPods accept SET_CUR 48000 Hz on clock source 9.
+- The siTDs in all 1024 frames, before the old entries, did not disturb the dock's hub or the storage device.
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).

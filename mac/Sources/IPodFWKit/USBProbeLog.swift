@@ -16,6 +16,7 @@ public enum USBProbeLog {
     static let queueTag = 7 * 4 + 1, endpointTag = 6 * 4 + 1, transferTag = 6 * 4 + 2, irqTag = 6 * 4 + 3, completionTag = 6 * 4
     static let entries = [1: "validate", 2: "initialize device", 3: "initialize interface"]
     static let dataTag = 11 * 4
+    static let audioDeviceTag = 12 * 4, audioRequestTag = 12 * 4 + 1, audioStreamTag = 12 * 4 + 2, audioMemoryTag = 12 * 4 + 3
 
     public struct Entry: Hashable {
         public var driver: String
@@ -49,6 +50,10 @@ public enum USBProbeLog {
             let tag = Int(data[o + 1])
             let regs = (0..<4).map { le32(data, o + 4 + 4 * $0) }
             let atR1 = Array(data[o + 20..<o + 40]), atR2 = Array(data[o + 40..<o + 60])
+            if tag >= audioDeviceTag && tag <= audioMemoryTag {
+                out.append(Entry(driver: "Audio", call: audioText(tag, regs), device: nil, interface: nil, registers: regs))
+                continue
+            }
             if tag == dataTag {
                 // Records of 40 bytes of one GET_DESCRIPTOR configuration answer: r0 request, r1 buffer, r2 offset, r3 length.
                 let length = Int(regs[3]), offset = Int(regs[2])
@@ -152,6 +157,29 @@ public enum USBProbeLog {
             out.append(e)
         }
         return out
+    }
+
+    /// The isochronous test (Stage 2): the audio device, a control request, the stream result, the memory.
+    static func audioText(_ tag: Int, _ r: [UInt32]) -> String {
+        switch tag {
+        case audioDeviceTag:
+            return String(format: "device found — address %d, interface %d alternate %d, endpoint %d OUT, max packet %d, clock source %d",
+                          r[0], r[1] & 0xFF, r[1] >> 8 & 0xFF, r[1] >> 16 & 0xFF, r[2], r[3])
+        case audioRequestTag:
+            let setup = (0..<4).map { UInt8(r[0] >> (8 * $0) & 0xFF) } + (0..<4).map { UInt8(r[1] >> (8 * $0) & 0xFF) }
+            let name: String
+            if setup[0] == 0x01 && setup[1] == 0x0B { name = "SET_INTERFACE \(setup[4]) alternate \(setup[2])" }
+            else if setup[0] == 0x21 && setup[1] == 0x01 { name = "SET_CUR sampling frequency, clock \(setup[5])" }
+            else { name = "request " + hex(setup, 8) }
+            let status = r[3] & 0xFF, active = status & 0x80 != 0
+            let result = active ? "no answer (still active)" : status == 0 ? "correct" : (status & 0x40 != 0 ? "stall or error" : "error") + String(format: " (0x%02X)", status)
+            return String(format: "%@: %@, setup token 0x%08X, status token 0x%08X", name, result, r[2], r[3])
+        case audioStreamTag:
+            return String(format: "1 kHz tone: %d frames sent, %d frames with an error, last error 0x%08X, frames %d to %d",
+                          r[0], r[1], r[2], r[3] & 0xFFFF, r[3] >> 16)
+        default:
+            return String(format: "memory — control page 0x%08X, siTDs 0x%08X, frame list 0x%08X, ASYNCLISTADDR 0x%08X", r[0], r[1], r[2], r[3])
+        }
     }
 
     /// The descriptors in a configuration descriptor, one line each. The answer can be shorter than

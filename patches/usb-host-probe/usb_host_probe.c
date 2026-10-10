@@ -90,6 +90,16 @@
 #define TAG_EXPERIMENT           (10 * 4 + 0)
 #define TAG_DATA                 (11 * 4 + 0)
 #define DATA_MAX   512                                  /* the maximum of bytes in one data dump */
+#define TAG_AUDIO_DEVICE         (12 * 4 + 0)
+#define TAG_AUDIO_REQUEST        (12 * 4 + 1)
+#define TAG_AUDIO_STREAM         (12 * 4 + 2)
+#define TAG_AUDIO_MEMORY         (12 * 4 + 3)
+#define LOG_RESERVE 16                                  /* the records for the audio test at the end */
+#define TONE_MS    5000                                 /* the length of the test tone */
+#define TONE_LEVEL 4000                                 /* the peak of the test tone (full scale 32767) */
+#define FRAMES     1024                                 /* the periodic frame list (USBCMD bits 3:2 = 0) */
+#define DMA_LOW    0x90000000u                          /* the RAM window of the USB structures */
+#define DMA_HIGH   0x94000000u
 /* The second composite driver record (registry entry 0x6bc434) matches device class 2. 0xc50ac gives
  * a driver 100 points if the device class is equal to the byte at +0x35 of the record, and 10 more
  * if the subclass is equal to +0x36. The composite validate 0x108b6c accepts each device. */
@@ -137,6 +147,7 @@ void sign_hub(void);
 void sign_storage(void);
 void log_call(int tag, const unsigned *regs);
 void *fw_new(unsigned size);                           /* 0x25a974: the allocator (operator new) */
+void *dma_alloc(unsigned size, int zero);              /* 0xad80c: the memory of the UIM (frame list, queue heads) */
 
 struct record {
     unsigned char magic, tag;
@@ -151,6 +162,8 @@ static unsigned root_hub_address = 0xffffffff;
 static unsigned completion_logs, interrupt_logs;
 static unsigned device_requests[4], next_request;       /* the request blocks of logged device transfers */
 static unsigned data_length[4], data_buffer[4];         /* GET_DESCRIPTOR configuration: wLength, buffer */
+static unsigned data_address[4];                        /* the device address of each followed request */
+static void find_audio(unsigned buffer, unsigned length, unsigned address);
 static unsigned log_saved, port_logs, uim_logs, last_status = 0xffffffff, last_portsc = 0xffffffff;
 /* The log buffer (32 KB) comes from the allocator when the probe starts, not from the image:
  * with a large theme, the space after osos is only approximately 10 KB. */
@@ -201,13 +214,20 @@ static int write_file(const char *name, const void *data, unsigned len)
     return err != 0 ? err : err2;
 }
 
-/* Read a word of the RAM. The USB hardware uses the uncached window (RAM | 0x80000000); read the
- * same RAM through 0x10000000. Other addresses give 0 (the real iPod stops at a bad read). */
+/* Is the address in a RAM window? 0x90000000-0x94000000 is the window of the UIM memory (0xad80c,
+ * not in the cache): the CPU and the controller use these addresses. 0x10000000-0x14000000 is the
+ * same RAM through the cache. Version 1.2 read USB buffers through the cache and got old lines (real
+ * log of 2026-10-09: the first 16 bytes of a configuration were zeros). Thus read a 0x9xxxxxxx
+ * address directly, as the firmware does. Other addresses give 0 (an argument can be a number, and
+ * the real iPod stops at a bad read). */
+static int ram_address(unsigned a)
+{
+    return (a >= 0x90000000 && a < 0x94000000) || (a >= 0x10000000 && a < 0x14000000);
+}
+
 static unsigned read32(unsigned a)
 {
-    if (a >= 0x90000000 && a < 0x94000000)
-        a -= 0x80000000;
-    if (a < 0x10000000 || a >= 0x14000000 || (a & 3))
+    if (!ram_address(a) || (a & 3))
         return 0;
     return *(volatile unsigned *)a;
 }
@@ -300,26 +320,21 @@ static int write_log(void)
 static void copy_from(unsigned char *dst, unsigned src)
 {
     int i;
-    /* Only RAM: an argument can be a number. The USB code gives the buffers with addresses in a
-     * window at 0x90000000 (emulator: setup packets at 0x93b5dd40). A read there stopped the probe
-     * on the real iPod (version 0.1.62), thus read the same RAM in the normal window at 0x10000000.
-     * The owner's iPod has 64 MB of RAM (real log: pointers at 0x1362xxxx). */
-    if (src >= 0x90000000 && src < 0x94000000)
-        src -= 0x80000000;
-    if (src < 0x10000000 || src >= 0x14000000)
+    /* Only RAM (refer to ram_address). The owner's iPod has 64 MB of RAM. */
+    if (!ram_address(src) || !ram_address(src + 19))
         return;
     for (i = 0; i < 20; i++)
-        dst[i] = ((const unsigned char *)src)[i];
+        dst[i] = ((const volatile unsigned char *)src)[i];
 }
 
 /* Write the received data of a GET_DESCRIPTOR configuration request to the log: records of 40 bytes
  * (at_r1 and at_r2 together). r0 request, r1 buffer, r2 offset, r3 length. */
-static void log_data(unsigned request, unsigned buffer, unsigned length)
+static void log_data(unsigned request, unsigned buffer, unsigned length, unsigned address)
 {
     unsigned offset;
     if (length > DATA_MAX)
         length = DATA_MAX;
-    for (offset = 0; offset < length && L && L->count < LOG_MAX; offset += 40) {
+    for (offset = 0; offset < length && L && L->count < LOG_MAX - LOG_RESERVE; offset += 40) {
         struct record *r = &L->r[L->count];
         int i;
         for (i = 0; i < (int)(sizeof *r / 4); i++)
@@ -330,6 +345,7 @@ static void log_data(unsigned request, unsigned buffer, unsigned length)
         r->regs[1] = buffer;
         r->regs[2] = offset;
         r->regs[3] = length;
+        r->pad = address;                               /* the device address (the app does not show it) */
         copy_from(r->at_r1, buffer + offset);
         copy_from(r->at_r2, buffer + offset + 20);
         L->count++;
@@ -350,10 +366,13 @@ static void track_data(int tag, const unsigned *regs, unsigned slot)
         } else if (setup[0] == 0x80 && setup[1] == 6 && setup[3] == 2) {
             data_length[slot] = setup[6] | setup[7] << 8;
             data_buffer[slot] = 0;
+            data_address[slot] = regs[5];
         }
     } else if (tag == TAG_COMPLETION && (regs[0] & 1) && data_length[slot]) {
-        if (data_buffer[slot])
-            log_data(regs[0] & ~1u, data_buffer[slot], data_length[slot]);
+        if (data_buffer[slot]) {
+            log_data(regs[0] & ~1u, data_buffer[slot], data_length[slot], data_address[slot]);
+            find_audio(data_buffer[slot], data_length[slot], data_address[slot]);
+        }
         data_length[slot] = 0;
         data_buffer[slot] = 0;
     }
@@ -405,7 +424,9 @@ void log_call(int tag, const unsigned *regs)
     if ((tag == TAG_INTERRUPT_ENDPOINT || tag == TAG_INTERRUPT_TRANSFER)
         && (regs[0] == root_hub_address || uim_logs++ >= UIM_LOGS))
         return;
-    if (L && L->count < LOG_MAX) {
+    /* Keep the last LOG_RESERVE records for the audio test and the registers. */
+    if (L && (L->count < LOG_MAX - LOG_RESERVE || tag >= TAG_AUDIO_DEVICE || tag == TAG_REGISTERS)
+        && L->count < LOG_MAX) {
         struct record *r = &L->r[L->count];
         int i;
         for (i = 0; i < (int)(sizeof *r / 4); i++)      /* the allocator does not clear the buffer; */
@@ -494,6 +515,241 @@ int hook_port_status(int port, unsigned short *status)
     return r;
 }
 
+/* ---- Stage 2 of USB-AUDIO-OUT.md: isochronous OUT to a USB audio device ----------------------
+ * The UIM of the firmware has no isochronous transfers (the table entries 0xd4820 and 0xd4828 return
+ * -1). This test makes the transfers itself, without the UIM:
+ *  1. It finds a USB Audio Class 2 device in the received configuration descriptors: an audio
+ *     streaming interface with 2 channels, 2-byte samples and an isochronous OUT endpoint.
+ *  2. It sends SET_INTERFACE and SET_CUR (48 kHz to the clock source of the playback terminal) through
+ *     its own control queue head in the asynchronous list.
+ *  3. It puts one siTD (split isochronous transfer descriptor) in each of the 1024 frames of the
+ *     periodic frame list. Each siTD sends 192 bytes (48 stereo samples, one period of 1 kHz) to the
+ *     endpoint through the transaction translator of the controller (hub 0, port 1, as the UIM
+ *     queue heads). The UI task makes each executed siTD active again.
+ *  4. After TONE_MS it removes the siTDs and sends SET_INTERFACE with alternate setting 0.
+ * The memory comes from 0xad80c, as the frame list and the queue heads of the UIM. The CPU and the
+ * controller use the same address (0x9xxxxxxx): the cache operation 0xa7164 is empty, and 0x9e2d4
+ * gives the same address back. */
+static const short sine[48] = {                       /* one period: 1 kHz at 48 kHz, peak TONE_LEVEL */
+         0,    522,   1035,   1531,   2000,   2435,   2828,   3173,   3464,   3696,   3864,   3966,
+      4000,   3966,   3864,   3696,   3464,   3173,   2828,   2435,   2000,   1531,   1035,    522,
+         0,   -522,  -1035,  -1531,  -2000,  -2435,  -2828,  -3173,  -3464,  -3696,  -3864,  -3966,
+     -4000,  -3966,  -3864,  -3696,  -3464,  -3173,  -2828,  -2435,  -2000,  -1531,  -1035,   -522
+};
+
+struct audio {
+    unsigned address, interface, alt, endpoint, packet, clock;
+};
+
+static volatile unsigned char *dma_page;                /* control QH, qTDs, setup, data, tone buffer */
+static volatile unsigned *sitd;                         /* FRAMES siTDs of 8 words */
+static int control_linked;
+
+static void log_regs(int tag, unsigned r0, unsigned r1, unsigned r2, unsigned r3)
+{
+    unsigned regs[4];
+    regs[0] = r0;
+    regs[1] = r1;
+    regs[2] = r2;
+    regs[3] = r3;
+    log_call(tag, regs);
+}
+
+/* A UAC2 playback interface in a configuration descriptor. Returns 0 if found. */
+static int parse_audio(const unsigned char *d, unsigned len, struct audio *a)
+{
+    unsigned o = 0, cls = 0, sub = 0, proto = 0, ifn = 0, alt = 0, clock = 0, subslot = 0, channels = 0;
+    while (o + 2 <= len) {
+        const unsigned char *b = d + o;
+        unsigned l = b[0], t = b[1];
+        if (l < 2 || o + l > len)
+            break;
+        if (t == 4 && l >= 9) {                         /* interface */
+            ifn = b[2];
+            alt = b[3];
+            cls = b[5];
+            sub = b[6];
+            proto = b[7];
+            subslot = channels = 0;
+        } else if (t == 0x24 && cls == 1 && proto == 0x20) {
+            if (sub == 1 && b[2] == 2 && l >= 17 && b[4] == 1 && b[5] == 1)
+                clock = b[7];                           /* input terminal "USB streaming": its clock source */
+            else if (sub == 2 && b[2] == 1 && l >= 16)
+                channels = b[10];                       /* AS_GENERAL: bNrChannels */
+            else if (sub == 2 && b[2] == 2 && l >= 6)
+                subslot = b[4];                         /* FORMAT_TYPE I: bSubslotSize */
+        } else if (t == 5 && l >= 7 && cls == 1 && sub == 2 && proto == 0x20 && (b[3] & 3) == 1
+                   && !(b[2] & 0x80) && subslot == 2 && channels == 2 && (b[4] | b[5] << 8) >= 192) {
+            a->interface = ifn;
+            a->alt = alt;
+            a->endpoint = b[2] & 0xf;
+            a->packet = b[4] | b[5] << 8;
+            a->clock = clock;
+            return 0;
+        }
+        o += l;
+    }
+    return -1;
+}
+
+/* The first UAC2 playback interface of a received configuration (called at the completion, possibly in
+ * the interrupt handler: it only reads and writes RAM). */
+static struct audio found;
+static int audio_found;
+
+static void find_audio(unsigned buffer, unsigned length, unsigned address)
+{
+    static unsigned char cfg[DATA_MAX];
+    unsigned n, total;
+    if (audio_found || !ram_address(buffer) || !ram_address(buffer + DATA_MAX))
+        return;
+    if (length > DATA_MAX)
+        length = DATA_MAX;
+    for (n = 0; n < length; n++)
+        cfg[n] = ((const volatile unsigned char *)buffer)[n];
+    total = cfg[2] | cfg[3] << 8;
+    if (length < 9 || cfg[1] != 2 || parse_audio(cfg, total < length ? total : length, &found) != 0)
+        return;
+    found.address = address;
+    audio_found = 1;
+}
+
+static void make_td(volatile unsigned *td, unsigned next, unsigned token, unsigned buffer)
+{
+    int i;
+    td[0] = next;
+    td[1] = 1;                                          /* alternate next: none */
+    td[3] = buffer;
+    td[4] = (buffer & ~0xfffu) + 0x1000;
+    for (i = 5; i < 8; i++)
+        td[i] = 0;
+    td[2] = token;                                      /* last: the token makes it active */
+}
+
+/* A control transfer through the probe's own queue head (setup, an optional OUT data stage of at most
+ * 4 bytes, status IN). The UI task waits for the result. Returns 0 if correct. */
+static int control(unsigned address, unsigned setup0, unsigned setup1, unsigned data, unsigned length)
+{
+    volatile unsigned *qh = (volatile unsigned *)dma_page;
+    volatile unsigned *td_setup = qh + 0x10, *td_data = qh + 0x18, *td_status = qh + 0x20;
+    volatile unsigned *setup = qh + 0x28, *buffer = qh + 0x30;
+    unsigned status, i;
+    setup[0] = setup0;
+    setup[1] = setup1;
+    buffer[0] = data;
+    make_td(td_status, 1, 0x80 | 1 << 8 | 0xc00 | 1u << 31, 0);              /* IN, 0 bytes, DATA1 */
+    if (length)
+        make_td(td_data, (unsigned)td_status, 0x80 | 0 << 8 | 0xc00 | length << 16 | 1u << 31, (unsigned)buffer);
+    make_td(td_setup, length ? (unsigned)td_data : (unsigned)td_status, 0x80 | 2 << 8 | 0xc00 | 8 << 16, (unsigned)setup);
+    /* Endpoint 0, full speed, data toggle from the qTD, 64 bytes, control endpoint; hub 0, port 1. */
+    qh[1] = address | 0x4000 | 64 << 16 | 0x08000000;
+    qh[2] = 0x40800000;
+    qh[3] = 0;
+    qh[5] = 1;
+    for (i = 6; i < 12; i++)
+        qh[i] = 0;
+    qh[4] = (unsigned)td_setup;
+    if (!control_linked) {                              /* after the head of the asynchronous list */
+        volatile unsigned *head = (volatile unsigned *)(ASYNCLIST & ~0x1fu);
+        if ((unsigned)head < DMA_LOW || (unsigned)head >= DMA_HIGH) {
+            log_regs(TAG_AUDIO_REQUEST, setup0, setup1, 0, 0x80);
+            return -1;
+        }
+        qh[0] = head[0];
+        head[0] = (unsigned)qh | 2;
+        control_linked = 1;
+    }
+    for (i = 0; i < 100; i++) {
+        task_sleep(2);
+        status = td_setup[2] | td_data[2] | td_status[2];
+        if (!(td_status[2] & 0x80) || (status & 0x40))
+            break;
+    }
+    status = td_status[2];
+    log_regs(TAG_AUDIO_REQUEST, setup0, setup1, td_setup[2], status);
+    return (status & 0xff) == 0 ? 0 : -1;
+}
+
+static void sitd_arm(volatile unsigned *s, unsigned buffer)
+{
+    s[4] = buffer;
+    s[5] = ((buffer + 191) & ~0xfffu) | 1 << 3 | 2;    /* TP "begin", 2 start splits */
+    s[3] = 0x80 | 192 << 16;                            /* active, 192 bytes */
+}
+
+/* Returns 0 if it logged a result. */
+static int audio_test(void)
+{
+    struct audio a;
+    unsigned ctrl, i, f, last, now, ok = 0, errors = 0, last_error = 0, start, tone_buffer;
+    volatile unsigned *frames;
+    volatile short *pcm;
+    if (!audio_found)
+        return -1;
+    a = found;
+    log_regs(TAG_AUDIO_DEVICE, a.address, a.interface | a.alt << 8 | a.endpoint << 16, a.packet, a.clock);
+    ctrl = read32(UIM_STATE + 0xc);
+    frames = (volatile unsigned *)read32(ctrl + 0x44);
+    if (!dma_page) {
+        unsigned p = (unsigned)dma_alloc(0x2000, 1), q = (unsigned)dma_alloc(FRAMES * 32 + 32, 1);
+        dma_page = (volatile unsigned char *)((p + 0xfff) & ~0xfffu);
+        sitd = (volatile unsigned *)((q + 31) & ~31u);
+    }
+    log_regs(TAG_AUDIO_MEMORY, (unsigned)dma_page, (unsigned)sitd, (unsigned)frames, ASYNCLIST);
+    /* Use the memory only in the window of the UIM memory. */
+    if ((unsigned)dma_page < DMA_LOW || (unsigned)dma_page >= DMA_HIGH || (unsigned)sitd < DMA_LOW
+        || (unsigned)sitd >= DMA_HIGH || (unsigned)frames < DMA_LOW || (unsigned)frames >= DMA_HIGH)
+        return 0;
+    /* SET_INTERFACE (interface, alternate setting), then SET_CUR sampling frequency 48000 to the clock. */
+    if (control(a.address, 0x01 | 0x0b << 8 | a.alt << 16, a.interface, 0, 0) != 0)
+        return 0;
+    if (a.clock)
+        control(a.address, 0x21 | 0x01 << 8 | 0x0100 << 16, a.clock << 8 | 4 << 16, 48000, 4);
+    tone_buffer = (unsigned)(dma_page + 0x100);
+    pcm = (volatile short *)tone_buffer;
+    for (i = 0; i < 48; i++)
+        pcm[2 * i] = pcm[2 * i + 1] = sine[i];
+    for (f = 0; f < FRAMES; f++) {
+        volatile unsigned *s = sitd + 8 * f;
+        s[1] = a.address | a.endpoint << 8 | 0 << 16 | 1u << 24;   /* OUT, hub 0, port 1 */
+        s[2] = 0x03;                                    /* start splits in micro-frames 0 and 1 */
+        s[6] = 1;                                       /* no back pointer */
+        sitd_arm(s, tone_buffer);
+        s[0] = frames[f];
+    }
+    tone(HIGH, 60000);                                  /* the iPod sign: the USB tone starts now */
+    for (f = 0; f < FRAMES; f++)
+        frames[f] = (unsigned)(sitd + 8 * f) | 4;       /* type siTD */
+    start = last = FRINDEX >> 3 & (FRAMES - 1);
+    for (i = 0; i < TONE_MS / 4; i++) {
+        task_sleep(4);
+        now = FRINDEX >> 3 & (FRAMES - 1);
+        for (f = last; f != now; f = (f + 1) & (FRAMES - 1)) {
+            volatile unsigned *s = sitd + 8 * f;
+            unsigned status = s[3];
+            if (status & 0x80)
+                continue;
+            if (status & 0x7c) {
+                errors++;
+                last_error = status;
+            } else {
+                ok++;
+            }
+            sitd_arm(s, tone_buffer);
+        }
+        last = now;
+    }
+    for (f = 0; f < FRAMES; f++) {
+        volatile unsigned *s = sitd + 8 * f;
+        s[3] = 0;
+        if (frames[f] == ((unsigned)s | 4))
+            frames[f] = s[0];
+    }
+    log_regs(TAG_AUDIO_STREAM, ok, errors, last_error, start | (FRINDEX >> 3 & (FRAMES - 1)) << 16);
+    control(a.address, 0x01 | 0x0b << 8, a.interface, 0, 0);   /* alternate setting 0: stop */
+    return 0;
+}
+
 int hook_event(void *ui, void *event)
 {
     int r = fw_long_play_timer(ui, event);
@@ -547,21 +803,9 @@ int hook_event(void *ui, void *event)
                 task_sleep(BEEP_MS);
                 tone(LOW, 60000);
             }
-            /* Experiment: switch the periodic schedule off for 2 s (USBCMD bit 4), then log the
-             * queues again. If a stopped asynchronous transfer then completes, the periodic list
-             * blocks the controller. Then switch it on again. */
-            {
-                unsigned regs[4];
-                regs[0] = USBCMD;
-                USBCMD = regs[0] & ~0x10u;
-                task_sleep(2000);
-                regs[1] = USBCMD;
-                regs[2] = USBSTS;
-                regs[3] = 0;
-                log_call(TAG_EXPERIMENT, regs);
-                log_queues();
-                USBCMD = USBCMD | 0x10u;
-            }
+            /* Stage 2 of USB-AUDIO-OUT.md: a test tone to a USB audio device (refer to audio_test). */
+            if (audio_test() == 0)
+                write_log();
             /* A second write: the ports of a hub and the devices behind it take more time. */
             task_sleep(LOG_WAIT2_MS);
             if (write_log() == 0) {
