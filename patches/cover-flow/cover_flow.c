@@ -140,6 +140,7 @@ int file_close(void *fh);
 #define TICK_MS        15                 /* the animation timer */
 #define LIST_TIMER     0x33               /* word index: the timer of the list (100 ms, 0x23b97c) */
 #define LIST_TIMER_MS  100
+#define STRAY_TICK_US  300000            /* a tick of the animation can come this long after the close */
 #define LIST_REPEATS   0xf8               /* byte: the repeat count of the list timer (list word 0x3e) */
 #define EV_TIMER       9                  /* word 2: the timer */
 #define SNAP           20                 /* in 1/256 of a cover: the smallest move of a frame */
@@ -172,6 +173,7 @@ static int caption_album = -1;
 static int loads_left;                    /* cover loads that this frame can do */
 static int missing;                       /* 1: a cover of this frame is not loaded yet */
 static int animating;                     /* 1: the timer runs */
+static unsigned closed_at;                /* USEC_TIMER at the last close */
 static void *list_timer(void);
 
 /* The albums. They stay in memory while the database does not change. */
@@ -966,6 +968,7 @@ COLD static void close_cover_flow(int send)
         ((unsigned *)fb)[i] = ((unsigned *)saved)[i];
     timer_stop(list_timer());                 /* give the timer back to the list */
     timer_set(list_timer(), LIST_TIMER_MS);
+    closed_at = USEC_TIMER;
     animating = 0;
     release();
     if (send)
@@ -1139,8 +1142,10 @@ COLD int hook_list_event(int *list, int *ev, void *a3, int a4)
     if (active)
         return list == cf_list ? active_event(list, ev, a3, a4) : list_event(list, ev, a3, a4);
     /* A tick of the Cover Flow animation that came after the close. The list starts its timer only
-       with a repeat count; with the count 0 it would count down from 255 and repeat (0x23b704). */
-    if (type == EV_TIMER && ev[2] == (int)(list + LIST_TIMER) && *((unsigned char *)list + LIST_REPEATS) == 0)
+       with a repeat count; with the count 0 it would count down from 255 and repeat (0x23b704).
+       Only shortly after the close: the album-art patch also uses the timer, with the count 0. */
+    if (type == EV_TIMER && ev[2] == (int)(list + LIST_TIMER) && *((unsigned char *)list + LIST_REPEATS) == 0 &&
+        USEC_TIMER - closed_at < STRAY_TICK_US)
         return 1;
     if (pending && list == pending_list && USEC_TIMER - push_time >= HOLD_US) {
         /* The list gets timer events (type 9) while the button is held. */

@@ -75,6 +75,7 @@ void log_event(void *log, int event, int value);
 int file_open_rw(void *path_record, void *fh, unsigned buffer, unsigned mode);
 int file_write(void *fh, unsigned *len, const void *buf);
 int list_event(int *list, int *ev, void *a3, int a4);   /* the previous target of the hook (chain) */
+void timer_start(void *timer);
 void view_invalidate(void *view);
 
 /* Code that runs once for each load or each label: small code. The pixel loops stay fast. */
@@ -167,7 +168,13 @@ static int albums_state;                  /* 0 = not made, 1 = made, -1 = not kn
 /* The late fill. While the wheel moves, a row whose thumbnail needs the disk gets an empty square.
  * The wheel event with the step 0 (the end of the movement) draws the list again. */
 #define EV_WHEEL        0xf               /* word 3: +1 or -1 for each step, 0 at the end */
-#define EV_TICK         0xd               /* comes to the lists approximately each 240 ms */
+#define EV_TICK         0xd               /* comes to the lists: each 240 ms in the emulator, each 3-4 s on the iPod */
+#define EV_TIMER        9                 /* word 2: the timer */
+#define LIST_TIMER      0xcc              /* the 100 ms timer of the list (0x23b97c): the blink of the selected row */
+#define TIMER_LOST_US   500000            /* a timer start older than this without its event is lost */
+#define KEY_PAUSE_US    1000000           /* after a key push, the list can use its timer for the blink */
+#define EV_KEY_DOWN     4
+#define EV_KEY_REPEAT   5
 #define MOVE_LIMIT_US   300000            /* an older step does not count: the end event can fail */
 #define BROWSE_LIST_CLASS 0x677290         /* vtable of a browse list (the Albums list) */
 #define VIEW_FLAGS_WORD 8                 /* word index: bits 0x1800 are 0x800 if the view is visible */
@@ -177,6 +184,9 @@ static unsigned step_time;                /* USEC_NOW at the last step */
 static int waiting;                       /* 1: a row has an empty square */
 static unsigned last_album_hash;          /* the last album row that was drawn */
 static int *album_list;                   /* the browse list of that row (only compared, not read) */
+static int timer_on;                      /* 1: the patch started the list timer, its event did not come */
+static unsigned timer_started;
+static unsigned key_time;                 /* USEC_NOW at the last key push to a list */
 
 /* ---------- the measurement (temporary, version 2.2) ----------
  * The scroll of the Albums list is slow on the real iPod, also with all thumbnails in memory. The
@@ -886,6 +896,27 @@ COLD static int prefill_one(void)
     return 0;
 }
 
+/* Starts the 100 ms timer of the list for the patch, if the patch did not start it already. The
+ * list uses this timer for the blink of the selected row after a push of Select (0x23b704: method
+ * +0x184, count at list + 0xf8). Thus the patch does not start it shortly after a key push. The
+ * list stops its timer when it is deleted. Its event comes to hook_list_event. */
+COLD static void start_tick(int *list)
+{
+    if (USEC_NOW - key_time < KEY_PAUSE_US)
+        return;
+    if (timer_on && USEC_NOW - timer_started < TIMER_LOST_US)
+        return;
+    timer_on = 1;
+    timer_started = USEC_NOW;
+    timer_start((char *)list + LIST_TIMER);
+}
+
+/* 1: the background fill has work: the artwork mode, the table is made and a slot is free. */
+COLD static int fill_has_work(void)
+{
+    return option_source == SOURCE_ARTWORK && art_state == 1 && slot_owner[art_next] == NO_SLOT;
+}
+
 /* ---------- the draw ---------- */
 
 /* Draws the thumbnail with runs of pixels that have the same colour. Used only if the target
@@ -1169,6 +1200,14 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
         else
             draw_empty(gc, ts, r.top + ((height - ts) >> 1), r.left + 1);
     }
+    /* The list of this album row is visible now: start the tick for the redraw or the fill. */
+    if (id == ALBUM_NAME_ID && album_list && (waiting || fill_has_work())) {
+        int *p = view, k;
+        for (k = 0; k < 4 && p && p != album_list; k++)
+            p = *(int **)((char *)p + VIEW_PARENT);
+        if (p == album_list)
+            start_tick(album_list);       /* only a list that is a parent of this row now */
+    }
 #if ALBUM_ART_STATS
     stat_add(T_ALBUM_ROW, t0);
     if ((stats.t[T_ALBUM_ROW].count & (STATS_EVERY - 1)) == 0)
@@ -1195,16 +1234,44 @@ void hook_label_draw(void *view, const char *text, void *a3)
 
 /* Replaces the event method of the browse-list class (slot +0x30, at 0x6772c0) with "chain": the
  * cover-flow patch hooks the same slot. A wheel step sets `moving`. At the end of the movement
- * (step 0), the list draws again if a row has an empty square. The tick (type 0xd) after
- * MOVE_LIMIT_US without a step does the same, because the real wheel often sends no end event.
- * In the artwork mode, a tick without a redraw makes one thumbnail in the background, if the tick
- * comes to the visible list of the last album row. */
+ * (step 0), the list draws again if a row has an empty square. The real wheel often sends no end
+ * event. Thus the patch also uses the 100 ms timer of the list (and the event type 0xd): a tick
+ * MOVE_LIMIT_US after the last step does the same. In the artwork mode, a tick without a redraw
+ * makes one thumbnail in the background, if it comes to the visible list of the last album row. */
+COLD static void tick(int *list)
+{
+    if (wheel_moves()) {
+        start_tick(list);                 /* wait for 0.3 s without a step */
+    } else if (waiting) {
+        waiting = 0;
+        STAT_COUNT(redraws);
+        view_invalidate(list);            /* the draw starts the tick again if there is more work */
+    } else if (option_source == SOURCE_ARTWORK && list == album_list &&
+               (list[VIEW_FLAGS_WORD] & 0x1800) == 0x800 && prefill_one()) {
+        STAT_COUNT(prefills);
+        start_tick(list);
+    }
+}
+
 int hook_list_event(int *list, int *ev, void *a3, int a4)
 {
+    /* The event of the timer that the patch started: do the work, and do not give it to the list.
+       The list would change the selected row and count down its blink count (from 255 if 0). */
+    if (ev[1] == EV_TIMER && ev[2] == (int)((char *)list + LIST_TIMER) && timer_on) {
+        timer_on = 0;
+        tick(list);
+        return 1;
+    }
+    if (ev[1] == EV_KEY_DOWN || ev[1] == EV_KEY_REPEAT) {
+        key_time = USEC_NOW;              /* the list can start its blink: the timer is for the list */
+        timer_on = 0;
+    }
     if (ev[1] == EV_WHEEL) {
         if (ev[3] != 0) {
             moving = 1;
             step_time = USEC_NOW;
+            if (list == album_list && waiting)
+                start_tick(list);         /* the redraw after the stop, also with the finger on the wheel */
         } else {
             moving = 0;
             STAT_COUNT(ends);
