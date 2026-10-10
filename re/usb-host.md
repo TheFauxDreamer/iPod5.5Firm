@@ -347,6 +347,35 @@ The UI was very slow, and the album art in Now Playing did not load. Already in 
 
 Probe 1.6: one sleep of (frames in front − 24) ms each cycle, and a record of the sleeps and the frames that passed.
 
+## The slow UI (probe 1.6 and 1.7, 2026-10-10)
+
+Probe 1.6 on the real iPod: 1313 sleeps, 14 924 ms requested, 14 991 ms passed: the sleep is exact. But the UI was still slow, the album art did not load, and only 408 of 15 780 packets had sound. The disconnection and connection of the dock froze the iPod.
+
+The sleep 0x11c9fc gives the kernel request 0x14 and then yields (request 0x1c) in a loop until the time is over. The measurement cannot show if the task blocks or yields. Apple's device code blocks on a counting semaphore (0xd1e78 wait, 0xd1e70 signal). The host interrupt handler 0xffd1c clears USBSTS bits 0–1 and posts a message to the UIM task.
+
+Probe 1.7: the last siTD of each set has "interrupt on complete"; a wrapper in front of 0xffd1c signals the endpoint event of the device mode (0x108318ec + 0x14); USBAudioTask waits on that event. A disconnection of the root port, or 200 siTD errors in a row, stops the music and gives the route back to the codec.
+
+## The restart of probe 1.7 (2026-10-10)
+
+The iPod restarted after the tone. The first set with "interrupt on complete" gave a transfer interrupt, and `music_isr` called 0xd1e70 in the interrupt. 0xd1e70 makes a kernel request (0x84644, type 2) when a task waits. The host handler 0xffd1c uses 0xadbdc instead: it puts {function, arguments} into a queue (0x278378), and a task calls the function. Probe 1.8 posts `music_dpc` with 0xadbdc. Emulator: a posted `music_dpc` wakes USBAudioTask.
+
+The owner: the music of probe 1.6 sounded correct. Thus the decoder had enough CPU, and the low count of packets with sound came from the full log (only the first 16 s were logged). Probe 1.8 keeps 96 records for the music.
+
+## The CPU of the music path (probe 1.8 real, emulator profile, 2026-10-10)
+
+Probe 1.8 also restarted the iPod after the tone. The log had the records up to "music route on", thus the restart came after the stream started. The interrupt path is the cause, in 1.7 and 1.8.
+
+The emulator profile (`IPODFW_PROFILE=1`, 15 s of the music route with the 1.6 sleep):
+
+| Block | Part of the instructions | Function |
+|---|---|---|
+| 0x737840 | 19.2 % | `hook_usb_send` of the probe: the copy with the −12 dB shift |
+| 0xc7580 | 5.4 % | USBAudioTask |
+| 0x1e2bc0, 0xd3e80, 0xd3e40 | 6.5 % | Apple's packet pool and fill |
+| 0xa0bc0, 0xa6980, 0x284080 | less than 1 % | the sleep loop 0x11c9fc |
+
+Thus the sleep blocks, and the cost is the work for each 1 ms packet. Probe 1.9 copies whole 32-bit frames, sets the volume on the EarPods (UAC2 SET_CUR volume, feature unit 2 before output terminal 3) and logs the time of its copy and of Apple's packet fill with the microsecond timer (0x60005010, the base of 0x282860).
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).

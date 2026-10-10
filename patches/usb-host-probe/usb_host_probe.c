@@ -94,11 +94,15 @@
 #define TAG_AUDIO_REQUEST        (12 * 4 + 1)
 #define TAG_AUDIO_STREAM         (12 * 4 + 2)
 #define TAG_AUDIO_MEMORY         (12 * 4 + 3)
-#define LOG_RESERVE 16                                  /* the records for the audio test at the end */
+#define LOG_RESERVE 96                                  /* the records for the audio and music tests at the end */
 #define TAG_MUSIC_START          (13 * 4 + 0)
 #define TAG_MUSIC_STATS          (13 * 4 + 1)
 #define TAG_MUSIC_CHAIN          (13 * 4 + 2)
 #define TAG_MUSIC_SLEEP          (13 * 4 + 3)
+#define TAG_MUSIC_STOP           (14 * 4 + 0)
+#define ERROR_STREAK 200                                /* siTD errors in a row: the device is gone */
+#define USEC       (*(volatile unsigned *)0x60005010)   /* the microsecond timer (0x282860) */
+#define VOLUME_DB  (-20)                                /* the volume of the device (UAC2 feature unit) */
 #define AHEAD_LOW  24                                   /* the frames in front after a wait */
 #define AHEAD_HIGH 36                                   /* the frames in front after a send (24 + 12) */
 #define STATS_PACKETS 5000                              /* a status record and a log write each 5 s of music */
@@ -170,6 +174,8 @@ int fw_usb_wait(void *device, int endpoint);           /* 0x24c4cc */
 void fw_event_signal(void *event);                     /* 0xd1e70 */
 void fw_route_usb(void *output, int on);               /* 0x1a2fa0 */
 void fw_rate_convert(void *source, unsigned rate);     /* 0x1e2f60 */
+void fw_route_flush(void *output, int flush);          /* 0x1a2fa8: gives the USB buffers back to the decoder */
+static void music_stop(int reason);
 
 struct record {
     unsigned char magic, tag;
@@ -529,6 +535,8 @@ int hook_port_status(int port, unsigned short *status)
     int r = fw_port_status(port, status);
     /* PORTSC bits 11:10 are the line state. They change all the time during high-speed traffic. */
     unsigned key = status[0] | (unsigned)status[1] << 16, sc = PORTSC1 & ~0xc00u;
+    if (music_mode && !(status[0] & 1))
+        music_stop(1);                                  /* the dock was disconnected */
     if (started && port_logs < PORT_LOGS && (key != last_status || sc != last_portsc)) {
         unsigned regs[4];
         last_status = key;
@@ -567,6 +575,7 @@ static const short sine[48] = {                       /* one period: 1 kHz at 48
 
 struct audio {
     unsigned address, interface, alt, endpoint, packet, clock;
+    unsigned control_interface, volume_unit;            /* the AC interface; the unit before the output terminal */
 };
 
 static volatile unsigned char *dma_page;                /* control QH, qTDs, setup, data, tone buffer */
@@ -587,6 +596,7 @@ static void log_regs(int tag, unsigned r0, unsigned r1, unsigned r2, unsigned r3
 static int parse_audio(const unsigned char *d, unsigned len, struct audio *a)
 {
     unsigned o = 0, cls = 0, sub = 0, proto = 0, ifn = 0, alt = 0, clock = 0, subslot = 0, channels = 0;
+    unsigned control = 0, unit = 0;
     while (o + 2 <= len) {
         const unsigned char *b = d + o;
         unsigned l = b[0], t = b[1];
@@ -600,8 +610,12 @@ static int parse_audio(const unsigned char *d, unsigned len, struct audio *a)
             proto = b[7];
             subslot = channels = 0;
         } else if (t == 0x24 && cls == 1 && proto == 0x20) {
+            if (sub == 1)
+                control = ifn;
             if (sub == 1 && b[2] == 2 && l >= 17 && b[4] == 1 && b[5] == 1)
                 clock = b[7];                           /* input terminal "USB streaming": its clock source */
+            else if (sub == 1 && b[2] == 3 && l >= 12 && !(b[4] == 1 && b[5] == 1))
+                unit = b[7];                            /* output terminal (not USB streaming): its source */
             else if (sub == 2 && b[2] == 1 && l >= 16)
                 channels = b[10];                       /* AS_GENERAL: bNrChannels */
             else if (sub == 2 && b[2] == 2 && l >= 6)
@@ -613,6 +627,8 @@ static int parse_audio(const unsigned char *d, unsigned len, struct audio *a)
             a->endpoint = b[2] & 0xf;
             a->packet = b[4] | b[5] << 8;
             a->clock = clock;
+            a->control_interface = control;
+            a->volume_unit = unit;
             return 0;
         }
         o += l;
@@ -788,7 +804,9 @@ static int audio_test(void)
  * the original functions (the device mode is unchanged). */
 static int last_send;
 static unsigned next_frame, music_packets, music_underruns, music_max_ahead, music_logged, music_sound;
-static unsigned music_sleeps, music_sleep_ms, music_sleep_frames;
+static unsigned music_sleeps;
+static unsigned music_used, music_checked, music_errors, music_streak;
+static unsigned music_send_us, music_fill_us, music_wait_end, music_start_us;
 static volatile unsigned char *music_ring;              /* RING x PACKET_MAX bytes */
 static struct audio music_device;
 
@@ -814,9 +832,11 @@ static void sitd_packet(volatile unsigned *s, unsigned buffer, unsigned length)
 int hook_usb_send(void *device, int endpoint, int count, unsigned char *packets)
 {
     int i;
-    unsigned now, ahead;
+    unsigned now, ahead, start = USEC;
     if (!music_mode)
-        return last_send = fw_usb_send(device, endpoint, count, packets);
+        return last_send = music_used ? 0 : fw_usb_send(device, endpoint, count, packets);
+    if (music_wait_end)
+        music_fill_us += start - music_wait_end;        /* Apple's 12 packets (0x1e3064) and the buffers back */
     DIGITAL_AUDIO_READY = 1;                            /* again, if the firmware cleared it */
     now = frame_now();
     ahead = (next_frame - now) & (FRAMES - 1);
@@ -826,15 +846,18 @@ int hook_usb_send(void *device, int endpoint, int count, unsigned char *packets)
     }
     for (i = 0; i < count; i++) {
         unsigned char *p = packets + 12 * i;
-        const short *in = *(const short **)p;
+        const unsigned *in = *(const unsigned **)p;
         unsigned length = *(unsigned short *)(p + 6), k;
-        volatile short *out = (volatile short *)(music_ring + (next_frame & (RING - 1)) * PACKET_MAX);
+        volatile unsigned *out = (volatile unsigned *)(music_ring + (next_frame & (RING - 1)) * PACKET_MAX);
         if (length > PACKET_MAX)
             length = PACKET_MAX;
-        if (length >= 4 && (in[0] | in[1] | in[length / 2 - 1]))
+        length &= ~3u;
+        if (length >= 4 && (in[0] | in[length / 4 - 1]))
             music_sound++;                              /* a packet that is not silence */
-        for (k = 0; k < length / 2; k++)
-            out[k] = in[k] >> 2;                        /* -12 dB: the digital route has no volume */
+        /* Whole stereo frames (32 bits). The volume is set on the device (VOLUME_DB); version 1.8
+         * shifted each sample, and that loop took 19 % of the CPU in the emulator. */
+        for (k = 0; k < length / 4; k++)
+            out[k] = in[k];
         sitd_packet(sitd + 8 * next_frame, (unsigned)out, length);
         next_frame = (next_frame + 1) & (FRAMES - 1);
         music_packets++;
@@ -842,27 +865,76 @@ int hook_usb_send(void *device, int endpoint, int count, unsigned char *packets)
     ahead = (next_frame - frame_now()) & (FRAMES - 1);
     if (ahead > music_max_ahead && ahead < FRAMES / 2)
         music_max_ahead = ahead;
+    music_send_us += USEC - start;
     return last_send = 0;
 }
 
-/* Wait until AHEAD_LOW frames are in front of the controller, with one sleep. Version 1.5 slept 1 ms
- * many times in each 12 ms; the menus were very slow (the sleep 0x11c9fc yields in a loop until the
- * time is over). Apple's code blocks on an event of the USB interrupt instead. The sleep records count
- * the requested ms and the frames that passed. */
+/* Count the executed siTDs since the last check. ERROR_STREAK errors in a row: the device is gone (for
+ * example the EarPods were disconnected from the dock). */
+static void music_check(void)
+{
+    unsigned now = frame_now(), f;
+    for (f = music_checked; f != now; f = (f + 1) & (FRAMES - 1)) {
+        unsigned status = sitd[8 * f + 3];
+        if (status & 0x80)
+            continue;
+        if (status & 0x7c) {
+            music_errors++;
+            if (++music_streak >= ERROR_STREAK) {
+                music_stop(2);
+                return;
+            }
+        } else {
+            music_streak = 0;
+        }
+    }
+    music_checked = now;
+}
+
+/* Wait until AHEAD_LOW frames are in front of the controller, with one sleep (0x11c9fc). The emulator
+ * profile shows that this sleep blocks: the loop 0xa0be0/0xa69b4 takes less than 1.5 % of the CPU.
+ * Versions 1.7 and 1.8 waited on an event from the USB interrupt; the iPod restarted after the tone. */
 static int music_wait(void *device, int endpoint)
 {
-    unsigned ahead, start;
+    unsigned ahead;
     if (!music_mode)
-        return fw_usb_wait(device, endpoint);
+        return music_used ? 0 : fw_usb_wait(device, endpoint);
     ahead = (next_frame - frame_now()) & (FRAMES - 1);
     if (ahead > AHEAD_LOW && ahead <= FRAMES / 2) {
-        start = frame_now();
         task_sleep(ahead - AHEAD_LOW);
         music_sleeps++;
-        music_sleep_ms += ahead - AHEAD_LOW;
-        music_sleep_frames += (frame_now() - start) & (FRAMES - 1);
     }
+    if (music_mode)
+        music_check();
+    music_wait_end = USEC;
     return 0;
+}
+
+/* Stop the music route: the stream off, the siTDs out of the frame list (their links end), the decoder
+ * buffers back to the codec, and USBAudioTask awake. The hooks then do nothing. reason 1: the root
+ * port lost the connection; 2: ERROR_STREAK siTD errors. */
+static void music_stop(int reason)
+{
+    volatile unsigned char *output = (volatile unsigned char *)AUDIO_OUTPUT;
+    unsigned ctrl = read32(UIM_STATE + 0xc), f;
+    volatile unsigned *frames = (volatile unsigned *)read32(ctrl + 0x44);
+    if (!music_mode)
+        return;
+    USB_AUDIO_STATE[2] = 0;
+    music_mode = 0;
+    for (f = 0; f < FRAMES; f++) {
+        volatile unsigned *sd = sitd + 8 * f;
+        sd[3] = 0;
+        if (ram_address((unsigned)frames) && frames[f] == ((unsigned)sd | 4))
+            frames[f] = sd[0];
+        sd[0] = 1;
+    }
+    if (output) {
+        output[0x59] = 0;
+        fw_route_usb((void *)output, 0);
+        fw_route_flush((void *)output, 1);
+    }
+    log_regs(TAG_MUSIC_STOP, reason, music_packets, music_errors, music_sleeps);
 }
 
 int hook_usb_wait(void *device, int endpoint)
@@ -899,6 +971,13 @@ static void music_start(const struct audio *a)
         rate = 48000;
         control(a->address, 0x21 | 0x01 << 8 | 0x0100 << 16, a->clock << 8 | 4 << 16, 48000, 4);
     }
+    /* The volume on the device: SET_CUR volume (control 2) for channels 1 and 2 of the unit before the
+     * output terminal (the EarPods: feature unit 2), in 1/256 dB. The digital route of the iPod has no
+     * volume. */
+    if (a->volume_unit)
+        for (f = 1; f <= 2; f++)
+            control(a->address, 0x21 | 0x01 << 8 | (0x0200 | f) << 16, a->volume_unit << 8 | a->control_interface | 2 << 16,
+                    (unsigned)(VOLUME_DB * 256) & 0xffff, 2);
     /* The rate of the packets: state + 8 (0x10fbb4), and the output rate of the converter (0x1e2f60,
      * as SET_CUR 0x13249c does). State + 1 = 0: 1000 packets each second (full speed). */
     USB_AUDIO_STATE[1] = 0;
@@ -920,6 +999,9 @@ static void music_start(const struct audio *a)
         }
     }
     next_frame = (frame_now() + 4) & (FRAMES - 1);
+    music_start_us = USEC;
+    music_checked = frame_now();
+    music_used = 1;
     music_mode = 1;
     /* The steps of 0x132274 without the device endpoint (0x24bf74): stream on, the event for
      * USBAudioTask, and the route of the audio output to USB (+0x59, then 0x1a2fa0 sets +0x58 and
@@ -947,7 +1029,7 @@ static void music_stats(void)
              source ? (read32((unsigned)source + 0x5c) & 0xffff) | (read32((unsigned)source + 0x5c) >> 16) << 8
                       | (unsigned)DIGITAL_AUDIO_READY << 16 | (unsigned)*(volatile unsigned char *)0x1081dff4 << 24 : 0,
              source ? (read32((unsigned)source + 4) & 0xffff) | read32((unsigned)source + 0xc) << 16 : 0);
-    log_regs(TAG_MUSIC_SLEEP, music_sleeps, music_sleep_ms, music_sleep_frames, music_max_ahead);
+    log_regs(TAG_MUSIC_SLEEP, music_sleeps, music_send_us / 1000, music_fill_us / 1000, (USEC - music_start_us) / 1000);
     music_logged = music_packets;
 }
 

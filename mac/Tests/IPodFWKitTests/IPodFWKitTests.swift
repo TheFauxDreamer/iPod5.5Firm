@@ -1022,8 +1022,10 @@ final class USBProbeLogTests: XCTestCase {
                        "music route on — 44100 Hz, output flags +0x58 1, +0x59 1, +0x5a 1 (1 = USB), stream 1")
         XCTAssertEqual(USBProbeLog.audioText(53, [60000, 2, 24, 0x0001_0101]),
                        "music — 60000 packets sent (60 s), 2 underruns, 24 packets with sound, route +0x5a 1, stream 1, source +0 1, +1 0 (1 = test signal)")
-        XCTAssertEqual(USBProbeLog.audioText(55, [800, 9600, 9700, 37]),
-                       "waits — 800 sleeps, 9600 ms requested, 9700 frames (ms) passed, at most 37 frames in front")
+        XCTAssertEqual(USBProbeLog.audioText(55, [800, 200, 400, 10000]),
+                       "CPU — 800 sleeps; probe copy 200 ms (2.0 %), Apple packet fill 400 ms (4.0 %) of 10000 ms")
+        XCTAssertEqual(USBProbeLog.audioText(56, [1, 30000, 5, 2500]),
+                       "music stopped — the dock was disconnected, 30000 packets, 5 siTD errors, 2500 sleeps")
         XCTAssertEqual(USBProbeLog.audioText(54, [0, 5, 0x0001_0302, 0xAC44_AC44]),
                        "decoder chain — codec buffers 0, USB buffers 5, queue write 2 read 3, ready flag 0x1081dff6 = 1, flag 0x1081dff4 = 0, music rate 44100 Hz, output rate 44100 Hz")
     }
