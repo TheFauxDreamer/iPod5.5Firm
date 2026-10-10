@@ -288,11 +288,30 @@ Conclusions:
 
 The file of this test also had an old record of the file-mode test after the 8 new records. Its time and its row count were larger, thus the first version of `album-art-stats.py` showed it as a part of the session. The script now also stops at a record where a count decreases.
 
+### Real iPod, artwork mode without the file (10 October 2026)
+
+The owner deleted `iPodFirmAlbumArt`, restarted the iPod and scrolled in Albums. A first attempt without a restart used the thumbnails that were still in memory: after a USB session without the file, the patch keeps the loaded thumbnails. The owner reported: "the scrolling is smooth but almost every album is a grey square initially". The file had 4 records:
+
+| Value | Result |
+|---|---|
+| State | `art_state` 1, `art_count` 326, `file_state` −1, `source` 0, no failed allocation |
+| `build_art` at the first open | 775 ms |
+| Waits / end events / redraws | 768 / 5 / 5 |
+| Fills from the ithmb file | 45 in approximately 1000 album rows |
+| All of an album row | 5707–11640 µs (record 0 includes the table build) |
+
+Conclusions:
+
+1. During a movement, the patch does not read the disk. Thus the scroll is smooth.
+2. A cover shows only after a stop. Thus most rows are grey at first.
+3. The real wheel sent 5 end events in approximately 22 s. Each end event gave a redraw.
+
 ### Open items
 
 1. After the stop, the redraw fills all visible rows in one paint. On the real iPod this is approximately 9 × 22 ms = 0.2 s.
 2. A test on the real iPod without `iPodFirmAlbumArt`: does the real wheel send the end event (+0x0c = 0) at each stop, or only when the finger leaves the wheel?
 3. The colour of the empty square with the dark theme.
+4. A background fill: load one cover for each regular event while the wheel does not move. All 326 covers fit in memory (approximately 7 s of fills). Find a regular event first, for example type 0xd ("Frequent event to all lists" in [cover-flow.md](cover-flow.md)).
 
 ## Next steps for speed (not done)
 
