@@ -1360,6 +1360,23 @@ final class PatchLibraryTests: XCTestCase {
         XCTAssertEqual(library.list().first { $0.spec.name == "sleep-now" }?.source, .builtIn)
     }
 
+    /// A patch with a chained hook and an option passes the examination: the trial link defines the
+    /// chain symbol and finds the variable of the option.
+    func testInspectChainAndOption() throws {
+        let builtIn = try XCTUnwrap(library.list().first { $0.spec.name == "album-art" })
+        let src = builtIn.folder
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: src.appendingPathComponent("patch.json"))) as? [String: Any])
+        json["version"] = "99.0"
+        let c = try inspect(makePatch(json, files: ["album_art.c": String(contentsOf: src.appendingPathComponent("album_art.c"), encoding: .utf8)],
+                                      folder: "album-art"))
+        XCTAssertTrue(c.canInstall, "\(c.errors)")
+        XCTAssertEqual(c.codeSize, builtIn.spec.size)
+        json["options"] = [["id": "source", "title": "T", "symbol": "no_such_variable", "choices": [["value": 0, "title": "A"]]]]
+        let bad = try inspect(makePatch(json, files: ["album_art.c": String(contentsOf: src.appendingPathComponent("album_art.c"), encoding: .utf8)],
+                                        folder: "album-art-bad"))
+        XCTAssertFalse(bad.canInstall)
+    }
+
     func testInstallFolderZipAndRemove() throws {
         let folder = try makePatch(spec("data-patch"))
         let c = try inspect(folder)

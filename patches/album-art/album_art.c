@@ -74,6 +74,8 @@ int file_close(void *fh);
 void log_event(void *log, int event, int value);
 int file_open_rw(void *path_record, void *fh, unsigned buffer, unsigned mode);
 int file_write(void *fh, unsigned *len, const void *buf);
+int list_event(int *list, int *ev, void *a3, int a4);   /* the previous target of the hook (chain) */
+void view_invalidate(void *view);
 
 /* Code that runs once for each load or each label: small code. The pixel loops stay fast. */
 #define COLD __attribute__((minsize))
@@ -109,6 +111,8 @@ int file_write(void *fh, unsigned *len, const void *buf);
 #define DB_TRACK_COUNT 0x1c
 #define DB_TRACKS      0x20               /* the first track */
 #define DB_ALBUM_POOL  0x138
+#define LIBRARY_ALBUMS 0xc60              /* the album list: album pool indexes, without "All" */
+#define LIBRARY_ALBUM_COUNT 0xc6c
 #define TRACK_NEXT     4
 #define TRACK_ALBUM    0x34
 #define TRACK_DBID     0x108
@@ -152,6 +156,21 @@ static unsigned short *slot_owner;        /* the index in `art` of each slot, or
 static unsigned art_slots, art_next;
 static unsigned short *art_buffer;        /* one 100 x 100 image */
 
+/* The albums of the library (the hashes, sorted). The row "All" is not an album. */
+static unsigned *album_hashes;
+static unsigned album_count;
+static int *album_rows;                   /* the album list of the library when the hashes were made */
+static int albums_state;                  /* 0 = not made, 1 = made, -1 = not known */
+
+/* The late fill. While the wheel moves, a row whose thumbnail needs the disk gets an empty square.
+ * The wheel event with the step 0 (the end of the movement) draws the list again. */
+#define EV_WHEEL        0xf               /* word 3: +1 or -1 for each step, 0 at the end */
+#define MOVE_LIMIT_US   500000            /* an older step does not count: the end event can fail */
+#define USEC_NOW        (*(volatile unsigned *)0x60005010)
+static int moving;                        /* 1: the wheel moves (set by hook_list_event) */
+static unsigned step_time;                /* USEC_NOW at the last step */
+static int waiting;                       /* 1: a row has an empty square */
+
 /* ---------- the measurement (temporary, version 2.2) ----------
  * The scroll of the Albums list is slow on the real iPod, also with all thumbnails in memory. The
  * emulator does not show this. With ALBUM_ART_STATS 1, the patch counts and times its parts with
@@ -179,13 +198,13 @@ enum {
 };
 typedef struct { unsigned count, total_us, max_us; } Timer;
 static struct {
-    unsigned magic, version, record, time_us;     /* "AAST", 2, the record number, USEC_TIMER */
+    unsigned magic, version, record, time_us;     /* "AAST", 3, the record number, USEC_TIMER */
     Timer t[T_COUNT];
     unsigned art_hits, art_failed, file_all_hits, file_cache_hits, db_loaded_calls;
     unsigned alloc_failed;                        /* a bit for each allocation that failed */
     unsigned art_state, art_count, art_slots;
     unsigned file_state, file_count, file_size, file_all, file_cache;
-    unsigned write_errors, source;
+    unsigned write_errors, source, waits, ends, redraws;
 } stats;
 
 static void stat_add(int i, unsigned start)
@@ -454,6 +473,79 @@ COLD static unsigned album_hash(char *db, int pool_index, unsigned short *name)
         }
     }
     return h;
+}
+
+COLD static void free_album_hashes(void)
+{
+    fw_free(album_hashes);
+    album_hashes = 0;
+    album_count = 0;
+    album_rows = 0;
+    albums_state = 0;
+}
+
+/* Makes the sorted hashes of the albums of the library. Sets albums_state to 1 or -1. */
+COLD static void make_album_hashes(void)
+{
+    char *library, *db;
+    int *rows;
+    unsigned short *name;
+    unsigned n, i, j, gap;
+
+    free_album_hashes();
+    albums_state = -1;
+    if (!PROVIDER)
+        return;
+    library = lib_resolve(*(void **)(PROVIDER + PROVIDER_LIBRARY));
+    if (!library || !(db = *(char **)(library + LIBRARY_DB)))
+        return;
+    rows = *(int **)(library + LIBRARY_ALBUMS);
+    n = *(unsigned *)(library + LIBRARY_ALBUM_COUNT);
+    if (!rows || n == 0 || n > 0xffff)
+        return;
+    name = alloc(NAME_BYTES, 1024);
+    album_hashes = alloc(n * 4, 2048);
+    if (!name || !album_hashes) {
+        fw_free(name);
+        free_album_hashes();
+        albums_state = -1;
+        return;
+    }
+    for (i = 0; i < n; i++)
+        album_hashes[i] = album_hash(db, rows[i], name);
+    fw_free(name);
+    for (gap = n >> 1; gap > 0; gap >>= 1)        /* shell sort */
+        for (i = gap; i < n; i++) {
+            unsigned v = album_hashes[i];
+            for (j = i; j >= gap && album_hashes[j - gap] > v; j -= gap)
+                album_hashes[j] = album_hashes[j - gap];
+            album_hashes[j] = v;
+        }
+    album_count = n;
+    album_rows = rows;
+    albums_state = 1;
+}
+
+/* 1 if `hash` is an album of the library, or if the albums are not known. 0 for the row "All". */
+COLD static int is_album(unsigned hash)
+{
+    unsigned lo = 0, hi;
+    char *library = PROVIDER ? lib_resolve(*(void **)(PROVIDER + PROVIDER_LIBRARY)) : 0;
+    if (albums_state == 0 || (albums_state == 1 && library &&
+                              (*(int **)(library + LIBRARY_ALBUMS) != album_rows ||
+                               *(unsigned *)(library + LIBRARY_ALBUM_COUNT) != album_count)))
+        make_album_hashes();              /* not made, or the album list changed */
+    if (albums_state != 1)
+        return 1;
+    hi = album_count;
+    while (lo < hi) {
+        unsigned mid = (lo + hi) >> 1;
+        if (album_hashes[mid] < hash)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    return lo < album_count && album_hashes[lo] == hash;
 }
 
 /* The tracks sorted by dbid, with the hash of their album (only while the table is made). */
@@ -828,6 +920,40 @@ COLD static void draw_thumbnail(void *gc, const unsigned short *px, int ts, int 
 
 typedef void (*draw_fn)(void *view, const char *text, void *a3);
 
+/* 1: the thumbnail of the file entry is in memory (no disk read). */
+COLD static int file_in_memory(const Entry *e)
+{
+    int i;
+    if (all_pixels)
+        return 1;
+    for (i = 0; i < CACHE_SLOTS; i++)
+        if (cache_hash[i] == e->hash && e->hash != 0)
+            return 1;
+    return 0;
+}
+
+/* 1: the wheel moved in the last MOVE_LIMIT_US. */
+COLD static int wheel_moves(void)
+{
+    if (moving && USEC_NOW - step_time >= MOVE_LIMIT_US)
+        moving = 0;
+    return moving;
+}
+
+/* An empty square in place of a thumbnail that comes later. */
+COLD static void draw_empty(void *gc, int ts, int top, int left)
+{
+    static const unsigned char grey[4] = { 0x80, 0x80, 0x80, 0xff };
+    Rect q;
+    q.top = top;
+    q.left = left;
+    q.bottom = top + ts;
+    q.right = left + ts;
+    gc_set_mode(gc, 0);
+    gc_set_color(gc, grey);
+    gc_fill_rect(gc, &q);
+}
+
 #if ALBUM_ART_STATS
 /* Writes one record of the measurement to STATS_PATH at the offset of the record. */
 COLD static void write_stats(void)
@@ -835,7 +961,7 @@ COLD static void write_stats(void)
     unsigned path[0x108 / 4], fh[0x30 / 4], len = sizeof stats, offset;
     int err;
     stats.magic = 0x54534141u;            /* "AAST" */
-    stats.version = 2;                    /* 2: with `source` (version 2.3 of the patch) */
+    stats.version = 3;                    /* 3: with `source` and the late fill (version 2.4) */
     stats.time_us = USEC_TIMER;
     stats.art_state = (unsigned)art_state;
     stats.art_count = art_count;
@@ -896,7 +1022,7 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
     const unsigned short *px = 0;
     const Entry *e;
     unsigned h = 0;
-    int height, *left, i, n, ts = 0;
+    int height, *left, i, n, ts = 0, wait = 0, busy;
     unsigned id = *(unsigned short *)((char *)view + VIEW_ELEMENT_ID);
     unsigned t0 = STAT_NOW(), t1;
 
@@ -909,6 +1035,7 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
     if (db_loaded) {
         db_loaded = 0;
         art_state = 0;
+        free_album_hashes();
         if (state == 1)
             check_for_new_file();
         else if (state == -1)
@@ -927,24 +1054,50 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
             h = slot_hash[i];
         }
     }
+    /* While the wheel moves, a thumbnail that needs the disk waits (`wait`): the row gets an
+       empty square, and the end of the movement draws the list again. */
+    busy = h ? wheel_moves() : 0;
     if (h && option_source == SOURCE_FILE && (e = find(h)) != 0) {
-        px = pixels(e);
         ts = (int)size;
+        if (busy && !file_in_memory(e))
+            wait = 1;
+        else
+            px = pixels(e);
     }
-    if (h && !px && id == ALBUM_NAME_ID) {
-        if (art_state == 0)
-            build_art();                  /* only if an album needs the artwork */
-        if ((n = art_find(h)) >= 0) {
-            px = art_thumb(n);
+    /* In the file mode, the row "All" is not in the file: it must not make the album table. */
+    if (h && !px && !wait && id == ALBUM_NAME_ID && (option_source != SOURCE_FILE || is_album(h))) {
+        if (art_state == 0 && busy) {
+            wait = 1;                     /* make the table after the movement */
             ts = TH;
+        } else {
+            if (art_state == 0)
+                build_art();              /* only if an album needs the artwork */
+            if ((n = art_find(h)) >= 0) {
+                ts = TH;
+                if (busy && art[n].slot >= art_slots && art[n].slot != FAILED)
+                    wait = 1;
+                else
+                    px = art_thumb(n);
+            }
         }
     }
     if (h && !px && option_source != SOURCE_FILE && (e = find(h)) != 0) {
-        px = pixels(e);
-        ts = (int)size;
+        if (busy && !file_in_memory(e)) {
+            wait = 1;
+            ts = (int)size;
+        } else {
+            px = pixels(e);
+            ts = (int)size;
+            wait = 0;                     /* the file has the thumbnail in memory */
+        }
     }
+    if (wait && !px) {
+        waiting = 1;
+        STAT_COUNT(waits);
+    } else
+        wait = 0;
     /* A list row has the height of the thumbnail and a margin. */
-    if (!px || height < ts || height > ts + 12) {
+    if ((!px && !wait) || height < ts || height > ts + 12) {
         t1 = STAT_NOW();
         original(view, text, a3);
         STAT_ADD(T_ORIGINAL_PLAIN, t1);
@@ -956,7 +1109,10 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
         STAT_ADD(T_ORIGINAL_SHIFTED, t1);
         *left -= ts + GAP;
         gc_prepare(view, gc);             /* set the origin and the clip for the original bounds */
-        draw_thumbnail(gc, px, ts, r.top + ((height - ts) >> 1), r.left + 1);
+        if (px)
+            draw_thumbnail(gc, px, ts, r.top + ((height - ts) >> 1), r.left + 1);
+        else
+            draw_empty(gc, ts, r.top + ((height - ts) >> 1), r.left + 1);
     }
 #if ALBUM_ART_STATS
     stat_add(T_ALBUM_ROW, t0);
@@ -980,6 +1136,28 @@ void hook_label_draw(void *view, const char *text, void *a3)
         return;
     }
     draw_with_thumbnail(label_draw, view, text, a3);
+}
+
+/* Replaces the event method of the browse-list class (slot +0x30, at 0x6772c0) with "chain": the
+ * cover-flow patch hooks the same slot. A wheel step sets `moving`. At the end of the movement
+ * (step 0), the list draws again if a row has an empty square. */
+int hook_list_event(int *list, int *ev, void *a3, int a4)
+{
+    if (ev[1] == EV_WHEEL) {
+        if (ev[3] != 0) {
+            moving = 1;
+            step_time = USEC_NOW;
+        } else {
+            moving = 0;
+            STAT_COUNT(ends);
+            if (waiting) {
+                waiting = 0;
+                STAT_COUNT(redraws);
+                view_invalidate(list);
+            }
+        }
+    }
+    return list_event(list, ev, a3, a4);
 }
 
 /* Replaces the call at 0xb4ad4 in the music database load: log_event(log, 0xf, 0). */

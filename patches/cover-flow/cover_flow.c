@@ -36,7 +36,7 @@
 typedef struct { int top, left, bottom, right; } Rect;
 
 /* Firmware functions (addresses are in patch.json). */
-int list_event(int *list, int *ev, void *a3, int a4);
+int list_event(int *list, int *ev, void *a3, int a4);   /* the previous target of the hook (chain) */
 int ui_event(void *ui, int *ev);
 int display_damage(void *unused, Rect *r, int zero);
 void *display_server(void);

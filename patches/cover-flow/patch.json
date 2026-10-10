@@ -5,7 +5,7 @@
   "symbol": "square.stack.3d.forward.dottedline",
   "category": "display",
   "version_letter": "c",
-  "version": "0.6",
+  "version": "0.6.1",
   "size": 10676,
   "description": "Shows the album covers as Cover Flow. Hold the Select button in the Albums list to open it.",
   "details": ["Hold the Select button in the Albums list for half a second. Cover Flow opens at the selected album.", "Turn the click wheel to move through the covers. The covers move smoothly, and each step gives the click of the lists.", "The album name and the artist show below the covers, in the font of the iPod.", "Push Select to open the album at the centre.", "Push Menu to go back to the Albums list.", "A short push of Select in the list opens the album as usual.", "The background is white with the light theme and black with Dark Mode."],
@@ -17,7 +17,6 @@
   ],
   "load_address": "extended",
   "symbols": {
-    "list_event": "0x23b704",
     "ui_event": "0x1d81cc",
     "display_damage": "0x17ef98",
     "display_server": "0x1647c0",
@@ -46,7 +45,8 @@
     "file_close": "0x08f184"
   },
   "hooks": [
-    { "kind": "word", "at": "0x6772c0", "expect": "0x0023b704", "to": "hook_list_event" },
+    { "kind": "word", "at": "0x6772c0", "expect": "0x0023b704", "to": "hook_list_event",
+      "chain": "list_event" },
     { "kind": "word", "at": "0x6701f0", "expect": "0x001d81cc", "to": "hook_ui_event" },
     { "kind": "word", "at": "0x17ef8c", "expect": "0x0017ef98", "to": "hook_display_damage" }
   ]

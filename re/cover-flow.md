@@ -310,3 +310,9 @@ Version 0.6:
 - 0x23b704 handles a timer event of its own timer with the repeat count at list + 0xf8. With a count of 0 it would count down from 255 and repeat the key action. The patch swallows such an event after the close.
 
 Emulator times of version 0.6: 18–19 ms for each frame without a cover load (about 53 frames each second), about 40 ms with a load. A single step took 5 frames.
+
+## Version 0.6.1: a chain on the list event (10 October 2026)
+
+`album-art` 2.4 also hooks the event method of the browse list (0x6772c0) for its late fill. Two hooks on one word need `chain` ([../docs/patch-system.md](../docs/patch-system.md#hook-chains)). Version 0.6.1 gives its hook `"chain": "list_event"`. The code does not change: the patcher gives the symbol `list_event` the previous target. Without `album-art`, this target is 0x23b704. With `album-art`, it is the hook of `album-art` (the build applies the patches sorted by name).
+
+Emulator test with `album-art` 2.4: a hold of Select opened Cover Flow, the wheel moved the covers, and Menu went back to the Albums list. Refer to [album-art-v2.md](album-art-v2.md), "Version 2.4".

@@ -233,7 +233,9 @@ Two patches cannot change the same word without a chain. A hook with `chain` can
 
 Each other value is an error. The patcher links the patch two times: the first link gives the address of `chain_default`, and the second link uses the `chain` values. `Patcher.chainTarget` (Python `chain_target`) has the rules.
 
-A hook with `chain` is not a conflict in `Patcher.conflicts`. The patch must be applied after the patches that it chains to. The build applies the Dark Mode build first, then the patches sorted by name. A hook without `chain` on the same word must come first. [something_comforting.c](../patches/something-comforting/something_comforting.c) is an example: it chains to the three Dark Mode hooks.
+A hook with `chain` is not a conflict in `Patcher.conflicts`. The patch must be applied after the patches that it chains to. The build applies the Dark Mode build first, then the patches sorted by name. A hook without `chain` on the same word must come first. [something_comforting.c](../patches/something-comforting/something_comforting.c) is an example: it chains to the three Dark Mode hooks. `album-art` and `cover-flow` both chain on 0x6772c0, the event method of the browse list.
+
+The install examination links a patch one time to find undefined symbols. It gives each `chain` symbol the value 0, because only the build knows the real target (`PatchLibrary.validate`, as `Patcher.codeSize`).
 
 ### Settings items
 
@@ -288,7 +290,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `flash-keep-awake` | 0x736644 | 0x736644–0x736700 (188 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
 | `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F0000 | The value 0x7eb000 in `patch.json` is not used. |
-| `album-art` | `extended` | After all other data (9356 bytes). Alone: 0x736800–0x738c8c. The album table, the thumbnails and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
+| `album-art` | `extended` | After all other data (11116 bytes). Alone: 0x736800–0x73936c. The album table, the thumbnails and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
 | `usb-host-probe` | `extended` | After all other data (8740 bytes; the 32 KB log buffer comes from the allocator) | Extended patch. Test patch. |
 | `something-comforting` | `extended` | After all other data (692 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736ab4, menu at 0x737000, osos end 0x737800 | Extended patch. Example patch. |
 | `cover-flow` | `extended` | After all other data (10676 bytes; approximately 600 KB for the screen copy, the covers and the read buffer come from the allocator while Cover Flow shows) | Extended patch. |

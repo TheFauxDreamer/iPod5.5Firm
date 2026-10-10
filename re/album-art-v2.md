@@ -193,6 +193,21 @@ The patcher writes the value into the variable `option_source`. In both modes, t
 
 Emulator test on 9 October 2026 with `source` 1 and the FolderLibrary (138 albums, `iPodFirmAlbumArt` with 138 thumbnails): each album row used the file (`file_all_hits`). There was no fill from the ithmb file. An album row took 1592–2426 µs, the same as the firmware draw. `build_art` still ran one time (37 ms): the row "All" is not in the file, thus the patch looked for it in the artwork.
 
+### Results on the real iPod (10 October 2026)
+
+The owner flashed version 2.3 with "iPodFirm Thumbnail File" and reported a much better scroll. The file had 6 records:
+
+| Value | Result |
+|---|---|
+| State | `art_count` 326, `file_count` 327, `file_all` 1, `source` 1, no failed allocation |
+| Album rows that used the file | Approximately 1500 |
+| Fills from the ithmb file | 1 (27 ms): an album that is not in the file |
+| All of an album row | 5962–7439 µs |
+| The original draw of an album row | 5519–7107 µs |
+| `build_art` | 775 ms, one time: the row "All" is not in the file |
+
+Version 2.4 removes the table build for the row "All" (refer to "Version 2.4" below).
+
 ## Research: a late fill with the wheel event (9 October 2026)
 
 The aim is a smooth scroll in the mode "iPod Artwork". Cover Flow 0.6 loads at most one cover in each frame, and loads the next covers when the movement stops ([cover-flow.md](cover-flow.md), "Version 0.6").
@@ -221,13 +236,29 @@ Emulator test with the FolderLibrary without `iPodFirmAlbumArt`. The script scro
 
 During the scroll, the rows showed grey squares. After the stop, the visible rows showed their covers. An album that went past during a fast scroll had no fill.
 
-### Open items for version 2.4
+## Version 2.4: the late fill (10 October 2026)
 
-1. Cover Flow also hooks 0x6772c0 without `chain`. Both patches must use `chain` on this word. Then Cover Flow needs a new version.
-2. If the end event does not come (for example a screen change during a movement), `moving` stays 1. Use a time limit: a step that is older than approximately 0.5 s does not count.
-3. After the stop, the redraw fills all visible rows in one paint. On the real iPod this is approximately 9 × 22 ms = 0.2 s.
-4. A test on the real iPod: does the real wheel send the end event (+0x0c = 0)?
-5. The colour of the empty square with the dark theme.
+Version 2.4 has the late fill of the prototype, with these changes:
+
+1. The hook on 0x6772c0 has `"chain": "list_event"`. `cover-flow` 0.6.1 also has `chain` on this word. The build applies `album-art` first, thus Cover Flow calls the hook of `album-art`, and that hook calls 0x23b704.
+2. A step that is older than 0.5 s (`MOVE_LIMIT_US`) does not count as a movement. Thus a missing end event cannot stop the fills.
+3. The table build also waits during a movement.
+4. In the artwork mode, a row that waits uses the file if the file has the thumbnail in memory.
+5. In the file mode, a name that is not in the file makes the table only if the album list of the library has it (library + 0xc60, count at + 0xc6c; 0x9c9fc reads it). The row "All" is not in that list.
+
+Emulator tests on 10 October 2026 (FolderLibrary, 138 albums, with `cover-flow` 0.6.1):
+
+| Test | Result |
+|---|---|
+| Artwork mode, no `iPodFirmAlbumArt` | 1336 waits, 4 end events, 4 redraws, 26 fills. Grey squares during the scroll, covers after the stop. |
+| Cover Flow with `album-art` 2.4 | Hold of Select opened Cover Flow. The wheel moved the covers. Menu went back to the Albums list with the thumbnails. |
+| File mode, with `iPodFirmAlbumArt` | `art_state` 0: no table build, no fill, no wait. |
+
+### Open items
+
+1. After the stop, the redraw fills all visible rows in one paint. On the real iPod this is approximately 9 × 22 ms = 0.2 s.
+2. A test on the real iPod: does the real wheel send the end event (+0x0c = 0)?
+3. The colour of the empty square with the dark theme.
 
 ## Next steps for speed (not done)
 

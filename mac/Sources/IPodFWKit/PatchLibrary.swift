@@ -212,6 +212,7 @@ public struct PatchLibrary {
             do {
                 var fw = [String: UInt32]()
                 for (k, v) in spec.symbols ?? [:] { fw[k] = try Patcher.hex(v) }
+                for h in spec.hooks ?? [] { if let c = h.chain { fw[c] = 0 } }   // the build gives the real target
                 var (code, table) = try Patcher.link(try Patcher.objectCode(c.folder), base: Self.trialBase, firmware: fw)
                 c.codeSize = code.count
                 try Patcher.setOptions(spec, values: [:], in: &code, base: Self.trialBase, symbols: table)
