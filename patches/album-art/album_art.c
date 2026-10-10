@@ -156,8 +156,10 @@ static unsigned short *slot_owner;        /* the index in `art` of each slot, or
 static unsigned art_slots, art_next;
 static unsigned short *art_buffer;        /* one 100 x 100 image */
 
-/* The albums of the library (the hashes, sorted). The row "All" is not an album. */
+/* The albums of the library: the hashes in the order of the list (row_hash) and sorted
+ * (album_hashes). The row "All" is not an album. */
 static unsigned *album_hashes;
+static unsigned *row_hash;
 static unsigned album_count;
 static int *album_rows;                   /* the album list of the library when the hashes were made */
 static int albums_state;                  /* 0 = not made, 1 = made, -1 = not known */
@@ -165,11 +167,16 @@ static int albums_state;                  /* 0 = not made, 1 = made, -1 = not kn
 /* The late fill. While the wheel moves, a row whose thumbnail needs the disk gets an empty square.
  * The wheel event with the step 0 (the end of the movement) draws the list again. */
 #define EV_WHEEL        0xf               /* word 3: +1 or -1 for each step, 0 at the end */
-#define MOVE_LIMIT_US   500000            /* an older step does not count: the end event can fail */
+#define EV_TICK         0xd               /* comes to the lists approximately each 240 ms */
+#define MOVE_LIMIT_US   300000            /* an older step does not count: the end event can fail */
+#define BROWSE_LIST_CLASS 0x677290         /* vtable of a browse list (the Albums list) */
+#define VIEW_FLAGS_WORD 8                 /* word index: bits 0x1800 are 0x800 if the view is visible */
 #define USEC_NOW        (*(volatile unsigned *)0x60005010)
 static int moving;                        /* 1: the wheel moves (set by hook_list_event) */
 static unsigned step_time;                /* USEC_NOW at the last step */
 static int waiting;                       /* 1: a row has an empty square */
+static unsigned last_album_hash;          /* the last album row that was drawn */
+static int *album_list;                   /* the browse list of that row (only compared, not read) */
 
 /* ---------- the measurement (temporary, version 2.2) ----------
  * The scroll of the Albums list is slow on the real iPod, also with all thumbnails in memory. The
@@ -198,13 +205,13 @@ enum {
 };
 typedef struct { unsigned count, total_us, max_us; } Timer;
 static struct {
-    unsigned magic, version, record, time_us;     /* "AAST", 3, the record number, USEC_TIMER */
+    unsigned magic, version, record, time_us;     /* "AAST", 4, the record number, USEC_TIMER */
     Timer t[T_COUNT];
     unsigned art_hits, art_failed, file_all_hits, file_cache_hits, db_loaded_calls;
     unsigned alloc_failed;                        /* a bit for each allocation that failed */
     unsigned art_state, art_count, art_slots;
     unsigned file_state, file_count, file_size, file_all, file_cache;
-    unsigned write_errors, source, waits, ends, redraws;
+    unsigned write_errors, source, waits, ends, redraws, prefills;
 } stats;
 
 static void stat_add(int i, unsigned start)
@@ -478,7 +485,9 @@ COLD static unsigned album_hash(char *db, int pool_index, unsigned short *name)
 COLD static void free_album_hashes(void)
 {
     fw_free(album_hashes);
+    fw_free(row_hash);
     album_hashes = 0;
+    row_hash = 0;
     album_count = 0;
     album_rows = 0;
     albums_state = 0;
@@ -505,14 +514,15 @@ COLD static void make_album_hashes(void)
         return;
     name = alloc(NAME_BYTES, 1024);
     album_hashes = alloc(n * 4, 2048);
-    if (!name || !album_hashes) {
+    row_hash = alloc(n * 4, 4096);
+    if (!name || !album_hashes || !row_hash) {
         fw_free(name);
         free_album_hashes();
         albums_state = -1;
         return;
     }
     for (i = 0; i < n; i++)
-        album_hashes[i] = album_hash(db, rows[i], name);
+        row_hash[i] = album_hashes[i] = album_hash(db, rows[i], name);
     fw_free(name);
     for (gap = n >> 1; gap > 0; gap >>= 1)        /* shell sort */
         for (i = gap; i < n; i++) {
@@ -526,15 +536,21 @@ COLD static void make_album_hashes(void)
     albums_state = 1;
 }
 
-/* 1 if `hash` is an album of the library, or if the albums are not known. 0 for the row "All". */
-COLD static int is_album(unsigned hash)
+/* Makes the album hashes if they are not made, or if the album list of the library changed. */
+COLD static void albums_ready(void)
 {
-    unsigned lo = 0, hi;
     char *library = PROVIDER ? lib_resolve(*(void **)(PROVIDER + PROVIDER_LIBRARY)) : 0;
     if (albums_state == 0 || (albums_state == 1 && library &&
                               (*(int **)(library + LIBRARY_ALBUMS) != album_rows ||
                                *(unsigned *)(library + LIBRARY_ALBUM_COUNT) != album_count)))
-        make_album_hashes();              /* not made, or the album list changed */
+        make_album_hashes();
+}
+
+/* 1 if `hash` is an album of the library, or if the albums are not known. 0 for the row "All". */
+COLD static int is_album(unsigned hash)
+{
+    unsigned lo = 0, hi;
+    albums_ready();
     if (albums_state != 1)
         return 1;
     hi = album_count;
@@ -842,6 +858,34 @@ COLD static const unsigned short *art_thumb(int n)
     return art_pixels + s * TH * TH;
 }
 
+/* The background fill: makes one thumbnail that is not in memory. It starts at the last album
+ * row that was drawn and goes up and down the album list. Returns 1 if it read a cover. */
+COLD static int prefill_one(void)
+{
+    int c, k, i, n, count2;
+    if (art_state != 1 || slot_owner[art_next] != NO_SLOT)
+        return 0;                         /* no table, or the memory is full: do not push out covers */
+    albums_ready();
+    if (albums_state != 1)
+        return 0;
+    for (c = 0; c < (int)album_count && row_hash[c] != last_album_hash; c++)
+        ;
+    if (c == (int)album_count)
+        c = 0;
+    count2 = 2 * (int)album_count;
+    for (k = 0; k < count2; k++) {
+        i = (k & 1) ? c - ((k + 1) >> 1) : c + (k >> 1);    /* c, c - 1, c + 1, c - 2, ... */
+        if (i < 0 || i >= (int)album_count)
+            continue;
+        n = art_find(row_hash[i]);
+        if (n >= 0 && art[n].slot == NO_SLOT) {
+            art_thumb(n);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* ---------- the draw ---------- */
 
 /* Draws the thumbnail with runs of pixels that have the same colour. Used only if the target
@@ -961,7 +1005,7 @@ COLD static void write_stats(void)
     unsigned path[0x108 / 4], fh[0x30 / 4], len = sizeof stats, offset;
     int err;
     stats.magic = 0x54534141u;            /* "AAST" */
-    stats.version = 3;                    /* 3: with `source` and the late fill (version 2.4) */
+    stats.version = 4;                    /* 4: with the background fill (version 2.5) */
     stats.time_us = USEC_TIMER;
     stats.art_state = (unsigned)art_state;
     stats.art_count = art_count;
@@ -1057,6 +1101,17 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
     /* While the wheel moves, a thumbnail that needs the disk waits (`wait`): the row gets an
        empty square, and the end of the movement draws the list again. */
     busy = h ? wheel_moves() : 0;
+    if (h && id == ALBUM_NAME_ID) {
+        int *p = view, k;
+        last_album_hash = h;
+        for (k = 0; k < 4 && p; k++) {    /* the label, its cell, ..., the list */
+            p = *(int **)((char *)p + VIEW_PARENT);
+            if (p && *(unsigned *)p == BROWSE_LIST_CLASS) {
+                album_list = p;
+                break;
+            }
+        }
+    }
     if (h && option_source == SOURCE_FILE && (e = find(h)) != 0) {
         ts = (int)size;
         if (busy && !file_in_memory(e))
@@ -1140,7 +1195,10 @@ void hook_label_draw(void *view, const char *text, void *a3)
 
 /* Replaces the event method of the browse-list class (slot +0x30, at 0x6772c0) with "chain": the
  * cover-flow patch hooks the same slot. A wheel step sets `moving`. At the end of the movement
- * (step 0), the list draws again if a row has an empty square. */
+ * (step 0), the list draws again if a row has an empty square. The tick (type 0xd) after
+ * MOVE_LIMIT_US without a step does the same, because the real wheel often sends no end event.
+ * In the artwork mode, a tick without a redraw makes one thumbnail in the background, if the tick
+ * comes to the visible list of the last album row. */
 int hook_list_event(int *list, int *ev, void *a3, int a4)
 {
     if (ev[1] == EV_WHEEL) {
@@ -1155,6 +1213,15 @@ int hook_list_event(int *list, int *ev, void *a3, int a4)
                 STAT_COUNT(redraws);
                 view_invalidate(list);
             }
+        }
+    } else if (ev[1] == EV_TICK && !wheel_moves()) {
+        if (waiting) {
+            waiting = 0;
+            STAT_COUNT(redraws);
+            view_invalidate(list);
+        } else if (option_source == SOURCE_ARTWORK && list == album_list &&
+                   (list[VIEW_FLAGS_WORD] & 0x1800) == 0x800 && prefill_one()) {
+            STAT_COUNT(prefills);
         }
     }
     return list_event(list, ev, a3, a4);

@@ -306,12 +306,32 @@ Conclusions:
 2. A cover shows only after a stop. Thus most rows are grey at first.
 3. The real wheel sent 5 end events in approximately 22 s. Each end event gave a redraw.
 
+## Version 2.5: the background fill (10 October 2026)
+
+The event type 0xd comes to the browse lists approximately each 240 ms (emulator: mean gap 238 ms, 126 events in 30 s), also while the wheel does not move. The longest gap was 30 s. Version 2.5 uses it as a tick in the hook on 0x6772c0:
+
+1. If the last step is older than 0.3 s (`MOVE_LIMIT_US`) and a row has an empty square, the list draws again. Thus a stop without an end event also fills the rows.
+2. Else, in the artwork mode, if the tick comes to the visible list of the last album row, the patch makes one thumbnail that is not in memory (`prefill_one`). It starts at the last album row and goes up and down the album list of the library (library + 0xc60). It stops when the next slot has a thumbnail, thus it does not push covers out of memory.
+3. At each album row, the patch keeps the browse list of the row (the first parent with the vtable 0x677290). The tick compares the list only. It does not read the kept pointer, thus a deleted list is not a risk. The visible flag is the same as in `cover-flow` (view word 8, bits 0x1800 = 0x800).
+
+A first version used "an album row was drawn in the last 2 s" to find a visible album list. It gave no fill: a list that does not move draws no rows.
+
+Emulator test (FolderLibrary without `iPodFirmAlbumArt`, with `cover-flow` 0.6.1, the scrolls of the 2.4 test and then 40 s without input):
+
+| Value | Version 2.4 | Version 2.5 |
+|---|---|---|
+| Waits | 1336 | 892 |
+| Background fills | — | 112 |
+| Fills in total | 26 | 138 (all albums) |
+
+After the 40 s, a fast scroll of 300 detents showed a cover in each row. On the real iPod, one fill takes approximately 22 ms. At one fill for each tick, the 326 covers of the owner need approximately 80 s on the Albums list.
+
 ### Open items
 
 1. After the stop, the redraw fills all visible rows in one paint. On the real iPod this is approximately 9 × 22 ms = 0.2 s.
 2. A test on the real iPod without `iPodFirmAlbumArt`: does the real wheel send the end event (+0x0c = 0) at each stop, or only when the finger leaves the wheel?
 3. The colour of the empty square with the dark theme.
-4. A background fill: load one cover for each regular event while the wheel does not move. All 326 covers fit in memory (approximately 7 s of fills). Find a regular event first, for example type 0xd ("Frequent event to all lists" in [cover-flow.md](cover-flow.md)).
+4. The background fill on the real iPod (version 2.5): does type 0xd come at the same rate? How long until all covers are in memory?
 
 ## Next steps for speed (not done)
 

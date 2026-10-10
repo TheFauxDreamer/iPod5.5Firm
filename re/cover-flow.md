@@ -111,7 +111,7 @@ Event types (emulator). Measure the time with `USEC_TIMER` (0x60005010), not wit
 | 6 | Key held | 0.5 s after the push (emulated `USEC_TIMER`). Goes to the UI handler 0x1d81cc, not to the list. |
 | 7 | Key release | Goes to the UI handler, not to the list. |
 | 9 | Timer of the list | About every 0.1 s while a key is held. |
-| 0xd | Frequent event to all lists | Not used by the patch. |
+| 0xd | Frequent event to all lists | Approximately each 240 ms, also while the wheel does not move (emulator, 10 October 2026). `album-art` 2.5 uses it as a tick. Not used by Cover Flow. |
 | 0xf | Wheel (vtable 0x677aec) | +0x0c is +1 or −1 for each step, 0 at the end of a movement. |
 | 0x10 | Wheel scroll in a menu | In the menu lists, not in the Albums list. |
 | 0x19 | Property change | +0x08 is the tag. "LstS" (0x4c737453): the list +0x0c has the selected row +0x14. |
