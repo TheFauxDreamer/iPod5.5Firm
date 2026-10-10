@@ -319,6 +319,34 @@ Results:
 - The EarPods accept SET_CUR 48000 Hz on clock source 9.
 - The siTDs in all 1024 frames, before the old entries, did not disturb the dock's hub or the storage device.
 
+## Stage 4: the music path (Ghidra, 2026-10-10)
+
+The firmware has a USB audio source for accessories (refer to [usb-audio.md](usb-audio.md)). Its parts:
+
+- The audio output object (0x1a3070, RAM 0x108236a8) gives each decoder buffer to the codec, or to the USB source if +0x5a is 1 (0x1a2d60). +0x5a is +0x58 (USB stream on, 0x1a2fa0) and +0x59 (the route allowed, 0x1e6640 after the iAP conditions 0x1e61c0).
+- The USB source object (0x1e30d0, RAM 0x10831964) keeps 6 decoder buffers in a queue and converts the rate (0x1e2de0, 0x1e2f60). 0x1e3064 fills a packet; an empty queue gives silence.
+- USBAudioTask (0xc75cc) waits for the event at state + 0x18 (state RAM 0x108234ec), then runs 0x132038: 12 packets, send, wait, give back the earlier set.
+
+The probe 1.4 uses this path without the device side: it sets state + 2, signals the event, sets +0x59 and calls 0x1a2fa0. Hooks on the send and wait calls in 0x132038 put the packets into the siTDs. Emulator: the route and the hooks operate, but the emulator has no audio, thus the packets were silence.
+
+## The music test (probe 1.4 real, 1.5 emulator, 2026-10-10)
+
+Probe 1.4 on the real iPod: SET_INTERFACE and SET_CUR 44100 correct; the route went to USB (+0x5a = 1); 42 204 packets, 0 underruns. But no music: the song stayed at 0:00, the album art did not load, and the menus were slow.
+
+The cause, from the machine code of 0x1e3064: the packet comes from the queue only if source + 0 is 0 and 0x1e2f74 returns 1. Else r3 = 1, and 0x1e2c90 gives silence and leaves the queue. With source + 8 = 0, 0x1e2f74 returns 0 while the byte at 0x1081dff6 is 0. An iAP "Digital Audio" accessory sets this byte. Thus the decoder gave its first 2 buffers, they were never taken, and the decoder waited.
+
+The slow menus: probe 1.4 wrote the 32 KB log at almost each wheel event after 2 s of music.
+
+Probe 1.5 sets 0x1081dff6 = 1, writes the log at most each 5 s of music, and logs the decoder chain. Emulator: the queue indices move (write 5 read 3, then write 1 read 5), 47 packets with sound, and the player went to the next songs. The emulator decodes too slowly for a full stream.
+
+## The music plays (probe 1.5, 2026-10-10)
+
+The owner heard the music in the USB-C EarPods. Status records: 38 892 packets, 0 underruns, 1406 packets with sound; USB buffers 2, the queue moved, ready flag 1, 44 100 Hz without conversion.
+
+The UI was very slow, and the album art in Now Playing did not load. Already in probe 1.4, with the decoder stopped, the UI was slow; thus the cause is in the USBAudioTask loop, not in the decoder. The sleep 0x11c9fc (0xa0df0) is a kernel delay (0x84644 request 0x14), then a loop of 0xa0be0 (the time passed?) and 0xa69b4 (request 0x1c, a yield) until the time is over. The probe called it with 1 ms many times in each 12 ms. Apple's device code blocks on an event of the USB interrupt instead (0xd1e78).
+
+Probe 1.6: one sleep of (frames in front − 24) ms each cycle, and a record of the sleeps and the frames that passed.
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).

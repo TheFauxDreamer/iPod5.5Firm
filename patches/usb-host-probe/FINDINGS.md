@@ -26,7 +26,8 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 | Photo import screen | Accepts the storage | 0.1.72: the screen did not say "unsupported device" but a text like "ready for SD card" (the owner did not remember the exact words). Probably the dock's own empty card slot (2537:1081) or a state before the card was ready. Not examined further; it is not necessary for audio. |
 | Configuration of the USB-C EarPods | **Read** | 2026-10-08 (iPodFirm 0.1.79): the composite driver took the EarPods (class EF/02), read the configuration and set configuration 1. USB Audio Class 2, full speed, a synchronous isochronous OUT endpoint. Refer to "The USB-C EarPods" below. |
 | An audio device (Apple USB-C EarPods) through the dock | **Enumerated; driver with the probe** | 2026-10-08: 05AC:110B, USB 2.01, device class EF/02/01 (interface association), packet size 64, address 106, full speed. "Add device" ran, but no class driver accepted the device. The configuration descriptor was not read. |
-| Isochronous transfers | **Works (probe 1.3, 2026-10-10): a 1 kHz tone in the USB-C EarPods, 5105 frames, 0 errors** | The UIM entries are stubs (0xd4820, 0xd4828). The probe makes its own siTDs in the frame list and sends a 1 kHz tone for 5 s. |
+| Isochronous transfers | **Works (probe 1.3, 2026-10-10): a 1 kHz tone in the USB-C EarPods, 5105 frames, 0 errors** |
+| The music of the iPod to the EarPods | **Works (probe 1.5, 2026-10-10)**; the UI is very slow, and the album art in Now Playing does not load. Probe 1.6: one sleep each cycle, test ready | Apple's USB audio source (Wadia path) gives the decoder PCM to USBAudioTask; the probe sends its packets with the siTDs. | The UIM entries are stubs (0xd4820, 0xd4828). The probe makes its own siTDs in the frame list and sends a 1 kHz tone for 5 s. |
 
 ## The hardware of the tests
 
@@ -70,6 +71,8 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 | 0.1.79 | Dock; USB-C EarPods; card reader removed | "Add device" gave the EarPods (05AC:110B) to the composite driver (validate, initialize device). The driver read three configurations (4-byte reads: 165 and 500 bytes for numbers 2 and 3) and the full configuration 1 (430 bytes), then sent SET_CONFIGURATION 1 and SET_FEATURE 1 (remote wakeup). No interface driver (audio, HID). The log was full (511 records) before the second write. | **The EarPods are a UAC2 device at full speed with a synchronous OUT endpoint.** The data dumps of configurations 2 and 3 were not correct (the cache, refer to cause 6). |
 | Probe 1.2 (iPodFirm 0.1.90) | Dock; USB-C EarPods | No tone and no audio record. The log was full (511 records) before the audio test. The dump of configuration 1 had 16 zero bytes at the start (old cache data from the earlier 4-byte reads of the same buffer), thus the device finder found no audio interface. | The 0x1xxxxxxx window is in the cache, and the 0x9xxxxxxx window is not. Probe 1.3 reads the buffers directly, finds the device at the completion and keeps 16 log records for the test. |
 | Probe 1.3 (iPodFirm 0.1.91) | Dock; USB-C EarPods | **The owner heard the 1 kHz tone in the EarPods.** Audio records: device address 67, interface 1 alternate 2, endpoint 2 OUT, 192 bytes, clock 9. SET_INTERFACE, SET_CUR 48000 Hz and SET_INTERFACE 0 correct. 5105 frames sent, 0 errors (approximately 5.1 s). The log kept space for the records (503 records). | **Stage 2 works on the real iPod.** Full-speed siTDs through the transaction translator of the controller (hub 0, port 1), behind the dock's hub, with the probe's own control queue head. |
+| Probe 1.4 (iPodFirm 0.1.92) | Dock; USB-C EarPods; a song | No music; the song stayed at 0:00; slow menus. Route on (+0x5a = 1), SET_CUR 44100 correct, 42 204 packets, 0 underruns. | The packets were silence: 0x1e3064 takes the music only if the iAP flag 0x1081dff6 is set. The slow menus came from the log writes. Probe 1.5 corrects both. |
+| Probe 1.5 (iPodFirm 0.1.93) | Dock; USB-C EarPods; a song | **The music played through the EarPods.** The UI was very slow, and the album art in Now Playing did not load. Status: 38 892 packets, 0 underruns, 1406 packets with sound; USB buffers 2, the queue moves, ready flag 1, 44 100 Hz without conversion. The log was full after the second status. | The chain works. Probable cause of the slow UI: the wait of the probe called the 1 ms sleep many times in each 12 ms in USBAudioTask; the sleep yields in a loop. Probe 1.6 sleeps one time each cycle and measures the sleeps. |
 
 ## The causes found
 
@@ -140,6 +143,8 @@ Records in `iPod_Control/iTunes/iPodFirmUSBLog` (511 records, 32 KB). iPodFirm s
 
 1. Done: the configuration of the EarPods (UAC2, refer to "The USB-C EarPods").
 1a. Done: the probe 1.3 played a 1 kHz tone to the EarPods (2026-10-10).
+1b. Done: the probe 1.5 played the music through the EarPods (2026-10-10).
+1c. Test the probe 1.6: the UI speed and the album art during the music. The sleep record shows if the kernel sleep blocks.
 2. Optional: read configurations 2 and 3 and the clock ranges (UAC2 GET RANGE). The external test above makes this less important: the Stage 3 driver can try 44.1 kHz and use 48 kHz if the EarPods refuse it. The probe must read each buffer only one time, or clean the cache first.
 3. Optional bench test of the minimum voltage of the EarPods (refer to the hardware section).
 4. Then Stages 2 and 3 of USB-AUDIO-OUT.md: the isochronous UIM entries and a USB audio class driver.

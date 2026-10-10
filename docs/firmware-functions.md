@@ -350,6 +350,18 @@ Refer to [re/usb-audio.md](../re/usb-audio.md). No patch uses these functions ye
 | 0x170f2c | The USB task. |
 | 0xd85d8 | Sets the device descriptor values (vendor 0x05AC, product 0x1209 for the 5.5G). |
 | 0x132614 | Makes the audio streaming object (vtable 0x666958). |
+| 0x1e3064 | (source, bytes): takes a 192-byte packet buffer from the pool (0xd3e70, 24 buffers in IRAM at 0x4001e580) and fills bytes / 4 stereo frames from the queue of the source (0x1e2c90), with the rate converter (0x1e2de0). An empty queue gives silence. Source + 1 not 0: a test signal (0xdbdb4). |
+| 0x1e2bdc | Gives a packet buffer back to the pool. |
+| 0x1e2f74 | (source): 1 if the music may go to USB. Source + 8 = 0: 0 while the byte at RAM 0x1081dff6 is 0 (an iAP "Digital Audio" accessory sets it); then the byte at 0x1081e018 = 1: the rates must be equal or ×2 or ×4 (0x1e2f38). 0x1e3064 gives silence (0x1e2c90 with r3 = 1) if it returns 0. Static, Emulator. |
+| 0xfed68 | (buffer, flag): gives a decoder buffer back; calls vtable + 0x18 of the audio output object (0x1a2924 with −1): the decoder gives its next buffer (0x1a2d60). |
+| 0x1e2c90 | The queue of the USB source (source + 0x10): 6 entries of 12 bytes (buffer, release handle, frames), write index +0x5c, read index +0x5e. An empty entry gives its buffer back to the decoder (0xfed68). |
+| 0x1a2d60 | The audio output gives a decoder buffer: to the USB source (0x1e2bc8) if output + 0x5a is 1, else to the codec driver (vtable +0x18). |
+| 0x1a2fa0 | (output, on): output + 0x58 = on; +0x5a and the byte at RAM 0x108236a6 = +0x58 and +0x59. |
+| 0x1a3070 | Returns the audio output object (RAM 0x108236a8). |
+| 0x1e30d0 | Returns the USB source object (RAM 0x10831964). Source + 4 the rate of the music, + 0xc the output rate (default 44100). |
+| 0x1e2f60 | (source, rate): sets the output rate of the converter. |
+| 0x132038 | The USB audio stream loop: 12 packets from 0x1e3064, send (0x24d518), wait (0x24c4cc), the earlier set back (0x1e2bdc), while state + 2 is not 0. |
+| 0x24d518, 0x24c4cc | Device mode: send isochronous packets on an endpoint; wait for the endpoint event. |
 | 0xc75cc | `USBAudioTask`. |
 | 0x132038 | The stream loop. Sends packets to endpoint 0x81. |
 | 0x1323d8 | Handles SET_INTERFACE. Alternate setting 1 starts the stream. |

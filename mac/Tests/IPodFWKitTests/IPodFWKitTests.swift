@@ -1018,6 +1018,14 @@ final class USBProbeLogTests: XCTestCase {
                        "SET_CUR sampling frequency, clock 9: stall or error (0x40), setup token 0x00080E00, status token 0x80000D40")
         XCTAssertEqual(USBProbeLog.audioText(50, [1240, 3, 0x0000_0008, 0x0200_0010]),
                        "1 kHz tone: 1240 frames sent, 3 frames with an error, last error 0x00000008, frames 16 to 512")
+        XCTAssertEqual(USBProbeLog.audioText(52, [44100, 0x010101, 1, 1]),
+                       "music route on — 44100 Hz, output flags +0x58 1, +0x59 1, +0x5a 1 (1 = USB), stream 1")
+        XCTAssertEqual(USBProbeLog.audioText(53, [60000, 2, 24, 0x0001_0101]),
+                       "music — 60000 packets sent (60 s), 2 underruns, 24 packets with sound, route +0x5a 1, stream 1, source +0 1, +1 0 (1 = test signal)")
+        XCTAssertEqual(USBProbeLog.audioText(55, [800, 9600, 9700, 37]),
+                       "waits — 800 sleeps, 9600 ms requested, 9700 frames (ms) passed, at most 37 frames in front")
+        XCTAssertEqual(USBProbeLog.audioText(54, [0, 5, 0x0001_0302, 0xAC44_AC44]),
+                       "decoder chain — codec buffers 0, USB buffers 5, queue write 2 read 3, ready flag 0x1081dff6 = 1, flag 0x1081dff4 = 0, music rate 44100 Hz, output rate 44100 Hz")
     }
 }
 

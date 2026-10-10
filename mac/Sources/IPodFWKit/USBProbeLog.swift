@@ -17,6 +17,7 @@ public enum USBProbeLog {
     static let entries = [1: "validate", 2: "initialize device", 3: "initialize interface"]
     static let dataTag = 11 * 4
     static let audioDeviceTag = 12 * 4, audioRequestTag = 12 * 4 + 1, audioStreamTag = 12 * 4 + 2, audioMemoryTag = 12 * 4 + 3
+    static let musicStartTag = 13 * 4, musicStatsTag = 13 * 4 + 1, musicChainTag = 13 * 4 + 2, musicSleepTag = 13 * 4 + 3
 
     public struct Entry: Hashable {
         public var driver: String
@@ -50,7 +51,7 @@ public enum USBProbeLog {
             let tag = Int(data[o + 1])
             let regs = (0..<4).map { le32(data, o + 4 + 4 * $0) }
             let atR1 = Array(data[o + 20..<o + 40]), atR2 = Array(data[o + 40..<o + 60])
-            if tag >= audioDeviceTag && tag <= audioMemoryTag {
+            if tag >= audioDeviceTag && tag <= musicSleepTag {
                 out.append(Entry(driver: "Audio", call: audioText(tag, regs), device: nil, interface: nil, registers: regs))
                 continue
             }
@@ -177,6 +178,20 @@ public enum USBProbeLog {
         case audioStreamTag:
             return String(format: "1 kHz tone: %d frames sent, %d frames with an error, last error 0x%08X, frames %d to %d",
                           r[0], r[1], r[2], r[3] & 0xFFFF, r[3] >> 16)
+        case musicStartTag where r[3] == 1:
+            return String(format: "music route on — %d Hz, output flags +0x58 %d, +0x59 %d, +0x5a %d (1 = USB), stream %d",
+                          r[0], r[1] & 0xFF, r[1] >> 8 & 0xFF, r[1] >> 16 & 0xFF, r[2])
+        case musicStartTag:
+            return String(format: "music start — audio object 0x%08X, USB source 0x%08X, audio output 0x%08X, event 0x%08X", r[0], r[1], r[2], r[3])
+        case musicStatsTag:
+            return String(format: "music — %d packets sent (%d s), %d underruns, %d packets with sound, route +0x5a %d, stream %d, source +0 %d, +1 %d (1 = test signal)",
+                          r[0], r[0] / 1000, r[1], r[2], r[3] & 0xFF, r[3] >> 8 & 0xFF, r[3] >> 16 & 0xFF, r[3] >> 24)
+        case musicChainTag:
+            return String(format: "decoder chain — codec buffers %d, USB buffers %d, queue write %d read %d, ready flag 0x1081dff6 = %d, flag 0x1081dff4 = %d, music rate %d Hz, output rate %d Hz",
+                          r[0], r[1], r[2] & 0xFF, r[2] >> 8 & 0xFF, r[2] >> 16 & 0xFF, r[2] >> 24, r[3] & 0xFFFF, r[3] >> 16)
+        case musicSleepTag:
+            return String(format: "waits — %d sleeps, %d ms requested, %d frames (ms) passed, at most %d frames in front",
+                          r[0], r[1], r[2], r[3])
         default:
             return String(format: "memory — control page 0x%08X, siTDs 0x%08X, frame list 0x%08X, ASYNCLISTADDR 0x%08X", r[0], r[1], r[2], r[3])
         }
