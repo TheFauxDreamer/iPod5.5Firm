@@ -85,6 +85,8 @@ The patch is `patches/usb-audio-out`, with the version letter `u`.
 - Do full speed first (siTD, through the built-in transaction translator of the ARC). Then do high speed (iTD).
 - Link the new descriptors into the periodic frame list of 0x97300. Complete them in the interrupt handler from Stage 1.
 
+**First test (2026-10-09):** the probe `usb-host-probe` (version 1.2) has a Stage 2 test without the UIM. It makes its own siTDs in the frame list and sends a 1 kHz tone to the EarPods for 5 s. The `"word"` hooks on the stub entries come later, with the driver of Stage 3. Details: [docs/modifications.md](docs/modifications.md#usb-host-probe), item 16.
+
 ## Stage 3: USB Audio Class 1 host driver
 
 - Add a driver record and a dispatch table, in the format of the records at 0x6c86e8 and 0x6c8780, for interface class 1, subclass 2.
@@ -144,3 +146,6 @@ The patch is `patches/usb-audio-out`, with the version letter `u`.
 | 2026-10-08 | Stage 0 | **The USB-C EarPods (05AC:110B) enumerated through the dock** at full speed: device class 0xEF (interface association). "Add device" found no driver. The configuration descriptor was not read. | Next: the probe gives class 0xEF to the composite driver and logs the configuration descriptor. |
 | 2026-10-08 | Stage 0 | The probe now gives class EF/02 to the composite driver (Ghidra: driver score 0xc50ac) and logs the configuration descriptor (decoded in Show USB Log). Emulator: correct. iPodFirm 0.1.79. | Owner: repeat the EarPods test through the dock. |
 | 2026-10-08 | Stage 0 | **The EarPods are a USB Audio Class 2 device at full speed.** Playback: interface 1, alternate 2 = 16-bit stereo, endpoint 0x02 isochronous OUT, synchronous (no feedback), 192 bytes each 1 ms at 48 kHz. Two HID interfaces (buttons). Details: [FINDINGS.md](patches/usb-host-probe/FINDINGS.md#the-usb-c-earpods-05ac110b). | Stage 2 (isochronous transfers) and Stage 3 (a UAC2 driver) have the data that they need. Owner to decide. |
+| 2026-10-09 | Stage 2 | The probe 1.2 sends a 1 kHz tone with its own siTDs (Ghidra: 0xad80c memory, the CPU and the controller use the same address). Offline: the device finder is correct for the EarPods log. Emulator: correct (no USB device). | Owner: test with the EarPods through the dock. |
+| 2026-10-09 | Stage 2 | Probe 1.2 on the real iPod: no tone. The test did not start: the log was full, and the device finder read old cache data. Probe 1.3 reads the USB buffers directly (not through the cache) and keeps log space for the test. | Owner: test probe 1.3. |
+| 2026-10-10 | Stage 2 | **The first USB audio from the iPod.** Probe 1.3 played a 1 kHz tone in the USB-C EarPods through the dock: SET_INTERFACE and SET_CUR 48 kHz correct, 5105 frames, 0 errors. | Stage 2 works. Next: Stage 3 and 4 (a driver in the firmware, the music as the source, the Settings item). |

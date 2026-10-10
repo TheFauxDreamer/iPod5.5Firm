@@ -26,7 +26,7 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 | Photo import screen | Accepts the storage | 0.1.72: the screen did not say "unsupported device" but a text like "ready for SD card" (the owner did not remember the exact words). Probably the dock's own empty card slot (2537:1081) or a state before the card was ready. Not examined further; it is not necessary for audio. |
 | Configuration of the USB-C EarPods | **Read** | 2026-10-08 (iPodFirm 0.1.79): the composite driver took the EarPods (class EF/02), read the configuration and set configuration 1. USB Audio Class 2, full speed, a synchronous isochronous OUT endpoint. Refer to "The USB-C EarPods" below. |
 | An audio device (Apple USB-C EarPods) through the dock | **Enumerated; driver with the probe** | 2026-10-08: 05AC:110B, USB 2.01, device class EF/02/01 (interface association), packet size 64, address 106, full speed. "Add device" ran, but no class driver accepted the device. The configuration descriptor was not read. |
-| Isochronous transfers | Not available | The UIM entries are stubs (0xd4820, 0xd4828) |
+| Isochronous transfers | **Works (probe 1.3, 2026-10-10): a 1 kHz tone in the USB-C EarPods, 5105 frames, 0 errors** | The UIM entries are stubs (0xd4820, 0xd4828). The probe makes its own siTDs in the frame list and sends a 1 kHz tone for 5 s. |
 
 ## The hardware of the tests
 
@@ -68,6 +68,8 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 | 0.1.72 | Dock, card reader from the start | **The dock's hub reported its ports. The hub driver reset them, and three devices were enumerated: 05E3:0749 and 2537:1081 (both to the storage driver, class 08/06/50) and 291A:8346 (USB billboard, class 0x11, no driver). The storage driver sent GET_MAX_LUN. Many tones, including the storage sign.** | **The periodic fix was the missing part. The complete chain works: USB-C mod, host mode, external hub, storage.** |
 | Probe 0.1.72 (2026-10-08) | Dock; USB-C EarPods on a USB-C port of the dock; card reader removed | The dock's hub enumerated again (address 105). Port 2: **05AC:110B (the EarPods), class EF/02/01**, address 106. "Add device" ran, and then no driver call came. Port 3: the dock's own card slot 2537:1081 to the storage driver. Port 5: the billboard 291A:8346, no driver. The hub interrupt QH (S-mask 0x01, C-mask 0x1C) stays in frame 0. | The EarPods operate on the 5 V of the dock and answer at full speed. The firmware has no driver for device class 0xEF: the composite driver takes only class 0. |
 | 0.1.79 | Dock; USB-C EarPods; card reader removed | "Add device" gave the EarPods (05AC:110B) to the composite driver (validate, initialize device). The driver read three configurations (4-byte reads: 165 and 500 bytes for numbers 2 and 3) and the full configuration 1 (430 bytes), then sent SET_CONFIGURATION 1 and SET_FEATURE 1 (remote wakeup). No interface driver (audio, HID). The log was full (511 records) before the second write. | **The EarPods are a UAC2 device at full speed with a synchronous OUT endpoint.** The data dumps of configurations 2 and 3 were not correct (the cache, refer to cause 6). |
+| Probe 1.2 (iPodFirm 0.1.90) | Dock; USB-C EarPods | No tone and no audio record. The log was full (511 records) before the audio test. The dump of configuration 1 had 16 zero bytes at the start (old cache data from the earlier 4-byte reads of the same buffer), thus the device finder found no audio interface. | The 0x1xxxxxxx window is in the cache, and the 0x9xxxxxxx window is not. Probe 1.3 reads the buffers directly, finds the device at the completion and keeps 16 log records for the test. |
+| Probe 1.3 (iPodFirm 0.1.91) | Dock; USB-C EarPods | **The owner heard the 1 kHz tone in the EarPods.** Audio records: device address 67, interface 1 alternate 2, endpoint 2 OUT, 192 bytes, clock 9. SET_INTERFACE, SET_CUR 48000 Hz and SET_INTERFACE 0 correct. 5105 frames sent, 0 errors (approximately 5.1 s). The log kept space for the records (503 records). | **Stage 2 works on the real iPod.** Full-speed siTDs through the transaction translator of the controller (hub 0, port 1), behind the dock's hub, with the probe's own control queue head. |
 
 ## The causes found
 
@@ -77,7 +79,7 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 4. **Firmware bug in the periodic insert** (0xf5c80): the frame list word comes from r1, but the callers give the queue head in r0. No interrupt endpoint (for example the status change endpoint of a hub) is polled. The probe sets r1 = r0 at both calls (0x9761c, 0x96d14).
 5. **The emulator allows reads that the real iPod does not.** A read in the 0x90000000 window (the uncached view of the RAM, RAM | 0x80000000) stopped the probe on the real iPod. Read RAM only through 0x10000000–0x14000000.
 
-6. **The probe reads DMA buffers through the data cache.** The probe reads RAM through 0x10000000, and the cache keeps the lines. When the controller then writes new data to the same buffer, the probe reads the old lines. Example: the composite driver put configurations 2 and 3 into the same buffer as configuration 1, and the dumps showed old bytes. The firmware itself reads through the 0x90000000 window and gets correct data. Only the first read of a buffer is reliable.
+6. **The probe read DMA buffers through the data cache** (corrected in probe 1.3: it reads 0x9xxxxxxx addresses directly). The probe reads RAM through 0x10000000, and the cache keeps the lines. When the controller then writes new data to the same buffer, the probe reads the old lines. Example: the composite driver put configurations 2 and 3 into the same buffer as configuration 1, and the dumps showed old bytes. The firmware itself reads through the 0x90000000 window and gets correct data. Only the first read of a buffer is reliable.
 
 ## The USB-C EarPods (05AC:110B)
 
@@ -137,6 +139,7 @@ Records in `iPod_Control/iTunes/iPodFirmUSBLog` (511 records, 32 KB). iPodFirm s
 ## Next steps
 
 1. Done: the configuration of the EarPods (UAC2, refer to "The USB-C EarPods").
+1a. Done: the probe 1.3 played a 1 kHz tone to the EarPods (2026-10-10).
 2. Optional: read configurations 2 and 3 and the clock ranges (UAC2 GET RANGE). The external test above makes this less important: the Stage 3 driver can try 44.1 kHz and use 48 kHz if the EarPods refuse it. The probe must read each buffer only one time, or clean the cache first.
 3. Optional bench test of the minimum voltage of the EarPods (refer to the hardware section).
 4. Then Stages 2 and 3 of USB-AUDIO-OUT.md: the isochronous UIM entries and a USB audio class driver.

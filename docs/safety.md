@@ -153,7 +153,7 @@ A test in the emulator is strong evidence, but not proof:
 | `volume-unlimit` | Byte check only (the emulator has no EU limit and no audio) | No |
 | `something-comforting` | Yes: the Settings item and the `tone` calls (no audio in the emulator) | No |
 | `cover-flow` | Yes: hold, wheel, Select, Menu, short push; version 0.4 with 138 albums and built-in artwork | Yes, version 0.1: hold, wheel, Menu, Dark Mode (2026-10-08) |
-| `usb-host-probe` | Host start only (no USB in the emulator) | Yes, as a test: dock hub, storage and the USB-C EarPods enumerate (2026-10-08) |
+| `usb-host-probe` | Host start; version 1.2: the siTD link and removal (no USB in the emulator) | Yes, as a test: dock hub, storage and the USB-C EarPods enumerate (2026-10-08). The tone test: version 1.3 played the tone in the USB-C EarPods (2026-10-10) |
 | Dark Mode switch | Yes | No |
 | Software version | Not recorded | No |
 

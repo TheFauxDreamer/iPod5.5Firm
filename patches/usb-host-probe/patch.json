@@ -31,7 +31,8 @@
       "Connect a charger to the power input of the adapter.",
       "Press a button on the iPod. First the iPod plays each sign one time: a long low tone, then high, low, high. Then it plays three short beeps and a silence. The iPod does not react for approximately 7 seconds during the tones.",
       "Listen for the real result. A long low tone means that the USB host mode operates. A second long low tone means that the hub in the adapter operates. High, low, high means that the iPod found the flash drive or card reader.",
-      "Wait for the second double beep. Approximately 10 seconds after the result tones, the iPod writes the USB log and gives two short low beeps. 20 seconds later, it writes the log again and gives two more beeps.",
+      "With USB-C headphones: hold the headphones near your ear, but not in your ear. After the first double beep, listen for a 1 kHz tone for 5 seconds.",
+      "Wait for the last double beep. Approximately 10 seconds after the result tones, the iPod writes the USB log and gives two short low beeps. 20 seconds later, it writes the log again and gives two more beeps.",
       "Disconnect the adapter and restart the iPod. The next start is normal.",
       "Connect the iPod to the Mac and click Show USB Log."
     ],
@@ -40,13 +41,13 @@
     ]
   },
   "version_letter": "h",
-  "version": "1.1",
-  "size": 8740,
-  "description": "A one-time test. It finds if the iPod can operate USB devices through a USB-C mod (USB-AUDIO-OUT.md, Stage 0).",
-  "caution": "While the test runs, the USB port possibly does not operate with a computer. To stop the test, hold Menu and Select until the iPod restarts.",
+  "version": "1.3",
+  "size": 11097,
+  "description": "A one-time test. It finds if the iPod can operate USB devices through a USB-C mod. It also sends a test tone to USB-C headphones (USB-AUDIO-OUT.md, Stages 0 and 2).",
+  "caution": "Do not put USB headphones in your ears during the test. The test tone can be loud. While the test runs, the USB port possibly does not operate with a computer. To stop the test, hold Menu and Select until the iPod restarts.",
   "details": ["After the next restart, the first button press starts the test.", "The iPod plays tones that tell you the result.", "The iPod writes a log of the USB devices that it found. Click Show USB Log to see it.", "The test runs one time. The next restart is normal."],
-  "requires": ["An iPod with a USB-C mod.", "A USB-C OTG adapter with a power input, and a charger.", "A USB flash drive or a card reader."],
-  "notes": ["First, the iPod plays each tone one time as an example: a long low tone, then high, low, high. Three short beeps and a silence follow.", "Result: a long low tone means that the USB host mode operates. A second long low tone means that the hub in the adapter operates.", "Result: high, low, high means that the iPod found the flash drive or the card reader.", "Two short low beeps mean that the iPod wrote the log.", "During the tones, the iPod does not react for approximately 7 seconds."],
+  "requires": ["An iPod with a USB-C mod.", "A USB-C OTG adapter with a power input, and a charger.", "A USB flash drive or a card reader, or USB-C headphones (USB Audio Class 2)."],
+  "notes": ["First, the iPod plays each tone one time as an example: a long low tone, then high, low, high. Three short beeps and a silence follow.", "Result: a long low tone means that the USB host mode operates. A second long low tone means that the hub in the adapter operates.", "Result: high, low, high means that the iPod found the flash drive or the card reader.", "Two short low beeps mean that the iPod wrote the log.", "With USB-C headphones: after the first log, the iPod gives one short high beep. Then the headphones play a 1 kHz tone for 5 seconds. Then the iPod writes the log again.", "During the tones, the iPod does not react for approximately 7 seconds."],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
@@ -73,6 +74,7 @@
     "completion_continue": "0xcb11c",
     "expert_add_device": "0xd377c",
     "fw_new": "0x25a974",
+    "dma_alloc": "0xad80c",
     "periodic_insert": "0xf5c80",
     "interrupt_completion_continue": "0xcba58",
     "uim_interrupt_endpoint": "0x974ec",
