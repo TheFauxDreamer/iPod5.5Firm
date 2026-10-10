@@ -254,6 +254,21 @@ Emulator tests on 10 October 2026 (FolderLibrary, 138 albums, with `cover-flow` 
 | Cover Flow with `album-art` 2.4 | Hold of Select opened Cover Flow. The wheel moved the covers. Menu went back to the Albums list with the thumbnails. |
 | File mode, with `iPodFirmAlbumArt` | `art_state` 0: no table build, no fill, no wait. |
 
+### Real iPod, file mode (10 October 2026)
+
+The owner flashed version 2.4 with "iPodFirm Thumbnail File" and `cover-flow` 0.6.1. The owner opened Albums, scrolled down and up, and opened and closed Cover Flow. The file had 9 records:
+
+| Value | Result |
+|---|---|
+| State | `art_state` 0 (no table build), `file_count` 327, `file_all` 1, no failed allocation |
+| Album rows that used the file | Approximately 2300 |
+| Fills from the ithmb file | 0 |
+| All of an album row | 5956–9158 µs (the first record includes the load of the file) |
+| The slowest album row | 45.6 ms (version 2.3: 813 ms) |
+| Waits / end events / redraws | 6 / 9 / 1 |
+
+The 6 waits came from one album that is not in the file. It is a real album, thus the patch waited for the end of the movement to make the table. At the stops, the album was not on the screen, thus the table was not made. Write the file again after a sync, so that the file has each album.
+
 ### Open items
 
 1. After the stop, the redraw fills all visible rows in one paint. On the real iPod this is approximately 9 × 22 ms = 0.2 s.

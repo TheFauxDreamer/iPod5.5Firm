@@ -145,7 +145,7 @@ A test in the emulator is strong evidence, but not proof:
 | Restore of a backup | No (no USB) | Not recorded. Tested on a disk image (`IPODFW_DISK_TEST=1`). |
 | Rescue restore | No | Not recorded |
 | Dark theme and moved rsrc | Yes | Yes (2 October 2026) |
-| `album-art` | Versions 2.2–2.4: yes (9 and 10 October 2026) | Version 1.0: yes. Version 2.1: installed, the scroll is slow (9 October 2026). Version 2.2: measured (9 October 2026). Version 2.3, file mode: the scroll is much better (10 October 2026). Version 2.4: no |
+| `album-art` | Versions 2.2–2.4: yes (9 and 10 October 2026) | Version 1.0: yes. Version 2.1: installed, the scroll is slow (9 October 2026). Version 2.2: measured (9 October 2026). Version 2.3, file mode: the scroll is much better (10 October 2026). Version 2.4, file mode with `cover-flow` 0.6.1: yes (10 October 2026); artwork mode: no |
 | `backlight-60s` | Menu only | No |
 | `sleep-now` | Up to the hardware sleep | No |
 | `flash-keep-awake` | Yes, without a sleep | 2-minute version only |
