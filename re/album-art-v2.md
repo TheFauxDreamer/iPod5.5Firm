@@ -269,10 +269,29 @@ The owner flashed version 2.4 with "iPodFirm Thumbnail File" and `cover-flow` 0.
 
 The 6 waits came from one album that is not in the file. It is a real album, thus the patch waited for the end of the movement to make the table. At the stops, the album was not on the screen, thus the table was not made. Write the file again after a sync, so that the file has each album.
 
+### Real iPod, artwork mode with the file (10 October 2026)
+
+The owner flashed version 2.4 with "iPod Artwork". The iPod still had `iPodFirmAlbumArt` (327 thumbnails, all in memory). The owner scrolled for approximately 28 s and saw no grey squares. The file had 8 records of this session:
+
+| Value | Result |
+|---|---|
+| State | `art_state` 1, `art_count` 326, `source` 0, no failed allocation |
+| `build_art` at the first open | 776 ms |
+| Fills from the ithmb file | 26 in approximately 2000 album rows (version 2.2: 305 fills in records 0–5) |
+| Waits / end events / redraws | 11 / 2 / 2 |
+| All of an album row (no fill) | 5661–7882 µs |
+
+Conclusions:
+
+1. In the artwork mode, a row that waits uses the file if the file has the thumbnail in memory. Thus the scroll showed the thumbnails of the file, and the fills came only when the wheel did not move. The 11 waits came from the album that is not in the file.
+2. The real wheel sent only 2 end events in approximately 28 s of scroll. Possibly the wheel sends the end event only when the finger leaves the wheel. Then an empty square can stay until the list draws again for a different cause. A test without the file must examine this.
+
+The file of this test also had an old record of the file-mode test after the 8 new records. Its time and its row count were larger, thus the first version of `album-art-stats.py` showed it as a part of the session. The script now also stops at a record where a count decreases.
+
 ### Open items
 
 1. After the stop, the redraw fills all visible rows in one paint. On the real iPod this is approximately 9 × 22 ms = 0.2 s.
-2. A test on the real iPod: does the real wheel send the end event (+0x0c = 0)?
+2. A test on the real iPod without `iPodFirmAlbumArt`: does the real wheel send the end event (+0x0c = 0) at each stop, or only when the finger leaves the wheel?
 3. The colour of the empty square with the dark theme.
 
 ## Next steps for speed (not done)

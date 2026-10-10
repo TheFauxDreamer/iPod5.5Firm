@@ -36,16 +36,21 @@ def find_file() -> Path:
 
 def records(data: bytes) -> list[dict]:
     """The records of the last session. Each session writes from record 0 again. Thus a record
-    of an earlier session can follow. Its time or its row count is not larger."""
+    of an earlier session can follow. Its time or one of its counts is smaller."""
     out = []
     for offset in range(0, len(data) - WORDS * 4 + 1, WORDS * 4):
         w = struct.unpack_from(f"<{WORDS}I", data, offset)
         if w[0] != MAGIC or w[1] != 3 or w[2] != len(out):
             break
-        if out and (w[3] < out[-1]["time"] or w[4] < out[-1]["timers"][0][0]):
-            break                                          # a record of an earlier session
         timers = [w[4 + 3 * i: 7 + 3 * i] for i in range(len(TIMERS))]
         rest = w[4 + 3 * len(TIMERS):]
+        if out:
+            # A record of an earlier session: in one session, the time and each count only increase.
+            last = out[-1]
+            counts = [t[0] for t in timers] + list(rest[:len(COUNTERS)])
+            before = [t[0] for t in last["timers"]] + list(last["counters"].values())
+            if w[3] < last["time"] or any(c < b for c, b in zip(counts, before)):
+                break
         out.append({"time": w[3], "timers": timers,
                     "counters": dict(zip(COUNTERS, rest[:len(COUNTERS)])),
                     "state": dict(zip(STATE, rest[len(COUNTERS):]))})
