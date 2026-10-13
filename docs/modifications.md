@@ -118,7 +118,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 ## album-art
 
-**User interface.** Patches pane > Album Artwork, letter `a`, version 2.5. The section "Album Thumbnail Source" selects the option `source` (refer to [The thumbnails](#album-art)). `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
+**User interface.** Patches pane > Album Artwork, letter `a`, version 2.6. The section "Album Thumbnail Source" selects the option `source` (refer to [The thumbnails](#album-art)). `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
 
 - "Thumbnails": "Write Thumbnails to iPod" writes the thumbnail file. The albums do not need this file. "Eject iPod" ejects the iPod.
 - "Playlist Artwork" sets a custom image for each playlist ("Choose Image…", "Use Automatic", or drag an image).
@@ -132,12 +132,12 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 - The file is optional. Without the file, the albums show their thumbnails and the playlists show none.
 - The option `source` sets the order for an album. "iPod Artwork" (0, the default): the artwork first, then the file. "iPodFirm Thumbnail File" (1): the file first, then the artwork. The file is in memory, thus mode 1 reads the disk only for an album that is not in the file. After a sync that adds albums, write the file again.
 - The patch makes the album table only at the first album row that needs the artwork. In the file mode, the row "All" does not make it: the patch makes the table only for a name that is in the album list of the library (library + 0xc60, count at + 0xc6c).
-- Late fill: while the wheel moves, a row whose thumbnail needs the disk shows a grey square of 20 × 20. The table build also waits. At the end of the movement (wheel event with the step 0), the patch calls `view_invalidate` (0x21ac04) on the list, and the visible rows get their thumbnails. A step that is older than 0.3 s does not count as a movement. The list event of type 0xd (approximately each 240 ms) also draws the list again after such a stop, because the real wheel often sends no end event.
-- Background fill (artwork mode): while the wheel does not move, each tick of type 0xd that comes to the visible list of the last album row makes one thumbnail. It starts near that row and stops when the memory for thumbnails is full.
+- Late fill: while the wheel moves, a row whose thumbnail needs the disk shows a grey square of 20 × 20. The table build also waits. At the end of the movement (wheel event with the step 0), the patch calls `view_invalidate` (0x21ac04) on the list, and the visible rows get their thumbnails. A step that is older than 0.3 s does not count as a movement. The real wheel often sends no end event. Thus the patch also uses the 100 ms timer of the list (list + 0xcc) as a tick: a tick 0.3 s after the last step draws the list again. The list uses this timer for the blink of the selected row. The patch takes only the events of a timer that it started, and does not start it in the first 1 s after a key push.
+- Background fill (artwork mode): while the wheel does not move, each tick that comes to the visible list of the last album row makes one thumbnail. It starts near that row and stops when the memory for thumbnails is full.
 
 The research is in [../re/album-art-v2.md](../re/album-art-v2.md).
 
-**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 11560 bytes. Version 1.0 used the fixed area 0x7358d0–0x73658c (3080 bytes). Thus a build with this patch moves rsrc.
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 12360 bytes. Version 1.0 used the fixed area 0x7358d0–0x73658c (3080 bytes). Thus a build with this patch moves rsrc.
 
 **Hooks.**
 
@@ -241,7 +241,7 @@ The large artwork in Now Playing does not come from the patch. RetailOS reads `i
 - A song row never gets a thumbnail, also if the song has the same name as an album.
 - Two names with the same FNV-1a hash share one thumbnail. The second name is ignored.
 
-**Test status.** Version 1.0: tested in the emulator and on a real iPod 5.5G, with the light theme and with the dark theme. Version 2.0: tested in the emulator (refer to [../re/album-art-v2.md](../re/album-art-v2.md)). Version 2.1: installed on a real iPod 5.5G with flash storage. The owner reports that the Albums list scrolls more slowly than without the patch, also on the second pass (9 October 2026). Version 2.2: measured on the same iPod on 9 October 2026. Each new album reads its image from the disk in approximately 22 ms, and the first Albums list stops for approximately 0.8 s. With the thumbnails in memory, the patch adds approximately 4–5 % to each row. Refer to [../re/album-art-v2.md](../re/album-art-v2.md). Version 2.3 with "iPodFirm Thumbnail File": tested on the same iPod on 10 October 2026. The owner reports a much better scroll. The stats show one disk read in approximately 1500 album rows. Version 2.4: tested in the emulator (late fill, the row "All", and with `cover-flow` 0.6.1). On the real iPod with the file mode and `cover-flow` 0.6.1 (10 October 2026): no table build at the first open (the slowest album row was 45.6 ms, 813 ms in version 2.3), no fill from the ithmb file, and Cover Flow operated. The artwork mode on the real iPod with the file present (10 October 2026): no grey squares, 26 fills from the ithmb file, but only 2 end events of the wheel in approximately 28 s. Without the file (10 October 2026): the scroll is smooth, but most rows show a grey square until a stop. 768 waits, 5 end events, 5 redraws, 45 fills. Version 2.5 (background fill): tested in the emulator; after 40 s on the list, each row showed its cover during a fast scroll. Not tested on a real iPod.
+**Test status.** Version 1.0: tested in the emulator and on a real iPod 5.5G, with the light theme and with the dark theme. Version 2.0: tested in the emulator (refer to [../re/album-art-v2.md](../re/album-art-v2.md)). Version 2.1: installed on a real iPod 5.5G with flash storage. The owner reports that the Albums list scrolls more slowly than without the patch, also on the second pass (9 October 2026). Version 2.2: measured on the same iPod on 9 October 2026. Each new album reads its image from the disk in approximately 22 ms, and the first Albums list stops for approximately 0.8 s. With the thumbnails in memory, the patch adds approximately 4–5 % to each row. Refer to [../re/album-art-v2.md](../re/album-art-v2.md). Version 2.3 with "iPodFirm Thumbnail File": tested on the same iPod on 10 October 2026. The owner reports a much better scroll. The stats show one disk read in approximately 1500 album rows. Version 2.4: tested in the emulator (late fill, the row "All", and with `cover-flow` 0.6.1). On the real iPod with the file mode and `cover-flow` 0.6.1 (10 October 2026): no table build at the first open (the slowest album row was 45.6 ms, 813 ms in version 2.3), no fill from the ithmb file, and Cover Flow operated. The artwork mode on the real iPod with the file present (10 October 2026): no grey squares, 26 fills from the ithmb file, but only 2 end events of the wheel in approximately 28 s. Without the file (10 October 2026): the scroll is smooth, but most rows show a grey square until a stop. 768 waits, 5 end events, 5 redraws, 45 fills. Version 2.5 (background fill with type 0xd): on the real iPod, the covers did not load (type 0xd comes only each 3–4 s there). Version 2.6 (the list timer as the tick): tested in the emulator without type 0xd; 0 waits, all covers loaded. Not tested on a real iPod.
 
 **Measurement build (versions 2.2 and 2.3).** The patch times its parts with `USEC_TIMER` (`ALBUM_ART_STATS 1` in `album_art.c`). After each 256 album or playlist row draws, it writes one record to `iPod_Control/iTunes/iPodFirmAlbumArtStats` with `file_open_rw` (0x08f3f8) and `file_write` (0x08f6f4). The script [../re/album-art-stats.py](../re/album-art-stats.py) shows the records. The write can stop the scroll for a short time. Version 2.3 also records the value of `source`. Version 2.4 also records the waits, the end events and the redraws (record version 3). Version 2.5 also records the background fills (record version 4). The measurement is for the test only. Remove it in a later version.
 
@@ -356,7 +356,7 @@ The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 min
 
 ## cover-flow
 
-**User interface.** Patches pane > Cover Flow, letter `c`, version 0.6.1. The patch needs no file of iPodFirm: it uses the albums, the names and the artwork that the iPod already has. The research is in [../re/cover-flow.md](../re/cover-flow.md).
+**User interface.** Patches pane > Cover Flow, letter `c`, version 0.6.2. The patch needs no file of iPodFirm: it uses the albums, the names and the artwork that the iPod already has. The research is in [../re/cover-flow.md](../re/cover-flow.md).
 
 **Effect.**
 
@@ -370,13 +370,13 @@ The background is white with the light theme and black with the dark theme. On w
 
 A short push of Select opens the album as usual. Play/Pause operates as usual. If the iPod shows a new screen (for example Now Playing), Cover Flow closes.
 
-**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 10676 bytes. The functions that run once for each event or each open have `__attribute__((minsize))`; the pixel loop `draw_cover` stays fast code. The framebuffer copy (153600 bytes), the cover cache (11 covers of 128 × 128, 360448 bytes), the read buffer (80000 bytes), the caption copy (26880 bytes) and the placeholder cover come from the allocator 0x25a974 when Cover Flow opens. They are released when it closes. The album table (about 9 bytes for each album) stays in memory while the database does not change. While the table is made, the patch also uses 12 bytes for each track and a 32 KB read window.
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 10708 bytes. The functions that run once for each event or each open have `__attribute__((minsize))`; the pixel loop `draw_cover` stays fast code. The framebuffer copy (153600 bytes), the cover cache (11 covers of 128 × 128, 360448 bytes), the read buffer (80000 bytes), the caption copy (26880 bytes) and the placeholder cover come from the allocator 0x25a974 when Cover Flow opens. They are released when it closes. The album table (about 9 bytes for each album) stays in memory while the database does not change. While the table is made, the patch also uses 12 bytes for each track and a 32 KB read window.
 
 **Hooks.**
 
 | Kind | At | Expect | To | Replaced |
 |---|---|---|---|---|
-| `word` | 0x6772c0 | 0x0023b704 | `hook_list_event` (`chain`: `list_event`) | Event method (slot +0x30) of the browse-list class 0x677290. `album-art` also hooks this word. Since version 0.6.1, the hook has `chain`, so that the two patches operate together. |
+| `word` | 0x6772c0 | 0x0023b704 | `hook_list_event` (`chain`: `list_event`) | Event method (slot +0x30) of the browse-list class 0x677290. `album-art` also hooks this word. Since version 0.6.1, the hook has `chain`, so that the two patches operate together. Since version 0.6.2, the hook takes a timer event of the list only in the first 0.3 s after the close of Cover Flow. |
 | `word` | 0x6701f0 | 0x001d81cc | `hook_ui_event` | The UI event handler 0x1d81cc |
 | `word` | 0x17ef8c | 0x0017ef98 | `hook_display_damage` | The literal of the damage callback, which the display registers at the start |
 

@@ -307,7 +307,7 @@ Version 0.6:
 - Each tick moves 5/8 of the remaining distance (at least 20/256 of a cover). The timer starts before the draw, so the frames follow each other.
 - The caption is drawn one time for each centre album and copied.
 - At most one cover load for each frame. A cover outside the screen is not loaded. When the movement stops, the ticks load the covers at centre ± 4.
-- 0x23b704 handles a timer event of its own timer with the repeat count at list + 0xf8. With a count of 0 it would count down from 255 and repeat the key action. The patch swallows such an event after the close.
+- 0x23b704 handles a timer event of its own timer with the count at list + 0xf8 (the blink of the selected row; refer to [album-art-v2.md](album-art-v2.md), "Version 2.6"). With a count of 0 it would count down from 255 and repeat the key action. The patch swallows such an event after the close.
 
 Emulator times of version 0.6: 18–19 ms for each frame without a cover load (about 53 frames each second), about 40 ms with a load. A single step took 5 frames.
 
@@ -316,3 +316,9 @@ Emulator times of version 0.6: 18–19 ms for each frame without a cover load (a
 `album-art` 2.4 also hooks the event method of the browse list (0x6772c0) for its late fill. Two hooks on one word need `chain` ([../docs/patch-system.md](../docs/patch-system.md#hook-chains)). Version 0.6.1 gives its hook `"chain": "list_event"`. The code does not change: the patcher gives the symbol `list_event` the previous target. Without `album-art`, this target is 0x23b704. With `album-art`, it is the hook of `album-art` (the build applies the patches sorted by name).
 
 Emulator test with `album-art` 2.4: a hold of Select opened Cover Flow, the wheel moved the covers, and Menu went back to the Albums list. Refer to [album-art-v2.md](album-art-v2.md), "Version 2.4".
+
+## Version 0.6.2: the stray tick (13 October 2026)
+
+The timer at list + 0xcc is the blink of the selected row, not a key repeat ([album-art-v2.md](album-art-v2.md), "Version 2.6"). `album-art` 2.6 also uses it as its tick. Thus version 0.6.2 takes a timer event of the list only in the first 0.3 s after the close (`STRAY_TICK_US`), and also if the count at list + 0xf8 is not 0. Before, it took each timer event with the count 0, at any time.
+
+Emulator test with `album-art` 2.6: hold of Select, wheel and Menu operated. After Menu, the selected row of the Albums list was "All" (the same as with version 0.6.1).

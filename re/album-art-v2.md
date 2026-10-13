@@ -214,7 +214,7 @@ The aim is a smooth scroll in the mode "iPod Artwork". Cover Flow 0.6 loads at m
 
 ### The list timer is not necessary
 
-The browse-list constructor 0x23b97c makes two timers with 0x13d7c8 (owner, timer, 0, 0): list + 0xcc (100 ms, the key repeat) and list + 0x104 (2000 ms). A timer that the patch makes itself is not safe. The destructor of the list does not stop it, thus it can send an event to a deleted list.
+The browse-list constructor 0x23b97c makes two timers with 0x13d7c8 (owner, timer, 0, 0): list + 0xcc (100 ms, the blink of the selected row; refer to "Version 2.6") and list + 0x104 (2000 ms). A timer that the patch makes itself is not safe. The destructor of the list does not stop it, thus it can send an event to a deleted list.
 
 The wheel event gives the end of a movement. The event method 0x23b704 of the list gets type 0xf with +0x0c = +1 or −1 for each step, and 0 at the end ([cover-flow.md](cover-flow.md), "The events"). Thus the patch needs no timer.
 
@@ -326,12 +326,44 @@ Emulator test (FolderLibrary without `iPodFirmAlbumArt`, with `cover-flow` 0.6.1
 
 After the 40 s, a fast scroll of 300 detents showed a cover in each row. On the real iPod, one fill takes approximately 22 ms. At one fill for each tick, the 326 covers of the owner need approximately 80 s on the Albums list.
 
+### Real iPod, version 2.5 (10 October 2026)
+
+Without `iPodFirmAlbumArt`, "iPod Artwork". The owner reported: "finger on the wheel artwork doesn't load. leaving the album view open with no input, artwork was still not loaded when scrolling after waiting 2 minutes." The file had 4 records: 499 waits, 8 end events, 6 redraws and only 42 background fills in approximately 2.5 minutes.
+
+Thus on the real iPod, type 0xd comes only approximately each 3–4 s, not each 240 ms as in the emulator. It is not a usable tick.
+
+## Version 2.6: the list timer as the tick (13 October 2026)
+
+The patch uses the 100 ms timer of the list at list + 0xcc, as `cover-flow` does for its animation. The list stops this timer when it is deleted, thus the timer is safe.
+
+Ghidra (0x23b704): for a timer event (type 9) of this timer, a visible list calls its method +0x184 with 1 or 0 by turns, decreases the byte at list + 0xf8, and starts the timer again until the byte is 0. Thus the timer is the blink of the selected row after a push of Select, not a key repeat. The constructor does not set the byte at + 0xf8, thus it is usually not 0. A first version of 2.6 started the timer only if this byte was 0, and it never started (emulator, a debug copy).
+
+Version 2.6:
+
+1. `start_tick` starts the timer if the patch did not start it in the last 0.5 s, and if no key push came to a list in the last 1 s. Then the list can use its timer for the blink.
+2. The hook takes each event of a timer that the patch started, and does not give it to the list. Else the list would change the selected row and count down from 255.
+3. A key push (type 4 or 5) to a list stops the claim of the patch.
+4. A draw of an album row starts the tick if a row waits or if the background fill has work. A wheel step starts it if a row waits. Each tick re-starts it while there is work.
+5. A tick 0.3 s after the last step draws the list again if a row waits. Else it makes one thumbnail in the background.
+6. `cover-flow` 0.6.2 takes a timer event of the list only in the first 0.3 s after its close. Before, it took each timer event with the count 0. It now also takes such a tick if the count is not 0.
+
+Emulator tests (FolderLibrary without `iPodFirmAlbumArt`, with `cover-flow` 0.6.2):
+
+| Test | Result |
+|---|---|
+| A copy without the type 0xd branch | 130 background fills, 138 fills in total, 0 waits |
+| Version 2.6 | 130 background fills, 0 waits |
+| A short push of Select on an album | The album opened |
+| Cover Flow: hold, wheel, Menu | Covers, the wheel moved, back to the Albums list |
+
+After the close of Cover Flow, the selected row was "All". The 2.4 test showed the same. This comes from `cover-flow`, not from the timer.
+
 ### Open items
 
 1. After the stop, the redraw fills all visible rows in one paint. On the real iPod this is approximately 9 × 22 ms = 0.2 s.
 2. A test on the real iPod without `iPodFirmAlbumArt`: does the real wheel send the end event (+0x0c = 0) at each stop, or only when the finger leaves the wheel?
 3. The colour of the empty square with the dark theme.
-4. The background fill on the real iPod (version 2.5): does type 0xd come at the same rate? How long until all covers are in memory?
+4. The background fill on the real iPod (version 2.6): how long until all 326 covers are in memory? At one fill (approximately 22 ms) for each 100 ms tick, approximately 40 s.
 
 ## Next steps for speed (not done)
 
