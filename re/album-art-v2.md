@@ -358,6 +358,10 @@ Emulator tests (FolderLibrary without `iPodFirmAlbumArt`, with `cover-flow` 0.6.
 
 After the close of Cover Flow, the selected row was "All". The 2.4 test showed the same. This comes from `cover-flow`, not from the timer.
 
+### Real iPod, version 2.6 (14 October 2026)
+
+The owner tested version 2.6 with "iPod Artwork", without `iPodFirmAlbumArt`, and with `cover-flow` 0.6.2. The owner reported: "that works great".
+
 ### Open items
 
 1. After the stop, the redraw fills all visible rows in one paint. On the real iPod this is approximately 9 × 22 ms = 0.2 s.
