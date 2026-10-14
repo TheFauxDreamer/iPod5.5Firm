@@ -319,6 +319,63 @@ Results:
 - The EarPods accept SET_CUR 48000 Hz on clock source 9.
 - The siTDs in all 1024 frames, before the old entries, did not disturb the dock's hub or the storage device.
 
+## Stage 4: the music path (Ghidra, 2026-10-10)
+
+The firmware has a USB audio source for accessories (refer to [usb-audio.md](usb-audio.md)). Its parts:
+
+- The audio output object (0x1a3070, RAM 0x108236a8) gives each decoder buffer to the codec, or to the USB source if +0x5a is 1 (0x1a2d60). +0x5a is +0x58 (USB stream on, 0x1a2fa0) and +0x59 (the route allowed, 0x1e6640 after the iAP conditions 0x1e61c0).
+- The USB source object (0x1e30d0, RAM 0x10831964) keeps 6 decoder buffers in a queue and converts the rate (0x1e2de0, 0x1e2f60). 0x1e3064 fills a packet; an empty queue gives silence.
+- USBAudioTask (0xc75cc) waits for the event at state + 0x18 (state RAM 0x108234ec), then runs 0x132038: 12 packets, send, wait, give back the earlier set.
+
+The probe 1.4 uses this path without the device side: it sets state + 2, signals the event, sets +0x59 and calls 0x1a2fa0. Hooks on the send and wait calls in 0x132038 put the packets into the siTDs. Emulator: the route and the hooks operate, but the emulator has no audio, thus the packets were silence.
+
+## The music test (probe 1.4 real, 1.5 emulator, 2026-10-10)
+
+Probe 1.4 on the real iPod: SET_INTERFACE and SET_CUR 44100 correct; the route went to USB (+0x5a = 1); 42 204 packets, 0 underruns. But no music: the song stayed at 0:00, the album art did not load, and the menus were slow.
+
+The cause, from the machine code of 0x1e3064: the packet comes from the queue only if source + 0 is 0 and 0x1e2f74 returns 1. Else r3 = 1, and 0x1e2c90 gives silence and leaves the queue. With source + 8 = 0, 0x1e2f74 returns 0 while the byte at 0x1081dff6 is 0. An iAP "Digital Audio" accessory sets this byte. Thus the decoder gave its first 2 buffers, they were never taken, and the decoder waited.
+
+The slow menus: probe 1.4 wrote the 32 KB log at almost each wheel event after 2 s of music.
+
+Probe 1.5 sets 0x1081dff6 = 1, writes the log at most each 5 s of music, and logs the decoder chain. Emulator: the queue indices move (write 5 read 3, then write 1 read 5), 47 packets with sound, and the player went to the next songs. The emulator decodes too slowly for a full stream.
+
+## The music plays (probe 1.5, 2026-10-10)
+
+The owner heard the music in the USB-C EarPods. Status records: 38 892 packets, 0 underruns, 1406 packets with sound; USB buffers 2, the queue moved, ready flag 1, 44 100 Hz without conversion.
+
+The UI was very slow, and the album art in Now Playing did not load. Already in probe 1.4, with the decoder stopped, the UI was slow; thus the cause is in the USBAudioTask loop, not in the decoder. The sleep 0x11c9fc (0xa0df0) is a kernel delay (0x84644 request 0x14), then a loop of 0xa0be0 (the time passed?) and 0xa69b4 (request 0x1c, a yield) until the time is over. The probe called it with 1 ms many times in each 12 ms. Apple's device code blocks on an event of the USB interrupt instead (0xd1e78).
+
+Probe 1.6: one sleep of (frames in front − 24) ms each cycle, and a record of the sleeps and the frames that passed.
+
+## The slow UI (probe 1.6 and 1.7, 2026-10-10)
+
+Probe 1.6 on the real iPod: 1313 sleeps, 14 924 ms requested, 14 991 ms passed: the sleep is exact. But the UI was still slow, the album art did not load, and only 408 of 15 780 packets had sound. The disconnection and connection of the dock froze the iPod.
+
+The sleep 0x11c9fc gives the kernel request 0x14 and then yields (request 0x1c) in a loop until the time is over. The measurement cannot show if the task blocks or yields. Apple's device code blocks on a counting semaphore (0xd1e78 wait, 0xd1e70 signal). The host interrupt handler 0xffd1c clears USBSTS bits 0–1 and posts a message to the UIM task.
+
+Probe 1.7: the last siTD of each set has "interrupt on complete"; a wrapper in front of 0xffd1c signals the endpoint event of the device mode (0x108318ec + 0x14); USBAudioTask waits on that event. A disconnection of the root port, or 200 siTD errors in a row, stops the music and gives the route back to the codec.
+
+## The restart of probe 1.7 (2026-10-10)
+
+The iPod restarted after the tone. The first set with "interrupt on complete" gave a transfer interrupt, and `music_isr` called 0xd1e70 in the interrupt. 0xd1e70 makes a kernel request (0x84644, type 2) when a task waits. The host handler 0xffd1c uses 0xadbdc instead: it puts {function, arguments} into a queue (0x278378), and a task calls the function. Probe 1.8 posts `music_dpc` with 0xadbdc. Emulator: a posted `music_dpc` wakes USBAudioTask.
+
+The owner: the music of probe 1.6 sounded correct. Thus the decoder had enough CPU, and the low count of packets with sound came from the full log (only the first 16 s were logged). Probe 1.8 keeps 96 records for the music.
+
+## The CPU of the music path (probe 1.8 real, emulator profile, 2026-10-10)
+
+Probe 1.8 also restarted the iPod after the tone. The log had the records up to "music route on", thus the restart came after the stream started. The interrupt path is the cause, in 1.7 and 1.8.
+
+The emulator profile (`IPODFW_PROFILE=1`, 15 s of the music route with the 1.6 sleep):
+
+| Block | Part of the instructions | Function |
+|---|---|---|
+| 0x737840 | 19.2 % | `hook_usb_send` of the probe: the copy with the −12 dB shift |
+| 0xc7580 | 5.4 % | USBAudioTask |
+| 0x1e2bc0, 0xd3e80, 0xd3e40 | 6.5 % | Apple's packet pool and fill |
+| 0xa0bc0, 0xa6980, 0x284080 | less than 1 % | the sleep loop 0x11c9fc |
+
+Thus the sleep blocks, and the cost is the work for each 1 ms packet. Probe 1.9 copies whole 32-bit frames, sets the volume on the EarPods (UAC2 SET_CUR volume, feature unit 2 before output terminal 3) and logs the time of its copy and of Apple's packet fill with the microsecond timer (0x60005010, the base of 0x282860).
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).
