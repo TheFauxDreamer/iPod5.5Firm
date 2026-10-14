@@ -353,6 +353,9 @@ Refer to [re/usb-audio.md](../re/usb-audio.md). No patch uses these functions ye
 | 0x1e3064 | (source, bytes): takes a 192-byte packet buffer from the pool (0xd3e70, 24 buffers in IRAM at 0x4001e580) and fills bytes / 4 stereo frames from the queue of the source (0x1e2c90), with the rate converter (0x1e2de0). An empty queue gives silence. Source + 1 not 0: a test signal (0xdbdb4). |
 | 0x1e2bdc | Gives a packet buffer back to the pool. |
 | 0x1e2f74 | (source): 1 if the music may go to USB. Source + 8 = 0: 0 while the byte at RAM 0x1081dff6 is 0 (an iAP "Digital Audio" accessory sets it); then the byte at 0x1081e018 = 1: the rates must be equal or ×2 or ×4 (0x1e2f38). 0x1e3064 gives silence (0x1e2c90 with r3 = 1) if it returns 0. Static, Emulator. |
+| 0xded04 | The idle routine of the kernel: sleeps the core (CPU_CTL 0x60007000 = 0x80000000) and adds the idle microseconds (timer 0x60005010) to the statistics at RAM 0x14983040 (+0 and +8 for the two cores, 64 bits; +0x10 and +0x18 the counts). Static, Emulator. |
+| 0x82694 | Unsigned division (r0 / r1): the quotient in r0, the remainder in r1 (`__aeabi_uidiv`). Static. |
+| 0x1d56e0 | Sets the byte at RAM 0x1081dff6 if a special file exists in `iPod_Control\Device`. 0x1e2f74 reads this byte. Static. |
 | 0xfed68 | (buffer, flag): gives a decoder buffer back; calls vtable + 0x18 of the audio output object (0x1a2924 with −1): the decoder gives its next buffer (0x1a2d60). |
 | 0x1e2c90 | The queue of the USB source (source + 0x10): 6 entries of 12 bytes (buffer, release handle, frames), write index +0x5c, read index +0x5e. An empty entry gives its buffer back to the decoder (0xfed68). |
 | 0x1a2d60 | The audio output gives a decoder buffer: to the USB source (0x1e2bc8) if output + 0x5a is 1, else to the codec driver (vtable +0x18). |

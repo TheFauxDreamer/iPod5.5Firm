@@ -376,6 +376,16 @@ The emulator profile (`IPODFW_PROFILE=1`, 15 s of the music route with the 1.6 s
 
 Thus the sleep blocks, and the cost is the work for each 1 ms packet. Probe 1.9 copies whole 32-bit frames, sets the volume on the EarPods (UAC2 SET_CUR volume, feature unit 2 before output terminal 3) and logs the time of its copy and of Apple's packet fill with the microsecond timer (0x60005010, the base of 0x282860).
 
+## The lag is not in the music path (probe 1.9, 2026-10-13)
+
+Probe 1.9 on the real iPod: no restart; the music played. The CPU record (the microsecond timer): the copy of the probe 1.1 %, Apple's packet fill 2.8 % of 152 s. Thus the USB audio work is not the cause of the lag.
+
+The byte 0x1081dff6 is not the cause either: in the block at 0x1081dfdc, only the reset (writes 0) and 0x1d56e0 (sets it if a special file exists in `iPod_Control\Device`) use offset 0x1a, and only 0x1e2f74 reads it.
+
+The idle routine 0xded04 keeps the idle microseconds of each core at RAM 0x14983040. Probe 1.10 logs the idle percentage for each phase: before the host start, in host mode, in the tone test and with the music. Emulator: 97.8 % idle in host mode, 97.6 % with the music route (the emulator has no USB traffic). The real values show which phase uses the CPU.
+
+The volume: the EarPods buttons send HID reports to the host; the probe has no HID driver. The iPod volume does not change the USB route. A later patch can map the iPod volume to the feature unit volume (SET_CUR) and the HID buttons to the iPod volume.
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).

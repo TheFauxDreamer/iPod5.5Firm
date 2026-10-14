@@ -1024,6 +1024,7 @@ final class USBProbeLogTests: XCTestCase {
                        "music — 60000 packets sent (60 s), 2 underruns, 24 packets with sound, route +0x5a 1, stream 1, source +0 1, +1 0 (1 = test signal)")
         XCTAssertEqual(USBProbeLog.audioText(55, [800, 200, 400, 10000]),
                        "CPU — 800 sleeps; probe copy 200 ms (2.0 %), Apple packet fill 400 ms (4.0 %) of 10000 ms")
+        XCTAssertEqual(USBProbeLog.audioText(57, [10000, 853, 0, 2]), "CPU idle — host mode: 85.3 % (core 1 0.0 %) in 10000 ms")
         XCTAssertEqual(USBProbeLog.audioText(56, [1, 30000, 5, 2500]),
                        "music stopped — the dock was disconnected, 30000 packets, 5 siTD errors, 2500 sleeps")
         XCTAssertEqual(USBProbeLog.audioText(54, [0, 5, 0x0001_0302, 0xAC44_AC44]),

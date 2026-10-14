@@ -17,7 +17,7 @@ public enum USBProbeLog {
     static let entries = [1: "validate", 2: "initialize device", 3: "initialize interface"]
     static let dataTag = 11 * 4
     static let audioDeviceTag = 12 * 4, audioRequestTag = 12 * 4 + 1, audioStreamTag = 12 * 4 + 2, audioMemoryTag = 12 * 4 + 3
-    static let musicStartTag = 13 * 4, musicStatsTag = 13 * 4 + 1, musicChainTag = 13 * 4 + 2, musicSleepTag = 13 * 4 + 3, musicStopTag = 14 * 4
+    static let musicStartTag = 13 * 4, musicStatsTag = 13 * 4 + 1, musicChainTag = 13 * 4 + 2, musicSleepTag = 13 * 4 + 3, musicStopTag = 14 * 4, idleTag = 14 * 4 + 1
 
     public struct Entry: Hashable {
         public var driver: String
@@ -51,7 +51,7 @@ public enum USBProbeLog {
             let tag = Int(data[o + 1])
             let regs = (0..<4).map { le32(data, o + 4 + 4 * $0) }
             let atR1 = Array(data[o + 20..<o + 40]), atR2 = Array(data[o + 40..<o + 60])
-            if tag >= audioDeviceTag && tag <= musicStopTag {
+            if tag >= audioDeviceTag && tag <= idleTag {
                 out.append(Entry(driver: "Audio", call: audioText(tag, regs), device: nil, interface: nil, registers: regs))
                 continue
             }
@@ -193,6 +193,10 @@ public enum USBProbeLog {
             let elapsed = max(r[3], 1)
             return String(format: "CPU — %d sleeps; probe copy %d ms (%.1f %%), Apple packet fill %d ms (%.1f %%) of %d ms",
                           r[0], r[1], Double(r[1]) * 100 / Double(elapsed), r[2], Double(r[2]) * 100 / Double(elapsed), r[3])
+        case idleTag:
+            let phases = [1: "before the host start", 2: "host mode", 3: "tone test", 4: "music start", 5: "music"]
+            return String(format: "CPU idle — %@: %.1f %% (core 1 %.1f %%) in %d ms",
+                          phases[Int(r[3])] ?? "phase \(r[3])", Double(r[1]) / 10, Double(r[2]) / 10, r[0])
         case musicStopTag:
             let reason = [1: "the dock was disconnected", 2: "the device does not answer"][Int(r[0])] ?? "reason \(r[0])"
             return String(format: "music stopped — %@, %d packets, %d siTD errors, %d sleeps", reason, r[1], r[2], r[3])

@@ -100,6 +100,10 @@
 #define TAG_MUSIC_CHAIN          (13 * 4 + 2)
 #define TAG_MUSIC_SLEEP          (13 * 4 + 3)
 #define TAG_MUSIC_STOP           (14 * 4 + 0)
+#define TAG_IDLE                 (14 * 4 + 1)
+/* The statistics of the idle routine 0xded04 (the kernel object at 0xdee84): +0 and +8 the idle
+ * microseconds of the two cores (64 bits each, the timer 0x60005010). */
+#define IDLE_STATS ((volatile unsigned *)0x14983040)
 #define ERROR_STREAK 200                                /* siTD errors in a row: the device is gone */
 #define USEC       (*(volatile unsigned *)0x60005010)   /* the microsecond timer (0x282860) */
 #define VOLUME_DB  (-20)                                /* the volume of the device (UAC2 feature unit) */
@@ -592,6 +596,23 @@ static void log_regs(int tag, unsigned r0, unsigned r1, unsigned r2, unsigned r3
     log_call(tag, regs);
 }
 
+/* The idle time of the CPU since the last mark: r0 the interval in ms, r1 and r2 the idle time of the
+ * two cores in per mille, r3 the phase (1 host start, 2 host mode, 3 tone, 4 music start, 5 music). */
+static unsigned idle_time, idle_core0, idle_core1;
+
+static void idle_mark(int phase)
+{
+    unsigned now = USEC, i0 = IDLE_STATS[0], i1 = IDLE_STATS[2];
+    if (idle_time) {
+        unsigned ms = (now - idle_time) / 1000;
+        if (ms)
+            log_regs(TAG_IDLE, ms, (i0 - idle_core0) / ms, (i1 - idle_core1) / ms, phase);
+    }
+    idle_time = now;
+    idle_core0 = i0;
+    idle_core1 = i1;
+}
+
 /* A UAC2 playback interface in a configuration descriptor. Returns 0 if found. */
 static int parse_audio(const unsigned char *d, unsigned len, struct audio *a)
 {
@@ -1030,6 +1051,7 @@ static void music_stats(void)
                       | (unsigned)DIGITAL_AUDIO_READY << 16 | (unsigned)*(volatile unsigned char *)0x1081dff4 << 24 : 0,
              source ? (read32((unsigned)source + 4) & 0xffff) | read32((unsigned)source + 0xc) << 16 : 0);
     log_regs(TAG_MUSIC_SLEEP, music_sleeps, music_send_us / 1000, music_fill_us / 1000, (USEC - music_start_us) / 1000);
+    idle_mark(5);
     music_logged = music_packets;
 }
 
@@ -1046,6 +1068,7 @@ int hook_event(void *ui, void *event)
         /* Clear the flag before the start, so that a stop in the host start cannot repeat. */
         if (read_flag() && write_file(FILE_PATH, "0", 1) == 0) {
             int i;
+            idle_mark(0);                               /* the start of the baseline (the demonstration) */
             sign_hub();                                 /* the demonstration: 400 ms */
             task_sleep(400 + PAUSE_MS);
             sign_storage();                             /* 450 ms */
@@ -1073,6 +1096,7 @@ int hook_event(void *ui, void *event)
                 COMPOSITE2_CLASS[0] = 0xef;
                 COMPOSITE2_CLASS[1] = 2;
             }
+            idle_mark(1);
             host_start(0, 0, 0, 0);
             USB_GLOBALS[0] = 2;                         /* again: the host start clears parts of the block */
             log_registers();
@@ -1081,6 +1105,7 @@ int hook_event(void *ui, void *event)
              * the active modal screen first (0x12d890, 0x12ddb8), for example the photo import
              * screen, and returns if the screen takes it. */
             task_sleep(LOG_WAIT_MS);
+            idle_mark(2);
             if (write_log() == 0) {
                 tone(LOW, 60000);                       /* "log saved": two short low beeps */
                 task_sleep(BEEP_MS);
@@ -1090,7 +1115,9 @@ int hook_event(void *ui, void *event)
             if (audio_test() == 0) {
                 /* Stage 4 test: the music to the device. Return at once, so that the owner can
                  * start a song. A later button event logs the statistics. */
+                idle_mark(3);
                 music_start(&found);
+                idle_mark(4);
                 if (write_log() == 0) {
                     tone(LOW, 60000);
                     task_sleep(BEEP_MS);

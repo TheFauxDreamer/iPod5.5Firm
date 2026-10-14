@@ -42,8 +42,8 @@
     ]
   },
   "version_letter": "h",
-  "version": "1.9",
-  "size": 11372,
+  "version": "1.10",
+  "size": 12312,
   "description": "A one-time test. It finds if the iPod can operate USB devices through a USB-C mod. It also sends a test tone, and then the music of the iPod, to USB-C headphones (USB-AUDIO-OUT.md, Stages 0, 2 and 4).",
   "caution": "Do not put USB headphones in your ears during the test. The test tone can be loud. While the test runs, the USB port possibly does not operate with a computer. To stop the test, hold Menu and Select until the iPod restarts.",
   "details": ["After the next restart, the first button press starts the test.", "The iPod plays tones that tell you the result.", "The iPod writes a log of the USB devices that it found. Click Show USB Log to see it.", "The test runs one time. The next restart is normal."],
@@ -82,6 +82,7 @@
     "fw_route_usb": "0x1a2fa0",
     "fw_rate_convert": "0x1e2f60",
     "fw_route_flush": "0x1a2fa8",
+    "__aeabi_uidiv": "0x82694",
     "periodic_insert": "0xf5c80",
     "interrupt_completion_continue": "0xcba58",
     "uim_interrupt_endpoint": "0x974ec",
