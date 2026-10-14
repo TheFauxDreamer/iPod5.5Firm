@@ -44,6 +44,11 @@ final class AppModel: ObservableObject {
     @Published var enabledPatches: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "enabledPatches") ?? []) {
         didSet { UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches") }
     }
+    /// The selected choice of each patch option: patch name -> option id -> value (see PatchSpec.Option).
+    @Published var patchOptions: [String: [String: Int]] =
+        (UserDefaults.standard.dictionary(forKey: "patchOptions") as? [String: [String: Int]]) ?? [:] {
+        didSet { UserDefaults.standard.set(patchOptions, forKey: "patchOptions") }
+    }
     @Published var appearance: Appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .light {
         didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
     }
@@ -633,8 +638,23 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The switched-on patches, with the selected value of each option.
     var activePatches: [PatchInfo] {
-        patches.filter { enabledPatches.contains($0.spec.name) }
+        patches.filter { enabledPatches.contains($0.spec.name) }.map { p in
+            var p = p
+            p.options = patchOptions[p.spec.name] ?? [:]
+            return p
+        }
+    }
+
+    /// The selected value of an option of a patch, or its default.
+    func optionValue(_ patch: PatchInfo, _ option: PatchSpec.Option) -> Int {
+        let v = patchOptions[patch.spec.name]?[option.id] ?? option.defaultValue
+        return option.choices.contains { $0.value == v } ? v : option.defaultValue
+    }
+
+    func setOptionValue(_ patch: PatchInfo, _ option: PatchSpec.Option, _ value: Int) {
+        patchOptions[patch.spec.name, default: [:]][option.id] = value
     }
 
     func isCompatible(_ p: PatchInfo) -> Bool {

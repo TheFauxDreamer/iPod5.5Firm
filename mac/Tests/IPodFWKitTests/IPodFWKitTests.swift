@@ -906,6 +906,26 @@ final class PatcherOptionTests: XCTestCase {
         XCTAssertTrue((0x7eb000..<0x7F0000).contains(Int(le32(out, 0x677a14))))
     }
 
+    /// A patch option: the patcher writes the selected value into the variable of the option.
+    /// The album-art option "source": 0 (the default) or 1. Another value stops the build.
+    func testPatchOption() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        var patch = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "album-art" }!
+        let artwork = try Patcher.apply([patch], to: osos)
+        patch.options = ["source": 1]
+        let file = try Patcher.apply([patch], to: osos)
+        XCTAssertEqual(artwork.count, file.count)
+        let changed = artwork.indices.filter { artwork[$0] != file[$0] }
+        XCTAssertEqual(changed.count, 1)
+        XCTAssertEqual(changed.first.map { $0 & 3 }, 0)
+        XCTAssertEqual(changed.first.map { le32(file, $0) }, 1)
+        XCTAssertEqual(changed.first.map { le32(artwork, $0) }, 0)
+        patch.options = ["source": 7]
+        XCTAssertThrowsError(try Patcher.apply([patch], to: osos))
+    }
+
     /// The usb-host-probe patch: the extended area, a bl in the UI event handler and two driver table words.
     /// The space measurement agrees with a real build, and finds a build that is too large.
     func testSpaceUse() throws {
@@ -1361,6 +1381,23 @@ final class PatchLibraryTests: XCTestCase {
         XCTAssertEqual(user.builtInVersion, builtIn.spec.version)
         try library.remove(user)
         XCTAssertEqual(library.list().first { $0.spec.name == "sleep-now" }?.source, .builtIn)
+    }
+
+    /// A patch with a chained hook and an option passes the examination: the trial link defines the
+    /// chain symbol and finds the variable of the option.
+    func testInspectChainAndOption() throws {
+        let builtIn = try XCTUnwrap(library.list().first { $0.spec.name == "album-art" })
+        let src = builtIn.folder
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: src.appendingPathComponent("patch.json"))) as? [String: Any])
+        json["version"] = "99.0"
+        let c = try inspect(makePatch(json, files: ["album_art.c": String(contentsOf: src.appendingPathComponent("album_art.c"), encoding: .utf8)],
+                                      folder: "album-art"))
+        XCTAssertTrue(c.canInstall, "\(c.errors)")
+        XCTAssertEqual(c.codeSize, builtIn.spec.size)
+        json["options"] = [["id": "source", "title": "T", "symbol": "no_such_variable", "choices": [["value": 0, "title": "A"]]]]
+        let bad = try inspect(makePatch(json, files: ["album_art.c": String(contentsOf: src.appendingPathComponent("album_art.c"), encoding: .utf8)],
+                                        folder: "album-art-bad"))
+        XCTAssertFalse(bad.canInstall)
     }
 
     func testInstallFolderZipAndRemove() throws {

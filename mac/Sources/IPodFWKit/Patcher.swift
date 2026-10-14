@@ -6,7 +6,8 @@ import Foundation
 // for the ARM7TDMI. A small linker puts the code at "load_address" and resolves relocations.
 // A patch can also change data ("bytes" and "strings"). A patch with no C file has no code.
 // A hook with "chain" can share its place with a hook of an earlier patch. A patch can add items
-// to the Settings menu ("settings_items").
+// to the Settings menu ("settings_items"). A patch can have options ("options"): the owner selects a
+// choice in the Patches pane, and the patcher writes its value into a variable of the patch.
 
 public struct PatchError: LocalizedError {
     public let message: String
@@ -35,6 +36,25 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
         public var label_id: String
         public var after_key: String? = nil
         public var template_key: String? = nil
+    }
+    /// A choice that the owner makes in the Patches pane before a build. The patcher writes the
+    /// `value` of the selected choice (32 bits) into the global variable `symbol` of the patch.
+    /// A precompiled patch.o operates the same, because the value goes into the linked bytes.
+    public struct Option: Codable, Hashable {
+        public struct Choice: Codable, Hashable {
+            public var value: Int
+            public var title: String
+            public var description: String?
+            /// A caution that the Patches pane shows when the owner selects this choice.
+            public var caution: String?
+        }
+        public var id: String
+        public var title: String
+        public var symbol: String
+        public var choices: [Choice]
+        public var `default`: Int?
+        /// The value without a selection: `default`, or the first choice.
+        public var defaultValue: Int { `default` ?? choices.first?.value ?? 0 }
     }
     /// A data change: `expect` and `value` are hexadecimal bytes.
     public struct Bytes: Codable, Hashable { public var at, expect, value: String }
@@ -65,6 +85,8 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var strings: [String: [String: String]]?
     /// Items that the patch adds to the Settings menu.
     public var settings_items: [SettingsItem]?
+    /// Choices that the owner makes in the Patches pane (see Option).
+    public var options: [Option]?
     /// A warning for an iPod that probably has the original hard drive (see IPodDisk.likelyOriginalHDD).
     public var hdd_warning: String?
     /// One letter a–z that the About screen can show after the version (see FirmwareVersion.letters).
@@ -214,6 +236,8 @@ public struct PatchInfo: Identifiable, Hashable {
     public var replacesBuiltIn = false
     /// The version of the built-in patch that this user patch replaces.
     public var builtInVersion: String?
+    /// The selected value of each option, by option id. A missing option uses its default.
+    public var options: [String: Int] = [:]
     public init(spec: PatchSpec, folder: URL, source: Source = .builtIn) {
         self.spec = spec
         self.folder = folder
@@ -384,6 +408,7 @@ public enum Patcher {
                 for h in chained { fw[h.chain!] = try chainTarget(h, in: current, patchSymbols: first) }
             }
             (code, table) = try link(object, base: base, firmware: fw)
+            try setOptions(spec, values: patch.options, in: &code, base: base, symbols: table)
         }
         let end = Int(base) + code.count
         guard end <= maxSize else {
@@ -417,6 +442,21 @@ public enum Patcher {
         try applyData(spec, to: &out)
         if let items = spec.settings_items, !items.isEmpty { try addSettingsItems(items, to: &out) }
         return out
+    }
+
+    /// Write the selected value of each option into its variable in the linked code.
+    static func setOptions(_ spec: PatchSpec, values: [String: Int], in code: inout [UInt8], base: UInt32,
+                           symbols: [String: UInt32]) throws {
+        for o in spec.options ?? [] {
+            let value = values[o.id] ?? o.defaultValue
+            guard o.choices.contains(where: { $0.value == value }) else {
+                throw PatchError("The option \"\(o.title)\" of \"\(spec.displayTitle)\" has no choice with the value \(value).")
+            }
+            guard let a = symbols[o.symbol], a >= base, Int(a - base) + 4 <= code.count, a & 3 == 0 else {
+                throw PatchError("The option \"\(o.id)\": \(o.symbol) is not a global 32-bit variable of the patch.")
+            }
+            put32(&code, Int(a - base), UInt32(truncatingIfNeeded: value))
+        }
     }
 
     /// The previous target of a hook with `chain`. "word": the word in the firmware (`expect`), or the

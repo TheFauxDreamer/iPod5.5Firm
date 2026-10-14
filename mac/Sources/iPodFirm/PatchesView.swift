@@ -358,6 +358,7 @@ struct PatchDetail: View {
                 PatchSwitch(patch: patch, label: "Include in Firmware")
                     .help("iPodFirm includes the turned-on patches when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.")
             }
+            PatchOptions(patch: patch)
             PatchAbout(spec: patch.spec)
             Section("Compatibility") {
                 PatchCompatibility(patch: patch)
@@ -382,6 +383,35 @@ struct PatchDetail: View {
         }
         .formStyle(.grouped)
         .task(id: "\(patch.spec.name) \(model.currentIPod?.disk ?? "")") { model.loadPatchToggles(patch) }
+    }
+}
+
+/// A section for each option of a patch (`options` in patch.json). The build uses the selected choice.
+struct PatchOptions: View {
+    @EnvironmentObject var model: AppModel
+    let patch: PatchInfo
+
+    var body: some View {
+        ForEach(patch.spec.options ?? [], id: \.id) { o in
+            let value = model.optionValue(patch, o)
+            Section(o.title) {
+                Picker(o.title, selection: Binding(get: { value }, set: { model.setOptionValue(patch, o, $0) })) {
+                    ForEach(o.choices, id: \.value) { c in Text(c.title).tag(c.value) }
+                }
+                .pickerStyle(.radioGroup).labelsHidden()
+                if let c = o.choices.first(where: { $0.value == value }) {
+                    if let d = c.description {
+                        Text(d).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let caution = c.caution {
+                        Label(caution, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Text("iPodFirm uses this choice when you save, flash, export an .ipsw or run the emulator. To change the iPod, flash it again.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 

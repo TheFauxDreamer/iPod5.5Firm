@@ -197,12 +197,25 @@ public struct PatchLibrary {
             }
         }
 
-        // A trial link finds undefined symbols.
+        // The options.
+        for o in spec.options ?? [] {
+            let values = o.choices.map(\.value)
+            if values.isEmpty || Set(values).count != values.count {
+                c.errors.append("The option \"\(o.title)\" must have one or more choices with different values.")
+            } else if let d = o.default, !values.contains(d) {
+                c.errors.append("The default of the option \"\(o.title)\" is not one of its choices.")
+            }
+        }
+
+        // A trial link finds undefined symbols and option variables that are not there.
         if c.errors.isEmpty && (hasObject || sources.count == 1) {
             do {
                 var fw = [String: UInt32]()
                 for (k, v) in spec.symbols ?? [:] { fw[k] = try Patcher.hex(v) }
-                c.codeSize = try Patcher.link(try Patcher.objectCode(c.folder), base: Self.trialBase, firmware: fw).0.count
+                for h in spec.hooks ?? [] { if let c = h.chain { fw[c] = 0 } }   // the build gives the real target
+                var (code, table) = try Patcher.link(try Patcher.objectCode(c.folder), base: Self.trialBase, firmware: fw)
+                c.codeSize = code.count
+                try Patcher.setOptions(spec, values: [:], in: &code, base: Self.trialBase, symbols: table)
             } catch {
                 c.errors.append("The code of the patch is not correct: \(error.localizedDescription)")
             }
