@@ -957,13 +957,13 @@ final class PatcherOptionTests: XCTestCase {
         XCTAssertGreaterThan(out.count, Patcher.maxOSOSSize)
         XCTAssertEqual(le32(out, 0x1d8260) & 0xFF00_0000, 0xEB00_0000)
         XCTAssertNotEqual(le32(out, 0x1d8260), le32(osos, 0x1d8260))
-        // the wrappers are in the probe code, which starts at 0x736800 and is shorter than 12 KB
-        for at in [0x6c8730, 0x6c878c] { XCTAssertTrue((Patcher.maxOSOSSize..<Patcher.maxOSOSSize + 0x3000).contains(Int(le32(out, at)))) }
+        // the wrappers are in the probe code, which starts at 0x736800 and is shorter than 16 KB
+        for at in [0x6c8730, 0x6c878c] { XCTAssertTrue((Patcher.maxOSOSSize..<Patcher.maxOSOSSize + 0x4000).contains(Int(le32(out, at)))) }
         // after other data (a theme and the Dark Mode items to 0x7eb123): the probe goes after it
         var filled = osos + [UInt8](repeating: 0, count: 0x7eb123 - osos.count)
         filled[0x7eb122] = 1
         let after = try Patcher.apply(probe, to: filled, originalSHA256: ThemeImport.sha256(osos))
-        XCTAssertTrue((0x7eb130..<0x7eb130 + 0x3000).contains(Int(le32(after, 0x6c8730))))
+        XCTAssertTrue((0x7eb130..<0x7eb130 + 0x4000).contains(Int(le32(after, 0x6c8730))))
         // with the other code patches: different areas and hook sites
         let names = ["album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input", "usb-host-probe"]
         _ = try Patcher.apply(all.filter { names.contains($0.spec.name) }, to: osos)
@@ -1045,10 +1045,56 @@ final class USBProbeLogTests: XCTestCase {
         XCTAssertEqual(USBProbeLog.audioText(55, [800, 200, 400, 10000]),
                        "CPU — 800 sleeps; probe copy 200 ms (2.0 %), Apple packet fill 400 ms (4.0 %) of 10000 ms")
         XCTAssertEqual(USBProbeLog.audioText(57, [10000, 853, 0, 2]), "CPU idle — host mode: 85.3 % (core 1 0.0 %) in 10000 ms")
+        XCTAssertEqual(USBProbeLog.audioText(58, [9, 0, 120, 3000]), "art step 9 (artwork lookup) — result 0x0, 120 µs, at 3000 ms")
+        XCTAssertEqual(USBProbeLog.audioText(59, [12, 4, 1, 250000]), "art summary step 12 (image load) — 4 calls, 1 with result 0, longest 250000 µs")
+        XCTAssertEqual(USBProbeLog.audioText(60, [5, 9000, 1, 9000]), "art task — in step 5 (lock 1) for 9000 ms; last step 1, 9000 ms ago")
+        XCTAssertEqual(USBProbeLog.audioText(60, [0, 0, 14, 20]), "art task — no step in progress; last step 14 (gate release), 20 ms ago")
         XCTAssertEqual(USBProbeLog.audioText(56, [1, 30000, 5, 2500]),
                        "music stopped — the dock was disconnected, 30000 packets, 5 siTD errors, 2500 sleeps")
         XCTAssertEqual(USBProbeLog.audioText(54, [0, 5, 0x0001_0302, 0xAC44_AC44]),
                        "decoder chain — codec buffers 0, USB buffers 5, queue write 2 read 3, ready flag 0x1081dff6 = 1, flag 0x1081dff4 = 0, music rate 44100 Hz, output rate 44100 Hz")
+        XCTAssertEqual(USBProbeLog.audioText(62, [0x1088_0000, 0x10_0000, 3, 0x0001_0102]),
+                       "art cache (host mode) — object 0x10880000, capacity +0x74 1048576, +0x78 3, +0x70 1, +0x71 1, +0x72 0")
+        XCTAssertEqual(USBProbeLog.audioText(62, [0, 0, 0, 0]),
+                       "art cache (before the host start) — object 0x00000000, capacity +0x74 0, +0x78 0, +0x70 0, +0x71 0, +0x72 0")
+        XCTAssertEqual(USBProbeLog.audioText(63, [0x0402_0001, 0x1081_0000, 0x0001_0101, 0x1090_0000]),
+                       "art gates — library open +0x54 1, +0x55 0, requests 2, count +0xc 4; photo import 0x10810000 state 1, active 1, the start object yes; play queue +4 0x10900000")
+        XCTAssertEqual(USBProbeLog.audioText(63, [0, 0, 0xFFFF_FFFF, 0xFFFF_FFFF]),
+                       "art gates — library open +0x54 0, +0x55 0, requests 0, count +0xc 0; no photo import service; no play queue object")
+        XCTAssertEqual(USBProbeLog.audioText(64, [0x0102_0003, 500, 0, 5]),
+                       "art queues (later) — library queue 3, cache queue 0, 2 cache entries, the art cache entry +8 = 1, library +0x30 500, task event 0x00000000")
+        XCTAssertEqual(USBProbeLog.audioText(64, [0xFF00_0000, 0, 0, 0]),
+                       "art queues (before the host start) — library queue 0, cache queue 0, 0 cache entries, no entry for the art cache, library +0x30 0, task event 0x00000000")
+        XCTAssertEqual(USBProbeLog.audioText(65, [0x1390_0000, 0x1390_0000, 0x0001_0001, 0x0102]),
+                       "art database (host mode) — ArtworkDB handle +0xd2c 0x13900000, +0xd14 0x13900000; app reload flag +0x484 1, +0x489 0, reload done +0x48a 1, +0x487 0; USB device state 1")
+        XCTAssertEqual(USBProbeLog.audioText(65, [0xFFFF_FFFF, 0xFFFF_FFFF, 0xFFFF_FFFF, 0]),
+                       "art database (before the host start) — no database object; no app object; USB device state 0")
+        XCTAssertEqual(USBProbeLog.audioText(66, [0x6974_696C, 1200, 0x1390_0000, 0x00AB_CD07]),
+                       "ArtworkDB — first word 0x6974696C (correct), 1200 entries, +6 0, index 0x13900000; list lookup correct, index lookup correct (dbid …00ABCD)")
+        XCTAssertEqual(USBProbeLog.audioText(66, [0xFFFF_FFFF, 0, 0, 0]), "ArtworkDB — no ArtworkDB object")
+        XCTAssertEqual(USBProbeLog.audioText(67, [0x29CB_FE07, 0, 0x0001_0002, 0x0102]),
+                       "art add test 1 (host mode) — dbid …29CBFE07: +0x78 0 → 2, +0xc 0 → 1, added")
+        XCTAssertEqual(USBProbeLog.audioText(67, [0x1234, 0x0001_0002, 0x0001_0002, 5]),
+                       "art add test 0 (later) — dbid …00001234: +0x78 2 → 2, +0xc 1 → 1, nothing added")
+        XCTAssertEqual(USBProbeLog.audioText(67, [0, 0xFFFF_FFFF, 0xFFFF_FFFF, 0]),
+                       "art add test 0 (before the host start) — not run: no art cache or no ArtworkDB entry")
+    }
+}
+
+/// The setting "Firmware layout": the empty margin below 8 MB (32 KB or 64 KB).
+final class OSOSMarginTests: XCTestCase {
+    func testMarginSetting() {
+        let key = ThemeImport.ososMarginKey
+        let old = UserDefaults.standard.string(forKey: key)
+        defer { if let old { UserDefaults.standard.set(old, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) } }
+        UserDefaults.standard.removeObject(forKey: key)
+        XCTAssertEqual(ThemeImport.ososLimit, 0x7F8000)
+        UserDefaults.standard.set(ThemeImport.OSOSMargin.previous.rawValue, forKey: key)
+        XCTAssertEqual(ThemeImport.ososLimit, 0x7F0000)
+        XCTAssertEqual(Patcher.SpaceUse.limit, 0x7F0000)
+        XCTAssertFalse(Patcher.SpaceUse(end: 0x7F4000).fits)
+        UserDefaults.standard.set("unknown", forKey: key)
+        XCTAssertEqual(ThemeImport.ososLimit, 0x7F8000)
     }
 }
 

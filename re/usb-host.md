@@ -386,6 +386,183 @@ The idle routine 0xded04 keeps the idle microseconds of each core at RAM 0x14983
 
 The volume: the EarPods buttons send HID reports to the host; the probe has no HID driver. The iPod volume does not change the USB route. A later patch can map the iPod volume to the feature unit volume (SET_CUR) and the HID buttons to the iPod volume.
 
+## The Now Playing art (probe 1.10 and 1.11, 2026-10-14)
+
+Probe 1.10: scrolling is correct. The UI stutters only when the album art of Now Playing must show, and the art does not show. The album-art patch is not involved (it draws only the covers in the lists).
+
+Hypothesis: in each music test, the card slot of the dock (2537:1081) gets the storage driver, and the iPod enters the photo import state of the Camera Connector ("ready for SD card"). The photo import and the album art use the same image library (ithmb files). Probe 1.11 sets the storage driver record (RAM 0x1084a49c) +0x12 and +0x35 from 8 to 0xff before the host start, thus no storage device gets a driver.
+
+## The Now Playing art: Ghidra (2026-10-15)
+
+Probe 1.11 (no storage driver): the art still does not load. Idle statistics (0xded04, core 0): 96.8 % before the host start, 87.0 % in host mode, 57.0 % with the music route before the song, 26.6 % during the song. The probe's own code is about 4 %.
+
+The art of Now Playing comes from ArtworkLoadTask (the name at 0x2aa7fc, made by 0x205cfc). Its loop 0x205db4:
+
+1. waits on its event at task + 0x4c;
+2. a gate for the client 0x19 at the kernel port 0x14: query 0x94bbc; if 0, request 0x94e6c and sleep 1.5 s; the release 0x94d80(0x19, 500) at the end;
+3. the lock at task + 0x40 (0xd6a64);
+4. the request lookup 0x2065c4 and the artwork lookup in the database 0x1f161c (0 = no art);
+5. 0x29e024 and the image load 0x2258a4 and 0x225594.
+
+The port 0x14 server is the task 0x284b0c (45 clients). A query is granted if the power-chip state (0x2651e4) is set or a client is active; during the music the audio client (0x27) is active. No display or artwork code reads the USB audio flags. 0x1a3080 makes the audio output object again and resets the USB route flags.
+
+Probe 1.12 traces each step of the task loop (tags 58–61) and has a mode without the music route ('2'). Emulator: the task wakes, the gate is granted (step 3 result 1), and the release follows; the emulator library has no art.
+
+## The art is missing when the probe is only installed (2026-10-15)
+
+Probe 1.12, run 1 (no music route): ArtworkLoadTask woke 11 times and the gate was granted, but its request queue (task + 0x50) was always empty. 0x20620c fills the queue inside the task loop from the play queue (the singleton 0x196418, vtable 0x66cad4; method +8 0x1968b0 = "the play queue exists"), from the count of 0x2059d0 and from task + 0x78.
+
+The owner: the art does not load when the probe is installed but not started, and it loads when the probe is removed. Thus the cause is static. With the owner's patches ("Switch on iPod" with Dark Gray, album-art, something-comforting) the image ends at about 0x7EE3A0 without the probe and at about 0x7F1D30 with it: above the old limit 0x7F0000. A search for literals that point to 0x7F0000–0x800000 (CPU, physical or DMA window) in the code finds none. Thus a user of that RAM finds the address at run time. Test: the app setting "Layout" with the limit 0x7F0000.
+
+The emulator: the owner's artwork and songs on the emulator drive; the songs did not start from the Songs list, thus no art test there.
+
+## The hooks that run without the probe start (2026-10-15)
+
+The owner: with probe 1.12 the art is missing also when the probe is not started, with each patch set and with both margins. A check of each hook site and its callers: without host mode only `hook_event` (0x1d8260) runs, and in 1.12 also the 14 art-trace hooks and the two `hook_output_make` sites. `hook_event` passes the call to 0x1d8570 (2 arguments, the result not used) and reads the trigger file one time. Probe 1.13 removes the 1.12 hooks; it has the hook set of 1.11.
+
+## The 1.12 trace hooks stopped the art (2026-10-15)
+
+Probe 1.13 (without the 16 hooks of 1.12), installed and not started: the owner sees the Now Playing art again. Thus the trace hooks were the cause when the probe was not started. Probable cause: the code of 0x205db4 uses register values (for example r1 after a call) that it expects the callee to keep; the C wrappers of the trace did not keep them. The art test with the probe started (host mode) is the next step.
+
+## The art in host mode: static analysis (2026-10-15)
+
+The owner: with probe 1.13 and "Start the Probe Without Music", the Now Playing art is missing. All results in this section are from Ghidra (static). The emulator results are not used, because the emulator does not give the same result each time.
+
+The gates of the art load. Each gate must be open for the art to show:
+
+| Gate | Where | Condition |
+|---|---|---|
+| 1 | 0x20620c | The play queue exists (0x196418, method +8). |
+| 2 | 0x20620c | The count of 0x2059d0 is not 0. |
+| 3 | 0x20620c | The art object + 0x78 is not 0. |
+| 4 | 0x20620c | The budget limit is more than 0. The budget uses the capacity at the art object + 0x74. |
+| 5 | 0x205db4 | The task event at the art object + 0x4c is set. |
+| 6 | 0x205db4 | The client 0x19 of the keep-awake task 0x284b0c is active. |
+| 7 | 0x205db4 | The lookup 0x1f161c finds the art in the database. |
+| 8 | 0x205db4 | The image load 0x2258a4 and 0x225594 reads the ithmb file. |
+
+The capacity at + 0x74:
+
+- The library open 0x1bfb94 calls the grant (art object method + 0x10, 0x206b78) for each cache: + 0x74 = 0x100000.
+- The library close 0x1bfd18 calls the release (method + 0x14, 0x206b98) for each cache: + 0x74 = 0.
+- The open reserves memory with 0x1f15b0 (pool at library + 0x38). The close gives it back with 0x1f16c4.
+
+The callers of the library close:
+
+| Caller | Condition | Open again after |
+|---|---|---|
+| 0x1ed828 (from 0x1ee8d0) | 0x1ee8d0 with a second argument that is not 0 | Yes: 0x1ee8d0 then calls 0x1ed918, and 0x1ed918 calls the open 0x1bfb94. With the argument 0, no close occurs. |
+| 0xb4fe4 (from 0x1ec2c8) | The database reload, if the app + 0x1c is not 0 | Not in the same function |
+| 0x16e85c (from 0x16f3e4) | The event type 0x10 with the identifier 0x5381 | Not in the same function |
+| 0xb2dc8 (from 0x1919d8) | A change of the byte + 0xb54 of the database | Yes, when the byte changes to not 0 |
+| 0x201b4c | The image view starts | 0x201c18 |
+
+This corrects an earlier note: the path 0x1ee8d0 does not leave the library closed.
+
+The photo import object:
+
+- The start table entry at 0x69ce28 calls 0x19a48c. 0x19a48c makes the object with 0x19b198 and keeps it at RAM 0x1081e97c.
+- 0x19b198 sets the state byte + 0x1c to 1 and registers the service 0x4280.
+- 0x19b014 changes the state. The callers set 5 (0x19a5ac), 6 (0x197c24), 0xa (0x197e08) and 0xc (0x199d7c, 0x19ae6c).
+- 0x197e70 returns 1 for the states 1–5 and 7. The static analysis does not show if 0x197e70 receives this object or an interface in it.
+
+Other results:
+
+- The task 0x284b0c is the keep-awake task. It grants a query when a client is active. No client excludes a different client. Thus the client 0x19 is not blocked by a USB client.
+- The client 0x1c (0x287dd4) opens a file in the "Resources" folder. It is not a USB client.
+- The DMA memory 0xad80c comes from the general allocator (0x25a974 and 0x28ce4c). The art caches use the same allocator.
+- No art code (0x205db4, 0x20620c, 0x2059d0, 0x206b78, 0x206b98) has a literal for the USB host data (0x1083e0f8) or the EHCI registers (0xC5000000). The code literals for 0x1083e0f8 are at 0xb8cd8–0x1234dc and 0x2860e4–0x286200 only.
+
+Result: the static analysis does not show which gate closes in host mode. Each gate depends on a state that changes at run time. To find the gate, read the state on the real iPod.
+
+Probe 1.14 reads the gates 1–4 and the photo import state on the real iPod. It calls only 0x1bfb74, 0x19a51c and 0x197e70, and reads RAM; it adds no hook. Tag 62 has the art cache, tag 63 the library flag, the counts, the import state and the play queue. The records come before the host start (phase 0), after it (1), in host mode (2), after the audio test (4) and at each later log write (5).
+
+## The art in host mode: probe 1.14 (2026-10-15)
+
+The real iPod, "Start the Probe Without Music", a song with art, Now Playing. The art is missing. Each art record has the same values:
+
+| Value | Result |
+|---|---|
+| The capacity + 0x74 | 0x100000 (the cache is open) |
+| The library + 0x54 | 1 (open) |
+| + 0x78 and + 0xc | 0: the art cache list has no track |
+| The photo import state | 1 (0x197e70 returns 1), also before the host start |
+| The play queue + 4 | 0 before the song, then not 0 |
+
+Thus gate 3 is closed: no track reaches the art cache list. The photo import state is not the cause, because it is the same before the host start.
+
+The path of a track request (Ghidra):
+
+1. The player gets a new track: 0x87cec calls 0x1bfe84(library, track id).
+2. 0x1bfe84 puts {track id, 1} into the library queue (+ 0x10, nodes at + 0x14). It makes the event 0x55000000 (0x1300f4) and posts it to the library (0x13d6d4).
+3. The library handler 0x1c020c (vtable 0x66eda0, event type 0x10) calls 0x1c00e8 if the library is open.
+4. 0x1c00e8 empties the library queue and calls 0x1bfe18 for each track.
+5. 0x1bfe18 calls the method + 0x1c (0x206c5c) of each cache entry (library + 0x3c) with the byte + 8 set.
+6. 0x206c5c puts {track id, 1} into the cache queue (+ 0x20, nodes at + 0x24).
+7. The task: 0x206860 empties the cache queue. 0x205e64 finds the art formats of the track and adds them to the list (+ 0x78 increases).
+
+Probe 1.15 counts the library queue, the cache queue and the cache entries (tag 64). A full library queue shows that the event 0x55000000 does not arrive. A full cache queue shows that the task does not run. Two empty queues show that 0x1bfe18 or 0x205e64 stops the track.
+
+## The art in host mode: probe 1.15 (2026-10-15)
+
+Tag 64 in each record: the library queue 0, the cache queue 0, one cache entry, its byte + 8 = 1. After the song starts, the art cache + 0x71 changes from 1 to 0, thus the task ran. Thus the request passes both queues, and 0x205e64 adds no art formats.
+
+0x205e64 needs the art of the track from 0x18d010. 0x18d010 calls 0x9b0a0(database, ...), and 0x9b0a0 does the lookup only if database + 0xd2c is not 0. The database is the app + 0x1c (the app pointer at RAM 0x1081da18).
+
+Database + 0xd2c is the ArtworkDB handle:
+
+- 0xa1ff0 sets it. It opens `iPod_Control\Artwork` (0xa9190) and loads `ArtworkDB` (0xafd5c). Only the first database load 0xb4a64 calls 0xa1ff0.
+- 0x91164 frees it and writes 0. Only 0xb4fe4 (the database reload) and 0xa1ff0 call 0x91164.
+
+The reload path: the app event 0x63800003 → 0x1ed9f0 sets the app + 0x484 (if + 0x489 is set) → 0x1e9f9c calls 0x1e78e8 → 0x1ec2c8 → 0xb4fe4, when the USB device state (RAM 0x108711d4 + 0x218) is 1. 0x1e78e8 sets the app + 0x48a. The event 0x63800003 comes from the notification handler 0x1e0458 (case 8 → 0x18ae70). The sender of notification 8 is not found yet.
+
+Hypothesis: in host mode the reload runs, and the ArtworkDB handle stays 0. Probe 1.16 logs the handle, the reload flags and the USB device state (tag 65).
+
+Rockbox (the local `rockpod` tree) has no USB host stack for the PP5022 (`usb-drv-arc.c` is device mode only) and does not use the ArtworkDB. Thus it gives no direct help here.
+
+## The art in host mode: probe 1.16 (2026-10-15)
+
+Tag 65 in each record, before and after the host start: the ArtworkDB handle is 0x13df3670 (database + 0xd2c and + 0xd14). The app + 0x484 and + 0x48a stay 0; + 0x489 is 1. The USB device state is 0, and 1 while the song plays. Thus no database reload occurs, and the reload hypothesis is wrong.
+
+The end of 0x1c00e8 calls the method + 0x28 (0x206474, the task event) of each enabled cache. Thus each track request wakes the task, and 0x205e64 runs for the track. 0x205e64 adds nothing if one of these steps fails:
+
+1. 0x18d010 → 0x9b0a0 → 0x9a0f8: the ArtworkDB entry of the track. 0x9a0f8 needs the first word 0x6974696c (0xa137c). It searches the sorted index + 0x620 (made at the first use by 0xa92ec) or the list + 0xc.
+2. 0x21bbb4: the count of images of the format (two formats from the table at 0x206200).
+3. 0x21bd64, 0x20540c, 0x12ca58, 0x12cb50 and 0x12cac4 (0x9b1b4, 0x9b164): the image record.
+
+Probe 1.17 tests step 1 for the first entry of the ArtworkDB (tag 66).
+
+## The art in host mode: probe 1.17 (2026-10-15)
+
+Tag 66 in each record, before and after the host start: the ArtworkDB object starts with 0x6974696c, has 5218 entries in the list + 0xc, and the index + 0x620 is 0x10a28278. 0x9a0f8 finds the first entry through the list and through the index. Thus the ArtworkDB and step 1 of 0x205e64 are correct in host mode.
+
+Steps 2 and 3 of 0x205e64: the formats come from the table at 0x2aa7f4 (7 and 8); 0x1be9dc gives the format code; 0x21bbb4 counts the images of the code; 0x12cac4 → 0x9b1b4 makes the path of the ithmb file (0x9b190 → 0x9c2e8) and reads its name with 0xa47a4 (→ 0xa4a30).
+
+Probe 1.18 calls 0x205e64 itself for ArtworkDB entries 0, 1 and 2 (before the host start, in host mode, later) and logs + 0x78 before and after (tag 67). The action "Record the Art State Without USB Host" (trigger '3') gives the same records without the host start.
+
+## The art: the baseline without the host start (probe 1.18, 2026-10-15)
+
+The action "Record the Art State Without USB Host" (trigger '3') runs the probe start without the host start. The owner: the Now Playing art is also missing. Tag 67: the test calls of 0x205e64 add the art formats of ArtworkDB entries 0, 1 and 2 (+ 0x78 0 → 1 → 2 → 3, + 0xc the same). After the song starts, + 0x78 stays 3: the playing song is not added. All other records are the same as in host mode.
+
+Thus the host mode is not the cause. The cause is in the part of the probe that runs in each mode: the tones and sleeps in the UI task, the 32 KB log buffer (0x25a974), and the log writes.
+
+Each log write called 0x1a0120 and then 0x19ff0c. 0x19ff0c is not a disk flush:
+
+1. It locks the memory cache manager (+ 0x48) and sets + 0x44 = 1.
+2. While the user count + 0x6c is not 0, it sends the event 10 to the users (0x19f9b0 → 0x1300f4, 0x13d6d4) and waits on + 0x58.
+
+Apple calls it only before the sleep (0xb43dc) and at the start of the disk mode (0x1ed828). At the end of the disk mode, 0x1ed918 calls 0x19ff6c, which sends the event 5. The probe never sent the event 5. Probe 1.13 not started wrote no log, and the art loaded.
+
+Probe 1.19 does not call 0x19ff0c. The disk mode start writes the file data to the disk.
+
+## The art: the root cause (probe 1.19, 2026-10-15)
+
+Probe 1.19 does not call 0x19ff0c. Baseline without the host start: the owner sees the Now Playing art. Tag 62: + 0x78 is 3 after the three test calls, then 6 and 8 while songs play (in 1.18 it stayed 3). The only change from 1.18 is the removal of 0x19ff0c after each log write.
+
+Root cause: 0x19ff0c (with 0x1a0120) after each log write of the probe. Apple calls it only before the sleep and before the disk mode. The probe called it many times and never called 0x19ff6c. After it, the request of the playing track did not reach the art cache list. The exact step that 0x19ff0c stops is not measured, because the fix removes the call.
+
+Host mode with probe 1.19 ("Start the Probe Without Music"): the owner sees the art; + 0x78 grows from 3 to 7 and 10. Thus the root cause is confirmed in host mode. A connection to the Mac while host mode runs froze the iPod.
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).

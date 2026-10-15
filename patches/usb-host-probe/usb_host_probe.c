@@ -101,6 +101,27 @@
 #define TAG_MUSIC_SLEEP          (13 * 4 + 3)
 #define TAG_MUSIC_STOP           (14 * 4 + 0)
 #define TAG_IDLE                 (14 * 4 + 1)
+/* Tags 58-61 (the trace of ArtworkLoadTask, version 1.12) are not used since version 1.13. */
+/* Version 1.14: the state of the art gates (re/usb-host.md, "The art in host mode: static analysis").
+ * The probe only reads. It adds no hook in Apple's code. */
+#define TAG_ART_CACHE            (15 * 4 + 2)
+#define TAG_ART_GATES            (15 * 4 + 3)
+#define TAG_ART_QUEUES           (16 * 4 + 0)
+#define TAG_ART_DB               (16 * 4 + 1)
+#define TAG_ART_LOOKUP           (16 * 4 + 2)
+#define TAG_ART_ADD              (16 * 4 + 3)
+#define ARTWORKDB_MAGIC 0x6974696c                      /* the first word of the ArtworkDB object (0xa137c) */
+#define APP_OBJECT    0x1081da18                        /* RAM: the app object (+0x1c the database object) */
+#define USB_DEVICE    0x108711d4                        /* the USB device object (0x24d88c returns it) */
+#define ART_LIBRARY   0x10882b70                        /* the library singleton (0x1bfef0 returns it) */
+#define PLAY_QUEUE    (*(volatile unsigned *)0x1081d9cc)  /* the play queue singleton (0x196418) */
+#define IMPORT_OBJECT (*(volatile unsigned *)0x1081e97c)  /* the photo import object (made by 0x19a48c) */
+void *fw_art_cache(void *library, int id);             /* 0x1bfb74: the art cache with this identifier */
+void *fw_import_find(void);                            /* 0x19a51c: the photo import service (0x4280) */
+int fw_import_active(void *import);                    /* 0x197e70: 1 if the import state is 1-5 or 7 */
+int fw_list_next(void *iterator, unsigned *entry);
+void *fw_art_find(void *artdb, unsigned unused, unsigned id_low, unsigned id_high, int indexed);  /* 0x9a0f8 */
+void fw_art_add(void *cache, int on, unsigned id_low, unsigned id_high);  /* 0x205e64: adds a track to the art cache */     /* 0x1e27e0: the next entry of a list (iterator: list, index -2) */
 /* The statistics of the idle routine 0xded04 (the kernel object at 0xdee84): +0 and +8 the idle
  * microseconds of the two cores (64 bits each, the timer 0x60005010). */
 #define IDLE_STATS ((volatile unsigned *)0x14983040)
@@ -129,6 +150,11 @@
  * a driver 100 points if the device class is equal to the byte at +0x35 of the record, and 10 more
  * if the subclass is equal to +0x36. The composite validate 0x108b6c accepts each device. */
 #define COMPOSITE2_CLASS ((volatile unsigned char *)0x1084a395)
+/* The storage driver record (registry entry 0x6bc460, RAM 0x1084a49c): +0x12 the interface class, +0x35
+ * the device class (8). Version 1.11 sets both to 0xff, so that no storage device (for example the card
+ * slot of the dock) gets a driver. Then the iPod does not enter the photo import state of the Camera
+ * Connector. Test: does the album art of Now Playing load then? */
+#define STORAGE_RECORD ((volatile unsigned char *)0x1084a49c)
 #define UIM_STATE  0x1084a778                           /* +0xc: the controller object of the UIM */
 #define TAG_REGISTERS            (7 * 4 + 3)
 #define TAG_QUEUE                (7 * 4 + 1)
@@ -166,8 +192,6 @@ int fw_irq_remove(void *manager, int source, void *handler, int zero);  /* 0x127
 void host_start(int a, int b, int c, int d);           /* 0x2860e8 */
 void tone(int pitch, int microseconds);                /* 0xcd430 */
 void task_sleep(int ms);                               /* 0x11c9fc */
-void *cache_object(void);                              /* 0x1a0120 */
-void cache_flush(void *cache);                         /* 0x19ff0c: writes the disk cache */
 void sign_hub(void);
 void sign_storage(void);
 void log_call(int tag, const unsigned *regs);
@@ -190,6 +214,7 @@ struct record {
 };
 
 static int checked, started;
+static unsigned last_write_us;
 static unsigned root_hub_address = 0xffffffff;
 static unsigned completion_logs, interrupt_logs;
 static unsigned device_requests[4], next_request;       /* the request blocks of logged device transfers */
@@ -212,7 +237,8 @@ static void make_path(unsigned *path, const char *name)
     fw_strcpy((char *)path + 4, name);
 }
 
-/* Returns 1 if the trigger file contains '1'. */
+/* Returns '1' (the full test), '2' (no music route) or '3' (no host start: the art records only,
+ * version 1.18) from the trigger file, else 0. */
 static int read_flag(void)
 {
     unsigned path[0x108 / 4], fh[0x30 / 4], got = 1;
@@ -224,13 +250,18 @@ static int read_flag(void)
         return 0;
     err = file_read(fh, &got, &c);
     file_close(fh);
-    return err == 0 && got == 1 && c == '1';
+    return err == 0 && got == 1 && (c == '1' || c == '2' || c == '3') ? c : 0;
 }
 
 /* Writes len bytes at the start of an existing file. Returns 0 if the write is correct.
  * The firmware keeps the write in its disk cache and writes it to the disk later (in the emulator,
- * after more than 10 s). The owner resets the iPod after the test, thus write_log() flushes the
- * cache with the same calls as the sleep sequence (0x1ed8cc, 0xb4430: 0x1a0120, then 0x19ff0c). */
+ * after more than 10 s). The disk mode start writes it (0x1ed828). Version 1.19: write_log() does not
+ * call 0x19ff0c any more. 0x19ff0c is not a disk flush: it makes each user of the memory cache
+ * manager (0x1a0120) give back its memory (event 10) and sets +0x44. Apple calls it only before the
+ * sleep (0xb43dc) and before the disk mode (0x1ed828, with 0x19ff6c at the end). The calls of
+ * versions 1.0-1.18 are the probable cause of the missing Now Playing art. Caution: connect the iPod
+ * 15 s after the last write before a restart. Do not connect a computer while host mode runs: the iPod
+ * freezes (version 1.19). */
 static int write_file(const char *name, const void *data, unsigned len)
 {
     unsigned path[0x108 / 4], fh[0x30 / 4];
@@ -347,8 +378,6 @@ static int write_log(void)
     }
     log_saved = L->count;
     err = write_file(LOG_PATH, L, LOG_BYTES);
-    if (err == 0)
-        cache_flush(cache_object());
     return err;
 }
 
@@ -611,6 +640,158 @@ static void idle_mark(int phase)
     idle_time = now;
     idle_core0 = i0;
     idle_core1 = i1;
+}
+
+/* The art gates (version 1.14). Two records; "phase" is the same value as in idle_mark.
+ * TAG_ART_CACHE: r0 the art cache object; r1 the capacity +0x74; r2 +0x78;
+ *   r3 phase | +0x70 << 8 | +0x71 << 16 | +0x72 << 24.
+ * TAG_ART_GATES: r0 the library open flag +0x54 | +0x55 << 8 | the request count (+0x54 list) << 16
+ *   | the count +0xc << 24 (each count at most 255);
+ *   r1 the photo import service (0x19a51c);
+ *   r2 the import state +0x1c | the result of 0x197e70 << 8 | (the service is the object at 0x1081e97c) << 16,
+ *   or 0xffffffff if no service;
+ *   r3 the play queue +4 (0 = no play queue), or 0xffffffff if no play queue object. */
+static void *art_cache;
+static unsigned art_count(unsigned list);
+
+/* TAG_ART_QUEUES (version 1.15): the path of a track request. 0x1bfe84 puts the track into the
+ * library queue (+0x10, list +0x14) and posts the event 0x55000000 to the library. Its handler
+ * (0x1c020c, 0x1c00e8) gives the track to each cache entry with the byte +8 set (0x1bfe18), into the
+ * cache queue (+0x20, list +0x24). The task empties that queue (0x206860).
+ * r0 the library queue count | the cache queue count << 8 | the cache entries << 16
+ *   | the byte +8 of the entry of the art cache << 24 (0xff: no entry);
+ * r1 the library +0x30; r2 the art cache +0x4c (the task event); r3 the phase. */
+static void art_queues(int phase)
+{
+    struct { unsigned list; int index; } it = { ART_LIBRARY + 0x3c, -2 };
+    unsigned entry = 0, entries = 0, enabled = 0xff, a = (unsigned)art_cache;
+    while (entries < 16 && fw_list_next(&it, &entry)) {
+        if (entry && read32(entry) == a && a)
+            enabled = *(volatile unsigned char *)(entry + 8);
+        entries++;
+    }
+    log_regs(TAG_ART_QUEUES, art_count(read32(ART_LIBRARY + 0x14)) | (a ? art_count(read32(a + 0x24)) : 0xff) << 8
+             | entries << 16 | enabled << 24, read32(ART_LIBRARY + 0x30), a ? read32(a + 0x4c) : 0, (unsigned)phase);
+}
+
+static unsigned art_count(unsigned list)
+{
+    unsigned n = 0;
+    while (list && n < 255) {
+        list = read32(list);
+        n++;
+    }
+    return n;
+}
+
+static unsigned read8(unsigned a)
+{
+    return read32(a & ~3u) >> ((a & 3) * 8) & 0xff;
+}
+
+/* TAG_ART_DB (version 1.16): the ArtworkDB handle and the database reload. The art lookup
+ * (0x18d010, 0x9b0a0) needs the handle at database +0xd2c. The first load sets it (0xa1ff0); the
+ * reload 0xb4fe4 clears it (0x91164) and does not set it again. The reload runs from 0x1e9f9c when
+ * the app +0x484 is set (0x1ed9f0, event 0x63800003) and the USB device state +0x218 is 1.
+ * r0 database +0xd2c; r1 database +0xd14;
+ * r2 app +0x484 | +0x489 << 8 | +0x48a << 16 (0x1e78e8 sets it) | +0x487 << 24;
+ * r3 phase | USB device +0x218 << 8. 0xffffffff: no object. */
+static void art_db(int phase)
+{
+    unsigned app = read32(APP_OBJECT), db = app ? read32(app + 0x1c) : 0;
+    log_regs(TAG_ART_DB, db ? read32(db + 0xd2c) : 0xffffffff, db ? read32(db + 0xd14) : 0xffffffff,
+             app ? read8(app + 0x484) | read8(app + 0x489) << 8 | read8(app + 0x48a) << 16 | read8(app + 0x487) << 24
+                 : 0xffffffff,
+             (unsigned)phase | read8(USB_DEVICE + 0x218) << 8);
+}
+
+/* TAG_ART_LOOKUP (version 1.17): the ArtworkDB object and a test of the lookup 0x9a0f8.
+ * r0 the first word (0x6974696c is correct); r1 the entries in the list +0xc (at most 0xffffff)
+ *   | the byte +6 << 24; r2 the index +0x620;
+ * r3 bit 0: the list lookup finds the first entry; bit 1: the index lookup finds it; bit 2: the
+ *   index lookup ran (only if the index exists, so that the probe does not make it);
+ *   bits 8-31: the low 24 bits of the dbid of the first entry. 0xffffffff: no ArtworkDB. */
+static void art_lookup(void)
+{
+    unsigned app = read32(APP_OBJECT), db = app ? read32(app + 0x1c) : 0, artdb = db ? read32(db + 0xd2c) : 0;
+    unsigned first, node, count = 0, result = 0;
+    if (!artdb) {
+        log_regs(TAG_ART_LOOKUP, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff);
+        return;
+    }
+    first = read32(artdb + 0xc);
+    for (node = first; node && count < 0xffffff; node = read32(node))
+        count++;
+    if (first && read32(artdb) == ARTWORKDB_MAGIC) {
+        unsigned low = read32(first + 0x10), high = read32(first + 0x14);
+        result = (low & 0xffffff) << 8;
+        if (fw_art_find((void *)artdb, 0, low, high, 0) == (void *)first)
+            result |= 1;
+        if (read32(artdb + 0x620)) {
+            result |= 4;
+            if (fw_art_find((void *)artdb, 0, low, high, 1) == (void *)first)
+                result |= 2;
+        }
+    }
+    log_regs(TAG_ART_LOOKUP, read32(artdb), count | read8(artdb + 6) << 24, read32(artdb + 0x620), result);
+}
+
+/* TAG_ART_ADD (version 1.18): a test of 0x205e64, the step of the art task that adds a track to the
+ * art cache list. The probe calls it for entry n of the ArtworkDB list (n = 0 before the host start,
+ * 1 in host mode, 2 at the first later write). +0x78 increases by one for each art format found.
+ * r0 the dbid (low word); r1 +0x78 | +0xc << 16 before; r2 the same after; r3 the phase | n << 8.
+ * 0xffffffff in r1: no art cache or no ArtworkDB entry n. */
+static int art_adds;
+
+static void art_add(int phase)
+{
+    unsigned app = read32(APP_OBJECT), db = app ? read32(app + 0x1c) : 0, artdb = db ? read32(db + 0xd2c) : 0;
+    unsigned a = (unsigned)art_cache, entry = artdb ? read32(artdb + 0xc) : 0, before, low, high;
+    int n = art_adds;
+    if (art_adds >= 3 || (phase != 0 && phase != 2 && phase != 5))
+        return;
+    art_adds++;
+    while (entry && n-- > 0)
+        entry = read32(entry);
+    if (!a || !entry || read32(artdb) != ARTWORKDB_MAGIC) {
+        log_regs(TAG_ART_ADD, 0, 0xffffffff, 0xffffffff, (unsigned)phase | (unsigned)(art_adds - 1) << 8);
+        return;
+    }
+    low = read32(entry + 0x10);
+    high = read32(entry + 0x14);
+    before = (read32(a + 0x78) & 0xffff) | read32(a + 0xc) << 16;
+    fw_art_add((void *)a, 1, low, high);
+    log_regs(TAG_ART_ADD, low, before, (read32(a + 0x78) & 0xffff) | read32(a + 0xc) << 16,
+             (unsigned)phase | (unsigned)(art_adds - 1) << 8);
+}
+
+static void art_state(int phase)
+{
+    volatile unsigned char *lib = (volatile unsigned char *)ART_LIBRARY;
+    volatile unsigned char *a;
+    unsigned char *imp;
+    unsigned pq = PLAY_QUEUE, gates2 = 0xffffffff, count;
+    if (!art_cache)
+        art_cache = fw_art_cache((void *)ART_LIBRARY, 0);
+    a = (volatile unsigned char *)art_cache;
+    if (a) {
+        log_regs(TAG_ART_CACHE, (unsigned)a, read32((unsigned)a + 0x74), read32((unsigned)a + 0x78),
+                 (unsigned)phase | a[0x70] << 8 | a[0x71] << 16 | (unsigned)a[0x72] << 24);
+        count = read32((unsigned)a + 0xc);
+        count = (art_count(read32((unsigned)a + 0x54)) << 16) | (count > 255 ? 255 : count) << 24;
+    } else {
+        log_regs(TAG_ART_CACHE, 0, 0, 0, (unsigned)phase);
+        count = 0;
+    }
+    imp = fw_import_find();
+    if (imp)
+        gates2 = imp[0x1c] | (fw_import_active(imp) & 0xff) << 8 | ((unsigned)imp == IMPORT_OBJECT) << 16;
+    log_regs(TAG_ART_GATES, lib[0x54] | lib[0x55] << 8 | count, (unsigned)imp, gates2,
+             pq ? read32(pq + 4) : 0xffffffff);
+    art_queues(phase);
+    art_db(phase);
+    art_lookup();
+    art_add(phase);
 }
 
 /* A UAC2 playback interface in a configuration descriptor. Returns 0 if found. */
@@ -1066,7 +1247,8 @@ int hook_event(void *ui, void *event)
     if (!checked) {
         checked = 1;
         /* Clear the flag before the start, so that a stop in the host start cannot repeat. */
-        if (read_flag() && write_file(FILE_PATH, "0", 1) == 0) {
+        int mode = read_flag();
+        if (mode && write_file(FILE_PATH, "0", 1) == 0) {
             int i;
             idle_mark(0);                               /* the start of the baseline (the demonstration) */
             sign_hub();                                 /* the demonstration: 400 ms */
@@ -1083,7 +1265,18 @@ int hook_event(void *ui, void *event)
                 L->magic = 0x31304c55;                  /* "UL01" */
                 L->count = 0;
             }
+            art_state(0);                               /* the art gates before the host start */
             started = 1;
+            if (mode == '3') {
+                /* The baseline (version 1.18): no host start. The later log writes record the
+                 * art state each 5 s, as in host mode. */
+                if (write_log() == 0) {
+                    tone(LOW, 60000);
+                    task_sleep(BEEP_MS);
+                    tone(LOW, 60000);
+                }
+                return r;
+            }
             /* Allow external hubs. "Add device" 0xd377c refuses a hub (class 9) after the root hub,
              * unless the byte at +0 of the global block is not 0 (error 0x673/0x67d, the photo
              * import screen says "unsupported device"). Nothing in the firmware sets it. With 2,
@@ -1096,16 +1289,22 @@ int hook_event(void *ui, void *event)
                 COMPOSITE2_CLASS[0] = 0xef;
                 COMPOSITE2_CLASS[1] = 2;
             }
+            if (STORAGE_RECORD[0x12] == 8 && STORAGE_RECORD[0x35] == 8) {
+                STORAGE_RECORD[0x12] = 0xff;
+                STORAGE_RECORD[0x35] = 0xff;
+            }
             idle_mark(1);
             host_start(0, 0, 0, 0);
             USB_GLOBALS[0] = 2;                         /* again: the host start clears parts of the block */
             log_registers();
+            art_state(1);
             /* The USB tasks find the devices during this wait. Then write the log here, because a
              * later button event possibly does not reach this hook: 0x1d81cc gives each event to
              * the active modal screen first (0x12d890, 0x12ddb8), for example the photo import
              * screen, and returns if the screen takes it. */
             task_sleep(LOG_WAIT_MS);
             idle_mark(2);
+            art_state(2);
             if (write_log() == 0) {
                 tone(LOW, 60000);                       /* "log saved": two short low beeps */
                 task_sleep(BEEP_MS);
@@ -1114,10 +1313,13 @@ int hook_event(void *ui, void *event)
             /* Stage 2 of USB-AUDIO-OUT.md: a test tone to a USB audio device (refer to audio_test). */
             if (audio_test() == 0) {
                 /* Stage 4 test: the music to the device. Return at once, so that the owner can
-                 * start a song. A later button event logs the statistics. */
+                 * start a song. A later button event logs the statistics. Mode '2' (version 1.12):
+                 * no music route, the music stays on the headphone jack (a test for the album art). */
                 idle_mark(3);
-                music_start(&found);
+                if (mode == '1')
+                    music_start(&found);
                 idle_mark(4);
+                art_state(4);
                 if (write_log() == 0) {
                     tone(LOW, 60000);
                     task_sleep(BEEP_MS);
@@ -1134,12 +1336,15 @@ int hook_event(void *ui, void *event)
             }
         }
     } else if (started && L) {
-        if (music_mode) {
-            if (music_packets - music_logged >= STATS_PACKETS) {
-                music_stats();                          /* at most one write each 5 s of music */
-                write_log();
-            }
-        } else if (L->count != log_saved) {
+        /* At most one write each 5 s (version 1.12; the art trace adds records all the time). */
+        unsigned now = USEC;
+        if (now - last_write_us >= 5000000) {
+            last_write_us = now;
+            if (music_mode)
+                music_stats();
+            else
+                idle_mark(5);
+            art_state(5);
             write_log();
         }
     }

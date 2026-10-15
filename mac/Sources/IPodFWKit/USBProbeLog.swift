@@ -18,6 +18,8 @@ public enum USBProbeLog {
     static let dataTag = 11 * 4
     static let audioDeviceTag = 12 * 4, audioRequestTag = 12 * 4 + 1, audioStreamTag = 12 * 4 + 2, audioMemoryTag = 12 * 4 + 3
     static let musicStartTag = 13 * 4, musicStatsTag = 13 * 4 + 1, musicChainTag = 13 * 4 + 2, musicSleepTag = 13 * 4 + 3, musicStopTag = 14 * 4, idleTag = 14 * 4 + 1
+    static let artStepTag = 14 * 4 + 2, artSummaryTag = 14 * 4 + 3, artStateTag = 15 * 4, outputMadeTag = 15 * 4 + 1
+    static let artCacheTag = 15 * 4 + 2, artGatesTag = 15 * 4 + 3, artQueuesTag = 16 * 4, artDBTag = 16 * 4 + 1, artLookupTag = 16 * 4 + 2, artAddTag = 16 * 4 + 3
 
     public struct Entry: Hashable {
         public var driver: String
@@ -51,7 +53,7 @@ public enum USBProbeLog {
             let tag = Int(data[o + 1])
             let regs = (0..<4).map { le32(data, o + 4 + 4 * $0) }
             let atR1 = Array(data[o + 20..<o + 40]), atR2 = Array(data[o + 40..<o + 60])
-            if tag >= audioDeviceTag && tag <= idleTag {
+            if tag >= audioDeviceTag && tag <= artAddTag {
                 out.append(Entry(driver: "Audio", call: audioText(tag, regs), device: nil, interface: nil, registers: regs))
                 continue
             }
@@ -197,12 +199,70 @@ public enum USBProbeLog {
             let phases = [1: "before the host start", 2: "host mode", 3: "tone test", 4: "music start", 5: "music"]
             return String(format: "CPU idle — %@: %.1f %% (core 1 %.1f %%) in %d ms",
                           phases[Int(r[3])] ?? "phase \(r[3])", Double(r[1]) / 10, Double(r[2]) / 10, r[0])
+        case artStepTag:
+            return String(format: "art step %d %@ — result 0x%X, %d µs, at %d ms", r[0], artStepName(r[0]), r[1], r[2], r[3])
+        case artSummaryTag:
+            return String(format: "art summary step %d %@ — %d calls, %d with result 0, longest %d µs", r[0], artStepName(r[0]), r[1], r[2], r[3])
+        case artStateTag:
+            return r[0] == 0
+                ? String(format: "art task — no step in progress; last step %d %@, %d ms ago", r[2], artStepName(r[2]), r[3])
+                : String(format: "art task — in step %d %@ for %d ms; last step %d, %d ms ago", r[0], artStepName(r[0]), r[1], r[2], r[3])
+        case outputMadeTag:
+            return String(format: "audio output object made again — 0x%08X → 0x%08X, flags +0x58/+0x59/+0x5a 0x%06X → 0x%06X", r[0], r[1], r[2], r[3])
+        case artCacheTag:
+            return String(format: "art cache (%@) — object 0x%08X, capacity +0x74 %d, +0x78 %d, +0x70 %d, +0x71 %d, +0x72 %d",
+                          artPhaseName(r[3] & 0xFF), r[0], r[1], r[2], r[3] >> 8 & 0xFF, r[3] >> 16 & 0xFF, r[3] >> 24)
+        case artGatesTag:
+            let library = String(format: "library open +0x54 %d, +0x55 %d, requests %d, count +0xc %d",
+                                 r[0] & 0xFF, r[0] >> 8 & 0xFF, r[0] >> 16 & 0xFF, r[0] >> 24)
+            let photo = r[2] == 0xFFFF_FFFF
+                ? "no photo import service"
+                : String(format: "photo import 0x%08X state %d, active %d, the start object %@",
+                         r[1], r[2] & 0xFF, r[2] >> 8 & 0xFF, r[2] >> 16 & 1 == 1 ? "yes" : "no")
+            let queue = r[3] == 0xFFFF_FFFF ? "no play queue object" : String(format: "play queue +4 0x%08X", r[3])
+            return "art gates — \(library); \(photo); \(queue)"
+        case artQueuesTag:
+            let enabled = r[0] >> 24 == 0xFF ? "no entry for the art cache" : "the art cache entry +8 = \(r[0] >> 24)"
+            return String(format: "art queues (%@) — library queue %d, cache queue %d, %d cache entries, %@, library +0x30 %d, task event 0x%08X",
+                          artPhaseName(r[3]), r[0] & 0xFF, r[0] >> 8 & 0xFF, r[0] >> 16 & 0xFF, enabled, r[1], r[2])
+        case artDBTag:
+            let handle = r[0] == 0xFFFF_FFFF ? "no database object" : String(format: "ArtworkDB handle +0xd2c 0x%08X, +0xd14 0x%08X", r[0], r[1])
+            let app = r[2] == 0xFFFF_FFFF ? "no app object" : String(format: "app reload flag +0x484 %d, +0x489 %d, reload done +0x48a %d, +0x487 %d",
+                                                                  r[2] & 0xFF, r[2] >> 8 & 0xFF, r[2] >> 16 & 0xFF, r[2] >> 24)
+            return String(format: "art database (%@) — %@; %@; USB device state %d", artPhaseName(r[3] & 0xFF), handle, app, r[3] >> 8 & 0xFF)
+        case artLookupTag where r[0] == 0xFFFF_FFFF:
+            return "ArtworkDB — no ArtworkDB object"
+        case artLookupTag:
+            let index = r[3] & 4 == 0 ? "index lookup not run" : (r[3] & 2 != 0 ? "index lookup correct" : "index lookup failed")
+            return String(format: "ArtworkDB — first word 0x%08X (%@), %d entries, +6 %d, index 0x%08X; list lookup %@, %@ (dbid …%06X)",
+                          r[0], r[0] == 0x6974_696C ? "correct" : "wrong", r[1] & 0xFF_FFFF, r[1] >> 24, r[2],
+                          r[3] & 1 != 0 ? "correct" : "failed", index, r[3] >> 8)
+        case artAddTag where r[1] == 0xFFFF_FFFF:
+            return String(format: "art add test %d (%@) — not run: no art cache or no ArtworkDB entry", r[3] >> 8, artPhaseName(r[3] & 0xFF))
+        case artAddTag:
+            let added = (r[2] & 0xFFFF) > (r[1] & 0xFFFF) ? "added" : "nothing added"
+            return String(format: "art add test %d (%@) — dbid …%08X: +0x78 %d → %d, +0xc %d → %d, %@",
+                          r[3] >> 8, artPhaseName(r[3] & 0xFF), r[0], r[1] & 0xFFFF, r[2] & 0xFFFF, r[1] >> 16, r[2] >> 16, added)
         case musicStopTag:
             let reason = [1: "the dock was disconnected", 2: "the device does not answer"][Int(r[0])] ?? "reason \(r[0])"
             return String(format: "music stopped — %@, %d packets, %d siTD errors, %d sleeps", reason, r[1], r[2], r[3])
         default:
             return String(format: "memory — control page 0x%08X, siTDs 0x%08X, frame list 0x%08X, ASYNCLISTADDR 0x%08X", r[0], r[1], r[2], r[3])
         }
+    }
+
+    /// The phase of an art record (version 1.14): the same values as the idle records.
+    static func artPhaseName(_ phase: UInt32) -> String {
+        [0: "before the host start", 1: "after the host start", 2: "host mode", 4: "after the audio test", 5: "later"][phase] ?? "phase \(phase)"
+    }
+
+    /// The steps of the trace of ArtworkLoadTask (0x205db4).
+    static func artStepName(_ step: UInt32) -> String {
+        let names: [UInt32: String] = [1: "(wait for a request)", 2: "(gate query 1)", 3: "(gate query 2)", 4: "(gate request)",
+                                       5: "(lock 1)", 6: "(lock 2)", 7: "(request lookup 1)", 8: "(request lookup 2)",
+                                       9: "(artwork lookup)", 10: "(handle 1)", 11: "(handle 2)", 12: "(image load)",
+                                       13: "(image decode)", 14: "(gate release)"]
+        return names[step] ?? ""
     }
 
     /// The descriptors in a configuration descriptor, one line each. The answer can be shorter than

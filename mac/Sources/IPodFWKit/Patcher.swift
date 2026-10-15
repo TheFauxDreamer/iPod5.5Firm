@@ -284,7 +284,7 @@ public enum Patcher {
         /// The end of the image after the build.
         public let end: Int
         public static let start = maxOSOSSize
-        public static let limit = ThemeImport.ososLimit
+        public static var limit: Int { ThemeImport.ososLimit }
         public var used: Int { max(0, end - Self.start) }
         public var total: Int { Self.limit - Self.start }
         public var fits: Bool { end <= Self.limit }

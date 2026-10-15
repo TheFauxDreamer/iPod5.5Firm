@@ -63,10 +63,12 @@ struct IPodFirmApp: App {
     }
 }
 
-/// The settings window (⌘,): the permissions that the app needs to write to the iPod.
+/// The settings window (⌘,): the permissions that the app needs to write to the iPod, and the
+/// firmware layout (the empty margin below 8 MB).
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @State private var showHelp = false
+    @AppStorage(ThemeImport.ososMarginKey) private var ososMargin = ThemeImport.OSOSMargin.current.rawValue
 
     var body: some View {
         TabView {
@@ -87,6 +89,20 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Permissions", systemImage: "lock.shield") }
+            Form {
+                Section {
+                    Picker("Empty margin below 8 MB", selection: $ososMargin) {
+                        ForEach(ThemeImport.OSOSMargin.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
+                    Text("A theme, the Dark Mode items and the extended patches stay below this limit. Use 64 KB to test if the margin causes a problem, for example the missing album art in Now Playing with the USB Host Probe. The setting applies to the next build. If the patches do not fit, the Patches pane shows it.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Firmware Layout")
+                }
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Layout", systemImage: "square.stack.3d.up") }
         }
         .frame(width: 560, height: 300)
         .onAppear { model.recheckFullDiskAccess() }

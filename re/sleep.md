@@ -12,7 +12,7 @@ Offsets are osos file offsets. The CPU address is the same.
 2. 0x1d83fc turns the backlight off (0xb4638) and starts the idle timer (`ctl + 0x48`, 500 ms).
 3. The idle timer handler 0x1d8a40 sleeps only if the gate 0x1d938c passes. The gate is 0x1d8d9c, then 0x1d8444 (0x1d8670 and 0x1d8718). If the gate does not pass, the handler starts the timer again.
 4. When the gate passes, the handler calls 0x1ee8d0(app, flag).
-5. 0x1ee8d0 saves the settings and writes the cache (0x1ed828, 0x19ff0c). Then it calls the sleep method (vtable 0x670720, offset 0x70, 0x1dfdd4).
+5. 0x1ee8d0 saves the settings and empties the memory cache manager (0x1ed828, 0x19ff0c: the users give back their memory; refer to usb-host.md). Then it calls the sleep method (vtable 0x670720, offset 0x70, 0x1dfdd4).
 6. 0x1dfdd4 calls the sleep function 0xb43dc. 0xb43dc turns the display off (0xb7c64(0)), sends keep-awake message type 4 (0x94e08) and enters power mode 2 or 3 (0x2823bc).
 
 Marker test in the emulator (stock firmware): the Sleep item ran 0x1d83fc, then the idle gate. The gate did not pass, and 0x1ee8d0 did not run.
