@@ -254,6 +254,26 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x094e08 | Keep-awake message type 4 ("sleep now"). Also used before a restart. | Static, Patch |
 | 0x001630 | Restart: writes 4 to `DEV_RS` (0x60006004). | Static, Emulator |
 
+### Battery and PMU
+
+Refer to [re/battery.md](../re/battery.md).
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x282f58, 0x282d90, 0x282e30 | I²C write (address, count 1–4, data), I²C read (address, count 1–4, out), and read of one register. | Static |
+| 0x283634, 0x283540 | PMU write and PMU read (register, count, data) at I²C address 8. | Static, Emulator |
+| 0x283704 | PMU type from register 0: `$` (0x24) gives type 2, other values give type 3. | Static |
+| 0x28341c | ADC conversion (channel, mode, out). Type 3 writes ADCC1/ADCC2 at 0x2e and reads ADCS1/ADCS2 at 0x30 until the ready bit is set. Gives a 10-bit value. | Static, Emulator |
+| 0x265f74 | Battery ADC read: channel 3 (`ADCIN1_SUBTR`). | Static, Emulator |
+| 0x265fd8 | Battery read with a second attempt. Resets the I²C controller (0x282f0c) after a failure. | Static |
+| 0x264ee8 | ADC value to level 0–15 with a table of 15 limits for each hardware revision. | Static, Emulator |
+| 0x9b24c | Battery level × 256 / 15 (0–256). 0x101 after a failure. | Static |
+| 0x1dfe44 | Power controller method +0xd0: the icon value 0–20, kept at 0x10822eac + 0xc. Called in groups of five, each 30 seconds. | Static, Emulator |
+| 0x1dff54 | Power controller method +0xd4: the raw battery ADC value (0x9b284). | Static |
+| 0x264cb0 | Battery limit test before the drive starts. | Static |
+| 0x1f5e68 | iAP battery report to an accessory. | Static |
+| 0x265164 | Returns the hardware revision word (RAM 0x1081de40 + 0x28). The emulator gives 0xb0010. | Static, Emulator |
+
 ### Volume and region
 
 Refer to [re/volume-limit.md](../re/volume-limit.md).
@@ -456,7 +476,7 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | 0x66d89c | Vtable of a picture view (for example the ">" arrow). |
 | 0x66c8c0 | Vtable of the Settings controller. |
 | 0x66c94c, 0x66c950 | Slots of the "get" and "set" methods of the settings object. |
-| 0x670720 | Vtable of the power controller. +0x6c: display on/off. +0x70: sleep. +0xb4: external power. |
+| 0x670720 | Vtable of the power controller. +0x6c: display on/off. +0x70: sleep. +0xb4: external power. +0xd0: battery icon value (0x1dfe44). +0xd4: raw battery ADC value. |
 | 0x69fd2c | A table entry that points to the Sleep item handler 0x1d83fc. |
 | 0x666920, 0x666958 | Vtables of the USB audio control and streaming objects. |
 | 0x677290 | Vtable of a browse list (for example Albums and Artists). +0x30 (0x6772c0): event method 0x23b704. +0x138 (0x6773c8): set the selection. |
@@ -535,6 +555,10 @@ The physical address is 0x10000000 + the CPU address.
 | 0x1081ec54 | Byte: the damage callback binds the layer if it is not 0. |
 | 0x1081da80 | Pointer to the application object (class 0x66a510). |
 | 0x1081d9c4 | The Clicker setting: bit 1 speaker, bit 2 headphones. |
+| 0x1081de98–0x1081df4b | Six battery tables of 15 halfwords. The start code copies them from osos 0x69c13c. |
+| 0x1081de40 | Power hardware object. +0x28: the hardware revision word. |
+| 0x10822eac | Battery state. +0xc: icon value 0–20 (0x15 = no value yet). +0x10: counter while the charger is connected. |
+| 0x1081dffb | Byte: if not 0, the battery icon value is always 5. |
 
 The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No code refers to the area between the image end and 8 MB. The patches and the theme data use this area.
 
@@ -549,7 +573,7 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | 0x70000080 | `GPO32_VAL` | Bit 30 (0x40000000) switches the drive power (set = off). |
 | 0xC30001E0–0xC30001FF | ATA taskfile | |
 | 0xC30003F8 | ATA control | |
-| 0x7000C000–0x7000C0FF | I²C controller | |
+| 0x7000C000–0x7000C0FF | I²C controller | The PMU (PCF50605) is at I²C address 8. Refer to [re/battery.md](../re/battery.md). |
 
 ## Resource IDs
 
@@ -607,3 +631,4 @@ The emulator found these element IDs (view + 0x1c):
 - The function of the audio route flags at 0x1081ee48 + 0 and + 1.
 - The UIM interrupt handler that completes the periodic USB host transfers.
 - The cause of the empty artwork frame in Now Playing with the unchanged firmware in the emulator.
+- The millivolt scale of the battery ADC channel 3, and the code that selects the battery picture. Refer to [re/battery.md](../re/battery.md#open-questions).
