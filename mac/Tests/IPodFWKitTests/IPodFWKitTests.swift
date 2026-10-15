@@ -7,7 +7,10 @@ final class FlasherTests: XCTestCase {
     struct FakeDisk: BlockReader {
         var bytes: [UInt8]
         var blockSize: Int
-        func read(_ offset: Int, _ length: Int) throws -> [UInt8] { Array(bytes[offset..<offset + length]) }
+        func read(_ offset: Int, _ length: Int) throws -> [UInt8] {
+            guard offset >= 0, offset + length <= bytes.count else { throw FirmwareError("Short read from disk at \(offset).") }
+            return Array(bytes[offset..<offset + length])
+        }
     }
 
     func testPlanWritesOnlyChangedBlocks() throws {
@@ -25,13 +28,39 @@ final class FlasherTests: XCTestCase {
         XCTAssertThrowsError(try FirmwareFlasher.planWrites(current: current, new: new, blockSize: 512, protected: 5632..<7000))
     }
 
-    func testLocateMBR() throws {
-        var d = [UInt8](repeating: 0, count: 4096)
-        d[0x1BE + 4] = 0; put32(&d, 0x1BE + 8, 63); put32(&d, 0x1BE + 12, 1000)
-        d[0x1CE + 4] = 0x0B; put32(&d, 0x1CE + 8, 1063); put32(&d, 0x1CE + 12, 9999)
+    /// A disk with an MBR. The firmware partition starts at `start` units of `unit` bytes.
+    func mbrDisk(start: Int, count: Int, unit: Int, banner: Bool = true) -> [UInt8] {
+        var d = [UInt8](repeating: 0, count: start * 4096 + 4096)
+        d[0x1BE + 4] = 0; put32(&d, 0x1BE + 8, UInt32(start)); put32(&d, 0x1BE + 12, UInt32(count))
+        d[0x1CE + 4] = 0x0B; put32(&d, 0x1CE + 8, UInt32(start + count)); put32(&d, 0x1CE + 12, 9999)
         d[510] = 0x55; d[511] = 0xAA
-        let r = try FirmwareFlasher.locatePartition(FakeDisk(bytes: d, blockSize: 512))
+        if banner { d.replaceSubrange(start * unit..<start * unit + stopSignPrefix.count, with: stopSignPrefix) }
+        return d
+    }
+
+    func testLocateMBR() throws {
+        let r = try FirmwareFlasher.locatePartition(FakeDisk(bytes: mbrDisk(start: 63, count: 1000, unit: 512), blockSize: 512))
         XCTAssertEqual(r.start, 63 * 512); XCTAssertEqual(r.size, 1000 * 512)
+    }
+
+    func testLocateMBRUnitFallback() throws {
+        // The disk reports 2048-byte blocks, but the MBR counts 512-byte sectors.
+        let r = try FirmwareFlasher.locatePartition(FakeDisk(bytes: mbrDisk(start: 64, count: 1000, unit: 512), blockSize: 2048))
+        XCTAssertEqual(r.start, 64 * 512); XCTAssertEqual(r.size, 1000 * 512)
+        // The disk reports 512-byte blocks, but the MBR counts 2048-byte sectors.
+        let r2 = try FirmwareFlasher.locatePartition(FakeDisk(bytes: mbrDisk(start: 16, count: 1000, unit: 2048), blockSize: 512))
+        XCTAssertEqual(r2.start, 16 * 2048); XCTAssertEqual(r2.size, 1000 * 2048)
+    }
+
+    func testLocateMBRWithoutBannerUsesBlockSize() throws {
+        // A damaged partition has no banner. The rescue restore must still find it.
+        let r = try FirmwareFlasher.locatePartition(FakeDisk(bytes: mbrDisk(start: 63, count: 1000, unit: 512, banner: false), blockSize: 512))
+        XCTAssertEqual(r.start, 63 * 512); XCTAssertEqual(r.size, 1000 * 512)
+    }
+
+    func testLocateMBRRefusesUnalignedStart() {
+        // The banner is at 63 x 512 bytes, but the disk reports 2048-byte blocks.
+        XCTAssertThrowsError(try FirmwareFlasher.locatePartition(FakeDisk(bytes: mbrDisk(start: 63, count: 1000, unit: 512), blockSize: 2048)))
     }
 
     func testHibernationImageIsPreserved() throws {

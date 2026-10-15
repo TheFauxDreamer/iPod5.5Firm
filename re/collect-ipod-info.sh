@@ -159,10 +159,10 @@ if [ "$FIRMWARE" = 1 ]; then
     fi
     [ -n "$LBA" ] && [ -n "$COUNT_SECTORS" ] || fail "No firmware partition found."
 
-    # The partition table gives sectors. iPodFirm uses the block size that the system reports as the
-    # sector size. Some iPods report a block size that is not the unit of their partition table. Thus
-    # try the reported block size first, then 512, 2048 and 4096 bytes. Use the first unit where the
-    # partition starts with the Apple STOP banner "{{~~".
+    # The partition table gives sectors. Some iPods report a block size that is not the unit of their
+    # partition table. Thus try the reported block size first, then 512, 2048 and 4096 bytes. Use the
+    # first unit where the partition starts with the Apple STOP banner "{{~~". iPodFirm does the same
+    # in FirmwareFlasher.mbrSectorUnit.
     banner_at() {                                   # OFFSET -> success if "{{~~" is at OFFSET
         local first=$(( $1 / BS )) pre=$(( $1 % BS )) n=1
         [ $(( pre + 4 )) -gt "$BS" ] && n=2

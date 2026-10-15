@@ -68,7 +68,7 @@ A stable signature is necessary. macOS connects Full Disk Access to the signatur
 
 The app reads the disk size to identify a probable original hard drive. Refer to [modifications.md](modifications.md#storage-type).
 
-`FirmwareFlasher.locatePartition` then finds the firmware partition in the MBR or in the Apple partition map. Refer to [firmware-format.md](firmware-format.md#the-location-of-the-firmware-partition).
+`FirmwareFlasher.locatePartition` then finds the firmware partition in the MBR or in the Apple partition map. For an MBR, it also finds the sector unit, because the unit can differ from the reported block size. Refer to [firmware-format.md](firmware-format.md#the-location-of-the-firmware-partition).
 
 The helper refuses an iPod that is not an iPod Video. It returns the code `unsupported-ipod`, and the iPod pane disables the back-up, flash and restore buttons. It does two tests:
 

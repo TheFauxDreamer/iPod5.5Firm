@@ -210,10 +210,10 @@ if (-not $NoFirmware) {
     }
     if ($null -eq $lba -or $null -eq $sectors) { Fail 'No firmware partition found.' }
 
-    # The partition table gives sectors. iPodFirm uses the block size that the system reports as the
-    # sector size. Some iPods report a block size that is not the unit of their partition table. Thus
-    # try the reported block size first, then 512, 2048 and 4096 bytes. Use the first unit where the
-    # partition starts with the Apple STOP banner "{{~~".
+    # The partition table gives sectors. Some iPods report a block size that is not the unit of their
+    # partition table. Thus try the reported block size first, then 512, 2048 and 4096 bytes. Use the
+    # first unit where the partition starts with the Apple STOP banner "{{~~". iPodFirm does the same
+    # in FirmwareFlasher.mbrSectorUnit.
     $probe = Join-Path $Out 'probe.bin'
     $unit = $null; $tried = @()
     foreach ($u in @($BS, 512, 2048, 4096)) {

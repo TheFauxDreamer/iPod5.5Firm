@@ -1,8 +1,9 @@
 import Foundation
 
-// Swift port of src/ipodfw/device.py: find iPods, locate the firmware
-// partition (MBR or APM), and flash safely. Raw I/O needs root, so the app
-// runs these through the bundled ipodfw-helper with administrator rights.
+// This file is the Swift version of src/ipodfw/device.py. It finds the connected iPods.
+// It finds the firmware partition in the MBR (Windows format) or in the APM (Mac format).
+// It also writes the firmware partition safely. Raw disk access needs root rights.
+// Thus the app runs these functions through the ipodfw-helper with administrator rights.
 
 public struct IPodDisk: Codable, Identifiable, Hashable {
     public var id: String { disk }
@@ -133,7 +134,11 @@ public enum FirmwareFlasher {
             guard p0.type == 0, p0.count > 0, [0x0B, 0x0C].contains(p1.type) else {
                 throw FirmwareError("The partition layout is not an iPod's (MBR).")
             }
-            return (p0.start * bs, p0.count * bs)
+            let unit = try mbrSectorUnit(disk, start: p0.start, count: p0.count)
+            guard p0.start * unit % bs == 0 else {
+                throw FirmwareError("The firmware partition starts at byte \(p0.start * unit). This is not a multiple of the block size \(bs).")
+            }
+            return (p0.start * unit, p0.count * unit)
         }
         if s0[0] == UInt8(ascii: "E") && s0[1] == UInt8(ascii: "R") {
             let mul = Int(s0[2]) / 2
@@ -150,6 +155,25 @@ public enum FirmwareFlasher {
             throw FirmwareError("No Apple_MDFW firmware partition in the Apple partition map.")
         }
         throw FirmwareError("Unrecognised partition table.")
+    }
+
+    /// The largest firmware partition that a sector unit can give. A larger value means a wrong unit.
+    static let maxPartitionSize = 512 * 1024 * 1024
+
+    /// The unit of the sector values in the MBR. Some iPods report a block size that is not this unit.
+    /// The function tries the reported block size, then 512, 2048 and 4096 bytes. It uses the first unit
+    /// where the partition starts with the Apple STOP banner. If no unit agrees, the partition is
+    /// probably damaged. Then the function uses the reported block size, so that the rescue restore works.
+    static func mbrSectorUnit(_ disk: BlockReader, start: Int, count: Int) throws -> Int {
+        let bs = disk.blockSize
+        var tried: [Int] = []
+        for unit in [bs, 512, 2048, 4096] where !tried.contains(unit) {
+            tried.append(unit)
+            guard count * unit <= maxPartitionSize,
+                  let head = try? disk.read(start * unit, stopSignPrefix.count) else { continue }
+            if head == stopSignPrefix { return unit }
+        }
+        return bs
     }
 
     /// new may differ from current only in the osos/rsrc length and checksum, and in the rsrc

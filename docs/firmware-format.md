@@ -10,10 +10,21 @@ The firmware partition is the first partition of the iPod disk. iPodFirm finds i
 
 | Table | Test | Result |
 |---|---|---|
-| MBR (Windows-formatted iPod) | Bytes 510–511 are `55 AA`. Entry 0 (at 0x1BE) has type 0 and a count larger than 0. Entry 1 has type 0x0B or 0x0C (FAT32). | Start = LBA start of entry 0 × block size. Size = sector count × block size. |
+| MBR (Windows-formatted iPod) | Bytes 510–511 are `55 AA`. Entry 0 (at 0x1BE) has type 0 and a count larger than 0. Entry 1 has type 0x0B or 0x0C (FAT32). | Start = LBA start of entry 0 × sector unit. Size = sector count × sector unit. Refer to "The MBR sector unit" below. |
 | APM (Mac-formatted iPod) | Sector 0 starts with `ER`. | The code examines each `PM` entry. It selects the entry with the name `Apple_MDFW` at bytes 48–57. Start and size are big-endian values at +8 and +12. |
 
 Any other layout gives the error "Unrecognised partition table." iPodFirm then does not write.
+
+### The MBR sector unit
+
+The MBR gives the start and the size in sectors. On some iPods, the sector unit of the MBR is not the block size that macOS reports. Thus `FirmwareFlasher.mbrSectorUnit` finds the unit:
+
+1. Try the reported block size, then 512, 2048 and 4096 bytes.
+2. Skip a unit that gives a partition larger than 512 MiB.
+3. Read 16 bytes at the start × the unit.
+4. Use the first unit where these bytes are the Apple STOP banner `{{~~  /-----\   `.
+
+If no unit agrees, the partition is probably damaged. Then the code uses the reported block size, so that the rescue restore can find the partition. If the start in bytes is not a multiple of the block size, the code stops with an error, because a write must be aligned. The Python function `mbr_sector_unit` in `src/ipodfw/device.py` does the same steps. The APM path does not use this function.
 
 ## The partition header
 

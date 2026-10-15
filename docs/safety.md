@@ -29,7 +29,7 @@ iPodFirm obeys these limits. The code enforces each limit. The "Where" column gi
 The helper does these checks in `Operations.flash` ([Operations.swift](../mac/Sources/IPodFWKit/Operations.swift)). Any failed check stops the flash before a write.
 
 1. Find the iPod again by its disk name. It must still be connected.
-2. Find the firmware partition (MBR or APM).
+2. Find the firmware partition (MBR or APM). For an MBR, find the sector unit with the Apple STOP banner. Stop if the partition start is not aligned to the block size. Refer to [firmware-format.md](firmware-format.md#the-mbr-sector-unit).
 3. Read the complete partition.
 4. Identify an iPod with a Samsung CPU (iPod classic): the directory is at +0x1000, not at +0x200. Stop with the code `unsupported-ipod`. Refer to [re/ipod-classic-6g.md](../re/ipod-classic-6g.md#detection-in-ipodfirm-fixed-on-6-october-2026).
 5. Read the model code. Stop if the iPod is not an iPod Video.

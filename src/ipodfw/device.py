@@ -4,6 +4,7 @@ The iPod must be in disk mode or simply mounted over USB. Raw I/O goes
 through /dev/rdiskN with block-aligned offsets, which needs root
 (run with sudo). Partition table parsing follows ipodpatcher's
 read_partinfo(): MBR for Windows-formatted iPods, APM for Mac-formatted.
+The MBR sector unit can differ from the reported block size. mbr_sector_unit() finds it.
 """
 
 from __future__ import annotations
@@ -14,7 +15,8 @@ import struct
 import subprocess
 from dataclasses import dataclass
 
-from .partition import ENTRY_SIZE, FirmwareError, FirmwarePartition, samsung_image_header, samsung_message
+from .partition import (ENTRY_SIZE, STOP_SIGN_PREFIX, FirmwareError, FirmwarePartition, samsung_image_header,
+                        samsung_message)
 
 
 @dataclass
@@ -92,6 +94,33 @@ class RawDisk:
             raise OSError(f"short write at {offset}")
 
 
+MAX_PARTITION_SIZE = 512 * 1024 * 1024   # a larger firmware partition means a wrong sector unit
+
+
+def mbr_sector_unit(disk: RawDisk, start: int, count: int) -> int:
+    """Return the unit of the sector values in the MBR.
+
+    Some iPods report a block size that is not this unit. Try the reported block size, then 512,
+    2048 and 4096 bytes. Use the first unit where the partition starts with the Apple STOP banner.
+    If no unit agrees, the partition is probably damaged. Then use the reported block size, so that
+    the rescue restore works.
+    """
+    tried: list[int] = []
+    for unit in (disk.bs, 512, 2048, 4096):
+        if unit in tried:
+            continue
+        tried.append(unit)
+        if count * unit > MAX_PARTITION_SIZE:
+            continue
+        try:
+            head = disk.read(start * unit, len(STOP_SIGN_PREFIX))
+        except OSError:
+            continue
+        if head == STOP_SIGN_PREFIX:
+            return unit
+    return disk.bs
+
+
 def locate_firmware_partition(disk: RawDisk) -> tuple[int, int]:
     """Return (start_bytes, size_bytes) of the firmware partition."""
     bs = disk.bs
@@ -101,7 +130,10 @@ def locate_firmware_partition(disk: RawDisk) -> tuple[int, int]:
         (t0, s0, n0), (t1, _s1, _n1) = parts[0], parts[1]
         if t0 != 0 or n0 == 0 or t1 not in (0x0B, 0x0C):
             raise FirmwareError("partition layout is not an iPod (MBR)")
-        return s0 * bs, n0 * bs
+        unit = mbr_sector_unit(disk, s0, n0)
+        if s0 * unit % bs:
+            raise FirmwareError(f"the firmware partition starts at byte {s0 * unit}, not a multiple of the block size {bs}")
+        return s0 * unit, n0 * unit
     if sector0[:2] == b"ER":
         mul = sector0[2] // 2
         blk, count = 1, 1

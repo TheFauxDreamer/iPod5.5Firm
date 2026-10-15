@@ -166,7 +166,7 @@ The test of the script (6 October 2026) used disk images in test mode (`IPOD_TES
 
 Both scripts read Windows-formatted iPods (MBR) and Mac-formatted iPods (APM). On Windows, a Mac-formatted iPod has no drive letter, so the device files are not copied. The firmware partition is copied.
 
-The partition table gives sectors. iPodFirm multiplies them by the block size that the system reports. Some iPods report a block size that is not the unit of their partition table. Thus both scripts (version 2) try the reported block size, then 512, 2048 and 4096 bytes. They use the first unit where the partition starts with the STOP banner, and record it in `info.txt` ("sector unit"). If no unit matches, they use the reported block size and show a warning. A partition that does not start on a block boundary is read in whole blocks and then cut.
+The partition table gives sectors. Some iPods report a block size that is not the unit of their partition table. Thus both scripts (version 2) try the reported block size, then 512, 2048 and 4096 bytes. They use the first unit where the partition starts with the STOP banner, and record it in `info.txt` ("sector unit"). If no unit matches, they use the reported block size and show a warning. A partition that does not start on a block boundary is read in whole blocks and then cut. iPodFirm uses the same unit search for an MBR (`FirmwareFlasher.mbrSectorUnit`). Refer to [firmware-format.md](../docs/firmware-format.md#the-mbr-sector-unit).
 
 Both scripts (version 3) have hard limits for the deletion of their temporary files. They never delete recursively:
 

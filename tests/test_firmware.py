@@ -8,7 +8,7 @@ from PIL import Image
 
 from ipodfw import device, pictures, resources, theme
 from ipodfw.ipsw import extract_firmware
-from ipodfw.partition import FirmwareError, FirmwarePartition
+from ipodfw.partition import STOP_SIGN_PREFIX, FirmwareError, FirmwarePartition
 
 
 def test_parse_directory(partition_bytes):
@@ -153,15 +153,42 @@ class FakeDisk:
         self.data, self.bs = data, bs
 
     def read(self, offset, length):
+        if offset < 0 or offset + length > len(self.data):
+            raise OSError(f"short read at {offset}")
         return self.data[offset:offset + length]
 
 
-def test_locate_mbr_partition():
-    disk = bytearray(4096)
-    struct.pack_into("<4xB3xII", disk, 0x1BE, 0x00, 63, 1000)
-    struct.pack_into("<4xB3xII", disk, 0x1CE, 0x0B, 1063, 99999)
+def mbr_disk(start, count, unit, banner=True):
+    """A disk with an MBR. The firmware partition starts at start units of unit bytes."""
+    disk = bytearray(start * 4096 + 4096)
+    struct.pack_into("<4xB3xII", disk, 0x1BE, 0x00, start, count)
+    struct.pack_into("<4xB3xII", disk, 0x1CE, 0x0B, start + count, 99999)
     disk[510:512] = b"\x55\xaa"
-    assert device.locate_firmware_partition(FakeDisk(bytes(disk), 512)) == (63 * 512, 1000 * 512)
+    if banner:
+        disk[start * unit:start * unit + len(STOP_SIGN_PREFIX)] = STOP_SIGN_PREFIX
+    return bytes(disk)
+
+
+def test_locate_mbr_partition():
+    assert device.locate_firmware_partition(FakeDisk(mbr_disk(63, 1000, 512), 512)) == (63 * 512, 1000 * 512)
+
+
+def test_locate_mbr_unit_fallback():
+    # The disk reports 2048-byte blocks, but the MBR counts 512-byte sectors.
+    assert device.locate_firmware_partition(FakeDisk(mbr_disk(64, 1000, 512), 2048)) == (64 * 512, 1000 * 512)
+    # The disk reports 512-byte blocks, but the MBR counts 2048-byte sectors.
+    assert device.locate_firmware_partition(FakeDisk(mbr_disk(16, 1000, 2048), 512)) == (16 * 2048, 1000 * 2048)
+
+
+def test_locate_mbr_without_banner_uses_block_size():
+    # A damaged partition has no banner. The rescue restore must still find it.
+    disk = mbr_disk(63, 1000, 512, banner=False)
+    assert device.locate_firmware_partition(FakeDisk(disk, 512)) == (63 * 512, 1000 * 512)
+
+
+def test_locate_mbr_refuses_unaligned_start():
+    with pytest.raises(FirmwareError):
+        device.locate_firmware_partition(FakeDisk(mbr_disk(63, 1000, 512), 2048))
 
 
 def test_locate_apm_partition():
