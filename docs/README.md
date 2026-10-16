@@ -14,6 +14,7 @@ All data is for Apple RetailOS 1.3 (`iPod_25.1.3.ipsw`). Other firmware versions
 | [ghidra-guide.md](ghidra-guide.md) | How to search the firmware with Ghidra: the set-up, the scripts, the search recipes, the procedure for an AI agent, the port to another firmware version and the support of another iPod model. |
 | [firmware-functions.md](firmware-functions.md) | The Ghidra findings: the firmware functions, vtables, RAM addresses and resource IDs that are identified. The method and the scripts. |
 | [app-and-device.md](app-and-device.md) | The app structure, the detection of the iPod, the privileged helper, and each external process, system API and network call. |
+| [ipod-shuffle.md](ipod-shuffle.md) | A specification of the iPod shuffle (Songs and Albums), with code in C and Swift to copy it into a music player. It has no links to other files, so you can share it alone. |
 | [safety.md](safety.md) | The protections before and during a flash, the backups, the recovery procedure, and the known problems. |
 | [../USB-AUDIO-OUT.md](../USB-AUDIO-OUT.md) | The plan and the status of USB-C audio out: the USB host stack, the missing isochronous support, the stages and the gates. |
 

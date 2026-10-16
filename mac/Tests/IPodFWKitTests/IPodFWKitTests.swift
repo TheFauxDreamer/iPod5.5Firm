@@ -957,13 +957,13 @@ final class PatcherOptionTests: XCTestCase {
         XCTAssertGreaterThan(out.count, Patcher.maxOSOSSize)
         XCTAssertEqual(le32(out, 0x1d8260) & 0xFF00_0000, 0xEB00_0000)
         XCTAssertNotEqual(le32(out, 0x1d8260), le32(osos, 0x1d8260))
-        // the wrappers are in the probe code, which starts at 0x736800 and is shorter than 16 KB
-        for at in [0x6c8730, 0x6c878c] { XCTAssertTrue((Patcher.maxOSOSSize..<Patcher.maxOSOSSize + 0x4000).contains(Int(le32(out, at)))) }
+        // the wrappers are in the probe code, which starts at 0x736800 and is shorter than 24 KB (version 1.21: 19760 bytes)
+        for at in [0x6c8730, 0x6c878c] { XCTAssertTrue((Patcher.maxOSOSSize..<Patcher.maxOSOSSize + 0x6000).contains(Int(le32(out, at)))) }
         // after other data (a theme and the Dark Mode items to 0x7eb123): the probe goes after it
         var filled = osos + [UInt8](repeating: 0, count: 0x7eb123 - osos.count)
         filled[0x7eb122] = 1
         let after = try Patcher.apply(probe, to: filled, originalSHA256: ThemeImport.sha256(osos))
-        XCTAssertTrue((0x7eb130..<0x7eb130 + 0x4000).contains(Int(le32(after, 0x6c8730))))
+        XCTAssertTrue((0x7eb130..<0x7eb130 + 0x6000).contains(Int(le32(after, 0x6c8730))))
         // with the other code patches: different areas and hook sites
         let names = ["album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input", "usb-host-probe"]
         _ = try Patcher.apply(all.filter { names.contains($0.spec.name) }, to: osos)
@@ -1078,6 +1078,25 @@ final class USBProbeLogTests: XCTestCase {
                        "art add test 0 (later) — dbid …00001234: +0x78 2 → 2, +0xc 1 → 1, nothing added")
         XCTAssertEqual(USBProbeLog.audioText(67, [0, 0xFFFF_FFFF, 0xFFFF_FFFF, 0]),
                        "art add test 0 (before the host start) — not run: no art cache or no ArtworkDB entry")
+        XCTAssertEqual(USBProbeLog.audioText(68, [0xC400, 0, 0x100, 0x0108]),
+                       "volume range — -60.0 dB to 0.0 dB, resolution 1.0000 dB, 1 sub-ranges")
+        XCTAssertEqual(USBProbeLog.audioText(68, [0, 0, 0, 0xFF]), "volume range — no answer; the probe uses −60 dB to 0 dB")
+        XCTAssertEqual(USBProbeLog.audioText(69, [128, 0xF3F5, 0x0000, 0x0003]),
+                       "volume — iPod output 128 of 256 → -12.0 dB; status channel 1 0x00, channel 2 0x00; request 3, 0 errors")
+        XCTAssertEqual(USBProbeLog.audioText(69, [0, 0x8000, 0x4040, 0x0001_0004]),
+                       "volume — iPod output 0 of 256 → silence; status channel 1 0x40, channel 2 0x40; request 4, 1 errors")
+        XCTAssertEqual(USBProbeLog.audioText(71, [0x0005_0203, 0x0000_0201, 0, 0]),
+                       "button report — interface 3, 2 bytes: 0102; pushed: volume +, play/pause; 0 errors")
+        XCTAssertEqual(USBProbeLog.audioText(71, [0x0000_0103, 0, 0, 0]), "button report — interface 3, 1 bytes: 00; pushed: none; 0 errors")
+        XCTAssertEqual(USBProbeLog.hidDescriptorText([0x001F_0503, 0, 0x0102_0100, 0x0000_0403], [0x05, 0x0C, 0x09, 0x01] + [UInt8](repeating: 0, count: 36)),
+                       "HID report descriptor — interface 3, endpoint 5 IN, 31 bytes; bytes 0–30: 050C0901000000000000000000000000000000000000000000000000000000; volume + bit 0, volume − bit 1, play/pause bit 2, next bit 3, previous bit 4, report ID 1, no array")
+        XCTAssertEqual(USBProbeLog.hidDescriptorText([0x00FF_0503, 0, 0, 0], []), "HID report descriptor — interface 3: no answer")
+        XCTAssertEqual(USBProbeLog.audioText(72, [0x047B, 1, 0x1390_0000, 0x1390_0000]),
+                       "key posted — volume + (private) push, result 1, sender 0x13900000, app port 0x13900000")
+        XCTAssertEqual(USBProbeLog.audioText(72, [0x073A, 0xFFFF_FFFF, 0, 0]), "key posted — stop release, result -1, sender 0x00000000, app port 0x00000000")
+        XCTAssertEqual(USBProbeLog.audioText(72, [0x0120, 0, 0, 0]), "key to the UI task (0x1ac198) — volume + push")
+        XCTAssertEqual(USBProbeLog.audioText(72, [0x001C, 0, 0, 0]), "key to the UI task (0x1ac198) — play/pause release")
+        XCTAssertEqual(USBProbeLog.audioText(73, [0x057D, 50, 45, 0]), "key in the UI task — volume − (private) repeat, volume level 50 → 45")
     }
 }
 

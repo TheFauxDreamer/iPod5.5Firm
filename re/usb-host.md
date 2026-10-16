@@ -378,6 +378,8 @@ Thus the sleep blocks, and the cost is the work for each 1 ms packet. Probe 1.9 
 
 ## The lag is not in the music path (probe 1.9, 2026-10-13)
 
+Update (2026-10-16): the owner found that a separate patch caused the UI lag, not the USB host probe. The item is closed.
+
 Probe 1.9 on the real iPod: no restart; the music played. The CPU record (the microsecond timer): the copy of the probe 1.1 %, Apple's packet fill 2.8 % of 152 s. Thus the USB audio work is not the cause of the lag.
 
 The byte 0x1081dff6 is not the cause either: in the block at 0x1081dfdc, only the reset (writes 0) and 0x1d56e0 (sets it if a special file exists in `iPod_Control\Device`) use offset 0x1a, and only 0x1e2f74 reads it.
@@ -562,6 +564,91 @@ Probe 1.19 does not call 0x19ff0c. Baseline without the host start: the owner se
 Root cause: 0x19ff0c (with 0x1a0120) after each log write of the probe. Apple calls it only before the sleep and before the disk mode. The probe called it many times and never called 0x19ff6c. After it, the request of the playing track did not reach the art cache list. The exact step that 0x19ff0c stops is not measured, because the fix removes the call.
 
 Host mode with probe 1.19 ("Start the Probe Without Music"): the owner sees the art; + 0x78 grows from 3 to 7 and 10. Thus the root cause is confirmed in host mode. A connection to the Mac while host mode runs froze the iPod.
+
+## The volume and the buttons (Ghidra, 2026-10-15)
+
+The volume of the iPod:
+
+- The app object (pointer at RAM 0x1081da18) keeps the volume level (0–100) at + 0x758. 0x1e9e88(app, level) sets it.
+- 0x88ff8 calculates the output volume (level × maximum / 100, 0–256). 0x1eee50 writes it to + 0x40c at each change, then sends it to the audio system with the property 0x607c (0x1928f4).
+- 0x1e8d10(app, step, show) is volume up. 0x1e9c84(app, step, show) is volume down. show = 1 opens the volume overlay (0x1eaacc). These methods change the UI state, thus they must run in the UI task.
+
+The keys of the UI handler 0x1d8aa4 (called by 0x1d81cc for the key types 4–7):
+
+| Key code | Action |
+|---|---|
+| 0x3a | Play/pause toggle |
+| 0x3b, 0x3c | Play, pause (probable) |
+| 0x3d | 0x1e75c0: a volume state (probably mute) |
+| 0x3e, 0x3f | Next and previous track (0xa9830, 0xada3c) |
+| 0x47, 0x48 | Fast forward and rewind: 0x1ec3c0 sets app + 0x6dc to 1 or 2, then a 500 ms timer; the release calls 0x1eefe8 |
+| 0x49–0x4c | 0x1ac198 with 0x6e, 0x6f, 0x57, 0x58 |
+
+No key for volume up or down is found yet.
+
+The key events: 0x2141fc(0x14) gives a 20-byte event, 0x222d74 fills it (type, source, code), and 0x13d524 sends it. The key class (vtable at 0x2a9bb0) has the methods 0x13d148 (push, type 4), 0x13d4b8 (repeat, type 5), 0x13d4f8 (held, type 6) and 0x13ce10 (release, type 7). 0x13d524 calls the handlers at once, in the task that calls it (0x101800 gives the context of the current task). Thus a different task must not call it.
+
+The EarPods: interface 3 (HID, report descriptor 31 bytes, endpoint 0x85) and interface 4 (HID, 42 bytes, endpoint 0x86).
+
+Probe 1.21:
+
+- It reads app + 0x40c in each wait of USBAudioTask and sends SET_CUR volume to the EarPods, without a wait (40 · log10(v / 256) dB, clamped to the UAC2 RANGE of the device; v = 0 gives 0x8000, silence).
+- It reads the report descriptors, polls the interrupt endpoints with its own periodic queue heads (S-mask 0x04, C-mask 0x70, hub 0, port 1, each 8th frame), and logs each changed report.
+- The buttons do not act yet: a safe path into the UI task is not found yet.
+
+## The volume and the buttons: probe 1.21 result and the key path (2026-10-16)
+
+Probe 1.21 on the real iPod: the EarPods volume follows the click wheel, with no gaps in the music.
+
+- The volume range of the EarPods (UAC2 RANGE): −60 dB to 0 dB, resolution 0.5 dB, one sub-range.
+- All 51 SET_CUR requests were correct (status 0). The iPod output went from 0 (silence) to 128 of 256 (−12 dB).
+- Interface 3, report descriptor (31 bytes): `05 0C 09 01 A1 01 85 01 15 00 25 01 09 CD 09 E9 09 EA 09 CF 95 04 75 01 81 02 95 0C 81 05 C0`. Report ID 1; bit 0 play/pause (0xCD), bit 1 volume + (0xE9), bit 2 volume − (0xEA), bit 3 voice command (0xCF); 12 constant bits.
+- Interface 4 (42 bytes): a vendor page (0xFF00) with report ID 1 (output, 63 bytes) and report ID 2 (input, 63 bytes). No buttons.
+- The reports: `01 04` volume −, `01 01` play/pause, `01 00` release.
+
+The key path into the UI task:
+
+- 0x13d6d4(event, target, async, sender, 0) puts an event into the message queue of the task of the target when async = 1 (0x151c10 → 0x1517d4 → 0x120e7c). The target port is target + 0xc → + 0xc → + 0x1c. If sender = 0, it reads the context of the current task (0x101800, then + 0x1c); a task without a context would give a wrong value. Thus the probe gives the sender.
+- 0x1d2ee8 and 0x1d32e0 post to the app target at RAM 0x1081da80 in this way. The player tasks call them.
+- The key code is bits 16–23 of event + 0x10 (0x2564b0).
+- The codes 0x7b and 0x7d are not compared by any key handler (0x14dd30 compares them as text characters only).
+
+Probe 1.22: USBAudioTask posts key events. Play/pause uses Apple's key 0x3a (push and release; 0x1d8aa4 acts at the release). Volume + and − use the private codes 0x7b and 0x7d, with a repeat while held. The probe's `hook_event` (0x1d8260, UI task) catches the private codes and calls 0x1e8d10 or 0x1e9c84 with a step of 5 and the volume bar.
+
+## The buttons: the key path of the remote (2026-10-16)
+
+Probe 1.22 on the real iPod: the buttons did not operate the iPod. The log: each button report decoded correctly, and each post with 0x13d6d4 returned 1 (USBAudioTask has an app context; sender 0x135747f4, app port 0x13e5b094). But no record of the UI hook came. Thus a `MsgS` message to the app target does not reach the key handler 0x1d81cc.
+
+The message table of the UI task (0x2a9bac, entries {kind, handler, 0}):
+
+| Kind | Handler | Action |
+|---|---|---|
+| `kDwn` | 0x13d148 | A key push: makes the type 4 event and gives it to 0x13d524 in the UI task |
+| `kAut` | 0x13d4b8 | A key repeat (type 5) |
+| `kP&H` | 0x13d4f8 | A key held (type 6) |
+| `kUp ` | 0x13ce10 | A key release (type 7) |
+| `time` | 0x13cf8c | A timer |
+| `MsgS` | 0x13d368 | An event to one target (0x13d6d4) |
+| `Weel` | 0x13cfcc | The wheel |
+
+0x1ac198(code, down, interrupt) sends `kDwn` or `kUp ` with the key code in bits 16–23 (0x151a40: with interrupt = 0 a locked queue and the event 0xd1e70; else a queue for an interrupt). It keeps the state of each key in tables at RAM 0x10883478 + code and 0x10883589 + code. The table at 0x10883510 has 0x79 entries, thus the codes are 0–0x78. The callers: the front buttons (0xada4c), the Simple Remote (0x1e6a84) and others.
+
+The Simple Remote handler 0x1e6a84 (lingo class methods 0x1e6850 and 0x1e6950) maps each bit of the button mask to a key code with the table at 0x63ef30:
+
+| Bit | Button | Key code |
+|---|---|---|
+| 0 | Play/pause | 0x1c |
+| 1 | Volume up | 0x20 |
+| 2 | Volume down | 0x1f |
+| 3 | Next track | 0x1e |
+| 4 | Previous track | 0x1d |
+| 5–25 | Next album, previous album, stop (0x3a), play (0x3b), pause (0x3c), mute (0x3d), …, menu (0x49), select (0x4a), up (0x4b), down (0x4c) | 0x38–0x4c |
+
+This corrects the note above: 0x3a is Stop, not Play/Pause.
+
+Probe 1.23 calls 0x1ac198 with 0x1c, 0x20 and 0x1f at each push and release of an EarPods button (third argument 0). The UI task makes the repeats and the volume bar, as for an Apple Remote.
+
+Real iPod, probe 1.23 (2026-10-16): **all EarPods buttons operate the iPod as expected** (volume +, volume −, play/pause). The log has 12 pushes and releases of volume − and 3 of volume + (then the log was full); 0 underruns.
 
 ## Open items
 

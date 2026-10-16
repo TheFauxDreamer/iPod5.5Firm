@@ -20,6 +20,8 @@ public enum USBProbeLog {
     static let musicStartTag = 13 * 4, musicStatsTag = 13 * 4 + 1, musicChainTag = 13 * 4 + 2, musicSleepTag = 13 * 4 + 3, musicStopTag = 14 * 4, idleTag = 14 * 4 + 1
     static let artStepTag = 14 * 4 + 2, artSummaryTag = 14 * 4 + 3, artStateTag = 15 * 4, outputMadeTag = 15 * 4 + 1
     static let artCacheTag = 15 * 4 + 2, artGatesTag = 15 * 4 + 3, artQueuesTag = 16 * 4, artDBTag = 16 * 4 + 1, artLookupTag = 16 * 4 + 2, artAddTag = 16 * 4 + 3
+    static let volumeRangeTag = 17 * 4, volumeSetTag = 17 * 4 + 1, hidDescTag = 17 * 4 + 2, hidReportTag = 17 * 4 + 3
+    static let keyPostTag = 18 * 4, keyActionTag = 18 * 4 + 1
 
     public struct Entry: Hashable {
         public var driver: String
@@ -53,7 +55,11 @@ public enum USBProbeLog {
             let tag = Int(data[o + 1])
             let regs = (0..<4).map { le32(data, o + 4 + 4 * $0) }
             let atR1 = Array(data[o + 20..<o + 40]), atR2 = Array(data[o + 40..<o + 60])
-            if tag >= audioDeviceTag && tag <= artAddTag {
+            if tag == hidDescTag {
+                out.append(Entry(driver: "Audio", call: hidDescriptorText(regs, atR1 + atR2), device: nil, interface: nil, registers: regs))
+                continue
+            }
+            if tag >= audioDeviceTag && tag <= keyActionTag {
                 out.append(Entry(driver: "Audio", call: audioText(tag, regs), device: nil, interface: nil, registers: regs))
                 continue
             }
@@ -243,12 +249,73 @@ public enum USBProbeLog {
             let added = (r[2] & 0xFFFF) > (r[1] & 0xFFFF) ? "added" : "nothing added"
             return String(format: "art add test %d (%@) — dbid …%08X: +0x78 %d → %d, +0xc %d → %d, %@",
                           r[3] >> 8, artPhaseName(r[3] & 0xFF), r[0], r[1] & 0xFFFF, r[2] & 0xFFFF, r[1] >> 16, r[2] >> 16, added)
+        case volumeRangeTag where r[3] & 0xFF < 8 || r[3] & 0xFF == 0xFF:
+            return "volume range — no answer; the probe uses −60 dB to 0 dB"
+        case volumeRangeTag:
+            return String(format: "volume range — %@ to %@, resolution %.4f dB, %d sub-ranges", decibels(r[0]), decibels(r[1]), Double(r[2]) / 256, r[3] >> 8)
+        case volumeSetTag:
+            return String(format: "volume — iPod output %d of 256 → %@; status channel 1 0x%02X, channel 2 0x%02X; request %d, %d errors",
+                          r[0], decibels(r[1]), r[2] & 0xFF, r[2] >> 8 & 0xFF, r[3] & 0xFFFF, r[3] >> 16)
+        case hidReportTag:
+            let length = Int(r[0] >> 8 & 0xFF)
+            let bytes = (1...3).flatMap { i in (0..<4).map { UInt8(r[i] >> (8 * $0) & 0xFF) } }.prefix(min(length, 12))
+            return String(format: "button report — interface %d, %d bytes: %@; pushed: %@; %d errors",
+                          r[0] & 0xFF, length, hex(Array(bytes), 12), buttonNames(r[0] >> 16 & 0xFF), r[0] >> 24)
+        case keyPostTag where r[1] == 0 && r[2] == 0 && r[3] == 0:
+            return String(format: "key to the UI task (0x1ac198) — %@ %@", keyName(r[0] & 0xFF), keyType(r[0] >> 8 & 0xFF))
+        case keyPostTag:
+            return String(format: "key posted — %@ %@, result %d, sender 0x%08X, app port 0x%08X",
+                          keyName(r[0] & 0xFF), keyType(r[0] >> 8 & 0xFF), Int32(bitPattern: r[1]), r[2], r[3])
+        case keyActionTag:
+            return String(format: "key in the UI task — %@ %@, volume level %d → %d", keyName(r[0] & 0xFF), keyType(r[0] >> 8 & 0xFF), r[1], r[2])
         case musicStopTag:
             let reason = [1: "the dock was disconnected", 2: "the device does not answer"][Int(r[0])] ?? "reason \(r[0])"
             return String(format: "music stopped — %@, %d packets, %d siTD errors, %d sleeps", reason, r[1], r[2], r[3])
         default:
             return String(format: "memory — control page 0x%08X, siTDs 0x%08X, frame list 0x%08X, ASYNCLISTADDR 0x%08X", r[0], r[1], r[2], r[3])
         }
+    }
+
+    /// The key codes of the button records: the Simple Remote codes (table 0x63ef30, version 1.23), and the codes of
+    /// version 1.22 (0x3a is Stop, not Play/Pause; 0x7b and 0x7d were private codes).
+    static func keyName(_ code: UInt32) -> String {
+        [0x1C: "play/pause", 0x20: "volume +", 0x1F: "volume −", 0x1E: "next track", 0x1D: "previous track",
+         0x3A: "stop", 0x7B: "volume + (private)", 0x7D: "volume − (private)"][code] ?? String(format: "key 0x%02X", code)
+    }
+
+    /// Version 1.23: 1 push, 0 release. Version 1.22: the event types 4, 5 and 7.
+    static func keyType(_ type: UInt32) -> String {
+        [0: "release", 1: "push", 4: "push", 5: "repeat", 6: "held", 7: "release"][type] ?? "type \(type)"
+    }
+
+    /// A UAC2 volume value in 1/256 dB (16 bits, signed); 0x8000 is silence.
+    static func decibels(_ value: UInt32) -> String {
+        value & 0xFFFF == 0x8000 ? "silence" : String(format: "%.1f dB", Double(Int16(truncatingIfNeeded: value)) / 256)
+    }
+
+    /// The buttons of a decoded report (version 1.21): bit 0 volume +, 1 volume −, 2 play/pause, 3 next, 4 previous; 0x80 a different report.
+    static func buttonNames(_ mask: UInt32) -> String {
+        if mask & 0x80 != 0 { return "a report with a different ID" }
+        let names = ["volume +", "volume −", "play/pause", "next", "previous"]
+        let pushed = names.enumerated().filter { mask & (1 << UInt32($0.offset)) != 0 }.map(\.element)
+        return pushed.isEmpty ? "none" : pushed.joined(separator: ", ")
+    }
+
+    /// The HID report descriptor record (version 1.21): r0 interface | endpoint << 8 | bytes << 16, r1 offset,
+    /// r2 the bits of volume +, volume −, play/pause and the report ID, r3 the bits of next and previous and the array; 40 bytes.
+    static func hidDescriptorText(_ r: [UInt32], _ bytes: [UInt8]) -> String {
+        let total = Int(r[0] >> 16 & 0xFF), offset = Int(r[1])
+        if total == 0xFF { return String(format: "HID report descriptor — interface %d: no answer", r[0] & 0xFF) }
+        func bit(_ b: UInt32) -> String { b == 0xFF ? "none" : b == 0xFE ? "after bit 253" : "bit \(b)" }
+        let chunk = Array(bytes.prefix(max(0, min(40, total - offset))))
+        var text = String(format: "HID report descriptor — interface %d, endpoint %d IN, %d bytes; bytes %d–%d: %@",
+                          r[0] & 0xFF, r[0] >> 8 & 0xFF, total, offset, offset + max(chunk.count, 1) - 1, hex(chunk, 40))
+        if offset == 0 {
+            let array = r[3] >> 16 == 0 ? "no array" : String(format: "an array of %d fields of %d bits", r[3] >> 24, r[3] >> 16 & 0xFF)
+            text += String(format: "; volume + %@, volume − %@, play/pause %@, next %@, previous %@, report ID %d, %@",
+                           bit(r[2] & 0xFF), bit(r[2] >> 8 & 0xFF), bit(r[2] >> 16 & 0xFF), bit(r[3] & 0xFF), bit(r[3] >> 8 & 0xFF), r[2] >> 24, array)
+        }
+        return text
     }
 
     /// The phase of an art record (version 1.14): the same values as the idle records.

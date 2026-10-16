@@ -102,32 +102,26 @@
 #define TAG_MUSIC_STOP           (14 * 4 + 0)
 #define TAG_IDLE                 (14 * 4 + 1)
 /* Tags 58-61 (the trace of ArtworkLoadTask, version 1.12) are not used since version 1.13. */
-/* Version 1.14: the state of the art gates (re/usb-host.md, "The art in host mode: static analysis").
- * The probe only reads. It adds no hook in Apple's code. */
-#define TAG_ART_CACHE            (15 * 4 + 2)
-#define TAG_ART_GATES            (15 * 4 + 3)
-#define TAG_ART_QUEUES           (16 * 4 + 0)
-#define TAG_ART_DB               (16 * 4 + 1)
-#define TAG_ART_LOOKUP           (16 * 4 + 2)
-#define TAG_ART_ADD              (16 * 4 + 3)
-#define ARTWORKDB_MAGIC 0x6974696c                      /* the first word of the ArtworkDB object (0xa137c) */
-#define APP_OBJECT    0x1081da18                        /* RAM: the app object (+0x1c the database object) */
-#define USB_DEVICE    0x108711d4                        /* the USB device object (0x24d88c returns it) */
-#define ART_LIBRARY   0x10882b70                        /* the library singleton (0x1bfef0 returns it) */
-#define PLAY_QUEUE    (*(volatile unsigned *)0x1081d9cc)  /* the play queue singleton (0x196418) */
-#define IMPORT_OBJECT (*(volatile unsigned *)0x1081e97c)  /* the photo import object (made by 0x19a48c) */
-void *fw_art_cache(void *library, int id);             /* 0x1bfb74: the art cache with this identifier */
-void *fw_import_find(void);                            /* 0x19a51c: the photo import service (0x4280) */
-int fw_import_active(void *import);                    /* 0x197e70: 1 if the import state is 1-5 or 7 */
-int fw_list_next(void *iterator, unsigned *entry);
-void *fw_art_find(void *artdb, unsigned unused, unsigned id_low, unsigned id_high, int indexed);  /* 0x9a0f8 */
-void fw_art_add(void *cache, int on, unsigned id_low, unsigned id_high);  /* 0x205e64: adds a track to the art cache */     /* 0x1e27e0: the next entry of a list (iterator: list, index -2) */
+/* Tags 62-67 (the art records, versions 1.14-1.18) are not used since version 1.21. The root cause of
+ * the missing Now Playing art was the call of 0x19ff0c after each log write (re/usb-host.md). */
+#define APP_OBJECT    0x1081da18                        /* RAM: the app object (+0x40c the output volume) */
+/* Version 1.21: the volume and the buttons of the USB audio device. */
+#define TAG_VOLUME_RANGE         (17 * 4 + 0)           /* r0 min, r1 max, r2 resolution (1/256 dB), r3 bytes | sub-ranges << 8 */
+#define TAG_VOLUME_SET           (17 * 4 + 1)           /* r0 iPod volume, r1 SET_CUR value, r2 status 1 | 2 << 8, r3 count | errors << 16 */
+#define TAG_HID_DESC             (17 * 4 + 2)           /* r0 interface | endpoint << 8 | bytes << 16, r1 offset, r2 r3 the map; 40 bytes */
+#define TAG_HID_REPORT           (17 * 4 + 3)           /* r0 interface | length << 8 | buttons << 16 | errors << 24, r1-r3 bytes 0-11 */
+/* Version 1.23: the buttons as iPod controls, through the key path of the remote (re/usb-host.md). */
+#define TAG_KEY_POST             (18 * 4 + 0)           /* r0 code | push << 8 (1 push, 0 release), r1 0, r2 0, r3 0 */
+/* Tag 73 (the volume key in the UI task, version 1.22) is not used since version 1.23. */
+#define KEY_PLAY_PAUSE  0x1c                            /* the key codes of the Simple Remote table at 0x63ef30 */
+#define KEY_VOLUME_UP   0x20
+#define KEY_VOLUME_DOWN 0x1f
+void fw_key(unsigned code, int down, unsigned interrupt);  /* 0x1ac198: a key push or release to the UI task */
 /* The statistics of the idle routine 0xded04 (the kernel object at 0xdee84): +0 and +8 the idle
  * microseconds of the two cores (64 bits each, the timer 0x60005010). */
 #define IDLE_STATS ((volatile unsigned *)0x14983040)
 #define ERROR_STREAK 200                                /* siTD errors in a row: the device is gone */
 #define USEC       (*(volatile unsigned *)0x60005010)   /* the microsecond timer (0x282860) */
-#define VOLUME_DB  (-20)                                /* the volume of the device (UAC2 feature unit) */
 #define AHEAD_LOW  24                                   /* the frames in front after a wait */
 #define AHEAD_HIGH 36                                   /* the frames in front after a send (24 + 12) */
 #define STATS_PACKETS 5000                              /* a status record and a log write each 5 s of music */
@@ -237,8 +231,7 @@ static void make_path(unsigned *path, const char *name)
     fw_strcpy((char *)path + 4, name);
 }
 
-/* Returns '1' (the full test), '2' (no music route) or '3' (no host start: the art records only,
- * version 1.18) from the trigger file, else 0. */
+/* Returns '1' (the full test) or '2' (no music route) from the trigger file, else 0. */
 static int read_flag(void)
 {
     unsigned path[0x108 / 4], fh[0x30 / 4], got = 1;
@@ -250,7 +243,7 @@ static int read_flag(void)
         return 0;
     err = file_read(fh, &got, &c);
     file_close(fh);
-    return err == 0 && got == 1 && (c == '1' || c == '2' || c == '3') ? c : 0;
+    return err == 0 && got == 1 && (c == '1' || c == '2') ? c : 0;
 }
 
 /* Writes len bytes at the start of an existing file. Returns 0 if the write is correct.
@@ -606,9 +599,15 @@ static const short sine[48] = {                       /* one period: 1 kHz at 48
      -4000,  -3966,  -3864,  -3696,  -3464,  -3173,  -2828,  -2435,  -2000,  -1531,  -1035,   -522
 };
 
+struct hid {                                            /* an HID interface with an interrupt IN endpoint */
+    unsigned interface, endpoint, packet, length;       /* length: of the report descriptor */
+};
+
 struct audio {
     unsigned address, interface, alt, endpoint, packet, clock;
     unsigned control_interface, volume_unit;            /* the AC interface; the unit before the output terminal */
+    unsigned hids;                                      /* version 1.21: the HID interfaces (the buttons) */
+    struct hid hid[2];
 };
 
 static volatile unsigned char *dma_page;                /* control QH, qTDs, setup, data, tone buffer */
@@ -640,158 +639,6 @@ static void idle_mark(int phase)
     idle_time = now;
     idle_core0 = i0;
     idle_core1 = i1;
-}
-
-/* The art gates (version 1.14). Two records; "phase" is the same value as in idle_mark.
- * TAG_ART_CACHE: r0 the art cache object; r1 the capacity +0x74; r2 +0x78;
- *   r3 phase | +0x70 << 8 | +0x71 << 16 | +0x72 << 24.
- * TAG_ART_GATES: r0 the library open flag +0x54 | +0x55 << 8 | the request count (+0x54 list) << 16
- *   | the count +0xc << 24 (each count at most 255);
- *   r1 the photo import service (0x19a51c);
- *   r2 the import state +0x1c | the result of 0x197e70 << 8 | (the service is the object at 0x1081e97c) << 16,
- *   or 0xffffffff if no service;
- *   r3 the play queue +4 (0 = no play queue), or 0xffffffff if no play queue object. */
-static void *art_cache;
-static unsigned art_count(unsigned list);
-
-/* TAG_ART_QUEUES (version 1.15): the path of a track request. 0x1bfe84 puts the track into the
- * library queue (+0x10, list +0x14) and posts the event 0x55000000 to the library. Its handler
- * (0x1c020c, 0x1c00e8) gives the track to each cache entry with the byte +8 set (0x1bfe18), into the
- * cache queue (+0x20, list +0x24). The task empties that queue (0x206860).
- * r0 the library queue count | the cache queue count << 8 | the cache entries << 16
- *   | the byte +8 of the entry of the art cache << 24 (0xff: no entry);
- * r1 the library +0x30; r2 the art cache +0x4c (the task event); r3 the phase. */
-static void art_queues(int phase)
-{
-    struct { unsigned list; int index; } it = { ART_LIBRARY + 0x3c, -2 };
-    unsigned entry = 0, entries = 0, enabled = 0xff, a = (unsigned)art_cache;
-    while (entries < 16 && fw_list_next(&it, &entry)) {
-        if (entry && read32(entry) == a && a)
-            enabled = *(volatile unsigned char *)(entry + 8);
-        entries++;
-    }
-    log_regs(TAG_ART_QUEUES, art_count(read32(ART_LIBRARY + 0x14)) | (a ? art_count(read32(a + 0x24)) : 0xff) << 8
-             | entries << 16 | enabled << 24, read32(ART_LIBRARY + 0x30), a ? read32(a + 0x4c) : 0, (unsigned)phase);
-}
-
-static unsigned art_count(unsigned list)
-{
-    unsigned n = 0;
-    while (list && n < 255) {
-        list = read32(list);
-        n++;
-    }
-    return n;
-}
-
-static unsigned read8(unsigned a)
-{
-    return read32(a & ~3u) >> ((a & 3) * 8) & 0xff;
-}
-
-/* TAG_ART_DB (version 1.16): the ArtworkDB handle and the database reload. The art lookup
- * (0x18d010, 0x9b0a0) needs the handle at database +0xd2c. The first load sets it (0xa1ff0); the
- * reload 0xb4fe4 clears it (0x91164) and does not set it again. The reload runs from 0x1e9f9c when
- * the app +0x484 is set (0x1ed9f0, event 0x63800003) and the USB device state +0x218 is 1.
- * r0 database +0xd2c; r1 database +0xd14;
- * r2 app +0x484 | +0x489 << 8 | +0x48a << 16 (0x1e78e8 sets it) | +0x487 << 24;
- * r3 phase | USB device +0x218 << 8. 0xffffffff: no object. */
-static void art_db(int phase)
-{
-    unsigned app = read32(APP_OBJECT), db = app ? read32(app + 0x1c) : 0;
-    log_regs(TAG_ART_DB, db ? read32(db + 0xd2c) : 0xffffffff, db ? read32(db + 0xd14) : 0xffffffff,
-             app ? read8(app + 0x484) | read8(app + 0x489) << 8 | read8(app + 0x48a) << 16 | read8(app + 0x487) << 24
-                 : 0xffffffff,
-             (unsigned)phase | read8(USB_DEVICE + 0x218) << 8);
-}
-
-/* TAG_ART_LOOKUP (version 1.17): the ArtworkDB object and a test of the lookup 0x9a0f8.
- * r0 the first word (0x6974696c is correct); r1 the entries in the list +0xc (at most 0xffffff)
- *   | the byte +6 << 24; r2 the index +0x620;
- * r3 bit 0: the list lookup finds the first entry; bit 1: the index lookup finds it; bit 2: the
- *   index lookup ran (only if the index exists, so that the probe does not make it);
- *   bits 8-31: the low 24 bits of the dbid of the first entry. 0xffffffff: no ArtworkDB. */
-static void art_lookup(void)
-{
-    unsigned app = read32(APP_OBJECT), db = app ? read32(app + 0x1c) : 0, artdb = db ? read32(db + 0xd2c) : 0;
-    unsigned first, node, count = 0, result = 0;
-    if (!artdb) {
-        log_regs(TAG_ART_LOOKUP, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff);
-        return;
-    }
-    first = read32(artdb + 0xc);
-    for (node = first; node && count < 0xffffff; node = read32(node))
-        count++;
-    if (first && read32(artdb) == ARTWORKDB_MAGIC) {
-        unsigned low = read32(first + 0x10), high = read32(first + 0x14);
-        result = (low & 0xffffff) << 8;
-        if (fw_art_find((void *)artdb, 0, low, high, 0) == (void *)first)
-            result |= 1;
-        if (read32(artdb + 0x620)) {
-            result |= 4;
-            if (fw_art_find((void *)artdb, 0, low, high, 1) == (void *)first)
-                result |= 2;
-        }
-    }
-    log_regs(TAG_ART_LOOKUP, read32(artdb), count | read8(artdb + 6) << 24, read32(artdb + 0x620), result);
-}
-
-/* TAG_ART_ADD (version 1.18): a test of 0x205e64, the step of the art task that adds a track to the
- * art cache list. The probe calls it for entry n of the ArtworkDB list (n = 0 before the host start,
- * 1 in host mode, 2 at the first later write). +0x78 increases by one for each art format found.
- * r0 the dbid (low word); r1 +0x78 | +0xc << 16 before; r2 the same after; r3 the phase | n << 8.
- * 0xffffffff in r1: no art cache or no ArtworkDB entry n. */
-static int art_adds;
-
-static void art_add(int phase)
-{
-    unsigned app = read32(APP_OBJECT), db = app ? read32(app + 0x1c) : 0, artdb = db ? read32(db + 0xd2c) : 0;
-    unsigned a = (unsigned)art_cache, entry = artdb ? read32(artdb + 0xc) : 0, before, low, high;
-    int n = art_adds;
-    if (art_adds >= 3 || (phase != 0 && phase != 2 && phase != 5))
-        return;
-    art_adds++;
-    while (entry && n-- > 0)
-        entry = read32(entry);
-    if (!a || !entry || read32(artdb) != ARTWORKDB_MAGIC) {
-        log_regs(TAG_ART_ADD, 0, 0xffffffff, 0xffffffff, (unsigned)phase | (unsigned)(art_adds - 1) << 8);
-        return;
-    }
-    low = read32(entry + 0x10);
-    high = read32(entry + 0x14);
-    before = (read32(a + 0x78) & 0xffff) | read32(a + 0xc) << 16;
-    fw_art_add((void *)a, 1, low, high);
-    log_regs(TAG_ART_ADD, low, before, (read32(a + 0x78) & 0xffff) | read32(a + 0xc) << 16,
-             (unsigned)phase | (unsigned)(art_adds - 1) << 8);
-}
-
-static void art_state(int phase)
-{
-    volatile unsigned char *lib = (volatile unsigned char *)ART_LIBRARY;
-    volatile unsigned char *a;
-    unsigned char *imp;
-    unsigned pq = PLAY_QUEUE, gates2 = 0xffffffff, count;
-    if (!art_cache)
-        art_cache = fw_art_cache((void *)ART_LIBRARY, 0);
-    a = (volatile unsigned char *)art_cache;
-    if (a) {
-        log_regs(TAG_ART_CACHE, (unsigned)a, read32((unsigned)a + 0x74), read32((unsigned)a + 0x78),
-                 (unsigned)phase | a[0x70] << 8 | a[0x71] << 16 | (unsigned)a[0x72] << 24);
-        count = read32((unsigned)a + 0xc);
-        count = (art_count(read32((unsigned)a + 0x54)) << 16) | (count > 255 ? 255 : count) << 24;
-    } else {
-        log_regs(TAG_ART_CACHE, 0, 0, 0, (unsigned)phase);
-        count = 0;
-    }
-    imp = fw_import_find();
-    if (imp)
-        gates2 = imp[0x1c] | (fw_import_active(imp) & 0xff) << 8 | ((unsigned)imp == IMPORT_OBJECT) << 16;
-    log_regs(TAG_ART_GATES, lib[0x54] | lib[0x55] << 8 | count, (unsigned)imp, gates2,
-             pq ? read32(pq + 4) : 0xffffffff);
-    art_queues(phase);
-    art_db(phase);
-    art_lookup();
-    art_add(phase);
 }
 
 /* A UAC2 playback interface in a configuration descriptor. Returns 0 if found. */
@@ -838,6 +685,42 @@ static int parse_audio(const unsigned char *d, unsigned len, struct audio *a)
     return -1;
 }
 
+/* A struct copy without memcpy (the firmware gives no memcpy symbol to the probe). */
+static void copy_audio(struct audio *dst, const struct audio *src)
+{
+    unsigned i;
+    for (i = 0; i < sizeof *dst / 4; i++)
+        ((unsigned *)dst)[i] = ((const unsigned *)src)[i];
+}
+
+/* The HID interfaces of a configuration (version 1.21): the interface, its HID descriptor (0x21,
+ * wDescriptorLength of the report descriptor) and its interrupt IN endpoint. At most two. */
+static void parse_hid(const unsigned char *d, unsigned len, struct audio *a)
+{
+    unsigned o = 0, cls = 0, ifn = 0, report = 0;
+    a->hids = 0;
+    while (o + 2 <= len && a->hids < 2) {
+        const unsigned char *b = d + o;
+        unsigned l = b[0], t = b[1];
+        if (l < 2 || o + l > len)
+            break;
+        if (t == 4 && l >= 9) {
+            ifn = b[2];
+            cls = b[5];
+            report = 0;
+        } else if (t == 0x21 && cls == 3 && l >= 9) {
+            report = b[7] | b[8] << 8;
+        } else if (t == 5 && l >= 7 && cls == 3 && (b[2] & 0x80) && (b[3] & 3) == 3) {
+            struct hid *h = &a->hid[a->hids++];
+            h->interface = ifn;
+            h->endpoint = b[2] & 0xf;
+            h->packet = b[4] | (b[5] & 7) << 8;
+            h->length = report;
+        }
+        o += l;
+    }
+}
+
 /* The first UAC2 playback interface of a received configuration (called at the completion, possibly in
  * the interrupt handler: it only reads and writes RAM). */
 static struct audio found;
@@ -856,6 +739,7 @@ static void find_audio(unsigned buffer, unsigned length, unsigned address)
     total = cfg[2] | cfg[3] << 8;
     if (length < 9 || cfg[1] != 2 || parse_audio(cfg, total < length ? total : length, &found) != 0)
         return;
+    parse_hid(cfg, total < length ? total : length, &found);
     found.address = address;
     audio_found = 1;
 }
@@ -872,20 +756,31 @@ static void make_td(volatile unsigned *td, unsigned next, unsigned token, unsign
     td[2] = token;                                      /* last: the token makes it active */
 }
 
-/* A control transfer through the probe's own queue head (setup, an optional OUT data stage of at most
- * 4 bytes, status IN). The UI task waits for the result. Returns 0 if correct. */
-static int control(unsigned address, unsigned setup0, unsigned setup1, unsigned data, unsigned length)
+/* A control transfer through the probe's own queue head in the asynchronous list: setup, an optional
+ * data stage, and the status stage. OUT data: at most 4 bytes (the word at +0xc0). IN data (version
+ * 1.21): at most 64 bytes, into CONTROL_IN. control_arm() starts the transfer and returns at once;
+ * control_check() gives 0x80 while it runs, else the status byte. Returns -1 if the list is not usable. */
+#define CONTROL_IN (dma_page + 0x200)
+static int control_data;
+
+static int control_arm(unsigned address, unsigned setup0, unsigned setup1, unsigned data, unsigned length, int in)
 {
     volatile unsigned *qh = (volatile unsigned *)dma_page;
     volatile unsigned *td_setup = qh + 0x10, *td_data = qh + 0x18, *td_status = qh + 0x20;
     volatile unsigned *setup = qh + 0x28, *buffer = qh + 0x30;
-    unsigned status, i;
+    unsigned i;
     setup[0] = setup0;
     setup[1] = setup1;
     buffer[0] = data;
-    make_td(td_status, 1, 0x80 | 1 << 8 | 0xc00 | 1u << 31, 0);              /* IN, 0 bytes, DATA1 */
-    if (length)
-        make_td(td_data, (unsigned)td_status, 0x80 | 0 << 8 | 0xc00 | length << 16 | 1u << 31, (unsigned)buffer);
+    control_data = length != 0;
+    if (in) {                                           /* IN data, DATA1; then status OUT, DATA1 */
+        make_td(td_status, 1, 0x80 | 0 << 8 | 0xc00 | 1u << 31, 0);
+        make_td(td_data, (unsigned)td_status, 0x80 | 1 << 8 | 0xc00 | length << 16 | 1u << 31, (unsigned)CONTROL_IN);
+    } else {                                            /* OUT data, DATA1; then status IN, DATA1 */
+        make_td(td_status, 1, 0x80 | 1 << 8 | 0xc00 | 1u << 31, 0);
+        if (length)
+            make_td(td_data, (unsigned)td_status, 0x80 | 0 << 8 | 0xc00 | length << 16 | 1u << 31, (unsigned)buffer);
+    }
     make_td(td_setup, length ? (unsigned)td_data : (unsigned)td_status, 0x80 | 2 << 8 | 0xc00 | 8 << 16, (unsigned)setup);
     /* Endpoint 0, full speed, data toggle from the qTD, 64 bytes, control endpoint; hub 0, port 1. */
     qh[1] = address | 0x4000 | 64 << 16 | 0x08000000;
@@ -897,23 +792,55 @@ static int control(unsigned address, unsigned setup0, unsigned setup1, unsigned 
     qh[4] = (unsigned)td_setup;
     if (!control_linked) {                              /* after the head of the asynchronous list */
         volatile unsigned *head = (volatile unsigned *)(ASYNCLIST & ~0x1fu);
-        if ((unsigned)head < DMA_LOW || (unsigned)head >= DMA_HIGH) {
-            log_regs(TAG_AUDIO_REQUEST, setup0, setup1, 0, 0x80);
+        if ((unsigned)head < DMA_LOW || (unsigned)head >= DMA_HIGH)
             return -1;
-        }
         qh[0] = head[0];
         head[0] = (unsigned)qh | 2;
         control_linked = 1;
     }
-    for (i = 0; i < 100; i++) {
+    return 0;
+}
+
+static unsigned control_check(void)
+{
+    volatile unsigned *qh = (volatile unsigned *)dma_page;
+    unsigned status = qh[0x20 + 2], all = qh[0x10 + 2] | status | (control_data ? qh[0x18 + 2] : 0);
+    if (!(status & 0x80))
+        return status & 0xff;
+    return all & 0x40 ? 0x40 : 0x80;                    /* a halted stage ends the transfer */
+}
+
+/* The blocking form, for the UI task. Returns 0 if correct. */
+static int control_wait(unsigned setup0, unsigned setup1)
+{
+    volatile unsigned *qh = (volatile unsigned *)dma_page;
+    unsigned status = 0x80, i;
+    for (i = 0; i < 100 && status == 0x80; i++) {
         task_sleep(2);
-        status = td_setup[2] | td_data[2] | td_status[2];
-        if (!(td_status[2] & 0x80) || (status & 0x40))
-            break;
+        status = control_check();
     }
-    status = td_status[2];
-    log_regs(TAG_AUDIO_REQUEST, setup0, setup1, td_setup[2], status);
-    return (status & 0xff) == 0 ? 0 : -1;
+    log_regs(TAG_AUDIO_REQUEST, setup0, setup1, qh[0x10 + 2], qh[0x20 + 2]);
+    return status == 0 ? 0 : -1;
+}
+
+static int control(unsigned address, unsigned setup0, unsigned setup1, unsigned data, unsigned length)
+{
+    if (control_arm(address, setup0, setup1, data, length, 0) != 0) {
+        log_regs(TAG_AUDIO_REQUEST, setup0, setup1, 0, 0x80);
+        return -1;
+    }
+    return control_wait(setup0, setup1);
+}
+
+/* Returns the count of received bytes (in CONTROL_IN), or -1. */
+static int control_in(unsigned address, unsigned setup0, unsigned setup1, unsigned length)
+{
+    volatile unsigned *qh = (volatile unsigned *)dma_page;
+    if (length > 64)
+        length = 64;
+    if (control_arm(address, setup0, setup1, 0, length, 1) != 0 || control_wait(setup0, setup1) != 0)
+        return -1;
+    return (int)(length - (qh[0x18 + 2] >> 16 & 0x7fff));
 }
 
 static void sitd_arm(volatile unsigned *s, unsigned buffer)
@@ -932,7 +859,7 @@ static int audio_test(void)
     volatile short *pcm;
     if (!audio_found)
         return -1;
-    a = found;
+    copy_audio(&a, &found);
     log_regs(TAG_AUDIO_DEVICE, a.address, a.interface | a.alt << 8 | a.endpoint << 16, a.packet, a.clock);
     ctrl = read32(UIM_STATE + 0xc);
     frames = (volatile unsigned *)read32(ctrl + 0x44);
@@ -1056,7 +983,7 @@ int hook_usb_send(void *device, int endpoint, int count, unsigned char *packets)
         length &= ~3u;
         if (length >= 4 && (in[0] | in[length / 4 - 1]))
             music_sound++;                              /* a packet that is not silence */
-        /* Whole stereo frames (32 bits). The volume is set on the device (VOLUME_DB); version 1.8
+        /* Whole stereo frames (32 bits). The volume is set on the device (volume_poll); version 1.8
          * shifted each sample, and that loop took 19 % of the CPU in the emulator. */
         for (k = 0; k < length / 4; k++)
             out[k] = in[k];
@@ -1093,6 +1020,401 @@ static void music_check(void)
     music_checked = now;
 }
 
+/* ---- Version 1.21: the volume and the buttons of the USB audio device --------------------------------
+ * The volume: the iPod keeps its output volume (0-256, after the volume limit) at app + 0x40c; 0x1eee50
+ * writes it at each change (re/usb-host.md). USBAudioTask reads it in each wait and sends SET_CUR volume
+ * to channels 1 and 2 of the feature unit, without a wait: control_arm(), then control_check() in the
+ * next waits. The curve is 40 log10(v / 256) dB (full volume 0 dB, half -12 dB), clamped to the range
+ * of the device (UAC2 RANGE). v = 0 gives 0x8000, "silence" in UAC2.
+ * The buttons: the HID interfaces of the device send their reports on interrupt IN endpoints. The probe
+ * reads the report descriptors, finds the bits of the Consumer page usages (volume +, volume -,
+ * play/pause, next, previous), and polls each endpoint with its own periodic queue head. Version 1.21
+ * only logs the reports; the actions on the iPod follow in version 1.22. */
+static const short volume_db[257] = {                  /* 1/256 dB; index 0 is not used */
+0, -24660, -21578, -19775, -18495, -17503, -16692, -16007, -15413, -14889, -14420, -13997,
+    -13610, -13254, -12924, -12617, -12330, -12061, -11806, -11566, -11338, -11121, -10914, -10716,
+    -10527, -10345, -10171, -10003,  -9841,  -9685,  -9535,  -9389,  -9248,  -9111,  -8978,  -8849,
+     -8724,  -8602,  -8483,  -8368,  -8255,  -8145,  -8038,  -7934,  -7831,  -7731,  -7634,  -7538,
+     -7444,  -7353,  -7263,  -7175,  -7089,  -7004,  -6921,  -6839,  -6759,  -6680,  -6603,  -6527,
+     -6452,  -6379,  -6306,  -6235,  -6165,  -6096,  -6028,  -5961,  -5895,  -5831,  -5767,  -5703,
+     -5641,  -5580,  -5519,  -5460,  -5401,  -5343,  -5285,  -5229,  -5173,  -5117,  -5063,  -5009,
+     -4956,  -4903,  -4851,  -4800,  -4749,  -4699,  -4649,  -4600,  -4551,  -4503,  -4456,  -4408,
+     -4362,  -4316,  -4270,  -4225,  -4180,  -4136,  -4092,  -4049,  -4006,  -3963,  -3921,  -3879,
+     -3838,  -3797,  -3757,  -3716,  -3676,  -3637,  -3598,  -3559,  -3520,  -3482,  -3444,  -3407,
+     -3370,  -3333,  -3296,  -3260,  -3224,  -3188,  -3153,  -3117,  -3083,  -3048,  -3014,  -2980,
+     -2946,  -2912,  -2879,  -2846,  -2813,  -2780,  -2748,  -2716,  -2684,  -2652,  -2621,  -2590,
+     -2559,  -2528,  -2497,  -2467,  -2437,  -2407,  -2377,  -2348,  -2318,  -2289,  -2260,  -2231,
+     -2203,  -2174,  -2146,  -2118,  -2090,  -2062,  -2035,  -2008,  -1980,  -1953,  -1926,  -1900,
+     -1873,  -1847,  -1821,  -1794,  -1769,  -1743,  -1717,  -1692,  -1666,  -1641,  -1616,  -1591,
+     -1566,  -1542,  -1517,  -1493,  -1469,  -1445,  -1421,  -1397,  -1373,  -1349,  -1326,  -1303,
+     -1279,  -1256,  -1233,  -1210,  -1188,  -1165,  -1143,  -1120,  -1098,  -1076,  -1054,  -1032,
+     -1010,   -988,   -966,   -945,   -923,   -902,   -881,   -860,   -839,   -818,   -797,   -776,
+      -756,   -735,   -715,   -694,   -674,   -654,   -634,   -614,   -594,   -574,   -554,   -535,
+      -515,   -496,   -476,   -457,   -438,   -419,   -400,   -381,   -362,   -343,   -324,   -306,
+      -287,   -269,   -250,   -232,   -214,   -195,   -177,   -159,   -141,   -123,   -105,    -88,
+       -70,    -52,    -35,    -17,      0
+};
+
+static int vol_min = -60 * 256, vol_max = 0;            /* the range of the device, in 1/256 dB */
+static int vol_step;                                    /* 0: idle; 1, 2: the channel in transfer */
+static unsigned vol_value, vol_sent = 0xffffffff, vol_sets, vol_errors, vol_status1, vol_polls;
+
+static unsigned output_volume(void)
+{
+    unsigned app = read32(APP_OBJECT), v = app ? read32(app + 0x40c) : 128;
+    return v > 256 ? 256 : v;
+}
+
+static unsigned volume_cur(unsigned v)
+{
+    int db;
+    if (v == 0)
+        return 0x8000;
+    db = volume_db[v];
+    if (db < vol_min)
+        db = vol_min;
+    if (db > vol_max)
+        db = vol_max;
+    return (unsigned)db & 0xffff;
+}
+
+static void volume_send(unsigned channel, unsigned v)
+{
+    control_arm(music_device.address, 0x21 | 0x01 << 8 | (0x0200 | channel) << 16,
+                music_device.volume_unit << 8 | music_device.control_interface | 2 << 16, volume_cur(v), 2, 0);
+    vol_polls = 0;
+}
+
+/* In USBAudioTask, at each wait. At most one request at a time; only the newest volume counts. */
+static void volume_poll(void)
+{
+    unsigned status;
+    if (!music_device.volume_unit || !dma_page)
+        return;
+    if (vol_step) {
+        status = control_check();
+        if (status == 0x80 && ++vol_polls < 100)        /* still in transfer (at most about 1 s) */
+            return;
+        if (status & 0xfc)
+            vol_errors++;
+        if (vol_step == 1) {
+            vol_status1 = status;
+            vol_step = 2;
+            volume_send(2, vol_value);
+            return;
+        }
+        vol_step = 0;
+        vol_sent = vol_value;
+        if (++vol_sets <= 100)
+            log_regs(TAG_VOLUME_SET, vol_value, volume_cur(vol_value), vol_status1 | (status & 0xff) << 8, vol_sets | vol_errors << 16);
+        return;
+    }
+    vol_value = output_volume();
+    if (vol_value != vol_sent) {
+        vol_step = 1;
+        volume_send(1, vol_value);
+    }
+}
+
+/* The range of the volume control (UAC2 RANGE: wNumSubRanges, then wMIN, wMAX, wRES of the first
+ * sub-range), and the volume at the start. UI task, before the music. */
+static void volume_start(const struct audio *a)
+{
+    volatile unsigned char *d = CONTROL_IN;
+    int got, f;
+    if (!a->volume_unit)
+        return;
+    got = control_in(a->address, 0xa1 | 0x02 << 8 | 0x0201u << 16, a->volume_unit << 8 | a->control_interface | 8 << 16, 8);
+    if (got >= 8) {
+        int lo = (short)(d[2] | d[3] << 8), hi = (short)(d[4] | d[5] << 8);
+        if (lo < hi && lo != -32768) {
+            vol_min = lo;
+            vol_max = hi;
+        }
+        log_regs(TAG_VOLUME_RANGE, (unsigned)lo & 0xffff, (unsigned)hi & 0xffff, d[6] | d[7] << 8, got | (d[0] | d[1] << 8) << 8);
+    } else {
+        log_regs(TAG_VOLUME_RANGE, 0, 0, 0, (unsigned)got & 0xff);
+    }
+    vol_value = output_volume();
+    for (f = 1; f <= 2; f++)
+        control(a->address, 0x21 | 0x01 << 8 | (0x0200 | f) << 16, a->volume_unit << 8 | a->control_interface | 2 << 16,
+                volume_cur(vol_value), 2);
+    vol_sent = vol_value;
+}
+
+/* The buttons. BUTTON_* are the bits of the decoded mask. */
+#define BUTTONS 5
+static const unsigned short button_usage[BUTTONS] = { 0xe9, 0xea, 0xcd, 0xb5, 0xb6 };
+#define NO_BIT 0xffff
+
+struct hid_map {
+    unsigned id;                                        /* the report ID of the Consumer input (0: none) */
+    unsigned bit[BUTTONS];                              /* the bit of each variable button, or NO_BIT */
+    unsigned array_offset, array_size, array_count;     /* the Consumer array input, if any */
+    unsigned array_min, array_logical;                  /* its Usage Minimum and Logical Minimum */
+};
+
+static struct hid_map hid_map[2];
+static volatile unsigned *hid_qh[2], *hid_td[2];
+static volatile unsigned char *hid_buf[2];
+static unsigned hid_packet[2], hid_interface[2], hid_count, hid_frames, hid_link, hid_logs, hid_errors;
+static unsigned char hid_last[2][12];
+static unsigned hid_last_length[2];
+
+/* The short items of a report descriptor (HID 1.11, 6.2.2). Only the inputs of the Consumer page
+ * (0x0c) count: one-bit variable fields, or an array of usage values. */
+static void parse_report(struct hid_map *m, const volatile unsigned char *d, unsigned len)
+{
+    unsigned o = 0, page = 0, size = 0, count = 0, id = 0, offset = 0, logical = 0;
+    unsigned usage[16], n = 0, umin = 0, umax = 0, k, i;
+    for (k = 0; k < BUTTONS; k++)
+        m->bit[k] = NO_BIT;
+    m->id = 0;
+    m->array_count = 0;
+    while (o < len) {
+        unsigned b = d[o], bytes = b & 3, value = 0;
+        if (bytes == 3)
+            bytes = 4;
+        if (b == 0xfe || o + 1 + bytes > len)           /* a long item, or the end */
+            break;
+        for (i = 0; i < bytes; i++)
+            value |= (unsigned)d[o + 1 + i] << (8 * i);
+        switch (b & 0xfc) {
+        case 0x04: page = value; break;                 /* Usage Page */
+        case 0x14: logical = value; break;              /* Logical Minimum */
+        case 0x74: size = value; break;                 /* Report Size */
+        case 0x84: id = value; offset = 0; break;       /* Report ID */
+        case 0x94: count = value; break;                /* Report Count */
+        case 0x08: if (n < 16) usage[n++] = value & 0xffff; break;   /* Usage */
+        case 0x18: umin = value & 0xffff; break;        /* Usage Minimum */
+        case 0x28: umax = value & 0xffff; break;        /* Usage Maximum */
+        case 0x80:                                      /* Input */
+            if (page == 0x0c && !(value & 1) && (value & 2) && size == 1) {
+                for (i = 0; i < count; i++) {
+                    unsigned u = i < n ? usage[i] : (umax >= umin && umax && umin + i <= umax ? umin + i : 0);
+                    for (k = 0; k < BUTTONS; k++)
+                        if (u == button_usage[k] && m->bit[k] == NO_BIT) {
+                            m->bit[k] = offset + i;
+                            m->id = id;
+                        }
+                }
+            } else if (page == 0x0c && !(value & 1) && !(value & 2) && size && size <= 16 && !m->array_count) {
+                m->array_offset = offset;
+                m->array_size = size;
+                m->array_count = count;
+                m->array_min = umin;
+                m->array_logical = logical;
+                m->id = id;
+            }
+            offset += size * count;
+            n = umin = umax = 0;
+            break;
+        case 0x90: case 0xb0: case 0xa0: case 0xc0:     /* Output, Feature, Collection, End Collection */
+            n = umin = umax = 0;
+            break;
+        }
+        o += 1 + bytes;
+    }
+}
+
+static unsigned report_bits(const unsigned char *r, unsigned len, unsigned bit, unsigned size)
+{
+    unsigned v = 0, i;
+    for (i = 0; i < size; i++, bit++)
+        if (bit / 8 < len && (r[bit / 8] >> (bit & 7) & 1))
+            v |= 1u << i;
+    return v;
+}
+
+/* The mask of the pushed buttons (bit k = button_usage[k]); 0x80: a report with a different ID. */
+static unsigned decode_buttons(const struct hid_map *m, const unsigned char *r, unsigned len)
+{
+    unsigned base = 0, mask = 0, k, i;
+    if (m->id) {
+        if (!len || r[0] != m->id)
+            return 0x80;
+        base = 8;
+    }
+    for (k = 0; k < BUTTONS; k++)
+        if (m->bit[k] != NO_BIT && report_bits(r, len, base + m->bit[k], 1))
+            mask |= 1u << k;
+    for (i = 0; i < m->array_count; i++) {
+        unsigned v = report_bits(r, len, base + m->array_offset + i * m->array_size, m->array_size);
+        if (v && v >= m->array_logical)
+            for (k = 0; k < BUTTONS; k++)
+                if (m->array_min + v - m->array_logical == button_usage[k])
+                    mask |= 1u << k;
+    }
+    return mask;
+}
+
+/* A record with up to 40 bytes at r1 and r2 (the tags after TAG_AUDIO_DEVICE use the reserve). */
+static void log_bytes(int tag, unsigned r0, unsigned r1, unsigned r2, unsigned r3, const volatile unsigned char *bytes, unsigned n)
+{
+    struct record *rec;
+    unsigned i;
+    if (!L || L->count >= LOG_MAX)
+        return;
+    rec = &L->r[L->count];
+    for (i = 0; i < sizeof *rec / 4; i++)
+        ((unsigned *)rec)[i] = 0;
+    rec->magic = 0xa5;
+    rec->tag = tag;
+    rec->regs[0] = r0;
+    rec->regs[1] = r1;
+    rec->regs[2] = r2;
+    rec->regs[3] = r3;
+    for (i = 0; i < n && i < 40; i++) {
+        if (i < 20)
+            rec->at_r1[i] = bytes[i];
+        else
+            rec->at_r2[i - 20] = bytes[i];
+    }
+    L->count++;
+}
+
+static unsigned map_byte(unsigned bit)                 /* 0xff: no bit; 0xfe: a bit after 253 */
+{
+    return bit == NO_BIT ? 0xff : bit > 0xfd ? 0xfe : bit;
+}
+
+static void hid_arm(unsigned i)
+{
+    volatile unsigned *qh = hid_qh[i];
+    if (qh[6] & 0x40)                                   /* halted: clear the overlay (data toggle 0) */
+        qh[6] = 0;
+    make_td(hid_td[i], 1, 0x80 | 1 << 8 | 0xc00 | hid_packet[i] << 16, (unsigned)hid_buf[i]);
+    qh[4] = (unsigned)hid_td[i];
+}
+
+/* UI task, in music_start after the siTDs are in the frame list. Memory in dma_page: the queue head at
+ * 0x300 + 0x100 i, its qTD at + 0x40, the report buffer (64 bytes) at + 0x80. */
+static void hid_start(const struct audio *a)
+{
+    unsigned ctrl = read32(UIM_STATE + 0xc), f, i, k, link;
+    volatile unsigned *frames = (volatile unsigned *)read32(ctrl + 0x44);
+    if (!ram_address((unsigned)frames))
+        return;
+    hid_count = 0;
+    for (i = 0; i < a->hids && i < 2; i++) {
+        const struct hid *h = &a->hid[i];
+        volatile unsigned *qh = (volatile unsigned *)(dma_page + 0x300 + 0x100 * i);
+        unsigned length = h->length < 64 ? h->length : 64, offset;
+        int got = control_in(a->address, 0x81 | 0x06 << 8 | 0x2200u << 16, h->interface | length << 16, length);
+        struct hid_map *m = &hid_map[i];
+        parse_report(m, CONTROL_IN, got > 0 ? (unsigned)got : 0);
+        for (offset = 0; offset < (got > 0 ? (unsigned)got : 1); offset += 40)
+            log_bytes(TAG_HID_DESC, h->interface | h->endpoint << 8 | (unsigned)(got & 0xff) << 16, offset,
+                      map_byte(m->bit[0]) | map_byte(m->bit[1]) << 8 | map_byte(m->bit[2]) << 16 | (m->id & 0xff) << 24,
+                      map_byte(m->bit[3]) | map_byte(m->bit[4]) << 8 | (m->array_count ? m->array_size | m->array_count << 8 : 0) << 16,
+                      CONTROL_IN + offset, got > (int)offset ? (unsigned)got - offset : 0);
+        hid_qh[i] = qh;
+        hid_td[i] = qh + 0x10;
+        hid_buf[i] = (volatile unsigned char *)(qh + 0x20);
+        hid_packet[i] = h->packet && h->packet < 64 ? h->packet : 64;
+        hid_interface[i] = h->interface;
+        /* Full speed, the endpoint, the data toggle from the queue head, no reclamation (periodic). */
+        qh[1] = a->address | h->endpoint << 8 | hid_packet[i] << 16;
+        /* S-mask micro-frame 2, C-mask 4-6 (the siTD start splits use 0 and 1); hub 0, port 1; mult 1. */
+        qh[2] = 0x04 | 0x70 << 8 | 1 << 23 | 1u << 30;
+        qh[3] = 0;
+        qh[5] = 1;
+        for (k = 6; k < 12; k++)
+            qh[k] = 0;
+        hid_last_length[i] = 0xffffffff;
+        hid_arm(i);
+        hid_count++;
+    }
+    if (!hid_count)
+        return;
+    /* The chain: siTD -> queue head 1 -> queue head 0 -> the old link of frame 0. Link it in each 8th
+     * frame that has the same old link, so that each queue head has one next pointer. */
+    link = sitd[0];
+    hid_link = link;
+    hid_qh[0][0] = link;
+    if (hid_count == 2)
+        hid_qh[1][0] = (unsigned)hid_qh[0] | 2;
+    hid_frames = 0;
+    for (f = 0; f < FRAMES; f += 8)
+        if (sitd[8 * f] == link) {
+            sitd[8 * f] = (unsigned)hid_qh[hid_count - 1] | 2;
+            hid_frames++;
+        }
+}
+
+/* Unlink the queue heads (music_stop). */
+static void hid_stop(void)
+{
+    unsigned f, i;
+    if (!hid_count)
+        return;
+    for (f = 0; f < FRAMES; f += 8)
+        if (sitd[8 * f] == ((unsigned)hid_qh[hid_count - 1] | 2))
+            sitd[8 * f] = hid_link;
+    for (i = 0; i < hid_count; i++)
+        hid_td[i][2] = 0;
+    hid_count = 0;
+}
+
+/* Version 1.23: a push or a release of a button goes to the UI task through 0x1ac198, the function that
+ * the front buttons (0xada4c) and the Simple Remote (0x1e6a84) use. It keeps the state of each key and
+ * sends a "kDwn" or "kUp " message (0x151a40) to the UI task, which makes the key events, the repeats
+ * and the volume bar. The third argument 0 selects the queue for a task (not an interrupt). */
+static unsigned key_down, key_posts;
+
+static void buttons_changed(unsigned mask)
+{
+    static const unsigned char code[3] = { KEY_VOLUME_UP, KEY_VOLUME_DOWN, KEY_PLAY_PAUSE };
+    unsigned k;
+    if (mask & 0x80)                                    /* a report with a different ID */
+        return;
+    for (k = 0; k < 3; k++) {
+        unsigned bit = 1u << k, down = (mask & bit) != 0;
+        if (down != ((key_down & bit) != 0)) {
+            fw_key(code[k], down, 0);
+            if (key_posts++ < 100)
+                log_regs(TAG_KEY_POST, code[k] | down << 8, 0, 0, 0);
+        }
+    }
+    key_down = mask & 7;
+}
+
+/* USBAudioTask, at each wait: a completed qTD has a report. Log each change, then arm the qTD again. */
+static void hid_poll(void)
+{
+    unsigned i, k, n, same;
+    for (i = 0; i < hid_count; i++) {
+        unsigned token = hid_td[i][2];
+        unsigned char r[12];
+        if (token & 0x80)
+            continue;
+        if (token & 0x7c) {
+            hid_errors++;
+        } else {
+            n = hid_packet[i] - (token >> 16 & 0x7fff);
+            for (k = 0; k < 12; k++)
+                r[k] = k < n ? hid_buf[i][k] : 0;
+            if (n > 12)
+                n = 12;
+            for (k = 0, same = n == hid_last_length[i]; k < 12; k++)
+                same &= r[k] == hid_last[i][k];
+            if (!same) {
+                unsigned mask = decode_buttons(&hid_map[i], r, n);
+                for (k = 0; k < 12; k++)
+                    hid_last[i][k] = r[k];
+                hid_last_length[i] = n;
+                if (n && hid_map[i].id && r[0] == hid_map[i].id)
+                    buttons_changed(mask);      /* the buttons as iPod controls (version 1.23) */
+                if (hid_logs++ < 200)
+                    log_regs(TAG_HID_REPORT, hid_interface[i] | n << 8 | mask << 16 | (hid_errors > 255 ? 255 : hid_errors) << 24,
+                             r[0] | r[1] << 8 | r[2] << 16 | (unsigned)r[3] << 24, r[4] | r[5] << 8 | r[6] << 16 | (unsigned)r[7] << 24,
+                             r[8] | r[9] << 8 | r[10] << 16 | (unsigned)r[11] << 24);
+            }
+        }
+        hid_arm(i);
+    }
+}
+
 /* Wait until AHEAD_LOW frames are in front of the controller, with one sleep (0x11c9fc). The emulator
  * profile shows that this sleep blocks: the loop 0xa0be0/0xa69b4 takes less than 1.5 % of the CPU.
  * Versions 1.7 and 1.8 waited on an event from the USB interrupt; the iPod restarted after the tone. */
@@ -1106,8 +1428,13 @@ static int music_wait(void *device, int endpoint)
         task_sleep(ahead - AHEAD_LOW);
         music_sleeps++;
     }
-    if (music_mode)
+    if (music_mode) {
         music_check();
+        if (music_mode) {
+            volume_poll();
+            hid_poll();
+        }
+    }
     music_wait_end = USEC;
     return 0;
 }
@@ -1124,6 +1451,7 @@ static void music_stop(int reason)
         return;
     USB_AUDIO_STATE[2] = 0;
     music_mode = 0;
+    hid_stop();
     for (f = 0; f < FRAMES; f++) {
         volatile unsigned *sd = sitd + 8 * f;
         sd[3] = 0;
@@ -1166,7 +1494,7 @@ static void music_start(const struct audio *a)
         music_ring = (volatile unsigned char *)dma_alloc(RING * PACKET_MAX, 1);
     if (!ram_address((unsigned)music_ring))
         return;
-    music_device = *a;
+    copy_audio(&music_device, a);
     if (control(a->address, 0x01 | 0x0b << 8 | a->alt << 16, a->interface, 0, 0) != 0)
         return;
     if (a->clock && control(a->address, 0x21 | 0x01 << 8 | 0x0100 << 16, a->clock << 8 | 4 << 16, 44100, 4) != 0) {
@@ -1174,12 +1502,9 @@ static void music_start(const struct audio *a)
         control(a->address, 0x21 | 0x01 << 8 | 0x0100 << 16, a->clock << 8 | 4 << 16, 48000, 4);
     }
     /* The volume on the device: SET_CUR volume (control 2) for channels 1 and 2 of the unit before the
-     * output terminal (the EarPods: feature unit 2), in 1/256 dB. The digital route of the iPod has no
-     * volume. */
-    if (a->volume_unit)
-        for (f = 1; f <= 2; f++)
-            control(a->address, 0x21 | 0x01 << 8 | (0x0200 | f) << 16, a->volume_unit << 8 | a->control_interface | 2 << 16,
-                    (unsigned)(VOLUME_DB * 256) & 0xffff, 2);
+     * output terminal (the EarPods: feature unit 2), in 1/256 dB, from the iPod volume (version 1.21;
+     * versions 1.9-1.20 used a fixed -20 dB). The digital route of the iPod has no volume. */
+    volume_start(a);
     /* The rate of the packets: state + 8 (0x10fbb4), and the output rate of the converter (0x1e2f60,
      * as SET_CUR 0x13249c does). State + 1 = 0: 1000 packets each second (full speed). */
     USB_AUDIO_STATE[1] = 0;
@@ -1200,6 +1525,7 @@ static void music_start(const struct audio *a)
             frames[f] = (unsigned)s | 4;
         }
     }
+    hid_start(a);                                       /* the buttons (version 1.21) */
     next_frame = (frame_now() + 4) & (FRAMES - 1);
     music_start_us = USEC;
     music_checked = frame_now();
@@ -1265,18 +1591,7 @@ int hook_event(void *ui, void *event)
                 L->magic = 0x31304c55;                  /* "UL01" */
                 L->count = 0;
             }
-            art_state(0);                               /* the art gates before the host start */
             started = 1;
-            if (mode == '3') {
-                /* The baseline (version 1.18): no host start. The later log writes record the
-                 * art state each 5 s, as in host mode. */
-                if (write_log() == 0) {
-                    tone(LOW, 60000);
-                    task_sleep(BEEP_MS);
-                    tone(LOW, 60000);
-                }
-                return r;
-            }
             /* Allow external hubs. "Add device" 0xd377c refuses a hub (class 9) after the root hub,
              * unless the byte at +0 of the global block is not 0 (error 0x673/0x67d, the photo
              * import screen says "unsupported device"). Nothing in the firmware sets it. With 2,
@@ -1297,14 +1612,12 @@ int hook_event(void *ui, void *event)
             host_start(0, 0, 0, 0);
             USB_GLOBALS[0] = 2;                         /* again: the host start clears parts of the block */
             log_registers();
-            art_state(1);
             /* The USB tasks find the devices during this wait. Then write the log here, because a
              * later button event possibly does not reach this hook: 0x1d81cc gives each event to
              * the active modal screen first (0x12d890, 0x12ddb8), for example the photo import
              * screen, and returns if the screen takes it. */
             task_sleep(LOG_WAIT_MS);
             idle_mark(2);
-            art_state(2);
             if (write_log() == 0) {
                 tone(LOW, 60000);                       /* "log saved": two short low beeps */
                 task_sleep(BEEP_MS);
@@ -1319,7 +1632,6 @@ int hook_event(void *ui, void *event)
                 if (mode == '1')
                     music_start(&found);
                 idle_mark(4);
-                art_state(4);
                 if (write_log() == 0) {
                     tone(LOW, 60000);
                     task_sleep(BEEP_MS);
@@ -1344,7 +1656,6 @@ int hook_event(void *ui, void *event)
                 music_stats();
             else
                 idle_mark(5);
-            art_state(5);
             write_log();
         }
     }

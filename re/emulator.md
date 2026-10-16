@@ -45,6 +45,8 @@ RECIPE=... ipod-film run --out=_film         # one PNG for each different screen
 
 - The emulator makes a synthetic boot ROM unless you give it a real 1 MB NOR dump. Thus a correct start in the emulator is strong evidence, but not proof.
 - The emulator has no USB. You can test `ipodfw flash` only on a real iPod.
+- The emulator answers 0 for the counter at 0x60006038. Thus the shuffle seed is 0, and the shuffle is not random. Refer to [shuffle.md](shuffle.md#emulator-tests) for a test firmware with a fixed seed.
+- The emulator keeps a restore point in its profile. A run with `--control` continues from it. Start the emulator with `--cold` to start from the drive.
 
 ## The iPodFirm additions to the emulator
 

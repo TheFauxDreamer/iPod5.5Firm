@@ -344,6 +344,25 @@ Refer to [re/album-artist.md](../re/album-artist.md). "Emulator" here means a te
 | 0x1114dc | Makes the artist sort key of a track (pool db + 0x10c). | Static |
 | 0x0dc6a8 | Skips bytes in the file. | Static |
 
+### Shuffle
+
+Refer to [re/shuffle.md](../re/shuffle.md). The reference model [re/shuffle-model.py](../re/shuffle-model.py) gives the same order as the firmware in the emulator.
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x0b3a04 | Shuffle setter (app, mode): 0 = Off, 1 = Songs, 2 = Albums. Sets the settings bytes +0x20 (on) and +0x92 (albums). | Static |
+| 0x0b40c4 | Starts a shuffled play list. Calls 0x94440 with settings +0x92 and +0x93. Writes the new position to the track item +0x24. | Static, Emulator |
+| 0x094440 | The music shuffle (list, current track, albums, shuffle in albums). Fisher–Yates from the end. Songs: slot 1, then the current track goes first. Albums: slot 6, groups of the same album name, then the group of the current track is swapped with group 0. | Static, Emulator |
+| 0x0e5978 | Random index 0 … n − 1: Park–Miller (16807, 2³¹ − 1, Schrage form), then `int16(float32(n) × float32(state) × 2⁻³¹)`. Seeds itself one time after a start. | Static, Emulator |
+| 0x00055c | Seed: `A XOR (B << 16)`, A and B are two reads of 0x60006038. | Static, Emulator |
+| 0x1120bc | Gets the cached track list of a slot (1 = database order, 6 = album order). | Static, Emulator |
+| 0x0ddf94 | Sorts a track list for a slot. | Static |
+| 0x0bb28c | Smart playlist evaluation. Selection type 2 (random) calls 0x94440. | Static |
+| 0x0af4b4 | Park–Miller with the state as an argument. The card game deck shuffle 0x12d494 uses it. | Static |
+| 0x143660 | Photo slideshow shuffle. Only the window of loaded photos, with `rand() % n`. | Static |
+| 0x11ac38 | C `rand()`: `1103515245 × state + 12345`, `(state >> 16) & 0x7fff`. Not used for music. | Static |
+| 0x11bb18 | C `srand()`. | Static |
+
 ### USB audio
 
 Refer to [re/usb-audio.md](../re/usb-audio.md). No patch uses these functions yet.
@@ -374,6 +393,14 @@ Refer to [re/usb-audio.md](../re/usb-audio.md). No patch uses these functions ye
 | 0xa1ff0, 0x91164, 0xb4fe4 | The ArtworkDB handle at database + 0xd2c (the database is the app + 0x1c; the app pointer is at RAM 0x1081da18). 0xa1ff0 (from the first load 0xb4a64) opens `iPod_Control\Artwork` (0xa9190) and loads `ArtworkDB` (0xafd5c), then copies the handle to + 0xd14. 0x91164 frees the handle and writes 0. The database reload 0xb4fe4 calls 0x91164 and the library close 0x1bfd18(library, 0); it does not call 0xa1ff0. 0x9b0a0 (the art lookup of a track) returns nothing when + 0xd2c is 0. Static. |
 | 0x1e9f9c, 0x1e78e8, 0x1ed9f0 | The database reload after a disk change. The app event 0x63800003 (0x1eccdc) calls 0x1ed9f0: if the app + 0x489 is set, it sets the reload flag + 0x484. 0x1e9f9c (from 0x1eeb54) calls 0x1e78e8 → 0x1ec2c8 → 0xb4fe4 when + 0x484 is set, no modal screen is active (+ 0x66), the photo import state is not 0xb, and the USB device state (0x24d88c, RAM 0x108711d4 + 0x218, read by 0x24d8e4) is 1. 0x1e78e8 sets + 0x48a. The notification handler 0x1e0458 (case 8, 0x18ae70) sends 0x63800003. Static. Real iPod (probe 1.16): this reload does not occur in host mode. |
 | 0x9a0f8 | (ArtworkDB, unused, dbid low, dbid high, indexed): finds the ArtworkDB entry of a track. The object must start with 0x6974696c (0xa137c). With indexed = 1 and + 6 = 0, it uses the sorted index + 0x620 (made at the first use by 0xa92ec and sorted by 0xadc20, under the lock + 0x614); else it searches the list + 0xc (entry + 0x10 and + 0x14 = dbid). Static. |
+| 0x1e9e88, 0x1e8d10, 0x1e9c84 | The volume methods of the app (UI task). 0x1e9e88(app, level) sets the level (0–100) at app + 0x758; 0x1e8d10(app, step, show) is volume up and 0x1e9c84 volume down; show = 1 opens the overlay (0x1eaacc). All call 0x88ff8 and then 0x1eee50. Static. |
+| 0x1eee50 | (app, output volume 0–256): writes app + 0x40c, sends the volume with the property 0x607c (0x1928f4) and sets the status icons. Static. |
+| 0x1d8aa4 | The key handler of the UI (from 0x1d81cc, for key types 4–7). Key codes (the Simple Remote codes 0x38–0x4c): 0x3a stop, 0x3b play, 0x3c pause, 0x3d mute, 0x3e and 0x3f next and previous chapter, 0x47 and 0x48 fast forward and rewind (0x1ec3c0, 0x1eefe8). Static. |
+| 0x2141fc, 0x222d74, 0x13d524 | A key event: 0x2141fc(0x14) allocates 20 bytes, 0x222d74 fills the type, the source and the code, and 0x13d524 calls the handlers at once in the current task. The key class methods: 0x13d148 (type 4), 0x13d4b8 (5), 0x13d4f8 (6), 0x13ce10 (7). Static. |
+| 0x13d6d4 | (event, target, async, sender, 0): with async = 1, puts the event into the message queue of the task of the target (port: target + 0xc → + 0xc → + 0x1c; 0x151c10 → 0x1517d4). With sender = 0 it reads the context of the current task (0x101800 + 0x1c). The app target is at RAM 0x1081da80 (0x1d2ee8, 0x1d32e0). A key event posted in this way does not reach the key handler 0x1d81cc (real iPod, probe 1.22). Static, Real iPod. |
+| 0x1ac198 | (code, down, interrupt): a key push or release to the UI task: a `kDwn` or `kUp ` message (0x151a40). The codes are 0–0x78. Callers: the front buttons (0xada4c), the Simple Remote (0x1e6a84). Static, Real iPod (probe 1.23 uses it for the EarPods buttons). |
+| 0x1e6a84 | The Simple Remote handler: each bit of the button mask to a key code (table 0x63ef30: play/pause 0x1c, volume up 0x20, volume down 0x1f, next 0x1e, previous 0x1d, stop 0x3a, …), then 0x1ac198. Static. |
+| 0x2564b0 | Returns the key code of an event: bits 16–23 of event + 0x10. Static. |
 | 0x19a51c, 0x197e70 | The photo import service (0x1d3050(0x4280), then the type check 0x222dd0); 0x197e70 returns 1 if its state byte + 0x1c is 1–5 or 7. The object is made at the start (0x69ce28 → 0x19a48c → 0x19b198, state 1) and kept at RAM 0x1081e97c; 0x19b014 sets the state. Static. |
 | 0x1d56e0 | Sets the byte at RAM 0x1081dff6 if a special file exists in `iPod_Control\Device`. 0x1e2f74 reads this byte. Static. |
 | 0xfed68 | (buffer, flag): gives a decoder buffer back; calls vtable + 0x18 of the audio output object (0x1a2924 with −1): the decoder gives its next buffer (0x1a2d60). |
@@ -535,6 +562,10 @@ The physical address is 0x10000000 + the CPU address.
 | 0x1081ec54 | Byte: the damage callback binds the layer if it is not 0. |
 | 0x1081da80 | Pointer to the application object (class 0x66a510). |
 | 0x1081d9c4 | The Clicker setting: bit 1 speaker, bit 2 headphones. |
+| 0x1081e044 | Static guard of the shuffle seed (bit 0 = the seed is set). |
+| 0x1081e048 | State of the shuffle generator (Park–Miller). |
+| 0x1083e0ac | State of the card game generator. |
+| 0x1081dae4 | State of C `rand()`. |
 
 The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No code refers to the area between the image end and 8 MB. The patches and the theme data use this area.
 
@@ -545,6 +576,7 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | 0x60005010 | `USEC_TIMER` | Microsecond counter. `flash-wake-on-input` and `something-comforting` read it. |
 | 0x7000a000 | `PWM0_CTRL` | The piezo: `period \| 0x80800000` plays a tone, 0 stops it. |
 | 0x60006004 | `DEV_RS` | Device reset. 4 restarts the iPod. |
+| 0x60006038 | — | Not in `pp5020.h`. A free-running 16-bit counter. 0x55c reads it two times for the shuffle seed. The emulator answers 0. |
 | 0x6000d13c | GPIOL input value | Power pins: bit 0x08 (FireWire or charger, low = power), bit 0x10 (USB, high = power), bit 0x20 (not known). |
 | 0x70000080 | `GPO32_VAL` | Bit 30 (0x40000000) switches the drive power (set = off). |
 | 0xC30001E0–0xC30001FF | ATA taskfile | |
@@ -607,3 +639,4 @@ The emulator found these element IDs (view + 0x1c):
 - The function of the audio route flags at 0x1081ee48 + 0 and + 1.
 - The UIM interrupt handler that completes the periodic USB host transfers.
 - The cause of the empty artwork frame in Now Playing with the unchanged firmware in the emulator.
+- Shuffle: does the firmware remove the tracks with "skip when shuffling" (mhit byte 0xa5)? Does Repeat All shuffle again at the end of the list? Refer to [re/shuffle.md](../re/shuffle.md#open-questions).

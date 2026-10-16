@@ -33,20 +33,6 @@
           }
         ],
         "status": "The probe starts at the next restart, without the music route: the music stays on the headphone jack."
-      },
-      {
-        "title": "Record the Art State Without USB Host",
-        "write": [
-          {
-            "path": "iPod_Control/iTunes/iPodFirmUSBLog",
-            "zeros": 32768
-          },
-          {
-            "path": "iPod_Control/iTunes/iPodFirmUSBProbe",
-            "text": "3"
-          }
-        ],
-        "status": "At the next restart, the probe records the album art state each 5 s. It does not start the USB host mode."
       }
     ],
     "steps_title": "Test Procedure",
@@ -71,13 +57,13 @@
     ]
   },
   "version_letter": "h",
-  "version": "1.20",
-  "size": 14624,
+  "version": "1.23",
+  "size": 20164,
   "description": "A one-time test. It finds if the iPod can operate USB devices through a USB-C mod. It also sends a test tone, and then the music of the iPod, to USB-C headphones (USB-AUDIO-OUT.md, Stages 0, 2 and 4).",
   "caution": "Do not put USB headphones in your ears during the test. The test tone can be loud. While the test runs, the USB port possibly does not operate with a computer. To stop the test, hold Menu and Select until the iPod restarts.",
   "details": ["After the next restart, the first button press starts the test.", "The iPod plays tones that tell you the result.", "The iPod writes a log of the USB devices that it found. Click Show USB Log to see it.", "The test runs one time. The next restart is normal."],
   "requires": ["An iPod with a USB-C mod.", "A USB-C OTG adapter with a power input, and a charger.", "A USB flash drive or a card reader, or USB-C headphones (USB Audio Class 2)."],
-  "notes": ["First, the iPod plays each tone one time as an example: a long low tone, then high, low, high. Three short beeps and a silence follow.", "Result: a long low tone means that the USB host mode operates. A second long low tone means that the hub in the adapter operates.", "Result: high, low, high means that the iPod found the flash drive or the card reader. Since version 1.11 the probe gives no driver to storage devices (a test for the album art of Now Playing), thus this sign does not come.", "Two short low beeps mean that the iPod wrote the log.", "With USB-C headphones: after the first log, the iPod gives one short high beep. Then the headphones play a 1 kHz tone for 5 seconds. Then the iPod sends its music to the headphones and writes the log again (two short low beeps).", "After the beeps, play a song. The music comes from the USB-C headphones. The probe sets their volume to -20 dB. The iPod headphone jack is silent. Each button press after 5 seconds of music adds two status records and writes the log.", "During the tones, the iPod does not react for approximately 7 seconds."],
+  "notes": ["First, the iPod plays each tone one time as an example: a long low tone, then high, low, high. Three short beeps and a silence follow.", "Result: a long low tone means that the USB host mode operates. A second long low tone means that the hub in the adapter operates.", "Result: high, low, high means that the iPod found the flash drive or the card reader. Since version 1.11 the probe gives no driver to storage devices (a test for the album art of Now Playing), thus this sign does not come.", "Two short low beeps mean that the iPod wrote the log.", "With USB-C headphones: after the first log, the iPod gives one short high beep. Then the headphones play a 1 kHz tone for 5 seconds. Then the iPod sends its music to the headphones and writes the log again (two short low beeps).", "After the beeps, play a song. The music comes from the USB-C headphones. The iPod volume sets their volume (version 1.21). The iPod headphone jack is silent. Each button press after 5 seconds of music adds status records and writes the log.", "Version 1.23: the buttons on the USB-C headphones operate the iPod, as an Apple Remote does. Volume + and volume − change the iPod volume; the middle button is Play/Pause.", "During the tones, the iPod does not react for approximately 7 seconds."],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
@@ -93,12 +79,7 @@
     "file_seek": "0x08f5c4",
     "file_close": "0x08f184",
     "fw_long_play_timer": "0x1d8570",
-    "fw_art_cache": "0x1bfb74",
-    "fw_import_find": "0x19a51c",
-    "fw_import_active": "0x197e70",
-    "fw_list_next": "0x1e27e0",
-    "fw_art_find": "0x09a0f8",
-    "fw_art_add": "0x205e64",
+    "fw_key": "0x1ac198",
     "host_start": "0x2860e8",
     "tone": "0xcd430",
     "task_sleep": "0x11c9fc",
