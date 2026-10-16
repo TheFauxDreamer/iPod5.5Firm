@@ -249,7 +249,7 @@ The install examination links a patch one time to find undefined symbols. It giv
 | `after_key` | Optional. The item comes after the item with this key, for example `0x60006088` (Clicker). If the menu has no such item, the item goes at the end. |
 | `template_key` | Optional. The item to copy. The default is Sound Check (`0x600060b7`), an On/Off item. |
 
-The patcher finds the menu through the resource table entry in the current image. Thus it also finds the menu that the Dark Mode build moved. It writes the new menu after the end of the image, aligned to 16 bytes, and changes the table entry. The image grows to a multiple of 0x800 bytes. The patcher stops with an error if the menu already has the key, or if the menu has no template item. Two patches with the same key are a conflict.
+The patcher finds the menu through the resource table entry in the current image. Thus it also finds the menu that the Dark Mode build moved. It writes the new menu after the end of the image, aligned to 16 bytes, and changes the table entry. The patcher stops with an error if the menu already has the key, or if the menu has no template item. Two patches with the same key are a conflict.
 
 The settings object calls the "get" method (vtable 0x66c94c) for the value text and the "set" method (vtable 0x66c950) when the owner selects the item. A patch hooks both with `chain`. Use a key that is not in the firmware: 0x600060e0 is Dark Mode, and 0x600060e4 is `something-comforting`.
 
@@ -295,7 +295,7 @@ After the link, the patcher writes the value of the selected choice into the var
 6. A Settings item key is already in the Settings menu, or the menu has no template item.
 7. A `menu_items` label is already in its menu, or the menu has no item with `template_label`.
 
-After the checks, iPodFirm writes the code and the hooks. It extends osos with zeros to a multiple of 0x800 bytes. The partition code then calculates the new length and checksum.
+After the checks, iPodFirm writes the code and the hooks. The build of several patches (`Patcher.apply` with a list, Python `apply_all`) does not round each patch: the image ends at the last byte of the code, the variables and the menus of a patch, and the next patch starts there (16-byte steps). Only the final image is extended with zeros to a multiple of 0x800 bytes. One patch alone (`apply` with one patch) is also rounded. The partition code then calculates the new length and checksum.
 
 ## The free space
 
@@ -321,11 +321,13 @@ Each `patch.json` records the size of its code in `size`. The Patches pane shows
 
 ### The extended area
 
-A patch that is too large for the area before 0x736800 uses `"load_address": "extended"`. The build then puts the patch after all the data that is already in the image: the end of osos, at least 0x736800, aligned to 16 bytes (`Patcher.extendedBase`, Python `extended_base`). Thus the patch goes after a theme, the Dark Mode switch table, the Settings menu, the dark-mode code and the extended patches before it. The limit is 0x7F8000 (`ThemeImport.ososLimit`), because the reset code of RetailOS stops if the image end is after 8 MB (0x800004). The 32 KB below 8 MB stay empty as a margin. Before 9 October 2026 the limit was 0x7F0000. The app setting "Layout" can select the old limit 0x7F0000 again (a test); the Python patcher uses 0x7F8000. The osos image gets larger than 0x736800, thus the build moves rsrc (`FirmwarePartition.makeRoom`), as for a theme.
+A patch that is too large for the area before 0x736800 uses `"load_address": "extended"`. The build then puts the patch after all the data that is already in the image: the end of osos, at least 0x736800, aligned to 16 bytes (`Patcher.extendedBase`, Python `extended_base`). Thus the patch goes after a theme, the Dark Mode switch table, the Settings menu, the dark-mode code and the extended patches before it. The limit is 0x7F8000 (`ThemeImport.ososLimit`), because the reset code of RetailOS stops if the image end is after 8 MB (0x800004). The 32 KB below 8 MB stay empty as a margin. Before 9 October 2026 the limit was 0x7F0000. The app setting "Layout" can select 0x7FC000 (a margin of 16 KB, more space for patches) or the old limit 0x7F0000 (a test); the Python patcher uses 0x7F8000. The osos image gets larger than 0x736800, thus the build moves rsrc (`FirmwarePartition.makeRoom`), as for a theme.
 
 The address of an extended patch changes with the theme and the other patches. Thus an extended patch must not use a fixed address of its own code or data in another patch.
 
-The Patches pane shows the use of this area while you switch patches on and off. `Patcher.spaceUse` copies the layout of `Patcher.apply`: each extended patch starts at `extendedBase` of the image before it, and each apply makes the image a multiple of 0x800 bytes. The test `testSpaceUse` makes sure that the result is the size of a real build. If a build is too large, the error gives the patch and the count of bytes too many.
+The Patches pane shows the use of this area while you switch patches on and off. `Patcher.spaceUse` copies the layout of the build: each extended patch starts at `extendedBase` of the image before it, each menu that a patch changes (`settings_items`, `menu_items`) goes after it, and only the end is rounded to 0x800 bytes. The test `testSpaceUse` makes sure that the result is the size of a real build, also for patches with menus.
+
+Before 17 October 2026, each patch and each menu started at the next 0x800 step, and the space bar did not count the menus. With `album-art`, `album-artists`, `cover-flow`, `instant-save`, `something-comforting` and `usb-host-probe`, the old build used 59392 bytes after 0x736800 and the bar showed less. The packed build uses 47104 bytes for the same patches. If a build is too large, the error gives the patch and the count of bytes too many.
 
 To make a large patch smaller, put `__attribute__((minsize))` on the functions that run only once for each event (for example a table build). Keep the pixel loops as fast code, and mark them `noinline` if a `minsize` function calls them. With `minsize`, the compiler can call a library function for a division by a constant. The patch has no library, so use a shift.
 

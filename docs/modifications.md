@@ -694,7 +694,7 @@ Real iPod (owner, 16 October 2026), version 1.2: after Settings > Main Menu > Al
 
 **Cause.** The setter 0x19351c changes the main menu mask and sets the byte "changed" (settings data + 0xb74). The firmware writes the settings only at a sleep (0x1ee8d0) or at a save of all data (0xbc094, for example at a disk change). A restart with Menu+Select runs no save. Refer to [re/album-artist.md](../re/album-artist.md#the-save-of-the-settings-real-ipod-16-october-2026).
 
-**Load address.** `extended`. The compiled code is 36 bytes (alone: 0x736800–0x736824; with `album-artists`: 0x739000–0x739024). Each extended patch starts at the next 0x800 step, thus the patch makes the image 2 KB larger.
+**Load address.** `extended`. The compiled code is 36 bytes (alone: 0x736800–0x736824). In a build with other patches, it starts directly after the patch before it (16-byte steps), thus it adds approximately 36 bytes.
 
 **Hooks.**
 

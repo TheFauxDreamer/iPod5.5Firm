@@ -935,13 +935,21 @@ final class PatcherOptionTests: XCTestCase {
         let set = all.filter { ["album-art", "flash-wake-on-input", "usb-host-probe"].contains($0.spec.name) }
         let sizes = try set.map { (patch: $0, size: try Patcher.codeSize($0)) }
         XCTAssertGreaterThan(sizes.first { $0.patch.spec.name == "usb-host-probe" }!.size, 1000)
-        let use = Patcher.spaceUse(imageCount: osos.count, patches: sizes)
+        let use = Patcher.spaceUse(osos: osos, patches: sizes)
         XCTAssertEqual(use.end, try Patcher.apply(set, to: osos).count)
         XCTAssertTrue(use.fits)
+        // patches with menus ("settings_items", "menu_items"): the measurement counts the menus,
+        // and the patches follow each other without a 0x800 gap
+        let menus = all.filter { ["album-art", "album-artists", "cover-flow", "instant-save", "something-comforting", "usb-host-probe"].contains($0.spec.name) }
+        let menuSizes = try menus.map { (patch: $0, size: try Patcher.codeSize($0)) }
+        let built = try Patcher.apply(menus, to: osos)
+        XCTAssertEqual(Patcher.spaceUse(osos: osos, patches: menuSizes).end, built.count)
+        let data = menuSizes.reduce(0) { $0 + $1.size } + (4 + 40 * 11) + (4 + 40 * 32) + (4 + 40 * 29) + (4 + 40 * 19)
+        XCTAssertLessThan(built.count - Patcher.maxOSOSSize, data + 6 * 16 + 0x800)     // only the alignment and one rounding
         // after other data that leaves too little space
         let probe = sizes.first { $0.patch.spec.name == "usb-host-probe" }!
         let filled = osos + [UInt8](repeating: 0, count: Patcher.SpaceUse.limit - 0x800 - osos.count) + [1]
-        let over = Patcher.spaceUse(imageCount: filled.count, patches: [probe])
+        let over = Patcher.spaceUse(osos: filled, patches: [probe])
         XCTAssertFalse(over.fits)
         XCTAssertThrowsError(try Patcher.apply([probe.patch], to: filled, originalSHA256: Patcher.sha256(osos)))
     }

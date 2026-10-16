@@ -279,3 +279,19 @@ def test_album_artists_menu_item():
     assert struct.unpack_from("<I", out, at + 4 + 40 * (rows.index(0xFF5E) + 1) + 0x1C)[0] == 0x60007E05
     assert report["bytes"] == json.loads((REPO / "patches/album-artists/patch.json").read_text())["size"]
     assert len(out) % 0x800 == 0
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_apply_all_packs_the_patches():
+    """The patches follow each other without a 0x800 gap: each one starts after the code, the
+    variables and the menus of the patch before it. Only the result is a multiple of 0x800."""
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    names = ["album-art", "album-artists", "cover-flow", "instant-save", "something-comforting", "usb-host-probe"]
+    out = patcher.apply_all(osos, [REPO / "patches" / n for n in names])
+    assert len(out) % 0x800 == 0
+    sizes = sum(json.loads((REPO / "patches" / n / "patch.json").read_text())["size"] for n in names)
+    menus = (4 + 40 * 11) + (4 + 40 * 32) + (4 + 40 * 29) + (4 + 40 * 19)
+    assert len(out) - patcher.PATCH_AREA_END < sizes + menus + len(names) * 16 + 0x800
+    # one patch alone is still rounded
+    alone, _ = patcher.apply(osos, REPO / "patches/instant-save", 0x736800)
+    assert len(alone) % 0x800 == 0

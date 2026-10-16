@@ -30,7 +30,7 @@ The app needs macOS 14 or later and an Apple silicon Mac (`--arch arm64`).
 
 [AppModel.swift](../mac/Sources/iPodFirm/AppModel.swift) holds the state and the actions of all panes.
 
-The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has two tabs. Permissions: the Touch ID helper, `requireTouchID` and Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`): 32 KB (the limit 0x7F8000, the default) or 64 KB (the limit 0x7F0000, the value before 9 October 2026). The setting applies to the next build and to the space bar of the Patches pane. It is a test for the missing Now Playing art with the USB Host Probe.
+The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has two tabs. Permissions: the Touch ID helper, `requireTouchID` and Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`): 32 KB (the limit 0x7F8000, the default), 16 KB (the limit 0x7FC000, more space for patches) or 64 KB (the limit 0x7F0000, the value before 9 October 2026). The setting applies to the next build and to the space bar of the Patches pane.
 
 The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
@@ -235,7 +235,7 @@ The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not ch
 | `customVersionOn`, `customVersion` | The custom version. |
 | `versionLettersOn` | The patch letters on the About screen. |
 | `requireTouchID` | Touch ID before a write (daemon mode). |
-| `ososMargin` | The empty margin below 8 MB: `current` (32 KB, limit 0x7F8000) or `previous` (64 KB, limit 0x7F0000). |
+| `ososMargin` | The empty margin below 8 MB: `current` (32 KB, limit 0x7F8000), `compact` (16 KB, limit 0x7FC000) or `previous` (64 KB, limit 0x7F0000). |
 | `emulatorLibrary`, `emulatorMusicFolder`, `emulatorSongCount` | The music library on the emulator drive. |
 
 ## The emulator

@@ -289,7 +289,7 @@ def add_settings_items(out: bytearray, items: list[dict]) -> int:
         template = int(item.get("template_key", hex(SOUND_CHECK_KEY)), 16)
         menu = insert_settings_item(menu, int(item["key"], 16), int(item["label_id"], 16), after, template)
     menu_at = extended_base(bytes(out))
-    size = (menu_at + len(menu) + 0x7FF) // 0x800 * 0x800
+    size = menu_at + len(menu)
     if size > OSOS_LIMIT:
         raise PatchError("No space for the Settings menu.")
     out += bytes(size - len(out))
@@ -338,7 +338,7 @@ def add_menu_items(out: bytearray, items: list[dict]) -> list[int]:
             key = int(item["key"], 16) if "key" in item else None
             menu = insert_menu_item(menu, int(item["label_id"], 16), int(item["template_label"], 16), after, key)
         menu_at = extended_base(bytes(out))
-        size = (menu_at + len(menu) + 0x7FF) // 0x800 * 0x800
+        size = menu_at + len(menu)
         if size > OSOS_LIMIT:
             raise PatchError(f"No space for Menu {menu_id}.")
         out += bytes(size - len(out))
@@ -346,6 +346,21 @@ def add_menu_items(out: bytearray, items: list[dict]) -> list[int]:
         struct.pack_into("<II", out, res.table_pos + 4, menu_at - main.data_start, len(menu))
         placed.append(menu_at)
     return placed
+
+
+def padded(osos: bytes) -> bytes:
+    """The image with zeros to the next multiple of 0x800 bytes, as in Apple's file."""
+    return bytes(osos) + bytes((len(osos) + 0x7FF) // 0x800 * 0x800 - len(osos))
+
+
+def apply_all(osos: bytes, patch_dirs: list, original_sha256: str | None = None) -> bytes:
+    """Apply several patches, as the app does: each one starts after the code, the variables and the
+    menus of the patch before it (16-byte steps). Only the result is rounded to 0x800 bytes."""
+    original = original_sha256 or hashlib.sha256(osos).hexdigest()
+    out = bytes(osos)
+    for d in patch_dirs:
+        out, _ = apply(out, d, PATCH_AREA_END, original_sha256=original, pad=False)
+    return padded(out)
 
 
 def set_options(spec: dict, values: dict[str, int], code: bytearray, base: int, table: dict[str, int]) -> None:
@@ -366,8 +381,11 @@ def set_options(spec: dict, values: dict[str, int], code: bytearray, base: int, 
 
 def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int | None = None,
           symbols: dict[str, int] | None = None, original_sha256: str | None = None,
-          options: dict[str, int] | None = None) -> tuple[bytes, dict]:
+          options: dict[str, int] | None = None, pad: bool = True) -> tuple[bytes, dict]:
     """Return (patched osos, report). `max_size` is the largest size the osos image can have.
+
+    With `pad`, the result is rounded to 0x800 bytes. Without it, the image ends at the last byte
+    of the patch (code, variables and menus), so that the next patch can start there (apply_all).
 
     `load_address` replaces the address in patch.json. `symbols` adds addresses that the build
     decides (for example the address of a table that the build puts in the osos image).
@@ -427,8 +445,8 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
         new = target if h["kind"] == "word" else branch(h["kind"], at, target)
         struct.pack_into("<I", out, at, new)
     apply_data(out, spec)
-    # keep the image size a multiple of 0x800, as in Apple's file
-    size = max(len(osos), (end + 0x7FF) // 0x800 * 0x800)
+    # the code ends at `end`; apply_all and the app round only the final image to 0x800
+    size = max(len(osos), end)
     out += bytes(max(0, size - len(out)))
     menu_at = None
     if spec.get("settings_items"):
@@ -445,4 +463,5 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
               "symbols": {k: hex(v) for k, v in table.items()}, "hooks": len(spec.get("hooks", [])),
               "settings_menu": hex(menu_at) if menu_at is not None else None,
               "menus": [hex(m) for m in menus]}
-    return bytes(out[:size]), report
+    result = bytes(out[:size])
+    return (padded(result) if pad else result), report
