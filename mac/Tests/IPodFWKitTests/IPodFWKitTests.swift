@@ -1183,6 +1183,8 @@ final class DarkModeTests: XCTestCase {
         XCTAssertEqual(labels, [0xFF83, 0xFF82, 0x7E03, 0xFF81])
         XCTAssertEqual(le32(out, 4 + 80 + 0x0C), 0x41A2)                     // the action of the template
         XCTAssertEqual(Array(out[4 + 80 + 0x20..<4 + 80 + 0x22]), [0x03, 0x7E])
+        let keyed = try Patcher.insertMenuItem(menu, label: 0x7E04, template: 0xFF82, after: nil, key: 0x6000_7E05)
+        XCTAssertEqual(le32(keyed, 4 + 120 + 0x1C), 0x6000_7E05)
         let end = try Patcher.insertMenuItem(menu, label: 0x7E03, template: 0xFF82, after: 0x1234)
         XCTAssertEqual(UInt16(end[4 + 120 + 0x18]) | UInt16(end[4 + 120 + 0x19]) << 8, 0x7E03)
         XCTAssertThrowsError(try Patcher.insertMenuItem(out, label: 0x7E03, template: 0xFF82, after: nil))
@@ -1202,9 +1204,9 @@ final class DarkModeTests: XCTestCase {
         let artists = all.filter { $0.spec.name == "album-artists" }
         let melody = all.filter { $0.spec.name == "something-comforting" }
         XCTAssertEqual(artists.count, 1)
-        func musicLabels(_ o: [UInt8]) throws -> [UInt16] {
+        func musicLabels(_ o: [UInt8], menu: Int16 = 24440) throws -> [UInt16] {
             let main = try Resources.mainBlock(Resources.scan(o, limit: Patcher.maxOSOSSize))
-            let r = main.resources.first { $0.type == "Menu" && $0.id == 24440 }!
+            let r = main.resources.first { $0.type == "Menu" && $0.id == menu }!
             let at = main.abs(r)
             return (0..<Int(le32(o, at))).map { UInt16(o[at + 4 + 40 * $0 + 0x18]) | UInt16(o[at + 4 + 40 * $0 + 0x19]) << 8 }
         }
@@ -1212,6 +1214,12 @@ final class DarkModeTests: XCTestCase {
         var labels = try musicLabels(alone)
         XCTAssertEqual(labels.count, 11)
         XCTAssertEqual(labels[labels.firstIndex(of: 0xFF82)! + 1], 0x7E03)
+        let main = try musicLabels(alone, menu: 24094)                         // the main menu
+        XCTAssertEqual(main.count, 32)
+        XCTAssertEqual(main[main.firstIndex(of: 0x5F7C)! + 1], 0x7E03)
+        let rows = try musicLabels(alone, menu: 24600)                         // Settings > Main Menu
+        XCTAssertEqual(rows.count, 29)
+        XCTAssertEqual(rows[rows.firstIndex(of: 0xFF5E)! + 1], 0x7E04)
         XCTAssertGreaterThanOrEqual(le32(alone, 0x6776f8), Patcher.patchAreaStart)
         XCTAssertEqual(alone.count % 0x800, 0)
         // after "Switch on iPod" with an empty theme, then something-comforting

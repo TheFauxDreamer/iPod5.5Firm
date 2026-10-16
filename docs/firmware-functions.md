@@ -233,6 +233,8 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x193b90 | Copies a setting and posts event 0x60000006 when it changes. | Static |
 | 0x1eb65c | Native method: writes the backlight seconds to the application object +0x444. | Static, Emulator |
 | 0x1ee8b8 | Saves the settings and the database, as before a sleep. | Static, Patch |
+| 0x0bc094 | Saves all (the database, the settings with 0xbbf1c, and other data). Called by 0x1ee8b8, 0xb4fe4 and 0x248440. | Static |
+| 0x0bbf1c | (settings): writes the settings only if the byte "changed" (+0xb74) is set. Called by 0xbc094 and the sleep sequence 0x1ee8d0. A restart with Menu+Select runs no save, thus the changes since the last sleep are lost (real iPod, 16 October 2026, also for the Apple row Songs). The write itself is 0xbbdf8. | Static, Emulator, Real iPod |
 | 0x1a0120, 0x19ff0c, 0x19ff6c | 0x1a0120 returns the memory cache manager. 0x19ff0c(manager) sets + 0x44 = 1 and sends the event 10 ("give back the memory", 0x19f9b0) to its users until the count + 0x6c is 0. 0x19ff6c sends the event 5 at the end. 0x19fd0c (a new block) sets + 0x44 = 0. Apple calls 0x19ff0c only before the sleep (0xb43dc) and before the disk mode (0x1ed828; 0x1ed918 then calls 0x19ff6c). Earlier this table called 0x19ff0c a disk cache flush; that was not correct. The USB host probe called it at each log write until version 1.18 (the probable cause of the missing Now Playing art). | Static, Emulator, Real iPod |
 | 0x1ee8d0 | Sleep sequence: saves, writes the cache (0x1ed828, 0x19ff0c), then calls the sleep method. Does not sleep if external power is found. | Static, Emulator |
 | 0x1ecc8c | External-power test, from saved copies of the power pins (vtable offset 0xb4 → 0x9e664). | Static |
@@ -373,6 +375,15 @@ Refer to [re/album-artist.md](../re/album-artist.md#album-artists-menu-item-15-o
 | 0x19e644 | (menu screen): the script calls it to activate the selected row. | Emulator |
 | 0x1e7b98 | (JS browser): resets the native browser (+0x1c) at the start of a browse. | Static, Emulator |
 | 0x1e7628 | (JS browser, mode): calls 0xb4038(browser, mode). Artists uses mode 1. | Static, Emulator |
+| 0x1e7b98 | (detail) The Artists item of the Music menu runs it one time, the Artists item of the main menu two times. Composers, Genres and Playlists do not run it when they open. | Emulator, Patch |
+| 0x105a04 | (label): the bit of a main-menu item in the main menu mask (a `switch` on the labels 0x5f7c–0x5f9f). Unused bits: 0x4000, 0x20000000, 0x40000000, 0x80000000. | Static, Patch |
+| 0x193470 | (settings, label): 1 if the main-menu item is on (mask AND bit). | Static, Patch |
+| 0x19351c | (settings, label, on): writes the bit into the mask and sets the byte "changed" (+0xb74). It does not write the settings file. The `instant-save` patch hooks its first instruction. | Static, Emulator, Patch |
+| 0x09d880 | (settings): the main menu mask, (main browser + 0xca0) + 0xb34. Emulator default: 0x0e180201. | Static, Emulator |
+| 0x0af838 | At the load of old preference versions: merges new default bits into the mask, with the mask 0x1fffffff. | Static |
+| 0x19ed58 | (screen, menu, label, 3, visible): shows or hides an item of a menu (item byte +4, bit 0 = hidden). The UI script calls it for each Apple item of the main menu (Menu 24094) at the start and each time the main menu shows. | Static, Emulator, Patch |
+| 0x24bc38 | (label, menu, visible): calls 0x19ed58 on the menu screen. Search (0x130b70) and Contacts (0x1b9ed0) use it at the start. | Static, Emulator |
+| 0x253fe4 | (item): 1 if the item is visible (item byte +4, bit 0 = 0). | Static |
 
 ### USB audio
 
@@ -596,7 +607,8 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | `TCmd` 9088 | The compiled JavaScript of the user interface (91,662 bytes at 0x4b441c). |
 | Menu 24598 | The Settings menu. |
 | Menu 24440 | The Music menu (10 items at 0x4af348). The Artists item has the label -126 and the value 0x41a2 at +0x0c. |
-| Menu 24094 | The list in Settings > Main Menu (31 items). |
+| Menu 24094 | The main menu (31 items). The label of each item is its key in the main menu mask, for example 0x5f7c = Artists. The UI script shows or hides each item. |
+| Menu 24600 | Settings > Main Menu (28 rows). Each row has the settings key 0x6000 + the label of its main-menu item, for example 0x60005f7c for Artists. The rows under Music start with U+2003 U+2060. |
 | Str -30 | "Artists": the title of the Artists screen. |
 | View 24486 | The Artists screen (View 24484: the Albums screen). |
 | Menu −138 | The Backlight Timer menu (data at 0x4b069c). |
@@ -612,7 +624,7 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | Str 0x602e, 0x602f | "On" and "Off". |
 | Str 0x7e00 | "Dark Mode" (added by the `dark-mode` patch). |
 | Str 0x7e01, 0x7e02 | "Something Comforting" and "Play" (added by the `something-comforting` patch). |
-| Str 0x7e03 | "Album Artists" (added by the `album-artists` patch). |
+| Str 0x7e03, 0x7e04 | "Album Artists", and the indented row text in Settings > Main Menu (added by the `album-artists` patch). |
 
 ## Element IDs
 

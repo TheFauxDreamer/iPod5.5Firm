@@ -46,6 +46,8 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
         public var label_id: String
         public var template_label: String
         public var after_label: String? = nil
+        /// Optional. The new 32-bit value at +0x1c: the settings key of an item in a Settings list.
+        public var key: String? = nil
     }
     /// A choice that the owner makes in the Patches pane before a build. The patcher writes the
     /// `value` of the selected choice (32 bits) into the global variable `symbol` of the patch.
@@ -555,7 +557,8 @@ public enum Patcher {
 
     /// The menu with one more item: a copy of the item with the label `template`, with the label `label`,
     /// after the item with the label `after` (or at the end, if the menu has no such item).
-    public static func insertMenuItem(_ menu: [UInt8], label: UInt16, template: UInt16, after: UInt16?) throws -> [UInt8] {
+    public static func insertMenuItem(_ menu: [UInt8], label: UInt16, template: UInt16, after: UInt16?,
+                                      key: UInt32? = nil) throws -> [UInt8] {
         let count = Int(le32(menu, 0))
         guard menu.count >= 4 + 40 * count else { throw PatchError("The menu is not complete.") }
         var items = (0..<count).map { Array(menu[4 + 40 * $0..<44 + 40 * $0]) }
@@ -564,6 +567,7 @@ public enum Patcher {
         guard let t = labels.firstIndex(of: template) else { throw PatchError("The menu has no item with the label 0x\(String(template, radix: 16)).") }
         var item = items[t]
         for at in [0x18, 0x20] { item[at] = UInt8(label & 0xFF); item[at + 1] = UInt8(label >> 8) }
+        if let key { put32(&item, 0x1C, key) }
         items.insert(item, at: after.flatMap { labels.firstIndex(of: $0) }.map { $0 + 1 } ?? items.count)
         var out = [UInt8](repeating: 0, count: 4)
         put32(&out, 0, UInt32(items.count))
@@ -586,7 +590,8 @@ public enum Patcher {
             for item in items where item.menu_id == id {
                 menu = try insertMenuItem(menu, label: UInt16(truncatingIfNeeded: try hex(item.label_id)),
                                           template: UInt16(truncatingIfNeeded: try hex(item.template_label)),
-                                          after: try item.after_label.map { UInt16(truncatingIfNeeded: try hex($0)) })
+                                          after: try item.after_label.map { UInt16(truncatingIfNeeded: try hex($0)) },
+                                          key: try item.key.map(hex))
             }
             let menuAt = Int(extendedBase(out))
             let size = (menuAt + menu.count + 0x7FF) / 0x800 * 0x800

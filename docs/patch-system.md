@@ -263,10 +263,11 @@ The settings object calls the "get" method (vtable 0x66c94c) for the value text 
 | `label_id` | The string ID of the new label, as a 16-bit hexadecimal value, for example `0x7e03`. The `b` hook on the string lookup (0x21f254) must give the text. |
 | `template_label` | The label of the item to copy, for example `0xff82` (-126, "Artists"). |
 | `after_label` | Optional. The new item comes after the item with this label. If the menu has no such item, the new item goes at the end. |
+| `key` | Optional. A new 32-bit value at +0x1c: the settings key of a row in a Settings list, for example `0x60007e05`. The hooks of the patch receive the low 16 bits. Do not use a label ID as the key: the list asks the value text with the resource lookup ('Str ', key), and the lookup hook of the patch answers its label IDs first. |
 
-A menu item is 40 bytes. The label ID is the i16 at +0x18, and again at +0x20. The patcher changes only these two values (`Patcher.insertMenuItem`, Python `insert_menu_item`). It puts each changed menu after the end of the image, as for the Settings menu, and changes the resource table entry (`Patcher.addMenuItems`, Python `add_menu_items`). The patcher stops with an error if the menu already has the label, or if the menu has no item with `template_label`. Two patches with the same menu and label are a conflict.
+A menu item is 40 bytes. The label ID is the i16 at +0x18, and again at +0x20. The patcher changes only these two values, and +0x1c if the item has `key` (`Patcher.insertMenuItem`, Python `insert_menu_item`). It puts each changed menu after the end of the image, as for the Settings menu, and changes the resource table entry (`Patcher.addMenuItems`, Python `add_menu_items`). The patcher stops with an error if the menu already has the label, or if the menu has no item with `template_label`. Two patches with the same menu and label are a conflict.
 
-To know which item the owner selects, hook the `activate` method of the menu lists (vtable slot 0x6776f8) with `chain`. [album_artists.c](../patches/album-artists/album_artists.c) is an example.
+To know which item the owner selects, hook the `activate` method of the menu lists (vtable slot 0x6776f8) with `chain`. [album_artists.c](../patches/album-artists/album_artists.c) is an example. It also adds an item to the main menu (Menu 24094) and a row to Settings > Main Menu (Menu 24600).
 
 ### Options
 
@@ -310,7 +311,8 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `album-art` | `extended` | After all other data (12360 bytes). Alone: 0x736800–0x739848. The album table, the thumbnails and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
 | `usb-host-probe` | `extended` | After all other data (14624 bytes; the 32 KB log buffer and the 40 KB of the isochronous test come from allocators) | Extended patch. Test patch. |
 | `something-comforting` | `extended` | After all other data (692 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736ab4, menu at 0x737000, osos end 0x737800 | Extended patch. Example patch. |
-| `album-artists` | `extended` | After all other data (3018 bytes), then the Music menu (11 items, 444 bytes). Alone: code 0x736800–0x7373ca, menu at 0x737800, osos end 0x738000 | Extended patch. The side table and the list come from the allocators. |
+| `album-artists` | `extended` | After all other data (3688 bytes), then three menus: Music (11 items, 444 bytes), the main menu (32 items, 1284 bytes) and Settings > Main Menu (29 items, 1164 bytes). Alone: code 0x736800–0x737668, menus at 0x737800, 0x738000 and 0x738800, osos end 0x739000 | Extended patch. The side table and the list come from the allocators. |
+| `instant-save` | `extended` | After all other data (36 bytes). Alone: 0x736800–0x736824, osos end 0x737000 | Extended patch. |
 | `cover-flow` | `extended` | After all other data (10708 bytes; approximately 600 KB for the screen copy, the covers and the read buffer come from the allocator while Cover Flow shows) | Extended patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.

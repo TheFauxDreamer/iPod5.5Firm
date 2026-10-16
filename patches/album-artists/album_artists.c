@@ -5,25 +5,41 @@
  * The design comes from osos-lab (RepriseOS) for the iPod Classic. The research is in
  * re/album-artist.md, section "Album Artists menu item".
  *
- * The patch.json section "menu_items" puts a copy of the Artists item after Artists in the Music
- * menu (Menu 24440), with the label LABEL_ID. The copy opens the Artists screen. When the owner
- * selects the copy, the patch sets "album artist mode" (aa_mode). In this mode the Artists screen
- * uses the Album Artist of each track.
+ * The patch.json section "menu_items" puts copies of the Artists item, with the label LABEL_ID:
+ *  - in the Music menu (Menu 24440), after Artists;
+ *  - in the main menu (Menu 24094), after Artists. The bit MAIN_MENU_BIT of the main menu mask shows
+ *    or hides it. The bit is 0 by default;
+ *  - in Settings > Main Menu (Menu 24600), with the label SETTINGS_LABEL_ID and the settings key
+ *    0x60007e05. Hooks L and M give its value and change the bit. The key must not be a label
+ *    ID: the list asks the value text with the resource lookup ('Str ', key), and hook F answers
+ *    the label IDs before the settings object.
+ * Each copy opens the Artists screen. When the owner selects a copy, the next browse uses "album
+ * artist mode": its browser (aa_browser) builds the Artists list from the Album Artists.
  *
  * Hooks:
  *  - A, the mhod 22 entry of the jump table of the track parser (0xd7ea0): the patch reads the Album
  *    Artist into the artist string pool. A side table keeps its index for each track, but only if
- *    it is not the index of the Artist;
+ *    its text is not the text of the Artist;
  *  - B, the call of the track parser in the database loader (0xafc8c): the patch clears the side
  *    table before each load;
- *  - C, the "activate" method of the menu lists (vtable 0x6776f8): each selection in a menu sets or
- *    clears aa_mode;
- *  - D, the first instruction of the list build 0xd080c: in aa_mode, the patch builds the Artists
+ *  - C, the "activate" method of the menu lists (vtable 0x6776f8): a selection of a copy sets
+ *    aa_pending, a selection of another item clears aa_pending and aa_browser. Composers, Genres
+ *    and Playlists do not run the reset of hook G, thus this clear is necessary;
+ *  - G, the first instruction of the browser reset 0x1e7b98 (the start of a browse): after a
+ *    selection of a copy, the browser of the browse gets the mode (aa_browser);
+ *  - D, the first instruction of the list build 0xd080c: for aa_browser, the patch builds the Artists
  *    list (field 4) from the Album Artists;
- *  - E, the call of the Artist text in the track filter (0x114354): in aa_mode, the filter compares
- *    the selected name with the Album Artist;
- *  - F, the first instruction of the resource lookup (0x21f254): the label of the item, and the
- *    title "Album Artists" (Str -30) in aa_mode. */
+ *  - H, the first instruction of the clear of the Artists list 0xa34b8: the patch knows when its
+ *    list is freed;
+ *  - E, the call of the Artist text in the track filter (0x114354): for aa_browser, the filter
+ *    compares the selected name with the Album Artist;
+ *  - F, the first instruction of the resource lookup (0x21f254): the labels of the items, and the
+ *    title "Album Artists" (Str -30) in album artist mode;
+ *  - I and J, the two calls of 0x105a04 (label -> bit of the main menu mask);
+ *  - K, the first instruction of 0x19ed58 (show or hide an item of a menu): when the UI script
+ *    shows or hides Artists in the main menu, the patch also shows or hides the copy;
+ *  - L and M, the "get" and "set" methods of the settings object (vtable 0x66c94c and 0x66c950):
+ *    the row in Settings > Main Menu. The firmware knows only its own keys. */
 
 typedef unsigned short u16;
 
@@ -47,25 +63,48 @@ void pool_unlock(void *pool);                                                   
 void *list_alloc(unsigned size);                                                   /* 0xa8178 */
 void *fw_alloc(unsigned size);                                                     /* 0x25a974 */
 void fw_free(void *p);                                                             /* 0x25a8e4 */
+unsigned menu_bit(int label);                                                      /* 0x105a04 */
+void *settings_object(void);                                                       /* 0x193090 */
+int main_menu_visible(void *settings, int label);                                  /* 0x193470 */
+void reset_continue(void);                                                         /* 0x1e7b9c */
+void clear_continue(void);                                                         /* 0xa34bc */
+void visible_continue(void);                                                       /* 0x19ed5c */
+void set_main_menu_visible(void *settings, int label, int on);                     /* 0x19351c */
+const char *str_lookup(void *table, int id);                                       /* 0x21f418 */
+void *str_table(void);                                                             /* 0x21f3b8 */
 void mhod_done(void);                                                              /* 0xd821c */
 void build_continue(void);                                                         /* 0xd0810 */
 void lookup_continue(void);                                                        /* 0x21f258 */
 /* Set by the patcher (chain): the previous targets of the hooks. */
 void *lookup_next(void *provider, unsigned type, int id);
 int activate_next(void *list, int row);
+int get_next(void *self, unsigned op, unsigned key, void *out);
+int set_next(void *self, unsigned op, unsigned key, void *value);
 
 #define TAG_STR        0x53747220u                     /* 'Str ' */
 #define LABEL_ID       0x7e03                          /* the label "Album Artists" */
+#define SETTINGS_LABEL_ID 0x7e04                       /* the label in Settings > Main Menu */
+#define ROW_KEY        0x7e05                          /* the key of that row (patch.json: 0x60007e05) */
+#define OP_TEXT_ID     0x70724944u                     /* 'prID': the ID of the value text */
+#define OP_TEXT        0x53747220u                     /* 'Str ': the value text */
+#define NOTIFY_BOOL    0x426f6f6cu                     /* 'Bool': the notice after a change */
+#define STR_ON         0x602e
+#define STR_OFF        0x602f
+#define MAIN_MENU_ID   24094
+#define ARTISTS_LABEL  0x5f7c                          /* Artists in the main menu */
 #define TITLE_ID       (-30)                           /* the title of the Artists screen */
+#define MAIN_MENU_BIT  0x40000000u                     /* a free bit of the main menu mask */
 #define FIELD_ARTIST   4
 #define SORT_ARTIST    7                               /* the sort list in the order of the Artist */
 #define FIELD(type, object, offset) (*(type *)((char *)(object) + (offset)))
 
 static const char label[] = "Album Artists";
+/* The rows under Music in Settings > Main Menu start with U+2003 and U+2060, as Str -162. */
+static const char settings_label[] = "\xe2\x80\x83\xe2\x81\xa0" "Album Artists";
 
-static int aa_mode;            /* 1 after a selection of the item, 0 after a selection of another item */
-static unsigned *aa_list;      /* the last list that the patch built (browser + 0xc48) */
-static unsigned aa_count;
+static int aa_pending;         /* 1 after a selection of a copy, until the next browse starts */
+static void *aa_browser;       /* the native browser of the browse in album artist mode, or 0 */
+static unsigned *aa_list;      /* the list that the patch built (browser + 0xc48), until it is freed */
 
 /* The side table: open addressing, key = track pointer, value = the index of the Album Artist in
  * the artist pool. Only the tracks whose Album Artist is not their Artist have an entry. */
@@ -206,9 +245,44 @@ int hook_activate(void *list, int row)
     if (data) {
         void *item = menu_item_at(data, row);
         const char *res = item ? FIELD(const char *, item, 0x10) : 0;
-        aa_mode = res && FIELD(short, res, 0x14) == LABEL_ID;
+        aa_pending = res && FIELD(short, res, 0x14) == LABEL_ID;
+        if (!aa_pending)
+            aa_browser = 0;
     }
     return activate_next(list, row);
+}
+
+/* The replaced first instruction of 0x1e7b98, then the rest of the function. */
+__attribute__((naked)) void reset_original(void *js_browser)
+{
+    __asm__ volatile("push {r4, lr}\n\tb reset_continue\n");
+}
+
+/* Hook G: the start of a browse. The JS browser has the native browser at +0x1c. The main menu item
+ * runs the reset two times, thus a reset without a pending selection does not clear the mode.
+ * Hook C clears it at the selection of another item. */
+void hook_reset(void *js_browser)
+{
+    if (aa_pending) {
+        aa_browser = FIELD(void *, js_browser, 0x1c);
+        aa_pending = 0;
+    }
+    reset_original(js_browser);
+}
+
+/* The replaced first instruction of 0xa34b8, then the rest of the function. */
+__attribute__((naked)) void clear_original(void *browser)
+{
+    __asm__ volatile("push {r4, r5, r6, lr}\n\tb clear_continue\n");
+}
+
+/* Hook H: the clear of the Artists list. With the build 0xd080c, it is the only code that writes
+ * browser + 0xc48. Thus aa_list is exact: it is the list of the patch until this clear frees it. */
+void hook_clear(void *browser)
+{
+    if (aa_list && FIELD(unsigned *, browser, 0xc48) == aa_list)
+        aa_list = 0;
+    clear_original(browser);
 }
 
 /* The index of the name that the Album Artists list uses for a track. */
@@ -357,7 +431,6 @@ static int build_album_artists(void *browser)
     FIELD(void *, browser, 0xc4c) = 0;
     FIELD(unsigned, browser, 0xc50) = m;
     aa_list = v;
-    aa_count = m;
     return 0;
 }
 
@@ -368,34 +441,48 @@ __attribute__((naked)) int build_original(void *browser, int x, unsigned field, 
 }
 
 /* Hook D: the list build. The browser keeps one Artists list. A list of the other mode is cleared
- * first, so that a change of the mode builds the list again. */
+ * first (hook H then clears aa_list), so that a change of the mode builds the list again. */
 int hook_build(void *browser, int x, unsigned field, unsigned sub)
 {
     if (field == FIELD_ARTIST && sub == 0) {
-        unsigned *current = FIELD(unsigned *, browser, 0xc48);
-        int ours = current && current == aa_list && FIELD(unsigned, browser, 0xc50) == aa_count;
-        if (current && ours != aa_mode) {
+        unsigned *current;
+        int mode;
+        current = FIELD(unsigned *, browser, 0xc48);
+        mode = aa_browser && browser == aa_browser;
+        int ours = current && current == aa_list;
+        if (current && ours != mode) {
             browser_clear_artists(browser);
             current = 0;
         }
-        if (!current)
-            aa_list = 0;
-        if (aa_mode)
+        if (mode)
             return current ? 0 : build_album_artists(browser);
     }
     return build_original(browser, x, field, sub);
 }
 
-/* Hook E: replaces "bl track_artist_text" in the filter. */
-void hook_filter_text(void *track, const u16 **text, unsigned *units)
+/* Hook E: replaces "bl track_artist_text" in the filter 0x1142a8. r5 is the browser there. */
+__attribute__((naked)) void hook_filter_text(void)
 {
-    unsigned index = aa_mode ? table_get(track) : 0;
+    __asm__ volatile("mov r3, r5\n\tb filter_text\n");
+}
+
+void filter_text(void *track, const u16 **text, unsigned *units, void *browser)
+{
+    unsigned index = aa_browser && browser == aa_browser ? table_get(track) : 0;
     if (!index) {
         track_artist_text(track, text, units);
         return;
     }
     pool_text((char *)FIELD(void *, track, 0) + 0xe0, index, text, units);
     *units >>= 1;
+}
+
+/* Hooks I and J: the two calls of 0x105a04 (label -> bit of the main menu mask) in 0x193470 (get)
+ * and 0x19351c (set). The bit is not used by the firmware, also not by the merge of new defaults
+ * at the load (mask 0x1fffffff, 0xaf838). The default mask does not have it: the item is off. */
+unsigned hook_menu_bit(int label)
+{
+    return label == LABEL_ID ? MAIN_MENU_BIT : menu_bit(label);
 }
 
 /* The replaced first instruction of the lookup. lookup_next is this function if no other patch
@@ -405,10 +492,61 @@ __attribute__((naked)) void *lookup_original(void *provider, unsigned type, int 
     __asm__ volatile("push {r3, r4, r5, r6, r7, lr}\n\tb lookup_continue\n");
 }
 
-/* Hook F: the label of the item, and the title of the screen in aa_mode. */
+/* Hook F: the labels of the items, and the title of the screen in album artist mode. */
 void *hook_lookup(void *provider, unsigned type, int id)
 {
-    if (type == TAG_STR && (id == LABEL_ID || (aa_mode && (short)id == TITLE_ID)))
+    if (type == TAG_STR && (id == LABEL_ID || (aa_browser && (short)id == TITLE_ID)))
         return (void *)label;
+    if (type == TAG_STR && id == SETTINGS_LABEL_ID)
+        return (void *)settings_label;
     return lookup_next(provider, type, id);
+}
+
+/* The replaced first instruction of 0x19ed58, then the rest of the function. */
+__attribute__((naked)) int visible_original(void *screen, int menu, int label, int kind, int visible)
+{
+    __asm__ volatile("push {r2, r3, r4, lr}\n\tb visible_continue\n");
+}
+
+/* Hook K: show or hide an item of a menu. The UI script does this for each Apple item of the main
+ * menu, at the start and each time the main menu shows. It does not know the copy, so the patch
+ * does it for the copy when the script does it for Artists. */
+int hook_set_visible(void *screen, int menu, int label, int kind, int visible)
+{
+    int result = visible_original(screen, menu, label, kind, visible);
+    if (menu == MAIN_MENU_ID && label == ARTISTS_LABEL)
+        visible_original(screen, menu, LABEL_ID, kind, main_menu_visible(settings_object(), LABEL_ID) != 0);
+    return result;
+}
+
+/* Hook L: the row in Settings > Main Menu. The patch gives the value text. For the other questions
+ * (for example 'BMap'), the firmware answers as for the Artists row. */
+int hook_settings_get(void *self, unsigned op, unsigned key, void *out)
+{
+    if (key == ROW_KEY) {
+        short value = main_menu_visible(self, LABEL_ID) ? STR_ON : STR_OFF;
+        if (op == OP_TEXT_ID) {
+            *(short *)((char *)self + 0x88) = value;
+            *(void **)out = (char *)self + 0x88;
+            return 1;
+        }
+        if (op == OP_TEXT) {
+            *(const char **)out = str_lookup(str_table(), value);
+            return 1;
+        }
+        key = ARTISTS_LABEL;
+    }
+    return get_next(self, op, key, out);
+}
+
+/* Hook M: a selection of the row switches the bit, as the firmware does for its rows (0x192774):
+ * 0x19351c writes the mask, then a 'Bool' notice (method +0x54) shows the new value. */
+int hook_settings_set(void *self, unsigned op, unsigned key, void *value)
+{
+    if (key == ROW_KEY) {
+        set_main_menu_visible(self, LABEL_ID, !main_menu_visible(self, LABEL_ID));
+        (*(void (**)(void *, unsigned, unsigned))(*(char **)self + 0x54))(self, NOTIFY_BOOL, key);
+        return 1;
+    }
+    return set_next(self, op, key, value);
 }

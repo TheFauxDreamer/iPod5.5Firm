@@ -330,7 +330,7 @@ The user interface of firmware 2.0.5 is different from RetailOS 1.3. Thus osos-l
 
 ### The Music menu
 
-The Music menu is Menu 24440 (data at 0x4af348). It has 10 items of 40 bytes: Playlists, Artists, Albums, Compilations, Songs, Podcasts, Radio, Genres, Composers and Audiobooks. The menu hides the items that have no content. Menu 24094 (31 items) is the list in Settings > Main Menu.
+The Music menu is Menu 24440 (data at 0x4af348). It has 10 items of 40 bytes: Playlists, Artists, Albums, Compilations, Songs, Podcasts, Radio, Genres, Composers and Audiobooks. The menu hides the items that have no content. Menu 24094 (31 items) is the main menu. Correction (16 October 2026): before, this note said that it is the list in Settings > Main Menu. That list is Menu 24600.
 
 | Item offset | Content | Artists item |
 |---|---|---|
@@ -482,3 +482,70 @@ Version 1.1 removes the equal texts with an FNV-1a hash of the text in one pass.
 Of the first open, approximately 0.85 s is the firmware: the first read of sort list 7 sorts the tracks by Artist. The native Artists list has the same cost if it opens first after a start.
 
 The full test status is in [docs/modifications.md](../docs/modifications.md#album-artists).
+
+## Version 1.2 (16 October 2026)
+
+The owner tested version 1.1 on the real iPod: it works well. The owner then asked for two changes: improve the mode and the list check, and put Album Artists in Settings > Main Menu.
+
+### The mode follows the browse
+
+In version 1.1, `aa_mode` was one global value. Version 1.2 gives the mode to one browser:
+
+- Hook C (menu `activate`) sets `aa_pending` for the new item, and clears `aa_pending` and `aa_browser` for all other items.
+- Hook G wraps the browser reset 0x1e7b98 (first instruction `push {r4, lr}`). If `aa_pending` is 1, the native browser (JS browser + 0x1c) becomes `aa_browser`.
+- Hooks D and E use `browser == aa_browser`. Hook E is a wrapper that passes r5 (the browser in the filter 0x1142a8 at 0x114354).
+
+Emulator results with `IPODFW_MARK_AT=0x1e7b98`:
+
+| Selection | Runs of 0x1e7b98 |
+|---|---|
+| Music > Album Artists, Artists, Albums, Songs | 1 at the open, none in the levels below |
+| Main menu > Album Artists | 2 |
+| Music > Composers, Genres, Playlists | 0 |
+
+Thus a reset without a pending selection must not clear the mode (the second reset of the main-menu item cleared it in a first build). And the clear in hook C is necessary, because some browses do not run the reset.
+
+### The exact list check
+
+FindConstant 0xc48 shows that only 0xd080c (the build) and 0xa34b8 (the clear) write browser + 0xc48. Hook H wraps 0xa34b8 (first instruction `push {r4, r5, r6, lr}`): if the clear frees `aa_list`, `aa_list` becomes 0. Hook D then compares only the pointer. Version 1.1 also compared the count, because it did not know when the firmware freed the list.
+
+### Album Artists in the main menu
+
+| Fact | Evidence |
+|---|---|
+| The main menu is Menu 24094. Each item has its label as the key, for example 0x5f7c = Artists. | Static, Emulator |
+| 0x105a04 maps a label to one bit of the main menu mask. 0x193470 (visible) and 0x19351c (set) are its only callers. | Static |
+| The mask is at (main browser + 0xca0) + 0xb34. Emulator default: 0x0e180201. Bits 0x4000, 0x20000000, 0x40000000 and 0x80000000 are not used. | Static, Emulator |
+| The load of old preference versions merges new default bits with the mask 0x1fffffff (0xaf838). The bits 0x40000000 and 0x80000000 are outside this merge. | Static |
+| The UI script shows or hides each Apple item of the main menu with 0x19ed58 (screen, menu, label, 3, visible): two times at the start, and each time the main menu shows. A change in Settings > Main Menu does not call it. | Emulator |
+| A copy of the Artists item in Menu 24094 showed in the main menu also when its bit was 0, because the script does not know its label. | Emulator |
+| Settings > Main Menu is Menu 24600 (28 rows). Each row has the settings key 0x6000 + the label of its item, for example 0x60005f7c. | Static, Emulator |
+| The firmware settings get (0x190b00) knows only its own keys. For an unknown key the row showed no value. 0x5f90 (a label with no bit and no string) also gave no value. | Emulator |
+| The list asks the value text of a row with the resource lookup ('Str ', key). With the key 0x7e03, the lookup hook of the patch answered with the label text before the settings object. | Emulator |
+
+The method in version 1.2:
+
+1. `menu_items` puts a copy of the Artists item into Menu 24094 (label 0x7e03), and a copy of the Artists row into Menu 24600 (label 0x7e04, key 0x60007e05).
+2. Hooks I and J (the `bl` at 0x193488 and 0x19353c) map 0x7e03 to bit 0x40000000.
+3. Hook K wraps 0x19ed58. When the script sets Artists (0x5f7c) in Menu 24094, the patch also sets 0x7e03 from the bit.
+4. Hooks L and M (settings get and set, with `chain`) handle the key 0x7e05: On or Off, and the change of the bit with 0x19351c and the 'Bool' notice. For other questions, hook L asks the firmware with the key 0x5f7c.
+
+Emulator result: the row showed Off, a selection changed it to On, and the main menu then showed Album Artists after Videos. The main menu item opened the Album Artists list. The emulator keeps no settings after a cold start (the Language screen showed again), thus the save of the bit is not tested.
+
+### The save of the settings (real iPod, 16 October 2026)
+
+The owner tested version 1.2 on the real iPod. After Settings > Main Menu > Album Artists = On, a restart with Menu+Select removed the item again. The owner also set Songs to On (an Apple row): it also did not stay. Thus the cause is the save of the settings, not the patch.
+
+Ghidra:
+
+| Address | Function |
+|---|---|
+| 0xbbf1c | (settings): if the byte "changed" (+0xb74) is not 0, it writes the settings (0xbbdf8). 0x19351c sets this byte at each change of the main menu mask. |
+| 0xbc094 | (app + 0x1c): saves all: the database, the settings (0xbbf1c) and other data. |
+| Callers of 0xbbf1c | 0xbc094, and the sleep sequence 0x1ee8d0 (from the timer handler 0x1d8cd0). |
+| Callers of 0xbc094 | `save_all` 0x1ee8b8 (from the application event 0x1eccdc, for example a disk change), 0xb4fe4 (from 0x1ec2c8) and 0x248440. The triggers of the last two are not examined. |
+
+Menu+Select restarts the iPod at once. It runs none of these functions. Thus each change of a setting since the last sleep is lost. The settings stay if the iPod sleeps (hold Play) or connects to a computer before the restart.
+
+The owner then asked for a separate patch, [instant-save](../patches/instant-save/). It hooks the first instruction of the setter 0x19351c and calls 0xbbf1c after each change. A trial link on 16 October 2026 measured: inside `album-artists` 40 bytes more (no change of the image end); as a separate patch 36 bytes, but the image grows by 2 KB, because each extended patch starts at the next 0x800 step. The owner selected the separate patch. Emulator: each change ran 0xbbf1c and the write 0xbbdf8 one time, and the drive got WRITE DMA commands.
+

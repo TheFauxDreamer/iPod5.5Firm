@@ -302,9 +302,10 @@ def _label(item: bytes) -> int:
     return struct.unpack_from("<H", item, 0x18)[0]
 
 
-def insert_menu_item(menu: bytes, label: int, template: int, after: int | None) -> bytes:
+def insert_menu_item(menu: bytes, label: int, template: int, after: int | None, key: int | None = None) -> bytes:
     """The menu with one more item: a copy of the item with the label `template`, with the label
-    `label`, after the item with the label `after` (or at the end). Labels are 16-bit string IDs."""
+    `label`, after the item with the label `after` (or at the end). Labels are 16-bit string IDs.
+    `key` replaces the 32-bit value at +0x1c (the settings key of an item in a Settings list)."""
     count = struct.unpack_from("<I", menu, 0)[0]
     if len(menu) < 4 + 40 * count:
         raise PatchError("The menu is not complete.")
@@ -317,6 +318,8 @@ def insert_menu_item(menu: bytes, label: int, template: int, after: int | None) 
     item = bytearray(items[labels.index(template)])
     struct.pack_into("<H", item, 0x18, label)
     struct.pack_into("<H", item, 0x20, label)
+    if key is not None:
+        struct.pack_into("<I", item, 0x1C, key)
     items.insert(labels.index(after) + 1 if after in labels else len(items), item)
     return struct.pack("<I", len(items)) + b"".join(items)
 
@@ -332,7 +335,8 @@ def add_menu_items(out: bytearray, items: list[dict]) -> list[int]:
         menu = bytes(out[main.abs(res):main.abs(res) + res.size])
         for item in (i for i in items if int(i["menu_id"]) == menu_id):
             after = int(item["after_label"], 16) if "after_label" in item else None
-            menu = insert_menu_item(menu, int(item["label_id"], 16), int(item["template_label"], 16), after)
+            key = int(item["key"], 16) if "key" in item else None
+            menu = insert_menu_item(menu, int(item["label_id"], 16), int(item["template_label"], 16), after, key)
         menu_at = extended_base(bytes(out))
         size = (menu_at + len(menu) + 0x7FF) // 0x800 * 0x800
         if size > OSOS_LIMIT:
