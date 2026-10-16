@@ -516,7 +516,9 @@ CAUTION: iPodFirm supports one osos per patch folder. The app downloads and uses
 | 0x1d871c | `flash-keep-awake` | `??????1a 0000a0e3 1080bde8 0100a0e3 1080bde8 10402de9 ??????eb 000050e3 0100a003 0000a013 1080bde8 1eff2fe1 10402de9` |
 | 0x23344c | `flash-keep-awake` | `140094e5 050050e1 ??????1a 0400a0e1 ??????eb 0000a0e3 ??????eb 0000a0e3 7080bde8 65657266 0110a0e3 581080e5 600090e5` |
 | 0x1d8344 | `flash-wake-on-input` | `0500a0e1 ??????eb 1c0050e3 ??????0a 0110a0e3 0400a0e1 ??????eb 040095e5 0f0050e3 ??????0a 0400a0e3 ??????eb 000050e3` |
-| 0x21f254 | `dark-mode`, `something-comforting` | `050051e3 04005113 03005113 01005113 0000a013 1eff2fe1 f8402de9 0150a0e1 0010a0e3 0260a0e1 0040a0e1 00108de5 ??????ea` |
+| 0xafc8c | `album-artists` | `1800d5e5 001fa0e1 020080e3 1800c5e5 0600a0e1 a1bfa0e1 ??????eb 0090a0e1 1800d5e5 0210a0e3 8b1001e0 0200c0e3 010080e1` |
+| 0x114354 | `album-artists` | `b802d8e1 000050e3 ??????0a 200094e5 04208de2 08108de2 ??????eb b832d8e1 08109de5 04209de5 00308de5 023c85e2 2a3083e2` |
+| 0x21f254 | `dark-mode`, `something-comforting`, `album-artists` | `050051e3 04005113 03005113 01005113 0000a013 1eff2fe1 f8402de9 0150a0e1 0010a0e3 0260a0e1 0040a0e1 00108de5 ??????ea` |
 | 0x9ee90 | Software version | `0040a0e1 0030a0e3 8000a0e3 00308de5 0030a0e1 08008de2 0110a0e3 3020a0e3 ??????eb 6420a0e3 24108de2 08008de2 ??????eb` |
 | 0x9ee70 | Software version | `0b0c80e2 d304d0e1 1eff2fe1 a00c90e5 510bd0e5 1eff2fe1 10402de9 62df4de2 0040a0e1 0030a0e3 8000a0e3 00308de5 0030a0e1` |
 
@@ -529,10 +531,16 @@ The signatures of the methods for the vtable hooks. They start at the function e
 | 0x1d83fc | 0x69fd2c | `sleep-now` | `10402de9 0040a0e1 180090e5 ??????eb 000050e3 18009415 ??????1b ??????eb 480084e2 ??????eb 480084e2 7d1fa0e3 ??????eb` |
 | 0x190b00 | 0x66c94c | `dark-mode`, `something-comforting` | `ff4f2de9 0050a0e1 0100a0e3 83df4de2 04028de5 ????9fe5 0080a0e3 000090e5 0160a0e1 010010e3 0340a0e1 ??????1a ????9fe5` |
 | 0x1919d8 | 0x66c950 | `dark-mode`, `something-comforting` | `f84f2de9 ????9fe5 0040a0e1 71c046e2 ????9fe5 0c0052e1 010086e2 01a0a0e3 0290a0e1 0080a0e3 0350a0e1 907046e2 ??????0a` |
+| 0x23ca4c | 0x6776f8 | `album-artists` | `????9fe5 ??????ea 43756e4d 70402de9 0040a0e1 440190e5 0150a0e1 000050e3 7080bd08 ??????eb 000050e3 0510a011 0400a011` |
 | 0x23b704 | 0x6772c0 | `cover-flow` | `70402de9 0040a0e1 200090e5 0160a0e1 061b00e2 040096e5 020b51e3 0050a0e3 ??????1a 040050e3 05005013 ??????0a 090050e3` |
 | 0x1d81cc | 0x6701f0 | `cover-flow` | `f0412de9 0040a0e1 040091e5 0150a0e1 030050e3 18009405 ??????0b 040095e5 040050e3 ??????1a 0500a0e1 ??????eb 000050e3` |
 | 0x17ef98 | 0x17ef8c | `cover-flow` | `70402de9 0c0091e5 0140a0e1 041091e5 010050e1 080094c5 001094c5 010050c1 7080bdd8 000052e3 7080bd18 ????9fe5 ????9fe5` |
 
 `FindConstant` finds 0x23b704 in three slots: 0x6671ac, 0x66eedc and 0x6772c0. The `cover-flow` patch uses only the slot of the browse-list class 0x677290 (vtable start + 0x30). 0x17ef8c is a literal in 0x17eeb0, not a vtable slot.
+
+Two more sites of `album-artists` need a different window:
+
+- 0xd7ea0 is an entry of a jump table (3573 matches). `MakeSignature.java OUT 0xd7e40 8 2` gives the dispatch: `10049de5 181040e2 0900a0e1 ??????eb 0050b0e1 ??????1a 18549de5 1f0055e3 05f18f90 ??????ea ??????ea` (1 match, offset 32). The hook site is the dispatch 0xd7e40 + 8 + 4 × 22.
+- 0xd080c is a function entry: `MakeSignature.java OUT 0xd080c 0 12` gives `ff5f2de9 96df4de2 0050a0e1 0000a0e3 4c008de5 0010e0e3 24008de5 48008de5 44008de5 0500a0e1 0090a0e3 0080a0e3 0070a0e3` (1 match, offset 0).
 
 These signatures are a start point. A function that Apple changed between the versions does not match. Then use the recipes in section 3.

@@ -327,22 +327,52 @@ Key events and key codes (emulator, refer to [../re/cover-flow.md](../re/cover-f
 
 ### The music database
 
-Refer to [re/album-artist.md](../re/album-artist.md). "Emulator" here means a test build of the proposed `album-artist` hook. No patch in `patches/` uses these functions yet.
+Refer to [re/album-artist.md](../re/album-artist.md). The `album-artists` patch uses 0xd7888, 0xd7e40 (hook at 0xd7ea0), 0xd821c and 0x10db84 ("Patch" in the table below).
 
 | Address | Function | Evidence |
 |---|---|---|
 | 0x0af930 | Loads iTunesDB. Calls 0xd7888 for the tracks and 0xd6de8 for the playlists. | Static |
-| 0x0d7888 | Reads the tracks (mhit) and their strings (mhod). | Static, Emulator |
+| 0x0d7888 | Reads the tracks (mhit) and their strings (mhod). The loader calls it one time for each load (`bl` at 0xafc8c). | Static, Emulator, Patch |
 | 0x0d7e40 | The jump on the mhod type. The table of `b` instructions is at 0xd7e48 + 4 × type (types 0 to 31). Type 22 (Album Artist) goes to the skip code 0xd81ec. | Static, Emulator |
 | 0x0d7f58 | The code for mhod type 4 (Artist). | Static, Emulator |
 | 0x0d821c | The end of the mhod loop body. It examines the result in r5. | Static, Emulator |
 | 0x0d6de8 | Reads the playlists. Its mhod strings are only the playlist names. | Static |
 | 0x10db84 | Reads an mhod string into a string pool. Arguments: reader, 1, type, pool, slot, 1. | Static, Emulator |
 | 0x0f4340 | Reads the string header and the text. Compares the type only with 2 (path). | Static |
-| 0x0885ec | Stores a text in a pool (pool, text, length, slot). Writes 0 to the slot first. The same text gets the same index and 1 more reference. | Static |
+| 0x0885ec | Stores a text in a pool (pool, text, length, slot). Writes 0 to the slot first. An empty text gives the index 0. Each track gets its own index, also for the same text: 4000 tracks with 400 album names gave 4000 different Album Artist indexes. Thus compare the texts, not the indexes. | Static, Emulator |
 | 0x0907f4 | Updates the artist data of a track. Calls 0x1114dc. | Static, Emulator |
 | 0x1114dc | Makes the artist sort key of a track (pool db + 0x10c). | Static |
 | 0x0dc6a8 | Skips bytes in the file. | Static |
+
+### The browser and the menus
+
+Refer to [re/album-artist.md](../re/album-artist.md#album-artists-menu-item-15-october-2026). The `album-artists` patch uses these functions.
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x0d080c | (browser, x, field, sub): builds the list of a field. Field 4 = Artist (sort list 7, browser + 0xc48/0xc4c/0xc50), 2 = Album (6), 0x40 = Genre (9), 0x4000000 = Composer (0x18). Does nothing if the list is there. | Static, Emulator, Patch |
+| 0x09dec4 | (browser): builds the Artists list and returns the count. | Static, Emulator |
+| 0x09cb10 | (browser, row, out): the letter of a row for the fast scroll. Uses the letter table of the main browser (+0xc4c). | Static |
+| 0x0b2620 | (browser, row): selects a row. +0x10 = row; the name goes to +0x228. | Static |
+| 0x0a34b8 | (browser): clears the Artists list (frees +0xc48 and +0xc4c with 0xa7f9c). | Static, Patch |
+| 0x09bb98 | (browser): the track database of the browser (the sort lists). | Static, Patch |
+| 0x09c8e4 | (db, list, 0, n): entry n of sort list `list`. | Static, Patch |
+| 0x09e418 | (entry): the track of an entry. | Static, Patch |
+| 0x1142a8 | (browser, entry, 0): the filter. Bit 0 of the result is 1 if the track agrees with the selections (genre +0x28, artist +0x228, composer +0x428, album +0x628). Calls 0x9f904 for the Artist at 0x114354. | Static, Patch |
+| 0x09f904 | (track, &text, &units): the Artist text of a track. | Static, Patch |
+| 0x09efe0 | (pool, index, &text, &bytes): a view of a pool string. | Static, Patch |
+| 0x091c7c | (data, a, a units, b, b units): the text compare of the lists. | Static, Patch |
+| 0x091d44 | Compares two tracks by one field (the field bit in argument 5). | Static |
+| 0x0a7200, 0x0b9f20 | (track data): lock and unlock of the string pools. | Static, Patch |
+| 0x0a8178, 0x0a7f9c | Allocate and free. The browser lists use this pair. | Static, Patch |
+| 0x0a96c0 | Makes a track object from the slab at db + 0x38. | Static |
+| 0x088bc0 | Makes the extension object of a track (track + 0x10) when it is necessary. | Static |
+| 0x23ca4c | `activate(list, row)` of a menu list: calls 0x239f7c(list, row, tag), which sends the selection event. | Static, Emulator, Patch |
+| 0x2183ec | (menu data, row): the item object of a visible row. Skips the hidden items. | Static, Patch |
+| 0x21845c | (menu data): the count of visible items. | Static |
+| 0x19e644 | (menu screen): the script calls it to activate the selected row. | Emulator |
+| 0x1e7b98 | (JS browser): resets the native browser (+0x1c) at the start of a browse. | Static, Emulator |
+| 0x1e7628 | (JS browser, mode): calls 0xb4038(browser, mode). Artists uses mode 1. | Static, Emulator |
 
 ### USB audio
 
@@ -461,6 +491,8 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | 0x666920, 0x666958 | Vtables of the USB audio control and streaming objects. |
 | 0x677290 | Vtable of a browse list (for example Albums and Artists). +0x30 (0x6772c0): event method 0x23b704. +0x138 (0x6773c8): set the selection. |
 | 0x6701f0 | Slot of the UI event handler 0x1d81cc. |
+| 0x6775b8 | Vtable of a menu list. +0x140 (0x6776f8): `activate(list, row)` 0x23ca4c. The list has the Menu ID at +0x1c (i16) and the menu data at +0x144. |
+| 0x66ec80 | Vtable of a menu item object. Item + 0x10 points to the Menu resource item + 4. |
 | 0x66a510 | Vtable of the application object. +0x30: event method 0x1d3348. |
 | 0x676974 | Vtable of a key event. +4: delete. +0x14: type check. |
 | 0x677aec | Vtable of a wheel event. |
@@ -496,6 +528,12 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | Music database | +0xb4, +0xe0, +0x138, +0x190 | String pools: titles, artists and composers, albums, genres |
 | Music database | +0xd2c, +0xd14 | The open file `iPod_Control\Artwork\ArtworkDB` (0xa1ff0) |
 | Track | +0x108, +0x10c | dbid (mhit + 0x70). ArtworkDB links an image to this ID. |
+| Native browser | +0x00 | u8: 1 = main browser; 2 = it uses the main browser at +0xc9c |
+| Native browser | +0x10, +0x228 | The selected artist row; the selected artist name (u16 length, UTF-16) |
+| Native browser | +0xc48, +0xc4c, +0xc50 | Artists: string indexes (pool db + 0xe0), letter table, count |
+| Native browser | +0xc60 … +0xc6c | Albums |
+| Main browser | +0xcf8, +0xca0 | The track data (string pools); the settings and text compare data (+0xb50: "Compilations") |
+| JS browser | +0x1c | The native browser |
 | Track | +0x00, +0x04 | The database; the next track |
 | Music database | +0x1c, +0x20 | Track count; the track array (0x110 bytes for each track) |
 | String pool (`strc`) | +0x08, +0x10, +0x14 | Handle to the entries {offset, length}; handle to the UTF-16 text; entry count |
@@ -557,6 +595,10 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 |---|---|
 | `TCmd` 9088 | The compiled JavaScript of the user interface (91,662 bytes at 0x4b441c). |
 | Menu 24598 | The Settings menu. |
+| Menu 24440 | The Music menu (10 items at 0x4af348). The Artists item has the label -126 and the value 0x41a2 at +0x0c. |
+| Menu 24094 | The list in Settings > Main Menu (31 items). |
+| Str -30 | "Artists": the title of the Artists screen. |
+| View 24486 | The Artists screen (View 24484: the Albums screen). |
 | Menu −138 | The Backlight Timer menu (data at 0x4b069c). |
 | View 24069 | The root view of the screen. |
 | View 24506 | The title bar. |
@@ -570,6 +612,7 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | Str 0x602e, 0x602f | "On" and "Off". |
 | Str 0x7e00 | "Dark Mode" (added by the `dark-mode` patch). |
 | Str 0x7e01, 0x7e02 | "Something Comforting" and "Play" (added by the `something-comforting` patch). |
+| Str 0x7e03 | "Album Artists" (added by the `album-artists` patch). |
 
 ## Element IDs
 

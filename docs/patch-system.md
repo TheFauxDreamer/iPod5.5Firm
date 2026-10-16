@@ -108,6 +108,7 @@ The install moves the old folder to the Trash. The patch keeps its switch state,
 | `symbol` | string | The name of an SF Symbol, for example `photo.on.rectangle.angled`. Do not use emoji. |
 | `category` | string | The group in the list of patches: `display`, `power`, `audio` (the group "Sound"), `fun` or `test`. |
 | `settings_items` | array, optional | On/Off items that the patch adds to the Settings menu. Refer to [Settings items](#settings-items). |
+| `menu_items` | array, optional | Copies of items that the patch adds to other menus, for example the Music menu. Refer to [Menu items](#menu-items). |
 | `options` | array, optional | Choices that the owner makes in the Patches pane before a build. Refer to [Options](#options). |
 
 | `ui` | object, optional | Controls in the Patches pane. Refer to [The ui object](#the-ui-object). |
@@ -252,6 +253,21 @@ The patcher finds the menu through the resource table entry in the current image
 
 The settings object calls the "get" method (vtable 0x66c94c) for the value text and the "set" method (vtable 0x66c950) when the owner selects the item. A patch hooks both with `chain`. Use a key that is not in the firmware: 0x600060e0 is Dark Mode, and 0x600060e4 is `something-comforting`.
 
+### Menu items
+
+`menu_items` adds a copy of an item to a menu, for example the Music menu (Menu 24440). The copy does the action of the item that it copies. Each item has these keys:
+
+| Key | Content |
+|---|---|
+| `menu_id` | The ID of the Menu resource, as a number, for example `24440`. |
+| `label_id` | The string ID of the new label, as a 16-bit hexadecimal value, for example `0x7e03`. The `b` hook on the string lookup (0x21f254) must give the text. |
+| `template_label` | The label of the item to copy, for example `0xff82` (-126, "Artists"). |
+| `after_label` | Optional. The new item comes after the item with this label. If the menu has no such item, the new item goes at the end. |
+
+A menu item is 40 bytes. The label ID is the i16 at +0x18, and again at +0x20. The patcher changes only these two values (`Patcher.insertMenuItem`, Python `insert_menu_item`). It puts each changed menu after the end of the image, as for the Settings menu, and changes the resource table entry (`Patcher.addMenuItems`, Python `add_menu_items`). The patcher stops with an error if the menu already has the label, or if the menu has no item with `template_label`. Two patches with the same menu and label are a conflict.
+
+To know which item the owner selects, hook the `activate` method of the menu lists (vtable slot 0x6776f8) with `chain`. [album_artists.c](../patches/album-artists/album_artists.c) is an example.
+
 ### Options
 
 `options` gives a patch choices that the owner selects in the Patches pane, before a save, a flash, an `.ipsw` export or an emulator run. To change the iPod, flash it again. Each option has these keys:
@@ -276,6 +292,7 @@ After the link, the patcher writes the value of the selected choice into the var
 4. A hook word does not have its `expect` value. Another change or another firmware version is in that location. A hook with `chain` also accepts the hook of an earlier patch.
 5. The `kind` is not known, or the `to` function is not a global function of the patch.
 6. A Settings item key is already in the Settings menu, or the menu has no template item.
+7. A `menu_items` label is already in its menu, or the menu has no item with `template_label`.
 
 After the checks, iPodFirm writes the code and the hooks. It extends osos with zeros to a multiple of 0x800 bytes. The partition code then calculates the new length and checksum.
 
@@ -293,6 +310,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `album-art` | `extended` | After all other data (12360 bytes). Alone: 0x736800–0x739848. The album table, the thumbnails and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
 | `usb-host-probe` | `extended` | After all other data (14624 bytes; the 32 KB log buffer and the 40 KB of the isochronous test come from allocators) | Extended patch. Test patch. |
 | `something-comforting` | `extended` | After all other data (692 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736ab4, menu at 0x737000, osos end 0x737800 | Extended patch. Example patch. |
+| `album-artists` | `extended` | After all other data (3018 bytes), then the Music menu (11 items, 444 bytes). Alone: code 0x736800–0x7373ca, menu at 0x737800, osos end 0x738000 | Extended patch. The side table and the list come from the allocators. |
 | `cover-flow` | `extended` | After all other data (10708 bytes; approximately 600 KB for the screen copy, the covers and the read buffer come from the allocator while Cover Flow shows) | Extended patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.

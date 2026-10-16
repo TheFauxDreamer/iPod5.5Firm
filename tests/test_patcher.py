@@ -1,6 +1,7 @@
 """Tests for the patcher options that the dark-mode build uses (needs IPODFW_IPSW)."""
 
 import hashlib
+import json
 import os
 import struct
 from pathlib import Path
@@ -234,3 +235,37 @@ def test_patch_option():
     assert [i for i in range(len(file)) if file[i] != artwork[i]] == [at]
     with pytest.raises(patcher.PatchError, match="no choice"):
         patcher.apply(osos, REPO / "patches/album-art", 0x736800, options={"source": 7})
+
+
+def test_insert_menu_item():
+    def item(label: int, target: int) -> bytes:
+        i = bytearray(40)
+        struct.pack_into("<H", i, 0x18, label)
+        struct.pack_into("<I", i, 0x0C, target)
+        struct.pack_into("<H", i, 0x20, label)
+        return bytes(i)
+    menu = struct.pack("<I", 3) + item(0xFF83, 0x40B2) + item(0xFF82, 0x41A2) + item(0xFF81, 0x415A)
+    out = patcher.insert_menu_item(menu, 0x7E03, 0xFF82, 0xFF82)
+    labels = [struct.unpack_from("<H", out, 4 + 40 * i + 0x18)[0] for i in range(4)]
+    assert labels == [0xFF83, 0xFF82, 0x7E03, 0xFF81]
+    assert struct.unpack_from("<I", out, 4 + 80 + 0x0C)[0] == 0x41A2       # the action of the template
+    assert struct.unpack_from("<H", out, 4 + 80 + 0x20)[0] == 0x7E03
+    with pytest.raises(patcher.PatchError, match="already has an item"):
+        patcher.insert_menu_item(out, 0x7E03, 0xFF82, None)
+    with pytest.raises(patcher.PatchError, match="no item with the label"):
+        patcher.insert_menu_item(menu, 0x7E03, 0x1111, None)
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_album_artists_menu_item():
+    from ipodfw import resources
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    out, report = patcher.apply(osos, REPO / "patches/album-artists", 0x736800)
+    main = resources.main_block(resources.scan(out))
+    r = next(r for r in main.resources if r.type == "Menu" and r.id == 24440)
+    at = main.abs(r)
+    assert [hex(at)] == report["menus"] and at >= int(report["code"][1], 16)
+    labels = [struct.unpack_from("<H", out, at + 4 + 40 * i + 0x18)[0] for i in range(struct.unpack_from("<I", out, at)[0])]
+    assert len(labels) == 11 and labels[labels.index(0xFF82) + 1] == 0x7E03
+    assert report["bytes"] == json.loads((REPO / "patches/album-artists/patch.json").read_text())["size"]
+    assert len(out) % 0x800 == 0

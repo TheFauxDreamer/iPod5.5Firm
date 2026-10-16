@@ -31,6 +31,10 @@ instruction and continues in the firmware (see chain_target):
 
       "settings_items": [ { "key": "0x600060e4", "label_id": "0x7e01", "after_key": "0x60006088" } ]
 
+"menu_items" adds a copy of an item to another menu, for example the Music menu (see add_menu_items):
+
+      "menu_items": [ { "menu_id": 24440, "label_id": "0x7e03", "template_label": "0xff82", "after_label": "0xff82" } ]
+
 The C code is compiled with Xcode clang for an ARM7TDMI (ARMv4T, ARM state). A small linker
 in this file puts .text, .rodata and .data at `load_address` and resolves the relocations.
 The code must fit in the space after the original image: the osos image can grow to the start
@@ -294,6 +298,52 @@ def add_settings_items(out: bytearray, items: list[dict]) -> int:
     return menu_at
 
 
+def _label(item: bytes) -> int:
+    return struct.unpack_from("<H", item, 0x18)[0]
+
+
+def insert_menu_item(menu: bytes, label: int, template: int, after: int | None) -> bytes:
+    """The menu with one more item: a copy of the item with the label `template`, with the label
+    `label`, after the item with the label `after` (or at the end). Labels are 16-bit string IDs."""
+    count = struct.unpack_from("<I", menu, 0)[0]
+    if len(menu) < 4 + 40 * count:
+        raise PatchError("The menu is not complete.")
+    items = [bytearray(menu[4 + 40 * i:44 + 40 * i]) for i in range(count)]
+    labels = [_label(it) for it in items]
+    if label in labels:
+        raise PatchError(f"The menu already has an item with the label {label:#x}.")
+    if template not in labels:
+        raise PatchError(f"The menu has no item with the label {template:#x}.")
+    item = bytearray(items[labels.index(template)])
+    struct.pack_into("<H", item, 0x18, label)
+    struct.pack_into("<H", item, 0x20, label)
+    items.insert(labels.index(after) + 1 if after in labels else len(items), item)
+    return struct.pack("<I", len(items)) + b"".join(items)
+
+
+def add_menu_items(out: bytearray, items: list[dict]) -> list[int]:
+    """Add the items to their menus, as add_settings_items does. Returns the addresses of the new menus."""
+    placed = []
+    for menu_id in dict.fromkeys(int(i["menu_id"]) for i in items):
+        main = resources.main_block(resources.scan(bytes(out)))
+        res = next((r for r in main.resources if r.type == "Menu" and r.id == menu_id), None)
+        if res is None:
+            raise PatchError(f"The firmware has no Menu {menu_id}.")
+        menu = bytes(out[main.abs(res):main.abs(res) + res.size])
+        for item in (i for i in items if int(i["menu_id"]) == menu_id):
+            after = int(item["after_label"], 16) if "after_label" in item else None
+            menu = insert_menu_item(menu, int(item["label_id"], 16), int(item["template_label"], 16), after)
+        menu_at = extended_base(bytes(out))
+        size = (menu_at + len(menu) + 0x7FF) // 0x800 * 0x800
+        if size > OSOS_LIMIT:
+            raise PatchError(f"No space for Menu {menu_id}.")
+        out += bytes(size - len(out))
+        out[menu_at:menu_at + len(menu)] = menu
+        struct.pack_into("<II", out, res.table_pos + 4, menu_at - main.data_start, len(menu))
+        placed.append(menu_at)
+    return placed
+
+
 def set_options(spec: dict, values: dict[str, int], code: bytearray, base: int, table: dict[str, int]) -> None:
     """Write the selected value of each option ("options" in patch.json) into its variable in the code.
 
@@ -381,8 +431,14 @@ def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int |
         out = out[:size]
         menu_at = add_settings_items(out, spec["settings_items"])
         size = len(out)
+    menus = []
+    if spec.get("menu_items"):
+        out = out[:size]
+        menus = add_menu_items(out, spec["menu_items"])
+        size = len(out)
     report = {"name": spec["name"], "code": [hex(base), hex(end)], "bytes": len(code),
               "map": {k: hex(v) for k, v in sorted(getattr(link, "last_map", {}).items(), key=lambda kv: kv[1])},
               "symbols": {k: hex(v) for k, v in table.items()}, "hooks": len(spec.get("hooks", [])),
-              "settings_menu": hex(menu_at) if menu_at is not None else None}
+              "settings_menu": hex(menu_at) if menu_at is not None else None,
+              "menus": [hex(m) for m in menus]}
     return bytes(out[:size]), report

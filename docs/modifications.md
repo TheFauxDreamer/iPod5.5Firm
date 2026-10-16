@@ -18,6 +18,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
 | [volume-unlimit](#volume-unlimit) | Data patch | Patches | 2 bytes | No |
 | [something-comforting](#something-comforting) | Code patch (example) | Patches | 1 `b` and 2 vtable words (all with `chain`), a Settings menu | No |
+| [album-artists](#album-artists) | Code patch | Patches | 2 `b`, 2 `bl`, 1 vtable word and 1 `b` (the last two with `chain`), a Music menu | Version 1.0: the list is correct, but it opens slowly. Version 1.1: no |
 | [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | No |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
@@ -600,6 +601,58 @@ Thus `0xa0348` always returns 0. The other match of the iPodWizard pattern, at 0
 **Note table.** [re/midi-to-tones.py](../re/midi-to-tones.py) makes the table from a MIDI file: track 6 (Flute), bars 41–48, the highest note at each time. 74 entries (37 notes), 12912 ms. The MIDI file is not in the repository.
 
 **Test status.** Emulator (2026-10-08): the Settings menu showed "Something Comforting" with "Play" after Clicker. Select called the set hook one time and `tone` 37 times for the notes. The times between the notes agreed with the table within approximately 10 ms. The menus worked after the melody. The emulator has no audio. Not tested on a real iPod.
+
+## album-artists
+
+**User interface.** Patches pane > Display > Album Artists, letter `l`. The section "Use the Album Artists List" gives the steps on the iPod. The design comes from osos-lab (RepriseOS) for the iPod Classic. The research is in [re/album-artist.md](../re/album-artist.md#album-artists-menu-item-15-october-2026).
+
+**Effect.** The Music menu has an Album Artists item after Artists. It opens a list with one row for each Album Artist, in alphabetical order. A song without an Album Artist is under its Artist. A row opens the albums and the songs of that Album Artist. The Artists list, Now Playing and the sort indexes of the database do not change. The list has no letters for the fast scroll.
+
+**Load address.** `extended`. The compiled code and data are 3018 bytes (alone: 0x736800–0x7373ca). After the code, the patcher writes the Music menu with 11 items (444 bytes; alone at 0x737800). The osos then ends at 0x738000.
+
+**Menu item.** A copy of the Artists item (label 0xff82, -126) after Artists in the Music menu (Menu 24440), with the label ID 0x7e03 (`menu_items`, refer to [patch-system.md](patch-system.md#menu-items)). The copy opens the Artists screen, because the firmware finds the action of an item in the item data.
+
+**Hooks.**
+
+| Hook | Kind | At | Expect | To | Chain |
+|---|---|---|---|---|---|
+| A | `b` | 0xd7ea0 | 0xea0000d1 | `hook_mhod22` | – |
+| B | `bl` | 0xafc8c | 0xeb009efd | `hook_load_tracks` | – |
+| C | `word` | 0x6776f8 | 0x0023ca4c | `hook_activate` | `activate_next` |
+| D | `b` | 0xd080c | 0xe92d5fff | `hook_build` | – |
+| E | `bl` | 0x114354 | 0xebfe2d6a | `hook_filter_text` | – |
+| F | `b` | 0x21f254 | 0xe92d40f8 | `hook_lookup` | `lookup_next`; default `lookup_original` (`push {r3-r7, lr}`, then 0x21f258) |
+
+**Runtime logic.**
+
+1. Hook A replaces the mhod 22 (Album Artist) entry of the jump table of the track parser. Apple's code skips this string. The patch reads it into the artist string pool (track data + 0xe0) with 0x10db84, into a slot on the stack. If the text is not empty and not the text of the Artist (track + 0x2c), `aa_store` keeps the index in a side table. Each track has its own pool index, also for the same text, thus `aa_store` compares the texts. Then the loop continues at 0xd821c.
+2. The side table uses open addressing. The key is the track pointer. It grows at 3/4 full (`fw_alloc` 0x25a974). Hook B clears it before each call of the track parser 0xd7888, thus before each load of the database.
+3. Hook C is the `activate` method of the menu lists (vtable 0x6775b8 + 0x140). For a list with menu data (list + 0x144), it gets the item of the row with 0x2183ec. If the label of the item is 0x7e03, `aa_mode` is 1. For all other items it is 0.
+4. Hook D wraps the list build 0xd080c. For field 4 (Artist) in `aa_mode`, `build_album_artists` collects the tracks of sort list 7 that pass the filter 0x1142a8. It takes the Album Artist index of each track, or the Artist index. It removes the same texts with an FNV-1a hash (one pass), sorts the unique names with the text compare 0x91c7c (a heap sort), and joins the names that compare as equal. It writes the indexes to browser + 0xc48, 0 to + 0xc4c (no letter table) and the count to + 0xc50. The native code then shows the names (0x9cabc) and selects a row (0xb2620).
+5. The browser keeps one Artists list. If the list in the browser is not of the current mode, hook D clears it first (0xa34b8). Thus Artists and Album Artists build their lists again after a change.
+6. Hook E replaces the call of the Artist text in the filter. In `aa_mode`, the filter compares the selected name (browser + 0x228) with the Album Artist of the track. The Albums and Songs levels then show the songs of the Album Artist.
+7. Hook F gives "Album Artists" for 'Str ' 0x7e03 (the label), and for 'Str ' -30 (the title of the Artists screen) in `aa_mode`. For all other lookups it calls `lookup_next`.
+
+**Limits.**
+
+- A sync changes the Album Artists only after the iPod reads the database again (as for all lists).
+- "Compilations" in Settings does not hide the compilations in the Album Artists list.
+- The list has no letter table. The fast scroll operates as with a database without mhod 53.
+- A library with mhod 52 and mhod 53 indexes (MiMusic, libgpod) is not tested. The patch sorts the list itself, thus the order does not depend on the indexes.
+
+**Test status.** Emulator (2026-10-16), the 7-track library of the [emulator test](../re/album-artist.md#emulator-test-6-october-2026):
+
+- Music showed Album Artists after Artists.
+- Album Artists showed All, Aardvark, Bravo, Echo and Various Artists, with the title "Album Artists".
+- Various Artists showed the 3 songs of Zeta Hits. Aardvark showed Apple One and Apple Two.
+- After this, Artists showed the 8 track artists. Mike Moe showed only Comp Two.
+- Now Playing showed the track Artist (Zulu feat. Kilo) and "2 of 2".
+- Genres > Test showed the 8 track artists.
+- With `album-art`, `cover-flow` and `something-comforting`, Album Artists and the Settings item "Something Comforting" operated.
+
+Real iPod (owner, 16 October 2026), version 1.0: the Album Artists item showed, and the list was correct. But the iPod stopped for approximately 6 seconds when Album Artists opened.
+
+Version 1.1 corrects the speed. Emulator (2026-10-16), 4000 tracks: the first open after a start took 0.95 s (0.85 s of it is the firmware sort of the Artist order, as for the native Artists list), and each later open 0.11 s (the native Artists list: 0.12 s). Version 1.0 took 1.6 s for each open. The 7-track library gave the same results as version 1.0. Refer to [re/album-artist.md](../re/album-artist.md#speed-16-october-2026). Version 1.1 is not tested on a real iPod.
 
 ## Storage type
 

@@ -1,0 +1,71 @@
+{
+  "name": "album-artists",
+  "title": "Album Artists",
+  "summary": "A Music menu item that lists the songs by Album Artist.",
+  "symbol": "person.2.crop.square.stack",
+  "category": "display",
+  "version_letter": "l",
+  "version": "1.1",
+  "size": 3018,
+  "description": "The Music menu has an Album Artists item after Artists. It shows one entry for each Album Artist. All the songs of a compilation are under one entry, for example \"Various Artists\".",
+  "details": [
+    "Music > Album Artists shows the Album Artists in alphabetical order.",
+    "A song without an Album Artist is under its Artist.",
+    "Select an Album Artist to see its albums and songs.",
+    "The Artists item and Now Playing do not change."
+  ],
+  "notes": [
+    "The iPod reads the Album Artist when it reads the music database: at the start and after a sync.",
+    "The Album Artists list has no letters for the fast scroll.",
+    "The idea comes from osos-lab (RepriseOS) for the iPod Classic."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "db_read_string": "0x10db84",
+    "parse_tracks": "0xd7888",
+    "menu_item_at": "0x2183ec",
+    "browser_main": "0x9bc6c",
+    "browser_db": "0x9bb98",
+    "browser_clear_artists": "0xa34b8",
+    "sort_list_entry": "0x9c8e4",
+    "track_filter": "0x1142a8",
+    "entry_track": "0x9e418",
+    "track_artist_text": "0x9f904",
+    "pool_text": "0x9efe0",
+    "text_compare": "0x91c7c",
+    "pools_lock": "0xa7200",
+    "pools_unlock": "0xb9f20",
+    "pool_lock": "0xa71d8",
+    "pool_unlock": "0xb9ef4",
+    "list_alloc": "0xa8178",
+    "fw_alloc": "0x25a974",
+    "fw_free": "0x25a8e4",
+    "mhod_done": "0xd821c",
+    "build_continue": "0xd0810",
+    "lookup_continue": "0x21f258"
+  },
+  "hooks": [
+    { "kind": "b", "at": "0xd7ea0", "expect": "0xea0000d1", "to": "hook_mhod22" },
+    { "kind": "bl", "at": "0xafc8c", "expect": "0xeb009efd", "to": "hook_load_tracks" },
+    { "kind": "word", "at": "0x6776f8", "expect": "0x0023ca4c", "to": "hook_activate", "chain": "activate_next" },
+    { "kind": "b", "at": "0xd080c", "expect": "0xe92d5fff", "to": "hook_build" },
+    { "kind": "bl", "at": "0x114354", "expect": "0xebfe2d6a", "to": "hook_filter_text" },
+    { "kind": "b", "at": "0x21f254", "expect": "0xe92d40f8", "to": "hook_lookup", "chain": "lookup_next", "chain_default": "lookup_original" }
+  ],
+  "menu_items": [
+    { "menu_id": 24440, "label_id": "0x7e03", "template_label": "0xff82", "after_label": "0xff82" }
+  ],
+  "ui": {
+    "steps_title": "Use the Album Artists List",
+    "steps": [
+      "Flash a firmware with this patch.",
+      "On the iPod, open Music.",
+      "Select Album Artists.",
+      "Select an Album Artist to see its albums."
+    ]
+  }
+}
