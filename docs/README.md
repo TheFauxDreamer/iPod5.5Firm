@@ -15,6 +15,7 @@ All data is for Apple RetailOS 1.3 (`iPod_25.1.3.ipsw`). Other firmware versions
 | [firmware-functions.md](firmware-functions.md) | The Ghidra findings: the firmware functions, vtables, RAM addresses and resource IDs that are identified. The method and the scripts. |
 | [app-and-device.md](app-and-device.md) | The app structure, the detection of the iPod, the privileged helper, and each external process, system API and network call. |
 | [ipod-shuffle.md](ipod-shuffle.md) | A specification of the iPod shuffle (Songs and Albums), with code in C and Swift to copy it into a music player. It has no links to other files, so you can share it alone. |
+| [porting.md](porting.md) | The parts that work only on macOS, the Swift and Python versions of each module, and a recommended path to a Windows or Linux version. |
 | [safety.md](safety.md) | The protections before and during a flash, the backups, the recovery procedure, and the known problems. |
 | [../USB-AUDIO-OUT.md](../USB-AUDIO-OUT.md) | The plan and the status of USB-C audio out: the USB host stack, the missing isochronous support, the stages and the gates. |
 
@@ -27,6 +28,7 @@ The research notes in [../re/](../re/) record the experiments in the sequence th
 - To search the firmware, to port a patch or to add a model, read [ghidra-guide.md](ghidra-guide.md).
 - To know what one patch does, read its section in [modifications.md](modifications.md).
 - To know which programs and permissions the app uses, read [app-and-device.md](app-and-device.md).
+- To port the app to Windows or Linux, read [porting.md](porting.md).
 
 ## Keep the reference current
 
@@ -42,7 +44,8 @@ Use this table to find the documents to update:
 | `Partition.swift`, `Resources.swift`, `Pictures.swift` or their Python versions | [firmware-format.md](firmware-format.md) |
 | `ThemeImport.swift`, `DarkMode.swift`, `FirmwareVersion.swift`, `AlbumArt.swift`, `ArtworkDB.swift`, `MusicImport.swift` | [modifications.md](modifications.md) |
 | `Device.swift`, `Operations.swift`, the helper or `Privileged.swift` | [safety.md](safety.md), [app-and-device.md](app-and-device.md) |
-| A new external program, system API, network connection, file or `UserDefaults` key | [app-and-device.md](app-and-device.md) |
+| A new external program, system API, network connection, file or `UserDefaults` key | [app-and-device.md](app-and-device.md). If the item works only on macOS, also [porting.md](porting.md). |
+| A new Swift module in `IPodFWKit`, a new Python module, or a module that gets its first version in the other language | [porting.md](porting.md) (section 2) |
 | A new pane, button or app function | [app-and-device.md](app-and-device.md), [../README.md](../README.md) |
 | `build-app.sh`, `install-emulator.sh` or the emulator patch | [app-and-device.md](app-and-device.md), [../re/emulator.md](../re/emulator.md) |
 | A new Ghidra or emulator result | The note in [../re/](../re/), then [firmware-functions.md](firmware-functions.md) |
