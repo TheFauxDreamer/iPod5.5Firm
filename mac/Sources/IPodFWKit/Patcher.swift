@@ -6,7 +6,7 @@ import Foundation
 // for the ARM7TDMI. A small linker puts the code at "load_address" and resolves relocations.
 // A patch can also change data ("bytes" and "strings"). A patch with no C file has no code.
 // A hook with "chain" can share its place with a hook of an earlier patch. A patch can add items
-// to the Settings menu ("settings_items"). A patch can have options ("options"): the owner selects a
+// to the Settings menu ("settings_items") and copies of items to other menus ("menu_items"). A patch can have options ("options"): the owner selects a
 // choice in the Patches pane, and the patcher writes its value into a variable of the patch.
 
 public struct PatchError: LocalizedError {
@@ -36,6 +36,18 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
         public var label_id: String
         public var after_key: String? = nil
         public var template_key: String? = nil
+    }
+    /// A copy of an item in a menu, for example the Music menu (Menu 24440). The copy of the item with the
+    /// label `template_label` gets the label `label_id` and goes after the item with `after_label`, or at
+    /// the end. Labels are 16-bit string IDs in hexadecimal, for example "0xff82" (-126, "Artists").
+    /// The copy does the action of the template item. The hooks of the patch give the label text.
+    public struct MenuItem: Codable, Hashable {
+        public var menu_id: Int
+        public var label_id: String
+        public var template_label: String
+        public var after_label: String? = nil
+        /// Optional. The new 32-bit value at +0x1c: the settings key of an item in a Settings list.
+        public var key: String? = nil
     }
     /// A choice that the owner makes in the Patches pane before a build. The patcher writes the
     /// `value` of the selected choice (32 bits) into the global variable `symbol` of the patch.
@@ -85,6 +97,8 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var strings: [String: [String: String]]?
     /// Items that the patch adds to the Settings menu.
     public var settings_items: [SettingsItem]?
+    /// Copies of items that the patch adds to other menus.
+    public var menu_items: [MenuItem]?
     /// Choices that the owner makes in the Patches pane (see Option).
     public var options: [Option]?
     /// A warning for an iPod that probably has the original hard drive (see IPodDisk.likelyOriginalHDD).
@@ -291,17 +305,41 @@ public enum Patcher {
         public init(end: Int) { self.end = end }
     }
 
-    /// The space that a build uses: `imageCount` is the size of the image after the appearance;
-    /// `patches` are the switched-on patches in build order with their code sizes. The layout is
-    /// the same as `apply`: an extended patch starts at `extendedBase`, and each apply makes the
-    /// image a multiple of 0x800 bytes.
-    public static func spaceUse(imageCount: Int, patches: [(patch: PatchInfo, size: Int)]) -> SpaceUse {
-        var count = imageCount
-        for (p, size) in patches where p.spec.load_address == extendedLoadAddress && size > 0 {
-            let base = (max(count, maxOSOSSize) + 15) & ~15
-            count = max(count, (base + size + 0x7FF) / 0x800 * 0x800)
+    /// The space that a build uses: `osos` is the image after the appearance; `patches` are the
+    /// switched-on patches in build order with their code sizes. The layout is the same as the
+    /// build (`apply` with several patches): an extended patch starts at `extendedBase` (16-byte
+    /// steps), each menu that a patch changes ("settings_items", "menu_items") goes after it, and
+    /// only the end of the image is rounded to 0x800 bytes.
+    public static func spaceUse(osos: [UInt8], patches: [(patch: PatchInfo, size: Int)]) -> SpaceUse {
+        var count = osos.count
+        var items = [Int16: Int]()                         // the item count of each changed menu
+        func itemCount(_ id: Int16) -> Int {
+            if let n = items[id] { return n }
+            guard let main = try? Resources.mainBlock(Resources.scan(osos, limit: maxOSOSSize)),
+                  let r = main.resources.first(where: { $0.type == "Menu" && $0.id == id }),
+                  main.abs(r) + 4 <= osos.count else { return 0 }
+            return Int(le32(osos, main.abs(r)))
         }
-        return SpaceUse(end: count)
+        func addMenu(_ id: Int16, _ added: Int) {
+            let n = itemCount(id) + added
+            items[id] = n
+            count = (max(count, maxOSOSSize) + 15) & ~15 + 4 + 40 * n
+        }
+        for (p, size) in patches {
+            if p.spec.load_address == extendedLoadAddress && size > 0 {
+                count = (max(count, maxOSOSSize) + 15) & ~15 + size
+            }
+            if let s = p.spec.settings_items, !s.isEmpty { addMenu(settingsMenuID, s.count) }
+            var ids = [Int]()
+            for m in p.spec.menu_items ?? [] where !ids.contains(m.menu_id) { ids.append(m.menu_id) }
+            for id in ids { addMenu(Int16(id), (p.spec.menu_items ?? []).filter { $0.menu_id == id }.count) }
+        }
+        return SpaceUse(end: (count + 0x7FF) / 0x800 * 0x800)
+    }
+
+    /// The image with zeros to the next multiple of 0x800 bytes, as in Apple's file.
+    public static func padded(_ osos: [UInt8]) -> [UInt8] {
+        osos + [UInt8](repeating: 0, count: (osos.count + 0x7FF) / 0x800 * 0x800 - osos.count)
     }
 
     public static func list(in folder: URL, source: PatchInfo.Source = .builtIn) -> [PatchInfo] {
@@ -338,6 +376,13 @@ public enum Patcher {
             for item in p.spec.settings_items ?? [] {
                 if let v = try? hex(item.key) { r.append((Int(v)..<Int(v) + 1, "Settings item \(item.key)")) }
             }
+            for item in p.spec.menu_items ?? [] {
+                // A separate range for each menu: the menu ID above the 16-bit label.
+                if let v = try? hex(item.label_id) {
+                    let k = (1 << 32) + item.menu_id << 16 + Int(v & 0xFFFF)
+                    r.append((k..<k + 1, "Menu \(item.menu_id) item \(item.label_id)"))
+                }
+            }
             for b in p.spec.bytes ?? [] {
                 if let v = try? hex(b.at) { r.append((Int(v)..<Int(v) + max(1, b.expect.count / 2), "bytes at \(b.at)")) }
             }
@@ -368,11 +413,13 @@ public enum Patcher {
 
     /// Apply several patches to `osos`. `originalSHA256` is the SHA-256 of the osos before any change
     /// (picture and text changes are allowed: the hooks and the code area are examined byte by byte).
+    /// The patches follow each other without a gap (16-byte steps): each one starts after the code,
+    /// the variables and the menus of the patch before it. Only the result is rounded to 0x800 bytes.
     public static func apply(_ patches: [PatchInfo], to osos: [UInt8], originalSHA256: String? = nil) throws -> [UInt8] {
         let original = originalSHA256 ?? sha256(osos)
         var out = osos
-        for p in patches { out = try apply(p, to: out, originalSHA256: original) }
-        return out
+        for p in patches { out = try apply(p, to: out, originalSHA256: original, pad: false) }
+        return padded(out)
     }
 
     public static func isCompatible(_ patch: PatchInfo, originalSHA256: String) -> Bool {
@@ -381,8 +428,10 @@ public enum Patcher {
 
     /// Apply one patch. `loadAddress` replaces the address in patch.json, and `symbols` adds
     /// addresses that the build decides (for example the address of a table in the osos image).
+    /// With `pad`, the result is rounded to 0x800 bytes. Without it, the image ends at the last byte
+    /// of the patch (code, variables and menus), so that the next patch can start there.
     public static func apply(_ patch: PatchInfo, to current: [UInt8], originalSHA256: String, loadAddress: UInt32? = nil,
-                             symbols: [String: UInt32] = [:], maxSize: Int = maxOSOSSize) throws -> [UInt8] {
+                             symbols: [String: UInt32] = [:], maxSize: Int = maxOSOSSize, pad: Bool = true) throws -> [UInt8] {
         let spec = patch.spec
         guard originalSHA256 == spec.osos_sha256 else {
             throw PatchError("The patch \"\(spec.name)\" is for a different firmware version.")
@@ -415,7 +464,7 @@ public enum Patcher {
             throw PatchError("The firmware is too large: the code of \"\(spec.displayTitle)\" ends at \(String(end, radix: 16)), but the maximum is \(String(maxSize, radix: 16)) (\(end - maxSize) bytes too many). Switch off a patch. The bar below the list of patches shows the space.")
         }
         var out = current
-        let size = max(out.count, (end + 0x7FF) / 0x800 * 0x800)
+        let size = max(out.count, pad ? (end + 0x7FF) / 0x800 * 0x800 : end)
         if out.count < size { out += [UInt8](repeating: 0, count: size - out.count) }
         guard out[Int(base)..<end].allSatisfy({ $0 == 0 }) else {
             throw PatchError("The code area of \"\(spec.name)\" is not empty. Two patches possibly use the same area.")
@@ -441,7 +490,8 @@ public enum Patcher {
         }
         try applyData(spec, to: &out)
         if let items = spec.settings_items, !items.isEmpty { try addSettingsItems(items, to: &out) }
-        return out
+        if let items = spec.menu_items, !items.isEmpty { try addMenuItems(items, to: &out) }
+        return pad ? padded(out) : out
     }
 
     /// Write the selected value of each option into its variable in the linked code.
@@ -525,12 +575,60 @@ public enum Patcher {
                                           after: try item.after_key.map(hex), template: try item.template_key.map(hex) ?? soundCheckKey)
         }
         let menuAt = Int(extendedBase(out))
-        let size = (menuAt + menu.count + 0x7FF) / 0x800 * 0x800
+        let size = menuAt + menu.count
         guard size <= ThemeImport.ososLimit else { throw PatchError("No space for the Settings menu.") }
         out += [UInt8](repeating: 0, count: size - out.count)
         out.replaceSubrange(menuAt..<menuAt + menu.count, with: menu)
         put32(&out, res.tablePos + 4, UInt32(menuAt - main.dataStart))
         put32(&out, res.tablePos + 8, UInt32(menu.count))
+    }
+
+    /// The menu with one more item: a copy of the item with the label `template`, with the label `label`,
+    /// after the item with the label `after` (or at the end, if the menu has no such item).
+    public static func insertMenuItem(_ menu: [UInt8], label: UInt16, template: UInt16, after: UInt16?,
+                                      key: UInt32? = nil) throws -> [UInt8] {
+        let count = Int(le32(menu, 0))
+        guard menu.count >= 4 + 40 * count else { throw PatchError("The menu is not complete.") }
+        var items = (0..<count).map { Array(menu[4 + 40 * $0..<44 + 40 * $0]) }
+        let labels = items.map { UInt16($0[0x18]) | UInt16($0[0x19]) << 8 }
+        guard !labels.contains(label) else { throw PatchError("The menu already has an item with the label 0x\(String(label, radix: 16)).") }
+        guard let t = labels.firstIndex(of: template) else { throw PatchError("The menu has no item with the label 0x\(String(template, radix: 16)).") }
+        var item = items[t]
+        for at in [0x18, 0x20] { item[at] = UInt8(label & 0xFF); item[at + 1] = UInt8(label >> 8) }
+        if let key { put32(&item, 0x1C, key) }
+        items.insert(item, at: after.flatMap { labels.firstIndex(of: $0) }.map { $0 + 1 } ?? items.count)
+        var out = [UInt8](repeating: 0, count: 4)
+        put32(&out, 0, UInt32(items.count))
+        return out + items.flatMap { $0 }
+    }
+
+    /// Add the items to their menus, as `addSettingsItems` does: each changed menu goes after the end of
+    /// `out`, and its resource table entry then points to it.
+    static func addMenuItems(_ items: [PatchSpec.MenuItem], to out: inout [UInt8]) throws {
+        var ids = [Int]()
+        for item in items where !ids.contains(item.menu_id) { ids.append(item.menu_id) }
+        for id in ids {
+            let main = try Resources.mainBlock(Resources.scan(out, limit: maxOSOSSize))
+            guard let res = main.resources.first(where: { $0.type == "Menu" && Int($0.id) == id }) else {
+                throw PatchError("The firmware has no Menu \(id).")
+            }
+            let at = main.abs(res)
+            guard at + Int(res.size) <= out.count else { throw PatchError("Menu \(id) is outside the image.") }
+            var menu = Array(out[at..<at + Int(res.size)])
+            for item in items where item.menu_id == id {
+                menu = try insertMenuItem(menu, label: UInt16(truncatingIfNeeded: try hex(item.label_id)),
+                                          template: UInt16(truncatingIfNeeded: try hex(item.template_label)),
+                                          after: try item.after_label.map { UInt16(truncatingIfNeeded: try hex($0)) },
+                                          key: try item.key.map(hex))
+            }
+            let menuAt = Int(extendedBase(out))
+            let size = menuAt + menu.count
+            guard size <= ThemeImport.ososLimit else { throw PatchError("No space for Menu \(id).") }
+            out += [UInt8](repeating: 0, count: size - out.count)
+            out.replaceSubrange(menuAt..<menuAt + menu.count, with: menu)
+            put32(&out, res.tablePos + 4, UInt32(menuAt - main.dataStart))
+            put32(&out, res.tablePos + 8, UInt32(menu.count))
+        }
     }
 
     static func hasCode(_ folder: URL) -> Bool {

@@ -946,13 +946,21 @@ final class PatcherOptionTests: XCTestCase {
         let set = all.filter { ["album-art", "flash-wake-on-input", "usb-host-probe"].contains($0.spec.name) }
         let sizes = try set.map { (patch: $0, size: try Patcher.codeSize($0)) }
         XCTAssertGreaterThan(sizes.first { $0.patch.spec.name == "usb-host-probe" }!.size, 1000)
-        let use = Patcher.spaceUse(imageCount: osos.count, patches: sizes)
+        let use = Patcher.spaceUse(osos: osos, patches: sizes)
         XCTAssertEqual(use.end, try Patcher.apply(set, to: osos).count)
         XCTAssertTrue(use.fits)
+        // patches with menus ("settings_items", "menu_items"): the measurement counts the menus,
+        // and the patches follow each other without a 0x800 gap
+        let menus = all.filter { ["album-art", "album-artists", "cover-flow", "instant-save", "something-comforting", "usb-host-probe"].contains($0.spec.name) }
+        let menuSizes = try menus.map { (patch: $0, size: try Patcher.codeSize($0)) }
+        let built = try Patcher.apply(menus, to: osos)
+        XCTAssertEqual(Patcher.spaceUse(osos: osos, patches: menuSizes).end, built.count)
+        let data = menuSizes.reduce(0) { $0 + $1.size } + (4 + 40 * 11) + (4 + 40 * 32) + (4 + 40 * 29) + (4 + 40 * 19)
+        XCTAssertLessThan(built.count - Patcher.maxOSOSSize, data + 6 * 16 + 0x800)     // only the alignment and one rounding
         // after other data that leaves too little space
         let probe = sizes.first { $0.patch.spec.name == "usb-host-probe" }!
         let filled = osos + [UInt8](repeating: 0, count: Patcher.SpaceUse.limit - 0x800 - osos.count) + [1]
-        let over = Patcher.spaceUse(imageCount: filled.count, patches: [probe])
+        let over = Patcher.spaceUse(osos: filled, patches: [probe])
         XCTAssertFalse(over.fits)
         XCTAssertThrowsError(try Patcher.apply([probe.patch], to: filled, originalSHA256: Patcher.sha256(osos)))
     }
@@ -1203,6 +1211,76 @@ final class DarkModeTests: XCTestCase {
         // a hook with "chain" is not a conflict; the same Settings item key is
         XCTAssertTrue(Patcher.conflicts(melody + [dark]).isEmpty)
         XCTAssertEqual(Patcher.conflicts(melody + melody).count, 1)
+    }
+
+    /// "menu_items": a copy of an item with a new label, after the item `after_label`, or at the end.
+    func testInsertMenuItem() throws {
+        func item(_ label: UInt16, _ target: UInt32) -> [UInt8] {
+            var i = [UInt8](repeating: 0, count: 40)
+            i[0x18] = UInt8(label & 0xFF); i[0x19] = UInt8(label >> 8)
+            put32(&i, 0x0C, target)
+            i[0x20] = i[0x18]; i[0x21] = i[0x19]
+            return i
+        }
+        var menu = [UInt8](repeating: 0, count: 4)
+        put32(&menu, 0, 3)
+        menu += item(0xFF83, 0x40B2) + item(0xFF82, 0x41A2) + item(0xFF81, 0x415A)
+        let out = try Patcher.insertMenuItem(menu, label: 0x7E03, template: 0xFF82, after: 0xFF82)
+        XCTAssertEqual(le32(out, 0), 4)
+        let labels = (0..<4).map { UInt16(out[4 + 40 * $0 + 0x18]) | UInt16(out[4 + 40 * $0 + 0x19]) << 8 }
+        XCTAssertEqual(labels, [0xFF83, 0xFF82, 0x7E03, 0xFF81])
+        XCTAssertEqual(le32(out, 4 + 80 + 0x0C), 0x41A2)                     // the action of the template
+        XCTAssertEqual(Array(out[4 + 80 + 0x20..<4 + 80 + 0x22]), [0x03, 0x7E])
+        let keyed = try Patcher.insertMenuItem(menu, label: 0x7E04, template: 0xFF82, after: nil, key: 0x6000_7E05)
+        XCTAssertEqual(le32(keyed, 4 + 120 + 0x1C), 0x6000_7E05)
+        let end = try Patcher.insertMenuItem(menu, label: 0x7E03, template: 0xFF82, after: 0x1234)
+        XCTAssertEqual(UInt16(end[4 + 120 + 0x18]) | UInt16(end[4 + 120 + 0x19]) << 8, 0x7E03)
+        XCTAssertThrowsError(try Patcher.insertMenuItem(out, label: 0x7E03, template: 0xFF82, after: nil))
+        XCTAssertThrowsError(try Patcher.insertMenuItem(menu, label: 0x7E03, template: 0x1111, after: nil))
+    }
+
+    /// The album-artists patch: alone, after "Switch on iPod", and with something-comforting (both hook the
+    /// lookup with "chain"). The Music menu has "Album Artists" after Artists. Needs IPODFW_IPSW.
+    func testAlbumArtistsMenuItem() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let partition = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data)
+        let osos = try partition.image("osos")
+        let sha = ThemeImport.sha256(osos)
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        let all = Patcher.list(in: repo.appendingPathComponent("patches"))
+        let dark = all.first { $0.spec.name == "dark-mode" }!
+        let artists = all.filter { $0.spec.name == "album-artists" }
+        let melody = all.filter { $0.spec.name == "something-comforting" }
+        XCTAssertEqual(artists.count, 1)
+        func musicLabels(_ o: [UInt8], menu: Int16 = 24440) throws -> [UInt16] {
+            let main = try Resources.mainBlock(Resources.scan(o, limit: Patcher.maxOSOSSize))
+            let r = main.resources.first { $0.type == "Menu" && $0.id == menu }!
+            let at = main.abs(r)
+            return (0..<Int(le32(o, at))).map { UInt16(o[at + 4 + 40 * $0 + 0x18]) | UInt16(o[at + 4 + 40 * $0 + 0x19]) << 8 }
+        }
+        let alone = try Patcher.apply(artists, to: osos, originalSHA256: sha)
+        var labels = try musicLabels(alone)
+        XCTAssertEqual(labels.count, 11)
+        XCTAssertEqual(labels[labels.firstIndex(of: 0xFF82)! + 1], 0x7E03)
+        let main = try musicLabels(alone, menu: 24094)                         // the main menu
+        XCTAssertEqual(main.count, 32)
+        XCTAssertEqual(main[main.firstIndex(of: 0x5F7C)! + 1], 0x7E03)
+        let rows = try musicLabels(alone, menu: 24600)                         // Settings > Main Menu
+        XCTAssertEqual(rows.count, 29)
+        XCTAssertEqual(rows[rows.firstIndex(of: 0xFF5E)! + 1], 0x7E04)
+        XCTAssertGreaterThanOrEqual(le32(alone, 0x6776f8), Patcher.patchAreaStart)
+        XCTAssertEqual(alone.count % 0x800, 0)
+        // after "Switch on iPod" with an empty theme, then something-comforting
+        let theme = ImportedTheme(name: "empty", source_sha256: sha, osos_sha256: sha)
+        let (switched, _) = try DarkMode.build(partition: partition, osos: osos, theme: theme, patch: dark, originalSHA256: sha)
+        let out = try Patcher.apply(artists + melody, to: switched, originalSHA256: sha)
+        labels = try musicLabels(out)
+        XCTAssertEqual(labels.filter { $0 == 0x7E03 }.count, 1)
+        XCTAssertLessThanOrEqual(out.count, ThemeImport.ososLimit)
+        // two times: the item exists already
+        XCTAssertThrowsError(try Patcher.apply(artists, to: alone, originalSHA256: sha))
+        XCTAssertTrue(Patcher.conflicts(artists + melody + [dark]).isEmpty)
+        XCTAssertEqual(Patcher.conflicts(artists + artists).count, 1)
     }
 
     func testChainTargetRules() throws {

@@ -4,6 +4,8 @@ This document records the research for an `album-artist` patch. The firmware is 
 
 **Status (6 October 2026): research only.** The owner decided not to add the patch to `patches/` now. This document keeps all the data to make it later: the hooks, the code, the `patch.json` and the test results. The emulator test used a test build of Hook 1. The sort-index correction is not tested.
 
+**Status (16 October 2026): a different method, now a patch.** The owner selected an "Album Artists" item in the Music menu, as in osos-lab. The normal Artists list does not change. Refer to [Album Artists menu item](#album-artists-menu-item-15-october-2026). The patch is [patches/album-artists/](../patches/album-artists/). The sections before it describe the first method ("replace the Artist").
+
 The owner asked for two changes:
 
 1. Sort the Albums list by the Album Artist.
@@ -72,7 +74,7 @@ Type 22 (Album Artist) goes to 0xd81ec. This code skips the string (0xdc6a8). Th
 |---|---|
 | 0x10db84 | Calls 0xf4340 with argument 4 = 0. |
 | 0xf4340 | Reads the mhod string header and the text. It compares the type only with 2 (path). Then it stores the text in the pool with 0x885ec. |
-| 0x885ec | Stores a string in a pool (pool, text, length, slot). It writes 0 to the slot first. If the pool has the same text, it adds 1 to the reference count and writes that index. An empty text gives the index 0. |
+| 0x885ec | Stores a string in a pool (pool, text, length, slot). It writes 0 to the slot first. An empty text gives the index 0. Correction (16 October 2026): each track gets its own index, also for the same text. The emulator test with 4000 tracks showed it. |
 | 0x907f4 | Reads the artist of the track (slot + 0x2c), sets bit 4 of byte +0x15, and calls 0x1114dc. |
 | 0x1114dc | Makes the sort key of the artist (pool db + 0x10c, slot + 0x30). |
 | 0xdc6a8 | Skips bytes in the file. |
@@ -83,7 +85,7 @@ The function 0xd6de8 also reads mhod strings, but only the playlist names.
 
 The hook replaces the jump table entry for type 22 (0xd7ea0) with a `b` to `hook_album_artist`. The hook does the same steps as the code for type 4. The Album Artist then replaces the Artist of the track. If the Album Artist is empty, the hook puts back the old Artist.
 
-A second store to the Artist slot keeps one extra reference to the old Artist in the pool. The memory use is small. The Artists list does not show these names, because the list comes from the tracks, not from the pool. The emulator test confirms this.
+A second store to the Artist slot keeps one extra entry in the pool. The memory use is small. The Artists list does not show these names, because the list comes from the tracks, not from the pool. The emulator test confirms this.
 
 The Composer uses the same pool (db + 0xe0). This also shows that the Artists list does not come from the pool.
 
@@ -301,3 +303,249 @@ Hook 2 calls 0xf426c(reader, db, buffer, length), then reads the sort type (the 
 - The firmware possibly does not accept a mix of lists from the index and lists that it sorts itself.
 - Without the letter tables, the letters of the fast scroll possibly do not operate.
 - The code needs approximately 60 bytes. Only 44 bytes are free after Hook 1 (0x7367d4–0x736800).
+
+## Album Artists menu item (15 October 2026)
+
+This section records the research for a second method. A new item "Album Artists" in the Music menu opens a list of the Album Artists. A song without an Album Artist uses its Artist. The normal Artists list, Now Playing and the sort indexes do not change.
+
+### The osos-lab design (iPod Classic, firmware 2.0.5)
+
+[osos-lab](https://github.com/lgreitis/osos-lab) (RepriseOS) has this function for the iPod Classic 6G and 7G. The files are in `payload/`. The source was read on 15 October 2026.
+
+| Part | File | Function |
+|---|---|---|
+| Read the tag | `album_artist.c`, `album_artist.S` | A hook in the track parser reads mhod 22 into the native artist string pool. A side hash table keeps the index for each track (key: the persistent ID). The table is cleared when the library loads again. |
+| Build the list | `album_artists.c` | The patch makes its own browser. For this browser only, it replaces the native "build artists" function. It collects the tracks that pass the native filter, sorts them by the Album Artist (or the Artist) with the native text compare, and makes the groups and the letter table. |
+| Filter | `album_artists.S` | A hook in the native filter compares the Album Artist of the track with the selected row. The Albums and Songs levels then come from the native code. |
+| Menu item | `album_artists.ui`, `album_artists_menu.c` | A new Music menu item after Artists. Settings items show or hide it in the Main Menu and the Music menu. |
+
+The user interface of firmware 2.0.5 is different from RetailOS 1.3. Thus osos-lab gives the design, not the addresses.
+
+### Method of the research
+
+- Ghidra (project `osos13`) and the scripts in `re/ghidra-scripts/`.
+- The instrumented emulator with the stock firmware 1.3 and the 7-track library of the [emulator test](#emulator-test-6-october-2026).
+- `IPODFW_PROFILE=1`: a comparison of the code that runs when Artists opens and when Albums opens.
+- `IPODFW_REGS_AT`: the registers at the bytecode loop (0x135b84), at the native call of the script engine (0x120bec), at the activate jump (0x19e69c) and at the resource lookup (0x21f254).
+
+### The Music menu
+
+The Music menu is Menu 24440 (data at 0x4af348). It has 10 items of 40 bytes: Playlists, Artists, Albums, Compilations, Songs, Podcasts, Radio, Genres, Composers and Audiobooks. The menu hides the items that have no content. Menu 24094 (31 items) is the main menu. Correction (16 October 2026): before, this note said that it is the list in Settings > Main Menu. That list is Menu 24600.
+
+| Item offset | Content | Artists item |
+|---|---|---|
+| +0x08 | u32 | 0x3eb2 |
+| +0x0c | u32: an ID of the target | 0x41a2 |
+| +0x18 | i16: the label string ID | -126 ("Artists") |
+| +0x1a | u8: the position (8, 9, ...) | 9 |
+| +0x1b | u8 | 3 |
+| +0x1c | u32 | 0x7a010000 |
+| +0x20 | i16: the label string ID again | -126 |
+
+The value at +0x0c is not a resource ID. It also occurs as a literal at 0x23db88 and in the script (0x4bf856), but its function is not known.
+
+### Test: a copy of the Artists item (emulator)
+
+A test firmware had a copy of the Artists item after Artists, with the label 24476 ("Cancel"). The new menu went after the end of osos (0x736800), as the patcher does for the Settings menu. Results:
+
+| Action | Result |
+|---|---|
+| Open the Music menu | Playlists, Artists, Cancel, Albums, Songs, Podcasts, Genres, Composers, Audiobooks |
+| Select Cancel | The Artists list (title "Artists") |
+| Select Albums | The Albums list |
+| Select Composers | The Composers list |
+
+Thus the firmware finds the action of an item from the item data, not from the position of the item. A new item that is a copy of Artists opens the Artists list. The other items continue to operate.
+
+### The selection of a menu item
+
+| Address | Function |
+|---|---|
+| 0x6775b8 | The vtable of the menu list class. |
+| 0x6776f8 | Vtable slot +0x140: `activate(list, row)` = 0x23ca4c. A `word` hook here sees each menu selection. |
+| 0x23ca4c | Calls 0x239f7c(list, row, tag). This sends the selection event. |
+| 0x19e644 | The script calls this method. It calls `activate` for the selected row. |
+| list + 0x1c | i16: the Menu resource ID (24440 for the Music menu). |
+| list + 0x144 | The menu data object. |
+| 0x2183ec(menu data, row) | Returns the item object of a visible row. It skips the hidden items. |
+| item + 0x10 | A pointer to the resource item + 4. The label ID is the i16 at this pointer + 0x14. |
+| 0x21845c(menu data) | Returns the count of visible items. |
+| 0x253fe4(item) | Returns 0 if the item is hidden. |
+
+### The script of the Artists screen
+
+The user interface script (`TCmd` 9088, SpiderMonkey 1.5 bytecode) has one function for each Music item. The Artists function starts near 0x4ba58e. The Albums function starts near 0x4b9fc2. When Artists opens, the script calls these native functions in this sequence:
+
+| Native | Arguments | Function |
+|---|---|---|
+| 0x19e644 | menu screen | Activates the selected row. |
+| 0x1e7b98 | JS browser | Resets the browser: 0xb29b0(br, 0), 0xb2894(br, 1, 3). |
+| 0x1e77e8 | JS browser | Updates the list. Calls 0x9dec4 (the artist count). |
+| 0x1e97bc | JS browser | Calls 0x9dec4. |
+| 0x1e7628 | JS browser, 1 | Calls 0xb4038(br, 1). |
+| 0x19e790, 0x19e524 | screen, 0x5fba / 0x5fa6 | View 24506 (the title bar) and View 24486 (the Artists screen). |
+
+The JS browser object has the native browser at +0x1c. The title of the Artists screen is `Str -30` ("Artists"). The resource lookup 0x21f254 gets it when the screen opens.
+
+### The native browser
+
+| Offset | Content |
+|---|---|
+| +0x00 | u8: the type. 1 = a main browser; 2 = a browser that uses the main browser at +0xc9c. |
+| +0x10 | The selected artist row (-1 = none). |
+| +0x28 | The selected genre (u16 length, then UTF-16 text). |
+| +0x228 | The selected artist (u16 length, then UTF-16 text). |
+| +0x428 | The selected composer. |
+| +0x628 | The selected album. |
+| +0xc3c, +0xc40, +0xc44 | Genres: string indexes, letter table, count. |
+| +0xc48, +0xc4c, +0xc50 | Artists: string indexes, letter table, count. |
+| +0xc54, +0xc58, +0xc5c | Composers: string indexes, letter table, count. |
+| +0xc60 to +0xc6c | Albums. |
+
+| Address | Function |
+|---|---|
+| 0x9bc6c(browser) | Returns the main browser. |
+| 0x9bb98(browser) | Returns the track database (the lists). |
+| main browser + 0xcf8 | The track data. The artist string pool is at track data + 0xe0. |
+| main browser + 0xca0 | The settings and the text compare data. Byte +0xb50 is "Compilations" in Settings. |
+| 0xd080c(browser, x, field, sub) | Builds the list of a field. Field 4 = Artist (sort list 7), 2 = Album (6), 0x40 = Genre (9), 0x4000000 = Composer (0x18). If the result is already there (for Artist: +0xc48 is not 0), it does nothing. |
+| 0x9dec4(browser) | Builds the Artists list (0xd080c with field 4) and returns the count. |
+| 0x9cabc(browser, row, out) | Copies the name of a row from the pool (track data + 0xe0) to `out`. |
+| 0x9cb10(browser, row, out) | Gives the letter of a row for the fast scroll. |
+| 0xb2620(browser, row) | Selects a row: +0x10 = row, the name goes to +0x228. |
+| 0xa34b8(browser) | Clears the Artists list. |
+| 0x9c8e4(db, list, 0, n) | Returns entry n of a sort list. |
+| 0x9e418(entry) | Returns the track of an entry. |
+| 0x1142a8(browser, entry, 0) | The filter. Bit 0 of the result is 1 if the track agrees with the selections. Entry byte +0x1c keeps the result (1 = yes, 2 = no). |
+| 0x9f904(track, &text, &units) | The Artist text of a track (pool track data + 0xe0, index at track + 0x2c). |
+| 0x9efe0(pool, index, &text, &bytes) | A view of a pool string. |
+| 0x91c7c(data, a, a units, b, b units) | The text compare. |
+| 0x91d44 | Compares two tracks by one field. |
+
+How 0xd080c builds the Artists list:
+
+1. It goes through sort list 7 (the tracks in the order of the Artist).
+2. It keeps the tracks that pass the filter 0x1142a8.
+3. It compares the Artist text of each track with the text of the previous track (0x91c7c). A different text starts a new row. The row gets the string index at track + 0x2c.
+4. If the database has a letter table for sort list 7 (mhod 53, at db + 0x494 + 4 × 7), it makes the letter table. Without mhod 53, +0xc4c stays 0.
+5. If "Compilations" is on, it skips the tracks of compilations (track + 0x15, bit 1).
+
+The rows of the list are string indexes in the artist pool. Thus a list of Album Artist indexes in the same pool operates with the native name, letter and select functions.
+
+The filter compares the selected artist (+0x228) with the Artist text of the track. It gets that text with `bl 0x9f904` at 0x114354.
+
+### The track object
+
+The parser 0xd7888 makes each track with 0xa96c0 (a slab of the database, db + 0x38). Track + 0x10 points to an extension object. 0x88bc0 makes the extension when the track needs one. No free field was found in the track. The loader 0xaf930 calls the parser one time for each load of the database (`bl 0xd7888` at 0xafc8c).
+
+### Proposed hooks
+
+| Hook | Kind | At | Expect | Function |
+|---|---|---|---|---|
+| A | `b` | 0xd7ea0 | 0xea0000d1 | mhod 22: read the Album Artist into the artist pool (0x10db84). Keep the index in a side table, keyed by the track pointer, only if it is different from the Artist index. Do not change track + 0x2c. |
+| B | `bl` | 0xafc8c | 0xeb009efd | Clear the side table, then call the parser 0xd7888. |
+| C | `word` | 0x6776f8 | 0x0023ca4c | Menu selection: in a menu list, set "album artist mode" if the selected item has the new label. Clear it for all other items. |
+| D | `b` | 0xd080c | 0xe92d5fff | In album artist mode, for field 4: build the list from the Album Artist indexes. Sort with 0x91c7c and make one row for each name. Write +0xc48, +0xc4c (0) and +0xc50. |
+| E | `bl` | 0x114354 | 0xebfe2d6a | In album artist mode: give the Album Artist text (or the Artist text) of the track. |
+| F | `b` + `chain` | 0x21f254 | 0xe92d40f8 | The lookup: the text of the new label, and "Album Artists" for `Str -30` in album artist mode. |
+
+A `menu_items` key in `patch.json` adds the copy of the Artists item to Menu 24440. It is a general form of `settings_items`.
+
+Answers from the emulator (16 October 2026), with the patch `album-artists` 1.0:
+
+- The browser of the Music menu is a main browser (byte +0 = 1, at 0x13e27a78 in the emulator). Thus 0x9cb10 uses the letter table of the patch, which is 0.
+- It is not known if the reset 0x1e7b98 clears the Artists list. Thus hook D clears a list of the other mode itself (0xa34b8). Artists after Album Artists showed the 8 track artists. Album Artists after Artists showed the Album Artists.
+- The filter results in the entries did not give old results after a change of the mode: Mike Moe (Artists) showed only Comp Two, and Aardvark (Album Artists) showed Apple One and Apple Two.
+- A selection of Genres cleared the mode: Genres > Test showed the 8 track artists.
+- The copy of the item needs no change of the position byte (+0x1a). The Music menu with 11 items operated.
+
+### Speed (16 October 2026)
+
+On the real iPod, version 1.0 stopped the iPod for approximately 6 seconds when Album Artists opened. The emulator test with 4000 tracks (400 albums, 320 Album Artists and "Various Artists") found the cause:
+
+| Part of the build (version 1.0) | Calls | Time |
+|---|---|---|
+| The entries of sort list 7 (the first read also sorts the list) | 4000 | 0.85 s |
+| The text sort | 83 000 compares | 0.66 s |
+| The join of the equal names | 3999 compares | 0.06 s |
+
+Version 1.0 removed the equal indexes before the text sort. But each track has its own index, also for the same text. Thus the sort compared all 4000 tracks, not the unique names. One compare (0x91c7c) costs approximately 8 µs. The time grows as n × log n with the count of tracks.
+
+Version 1.1 removes the equal texts with an FNV-1a hash of the text in one pass. Then only the unique names go to the text sort. `aa_store` also compares the texts, not the indexes, thus a track whose Album Artist is its Artist gets no entry in the side table.
+
+| Open, 4000 tracks | Version 1.0 | Version 1.1 |
+|---|---|---|
+| Album Artists, first open after the start | 1.6 s | 0.95 s |
+| Album Artists, second open | 1.6 s | 0.11 s |
+| Artists (native), for comparison | – | 0.12 s |
+
+Of the first open, approximately 0.85 s is the firmware: the first read of sort list 7 sorts the tracks by Artist. The native Artists list has the same cost if it opens first after a start.
+
+The full test status is in [docs/modifications.md](../docs/modifications.md#album-artists).
+
+## Version 1.2 (16 October 2026)
+
+The owner tested version 1.1 on the real iPod: it works well. The owner then asked for two changes: improve the mode and the list check, and put Album Artists in Settings > Main Menu.
+
+### The mode follows the browse
+
+In version 1.1, `aa_mode` was one global value. Version 1.2 gives the mode to one browser:
+
+- Hook C (menu `activate`) sets `aa_pending` for the new item, and clears `aa_pending` and `aa_browser` for all other items.
+- Hook G wraps the browser reset 0x1e7b98 (first instruction `push {r4, lr}`). If `aa_pending` is 1, the native browser (JS browser + 0x1c) becomes `aa_browser`.
+- Hooks D and E use `browser == aa_browser`. Hook E is a wrapper that passes r5 (the browser in the filter 0x1142a8 at 0x114354).
+
+Emulator results with `IPODFW_MARK_AT=0x1e7b98`:
+
+| Selection | Runs of 0x1e7b98 |
+|---|---|
+| Music > Album Artists, Artists, Albums, Songs | 1 at the open, none in the levels below |
+| Main menu > Album Artists | 2 |
+| Music > Composers, Genres, Playlists | 0 |
+
+Thus a reset without a pending selection must not clear the mode (the second reset of the main-menu item cleared it in a first build). And the clear in hook C is necessary, because some browses do not run the reset.
+
+### The exact list check
+
+FindConstant 0xc48 shows that only 0xd080c (the build) and 0xa34b8 (the clear) write browser + 0xc48. Hook H wraps 0xa34b8 (first instruction `push {r4, r5, r6, lr}`): if the clear frees `aa_list`, `aa_list` becomes 0. Hook D then compares only the pointer. Version 1.1 also compared the count, because it did not know when the firmware freed the list.
+
+### Album Artists in the main menu
+
+| Fact | Evidence |
+|---|---|
+| The main menu is Menu 24094. Each item has its label as the key, for example 0x5f7c = Artists. | Static, Emulator |
+| 0x105a04 maps a label to one bit of the main menu mask. 0x193470 (visible) and 0x19351c (set) are its only callers. | Static |
+| The mask is at (main browser + 0xca0) + 0xb34. Emulator default: 0x0e180201. Bits 0x4000, 0x20000000, 0x40000000 and 0x80000000 are not used. | Static, Emulator |
+| The load of old preference versions merges new default bits with the mask 0x1fffffff (0xaf838). The bits 0x40000000 and 0x80000000 are outside this merge. | Static |
+| The UI script shows or hides each Apple item of the main menu with 0x19ed58 (screen, menu, label, 3, visible): two times at the start, and each time the main menu shows. A change in Settings > Main Menu does not call it. | Emulator |
+| A copy of the Artists item in Menu 24094 showed in the main menu also when its bit was 0, because the script does not know its label. | Emulator |
+| Settings > Main Menu is Menu 24600 (28 rows). Each row has the settings key 0x6000 + the label of its item, for example 0x60005f7c. | Static, Emulator |
+| The firmware settings get (0x190b00) knows only its own keys. For an unknown key the row showed no value. 0x5f90 (a label with no bit and no string) also gave no value. | Emulator |
+| The list asks the value text of a row with the resource lookup ('Str ', key). With the key 0x7e03, the lookup hook of the patch answered with the label text before the settings object. | Emulator |
+
+The method in version 1.2:
+
+1. `menu_items` puts a copy of the Artists item into Menu 24094 (label 0x7e03), and a copy of the Artists row into Menu 24600 (label 0x7e04, key 0x60007e05).
+2. Hooks I and J (the `bl` at 0x193488 and 0x19353c) map 0x7e03 to bit 0x40000000.
+3. Hook K wraps 0x19ed58. When the script sets Artists (0x5f7c) in Menu 24094, the patch also sets 0x7e03 from the bit.
+4. Hooks L and M (settings get and set, with `chain`) handle the key 0x7e05: On or Off, and the change of the bit with 0x19351c and the 'Bool' notice. For other questions, hook L asks the firmware with the key 0x5f7c.
+
+Emulator result: the row showed Off, a selection changed it to On, and the main menu then showed Album Artists after Videos. The main menu item opened the Album Artists list. The emulator keeps no settings after a cold start (the Language screen showed again), thus the save of the bit is not tested.
+
+### The save of the settings (real iPod, 16 October 2026)
+
+The owner tested version 1.2 on the real iPod. After Settings > Main Menu > Album Artists = On, a restart with Menu+Select removed the item again. The owner also set Songs to On (an Apple row): it also did not stay. Thus the cause is the save of the settings, not the patch.
+
+Ghidra:
+
+| Address | Function |
+|---|---|
+| 0xbbf1c | (settings): if the byte "changed" (+0xb74) is not 0, it writes the settings (0xbbdf8). 0x19351c sets this byte at each change of the main menu mask. |
+| 0xbc094 | (app + 0x1c): saves all: the database, the settings (0xbbf1c) and other data. |
+| Callers of 0xbbf1c | 0xbc094, and the sleep sequence 0x1ee8d0 (from the timer handler 0x1d8cd0). |
+| Callers of 0xbc094 | `save_all` 0x1ee8b8 (from the application event 0x1eccdc, for example a disk change), 0xb4fe4 (from 0x1ec2c8) and 0x248440. The triggers of the last two are not examined. |
+
+Menu+Select restarts the iPod at once. It runs none of these functions. Thus each change of a setting since the last sleep is lost. The settings stay if the iPod sleeps (hold Play) or connects to a computer before the restart.
+
+The owner then asked for a separate patch, [instant-save](../patches/instant-save/). It hooks the first instruction of the setter 0x19351c and calls 0xbbf1c after each change. A trial link on 16 October 2026 measured: inside `album-artists` 40 bytes more (no change of the image end); as a separate patch 36 bytes, but the image grows by 2 KB, because each extended patch starts at the next 0x800 step. The owner selected the separate patch. Emulator: each change ran 0xbbf1c and the write 0xbbdf8 one time, and the drive got WRITE DMA commands.
+

@@ -94,7 +94,7 @@ struct SettingsView: View {
                     Picker("Empty margin below 8 MB", selection: $ososMargin) {
                         ForEach(ThemeImport.OSOSMargin.allCases) { Text($0.title).tag($0.rawValue) }
                     }
-                    Text("A theme, the Dark Mode items and the extended patches stay below this limit. Use 64 KB to test if the margin causes a problem, for example the missing album art in Now Playing with the USB Host Probe. The setting applies to the next build. If the patches do not fit, the Patches pane shows it.")
+                    Text("A theme, the Dark Mode items and the extended patches stay below this limit. The margin is a reserve: no code that iPodFirm found uses this memory, but a direct memory write by the hardware cannot be excluded. Use 16 KB if the patches do not fit. Use 64 KB to test if the margin causes a problem. The setting applies to the next build. If the patches do not fit, the Patches pane shows it.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 } header: {

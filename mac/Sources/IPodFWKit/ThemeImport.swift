@@ -173,8 +173,9 @@ public enum ThemeImport {
     /// The reset code of RetailOS stops if the end of the OS image is after 8 MB (0x800004). A
     /// picture that the theme makes larger goes after the current end of osos, below this limit.
     /// Extended patches (`"load_address": "extended"`) also stay below this limit. The margin below
-    /// 8 MB stays empty: 32 KB (the default since 9 October 2026) or 64 KB (before). The app setting
-    /// "Firmware layout" selects it (`ososMarginKey` in the user defaults).
+    /// 8 MB stays empty: 32 KB (the default since 9 October 2026), 64 KB (before) or 16 KB (more
+    /// space for patches). The app setting "Firmware layout" selects it (`ososMarginKey` in the user
+    /// defaults).
     public static var ososLimit: Int { OSOSMargin.selected.limit }
 
     /// The key of the margin setting in the user defaults of the app.
@@ -187,10 +188,24 @@ public enum ThemeImport {
         /// 64 KB: the limit 0x7F0000 (before 9 October 2026). A test: the Now Playing art with the
         /// USB host probe (patches/usb-host-probe/FINDINGS.md).
         case previous
+        /// 16 KB: the limit 0x7FC000. More space for patches, with a smaller reserve below 8 MB.
+        case compact
 
         public var id: String { rawValue }
-        public var limit: Int { self == .current ? 0x7F8000 : 0x7F0000 }
-        public var title: String { self == .current ? "32 KB (limit 0x7F8000, current)" : "64 KB (limit 0x7F0000, before 9 October 2026)" }
+        public var limit: Int {
+            switch self {
+            case .current: 0x7F8000
+            case .previous: 0x7F0000
+            case .compact: 0x7FC000
+            }
+        }
+        public var title: String {
+            switch self {
+            case .current: "32 KB (limit 0x7F8000, default)"
+            case .previous: "64 KB (limit 0x7F0000, before 9 October 2026)"
+            case .compact: "16 KB (limit 0x7FC000, more space for patches)"
+            }
+        }
 
         /// The setting of the app, or `current`.
         public static var selected: OSOSMargin {

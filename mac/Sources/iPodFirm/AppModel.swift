@@ -615,8 +615,8 @@ final class AppModel: ObservableObject {
     /// The code size of each patch, by folder and version: the app compiles each patch one time.
     private var codeSizes = [String: Int]()
 
-    /// Measure the space of the current selection: build the appearance, and add the code sizes of
-    /// the switched-on patches. The Patches pane calls this after each change.
+    /// Measure the space of the current selection: build the appearance, and add the code sizes and
+    /// the menus of the switched-on patches. The Patches pane calls this after each change.
     func refreshSpaceUse() async {
         guard let editor else { spaceUse = nil; return }
         let patches = activePatches, appearance = activeAppearance, known = codeSizes
@@ -629,7 +629,7 @@ final class AppModel: ObservableObject {
                 sizes[key] = size
                 list.append((p, size))
             }
-            return (sizes, Patcher.spaceUse(imageCount: osos.count, patches: list))
+            return (sizes, Patcher.spaceUse(osos: osos, patches: list))
         }.value
         guard !Task.isCancelled else { return }
         if let result {

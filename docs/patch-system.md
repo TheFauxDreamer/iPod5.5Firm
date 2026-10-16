@@ -108,6 +108,7 @@ The install moves the old folder to the Trash. The patch keeps its switch state,
 | `symbol` | string | The name of an SF Symbol, for example `photo.on.rectangle.angled`. Do not use emoji. |
 | `category` | string | The group in the list of patches: `display`, `power`, `audio` (the group "Sound"), `fun` or `test`. |
 | `settings_items` | array, optional | On/Off items that the patch adds to the Settings menu. Refer to [Settings items](#settings-items). |
+| `menu_items` | array, optional | Copies of items that the patch adds to other menus, for example the Music menu. Refer to [Menu items](#menu-items). |
 | `options` | array, optional | Choices that the owner makes in the Patches pane before a build. Refer to [Options](#options). |
 
 | `ui` | object, optional | Controls in the Patches pane. Refer to [The ui object](#the-ui-object). |
@@ -248,9 +249,25 @@ The install examination links a patch one time to find undefined symbols. It giv
 | `after_key` | Optional. The item comes after the item with this key, for example `0x60006088` (Clicker). If the menu has no such item, the item goes at the end. |
 | `template_key` | Optional. The item to copy. The default is Sound Check (`0x600060b7`), an On/Off item. |
 
-The patcher finds the menu through the resource table entry in the current image. Thus it also finds the menu that the Dark Mode build moved. It writes the new menu after the end of the image, aligned to 16 bytes, and changes the table entry. The image grows to a multiple of 0x800 bytes. The patcher stops with an error if the menu already has the key, or if the menu has no template item. Two patches with the same key are a conflict.
+The patcher finds the menu through the resource table entry in the current image. Thus it also finds the menu that the Dark Mode build moved. It writes the new menu after the end of the image, aligned to 16 bytes, and changes the table entry. The patcher stops with an error if the menu already has the key, or if the menu has no template item. Two patches with the same key are a conflict.
 
 The settings object calls the "get" method (vtable 0x66c94c) for the value text and the "set" method (vtable 0x66c950) when the owner selects the item. A patch hooks both with `chain`. Use a key that is not in the firmware: 0x600060e0 is Dark Mode, and 0x600060e4 is `something-comforting`.
+
+### Menu items
+
+`menu_items` adds a copy of an item to a menu, for example the Music menu (Menu 24440). The copy does the action of the item that it copies. Each item has these keys:
+
+| Key | Content |
+|---|---|
+| `menu_id` | The ID of the Menu resource, as a number, for example `24440`. |
+| `label_id` | The string ID of the new label, as a 16-bit hexadecimal value, for example `0x7e03`. The `b` hook on the string lookup (0x21f254) must give the text. |
+| `template_label` | The label of the item to copy, for example `0xff82` (-126, "Artists"). |
+| `after_label` | Optional. The new item comes after the item with this label. If the menu has no such item, the new item goes at the end. |
+| `key` | Optional. A new 32-bit value at +0x1c: the settings key of a row in a Settings list, for example `0x60007e05`. The hooks of the patch receive the low 16 bits. Do not use a label ID as the key: the list asks the value text with the resource lookup ('Str ', key), and the lookup hook of the patch answers its label IDs first. |
+
+A menu item is 40 bytes. The label ID is the i16 at +0x18, and again at +0x20. The patcher changes only these two values, and +0x1c if the item has `key` (`Patcher.insertMenuItem`, Python `insert_menu_item`). It puts each changed menu after the end of the image, as for the Settings menu, and changes the resource table entry (`Patcher.addMenuItems`, Python `add_menu_items`). The patcher stops with an error if the menu already has the label, or if the menu has no item with `template_label`. Two patches with the same menu and label are a conflict.
+
+To know which item the owner selects, hook the `activate` method of the menu lists (vtable slot 0x6776f8) with `chain`. [album_artists.c](../patches/album-artists/album_artists.c) is an example. It also adds an item to the main menu (Menu 24094) and a row to Settings > Main Menu (Menu 24600).
 
 ### Options
 
@@ -276,8 +293,9 @@ After the link, the patcher writes the value of the selected choice into the var
 4. A hook word does not have its `expect` value. Another change or another firmware version is in that location. A hook with `chain` also accepts the hook of an earlier patch.
 5. The `kind` is not known, or the `to` function is not a global function of the patch.
 6. A Settings item key is already in the Settings menu, or the menu has no template item.
+7. A `menu_items` label is already in its menu, or the menu has no item with `template_label`.
 
-After the checks, iPodFirm writes the code and the hooks. It extends osos with zeros to a multiple of 0x800 bytes. The partition code then calculates the new length and checksum.
+After the checks, iPodFirm writes the code and the hooks. The build of several patches (`Patcher.apply` with a list, Python `apply_all`) does not round each patch: the image ends at the last byte of the code, the variables and the menus of a patch, and the next patch starts there (16-byte steps). Only the final image is extended with zeros to a multiple of 0x800 bytes. One patch alone (`apply` with one patch) is also rounded. The partition code then calculates the new length and checksum.
 
 ## The free space
 
@@ -293,6 +311,8 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `album-art` | `extended` | After all other data (12360 bytes). Alone: 0x736800–0x739848. The album table, the thumbnails and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
 | `usb-host-probe` | `extended` | After all other data (22248 bytes; the 32 KB log buffer and the 40 KB of the isochronous test come from allocators) | Extended patch. Test patch. |
 | `something-comforting` | `extended` | After all other data (692 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736ab4, menu at 0x737000, osos end 0x737800 | Extended patch. Example patch. |
+| `album-artists` | `extended` | After all other data (3688 bytes), then three menus: Music (11 items, 444 bytes), the main menu (32 items, 1284 bytes) and Settings > Main Menu (29 items, 1164 bytes). Alone: code 0x736800–0x737668, menus at 0x737800, 0x738000 and 0x738800, osos end 0x739000 | Extended patch. The side table and the list come from the allocators. |
+| `instant-save` | `extended` | After all other data (36 bytes). Alone: 0x736800–0x736824, osos end 0x737000 | Extended patch. |
 | `cover-flow` | `extended` | After all other data (10888 bytes; approximately 600 KB for the screen copy, the covers and the read buffer come from the allocator while Cover Flow shows) | Extended patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
@@ -301,11 +321,13 @@ Each `patch.json` records the size of its code in `size`. The Patches pane shows
 
 ### The extended area
 
-A patch that is too large for the area before 0x736800 uses `"load_address": "extended"`. The build then puts the patch after all the data that is already in the image: the end of osos, at least 0x736800, aligned to 16 bytes (`Patcher.extendedBase`, Python `extended_base`). Thus the patch goes after a theme, the Dark Mode switch table, the Settings menu, the dark-mode code and the extended patches before it. The limit is 0x7F8000 (`ThemeImport.ososLimit`), because the reset code of RetailOS stops if the image end is after 8 MB (0x800004). The 32 KB below 8 MB stay empty as a margin. Before 9 October 2026 the limit was 0x7F0000. The app setting "Layout" can select the old limit 0x7F0000 again (a test); the Python patcher uses 0x7F8000. The osos image gets larger than 0x736800, thus the build moves rsrc (`FirmwarePartition.makeRoom`), as for a theme.
+A patch that is too large for the area before 0x736800 uses `"load_address": "extended"`. The build then puts the patch after all the data that is already in the image: the end of osos, at least 0x736800, aligned to 16 bytes (`Patcher.extendedBase`, Python `extended_base`). Thus the patch goes after a theme, the Dark Mode switch table, the Settings menu, the dark-mode code and the extended patches before it. The limit is 0x7F8000 (`ThemeImport.ososLimit`), because the reset code of RetailOS stops if the image end is after 8 MB (0x800004). The 32 KB below 8 MB stay empty as a margin. Before 9 October 2026 the limit was 0x7F0000. The app setting "Layout" can select 0x7FC000 (a margin of 16 KB, more space for patches) or the old limit 0x7F0000 (a test); the Python patcher uses 0x7F8000. The osos image gets larger than 0x736800, thus the build moves rsrc (`FirmwarePartition.makeRoom`), as for a theme.
 
 The address of an extended patch changes with the theme and the other patches. Thus an extended patch must not use a fixed address of its own code or data in another patch.
 
-The Patches pane shows the use of this area while you switch patches on and off. `Patcher.spaceUse` copies the layout of `Patcher.apply`: each extended patch starts at `extendedBase` of the image before it, and each apply makes the image a multiple of 0x800 bytes. The test `testSpaceUse` makes sure that the result is the size of a real build. If a build is too large, the error gives the patch and the count of bytes too many.
+The Patches pane shows the use of this area while you switch patches on and off. `Patcher.spaceUse` copies the layout of the build: each extended patch starts at `extendedBase` of the image before it, each menu that a patch changes (`settings_items`, `menu_items`) goes after it, and only the end is rounded to 0x800 bytes. The test `testSpaceUse` makes sure that the result is the size of a real build, also for patches with menus.
+
+Before 17 October 2026, each patch and each menu started at the next 0x800 step, and the space bar did not count the menus. With `album-art`, `album-artists`, `cover-flow`, `instant-save`, `something-comforting` and `usb-host-probe` (versions of 16 October 2026), the old build used 59392 bytes after 0x736800 and the bar showed less. The packed build used 47104 bytes for the same patches. With the versions on `main` of 17 October 2026 (`cover-flow` 10888 bytes, `usb-host-probe` 22248 bytes), the packed build uses 55296 bytes. If a build is too large, the error gives the patch and the count of bytes too many.
 
 To make a large patch smaller, put `__attribute__((minsize))` on the functions that run only once for each event (for example a table build). Keep the pixel loops as fast code, and mark them `noinline` if a `minsize` function calls them. With `minsize`, the compiler can call a library function for a division by a constant. The patch has no library, so use a shift.
 
