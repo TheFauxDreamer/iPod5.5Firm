@@ -650,6 +650,88 @@ Probe 1.23 calls 0x1ac198 with 0x1c, 0x20 and 0x1f at each push and release of a
 
 Real iPod, probe 1.23 (2026-10-16): **all EarPods buttons operate the iPod as expected** (volume +, volume −, play/pause). The log has 12 pushes and releases of volume − and 3 of volume + (then the log was full); 0 underruns.
 
+## The freeze at a new connection in host mode (Ghidra, 2026-10-16)
+
+The owner: in host mode, a disconnection and connection of the dock freezes the iPod (since probe 1.6), and a connection of the Mac also froze it (probe 1.19). The UI stays alive after the disconnection (1.11: the stop record came from a later log write); the freeze comes at the reconnection. Probe 0.1.61 survived a disconnection.
+
+The USB device task (0x170f2c) runs at the same time as the host stack, on the same controller. Its loop:
+
+1. It waits on its event until its state (+6) is 3 (USB power).
+2. `bl 0x24d3c4` at 0x170fc8: 0x24d3c4 → 0x24cfac → 0x220e0c, the device start. It sets up the endpoints, sets a USBCMD bit (0x2204f8) and installs and enables the device interrupt handler 0xcd8e0 (0x18a870, 0x18a824).
+3. `bl 0x24cd34` at 0x170fd8: the session.
+4. `bl 0x24d49c` at 0x170fe0: the stop (0x24d0dc → 0x220f34).
+
+After both `bl` sites the loop uses only r0 (`cmp r0,#0`) and r4.
+
+The session 0x24cd34:
+
+- It runs while OTGSC bit 11 (B-session valid) is set (0x220278, device + 0x3c).
+- It tests and clears USBSTS bits (0x220b80 with 0x40, 0x100, 4 and 2; bit 2 is also the "port change" bit of the host).
+- It ends when VBUS goes away, or when the abort flag at RAM 0x108318ec + 5 is set; then it clears the flag (0x24c5a4).
+
+The device stop 0x220f34 removes the device interrupt object (0x18a888), stops the controller and sets the USBCMD reset bit. Then it waits without a limit until the reset ends.
+
+The UIM "delete endpoint" (0x970a8, dispatch table 0x6c8820 + 0x50) finds the queue head with 0xffe6c (async) or 0xf3700 (periodic). The async unlink 0xe8c20 waits without a limit: for USBSTS bit 15 = 0 when the list becomes empty (after USBCMD bit 5 off), else for USBSTS bit 5 after the doorbell (USBCMD bit 6). The periodic unlink 0xe0074 has a limit of 150 tries.
+
+`USBPowerSense` (0x2856a4) watches the VBUS GPIO (0x2218ac; the object vtable 0x66add4). Its change handler 0x1710d0 sends the notifications 4 and 5 (0xcd30c → 0x1173ac → 0xb0848 → 0x1e0458). Notification 4 gives the app events 0x6380000d and 0x6380000e (0x18ac94); the app handler 0x1ebb6c keeps the power state at app + 0x485 and pauses the music when the power goes away (0x1e9090).
+
+The chain of the freeze:
+
+1. The dock gives VBUS from the start, thus a device session runs when the probe starts host mode.
+2. A disconnection removes VBUS. The session ends, and the device stop resets the controller under the host stack.
+3. The UIM deletes the queue heads of the dock and waits forever in 0xe8c20.
+4. A reconnection (the dock or the Mac) gives VBUS again. The device task starts the device mode on the same controller and takes the USB interrupt. The iPod freezes.
+
+The probe's own control queue head in the asynchronous list does not break 0xe8c20: Apple's tail link takes its place.
+
+Probe 1.24: `bl` hooks at 0x170fc8 (`hook_device_start`) and 0x170fe0 (`hook_device_stop`). While host mode runs (`host_running`), the start returns 1 ("failed", the task waits again) and the stop is skipped. Before the host start, `device_handover` sets the abort flag and waits at most 2.5 s for Apple's own stop of the session; if no session runs, it clears the flag again. Tag 74 records each step; a short high tone marks a blocked start.
+
+## Probe 1.24 result and the reconnection (2026-10-16)
+
+Real iPod, probe 1.24: **no freeze** when the dock was connected again, and no freeze when the Mac was connected. Tag 74: before the host start no device session ran (OTGSC 0x00080000, bit 11 off; the wait used the full 2.5 s, then the flag was cleared). At the disconnection the music route stopped (reason 1). At the reconnection the device task tried to start the device mode, and the probe blocked it (OTGSC 0x7f2e00, VBUS present). Then the root port showed the dock connected and enabled again; the log was then full.
+
+After the reconnection the EarPods had no sound and no controls: the probe started the music route only one time. The music also paused at the disconnection: this is Apple's behaviour when the external power goes away (0x1ebb6c → 0x1e9090).
+
+The EarPods send only one bit for the middle button (0xCD). The firmware has no logic for two or three pushes; the Simple Remote table has separate keys for the next track (0x1e) and the previous track (0x1d).
+
+Probe 1.25:
+
+- At each music stop: the probe takes its control queue head out of the asynchronous ring (`control_unlink`; the UIM builds a new ring when the dock goes away), clears `audio_found` (the next enumeration gives the new address) and resets the volume and button state.
+- The first button press after the new enumeration starts the music route again in the UI task (`hook_event`).
+- The middle button: one push is play/pause (0x1c), two pushes the next track (0x1e), three pushes the previous track (0x1d), after 400 ms without a new push.
+
+## Probe 1.25 result and the stop at a disconnection (2026-10-16)
+
+Real iPod, probe 1.25: **after the reconnection the headphones operate again** (sound, volume, buttons) after a button press. Two pushes (next track) and three pushes (previous track) of the middle button operate well. But at the disconnection the playback stopped completely, not only paused. The log was full before the disconnection (the button records).
+
+Ghidra:
+
+- The play state is 0x9ba00(database): 1 playing, 2 paused, else stopped. 0x1e798c and 0x1e7848 use it.
+- Apple's power handler 0x1ebb6c calls 0x1e9090 only if the flag app + 0x486 was set at the power-on. 0x1e9090 is the action of the pause key 0x3c in 0x1d8aa4, thus a pause, not a stop.
+- The probe stopped the route in the UIM task (in `hook_port_status`), at a time when USBAudioTask can hold 12 to 24 packets of the decoder. Then 0x1a2fa8 cleared the queue of the USB source under it. Apple's own stream stop 0x13221c makes the same calls, but in its own order: the stream off, the cancel of the endpoint (0x24bf7c), then the route (0x1a2fa0) and the flush (0x1a2fa8).
+
+Probe 1.26: `hook_port_status` only sets `stop_request`; USBAudioTask stops the route at its next wait (between two sets). If the player played, the probe then sends the remote Pause key (0x3c) with 0x1ac198. Tag 75 records the play state before and after the stop, after the pause key and at the later log writes. The button, key and volume records are fewer (40, 40, 30), so that the log has space at the end.
+
+## Probe 1.26 result, the volume at the start and "unsupported device" (2026-10-16)
+
+Real iPod, probe 1.26: **the song pauses at the disconnection** (tag 75: playing before the stop, paused after the pause key and later). Two problems remain:
+
+1. The headphones start too loud. The owner turned the volume down at once (iPod output 72 → 32 of 256). The curve 40·log10(v/256) gives −12 dB at half volume, much louder than the headphone jack of the iPod.
+2. At the reconnection, the iPod shows "unsupported device", and that screen ends the playback.
+
+Ghidra, the USB host message:
+
+- 0xd9cec(type, error) sends the notification 0x12 (0xcd314) to the UI, which shows the USB host message. Callers: 0xd399c (in add device 0xd377c), 0x10c204, 0xe2be0 and 0xc0c38 (a conditional `bleq`).
+- Add device 0xd377c: a hub (class 9) is accepted if USB_GLOBALS[0] > 1, or if the hub count USB_GLOBALS[1] < 3 and (USB_GLOBALS[0] ≠ 0 or the count is 0). Errors: 0x673 and 0x67d (hub not allowed), 0x68c (no driver).
+- The dock has devices without a driver of the probe (the card slot, which has no storage driver since 1.11, and the billboard), thus each enumeration gives 0x68c. At the first start the music did not play yet.
+
+Probe 1.27:
+
+- `bl` hooks at 0xd399c, 0x10c204 and 0xe2be0: while host mode runs, `hook_usb_message` does not call 0xd9cec and logs the error (tag 74, event 6). The site 0xc0c38 is a `bleq`; a hook would make it unconditional, thus it stays.
+- The volume curve is −48 · (1 − v/256) dB (half −24 dB, three quarters −12 dB, full 0 dB), clamped to the range of the device. The 1 kHz test tone also uses the iPod volume (before, the default volume of the device).
+
+Real iPod, probe 1.27: all as expected. No "unsupported device" at a reconnection, the song pauses and continues after Play, and the volume levels are good.
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).

@@ -94,6 +94,10 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 | Probe 1.21 (iPodFirm 0.1.111), music route (2026-10-16) | Songs; the click wheel volume; the EarPods buttons | **The EarPods volume follows the click wheel, with no gaps.** RANGE −60 to 0 dB (0.5 dB); 51 SET_CUR, all correct. Interface 3: report ID 1, bits play/pause 0, volume + 1, volume − 2, voice 3; reports `01 04`, `01 01`, `01 00`. Interface 4: vendor page, no buttons. The log was full (511) after the button reports. | The volume works. The button decode is correct. Probe 1.22: the buttons as iPod controls through key events. |
 | Probe 1.22 (iPodFirm 0.1.112), music route (2026-10-16) | The EarPods buttons | **The buttons did not operate the iPod.** Each report decoded correctly; each post (0x13d6d4) returned 1; no record of the UI hook. | A `MsgS` message to the app target does not reach the key handler 0x1d81cc. The real key path is 0x1ac198 (`kDwn`, `kUp `), with the Simple Remote codes (table 0x63ef30). Probe 1.23 uses it. |
 | Probe 1.23 (iPodFirm 0.1.113), music route (2026-10-16) | The EarPods buttons, songs | **All buttons operate the iPod as expected** (volume +, volume −, play/pause). Log: 12 volume − and 3 volume + pushes and releases through 0x1ac198 (then the log was full); 0 underruns. | The volume and the buttons are complete for the probe. |
+| Probe 1.24 (iPodFirm 0.1.115), music route (2026-10-16) | Dock disconnection, reconnection; then the Mac | **No freeze** at the reconnection of the dock or at the Mac connection. Tag 74: no device session before the host start; the device start at the reconnection was blocked. The music paused at the disconnection; after the reconnection, no sound and no controls. | The freeze is solved. The route starts only one time; probe 1.25 starts it again after a reconnection. |
+| Probe 1.25 (iPodFirm 0.1.116), music route (2026-10-16) | Two and three pushes; dock disconnection and reconnection | **The headphones operate again after the reconnection** (after a button press). Two pushes (next) and three pushes (previous) operate well. At the disconnection the playback stopped completely. The log was full before the disconnection. | Probable cause: the stop ran in the UIM task while USBAudioTask held decoder packets. Probe 1.26 stops in USBAudioTask and then pauses. |
+| Probe 1.26 (iPodFirm 0.1.117), music route (2026-10-16) | Dock disconnection and reconnection | **The song pauses at the disconnection** (tag 75: playing, then paused). The headphones start too loud (the owner turned the volume down at once). At the reconnection the iPod shows "unsupported device", and that screen ends the playback. | The message comes from add device (0xd377c, error 0x68c for the devices without a driver) through 0xd9cec. Probe 1.27 skips the message while host mode runs, and uses the curve −48 · (1 − v/256) dB. |
+| Probe 1.27 (iPodFirm 0.1.118), music route (2026-10-16) | Start, volume, disconnection, reconnection, Play | **All as expected.** No "unsupported device"; the song pauses and continues; the volume levels are much better. | The probe is complete for Stage 4. |
 
 ## The causes found
 
@@ -137,6 +141,7 @@ Results for Stages 2 and 3:
 | Art trace (14 sites in 0x205db4) and `hook_output_make` (0x18c770, 0x1b8054), version 1.12 only | Yes. Removed in 1.13. |
 | `hook_port_status`, `hook_chip_check`, `hook_irq_install`, `hook_add_device`, `hook_periodic_insert`, the `b` hooks 0xcb118 and 0xcba54, the UIM and class driver table words | No: USB host mode only. |
 | `hook_usb_send`, `hook_usb_wait`, `hook_usb_wait_if_sent` (0x132038) | No: only when USBAudioTask streams. |
+| `hook_device_start`, `hook_device_stop` (the device task 0x170f2c, version 1.24) | Yes, at each USB power change, but they call the originals until the probe starts host mode. |
 
 ## Key addresses (osos 1.3)
 
@@ -186,7 +191,11 @@ Records in `iPod_Control/iTunes/iPodFirmUSBLog` (511 records, 32 KB). iPodFirm s
 1m. Done: probe 1.21: the click wheel volume on the EarPods works; the buttons decode.
 1n. Done: probe 1.22: the key posts to the app did not reach the key handler.
 1o. Done: probe 1.23: the EarPods buttons operate the iPod (the remote key path 0x1ac198).
-1p. Next: the freeze when a computer or the dock connects in host mode; then Stage 3. The UI lag is closed: the owner found that a separate patch caused it, not the USB host probe (2026-10-16).
+1p. Done: probe 1.24: no freeze at a new connection (the device task is blocked while host mode runs).
+1q. Done: probe 1.25: the route again after a reconnection; two and three pushes operate.
+1r. Done: probe 1.26: a pause at the disconnection.
+1s. Done: probe 1.27: all as expected.
+1t. Next: Stage 3, the real patch `usb-audio-out`. The UI lag is closed: the owner found that a separate patch caused it, not the USB host probe (2026-10-16).
 1l. Later: the freeze when a computer or the dock connects in host mode; the volume (iPod volume to the feature unit, HID buttons; done in 1.21–1.23); the UI lag (closed: a separate patch); then Stage 3. Earlier item: probe 1.20 (1.19 with corrected test steps: wait 15 s, then restart; do not connect the Mac in host mode) with the music route ("Start the Probe at the Next Restart"). Then the freeze when a computer or the dock connects in host mode, and the UI lag.
 2. Optional: read configurations 2 and 3 and the clock ranges (UAC2 GET RANGE). The external test above makes this less important: the Stage 3 driver can try 44.1 kHz and use 48 kHz if the EarPods refuse it. The probe must read each buffer only one time, or clean the cache first.
 3. Optional bench test of the minimum voltage of the EarPods (refer to the hardware section).

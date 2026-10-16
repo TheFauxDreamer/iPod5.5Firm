@@ -1107,6 +1107,16 @@ final class USBProbeLogTests: XCTestCase {
         XCTAssertEqual(USBProbeLog.audioText(72, [0x073A, 0xFFFF_FFFF, 0, 0]), "key posted — stop release, result -1, sender 0x00000000, app port 0x00000000")
         XCTAssertEqual(USBProbeLog.audioText(72, [0x0120, 0, 0, 0]), "key to the UI task (0x1ac198) — volume + push")
         XCTAssertEqual(USBProbeLog.audioText(72, [0x001C, 0, 0, 0]), "key to the UI task (0x1ac198) — play/pause release")
+        XCTAssertEqual(USBProbeLog.audioText(74, [5, 1, 1050, 0x0000_0E00]),
+                       "device task — before the host start: the device session stopped (1050 ms); OTGSC 0x00000E00 (VBUS present)")
+        XCTAssertEqual(USBProbeLog.audioText(74, [1, 1, 0, 0x0000_0200]),
+                       "device task — the start of the device mode is blocked (host mode runs); OTGSC 0x00000200 (VBUS absent)")
+        XCTAssertEqual(USBProbeLog.audioText(74, [6, 4, 0x68C, 0]), "USB host message not shown (host mode runs) — type 4, no driver")
+        XCTAssertEqual(USBProbeLog.audioText(75, [1, 1, 0, 5]), "player — before the stop: playing; codec buffers 0, USB buffers 5")
+        XCTAssertEqual(USBProbeLog.audioText(75, [2, 5, 3, 0]), "player — later: paused; codec buffers 3, USB buffers 0")
+        XCTAssertEqual(USBProbeLog.audioText(75, [0, 3, 0, 0]), "player — after the pause key: stopped (0); codec buffers 0, USB buffers 0")
+        XCTAssertEqual(USBProbeLog.audioText(74, [4, 0, 0, 0]),
+                       "device task — the stop is skipped (host mode runs, no controller reset); OTGSC 0x00000000 (VBUS absent)")
         XCTAssertEqual(USBProbeLog.audioText(73, [0x057D, 50, 45, 0]), "key in the UI task — volume − (private) repeat, volume level 50 → 45")
     }
 }

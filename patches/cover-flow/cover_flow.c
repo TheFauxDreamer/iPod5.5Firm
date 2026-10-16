@@ -144,6 +144,7 @@ int file_close(void *fh);
 #define EV_TIMER       9                  /* word 2: the timer */
 #define SNAP           20                 /* in 1/256 of a cover: the smallest move of a frame */
 #define PRELOAD        SIDE               /* when the movement stops, load the covers to centre +/- this */
+#define OPEN_LOADS     3                  /* covers that the first frame loads: the centre and its two neighbours */
 #define CENTER_Y       100                /* the middle line of the covers */
 #define REFLECT_END    198                /* the reflections end above the caption */
 #define ALBUM_TOP      198                /* the album line: 198-220, the artist line: 220-240 */
@@ -174,6 +175,7 @@ static int missing;                       /* 1: a cover of this frame is not loa
 static int animating;                     /* 1: the timer runs */
 static unsigned closed_at;                /* USEC_TIMER at the last close */
 static void *list_timer(void);
+static void arm_timer(void);
 
 /* The albums. They stay in memory while the database does not change. */
 static int **album_track;                 /* the first track of each album */
@@ -842,23 +844,38 @@ COLD static void draw_caption(int i)
     centre_line(ARTIST_TOP, H, 1);
 }
 
-COLD static void render(void)
+/* Returns 1 if the cover `i` shows on the screen, and its place in `p`. */
+COLD static int visible(int i, Place *p)
+{
+    int d = i * 256 - pos;
+    if (i < 0 || i >= (int)count || d > (SIDE + 1) * 256 || d < -(SIDE + 1) * 256)
+        return 0;
+    place(d, p);
+    return p->x0 < W && p->x1 > 0;       /* outside the screen: do not load it */
+}
+
+/* `loads`: the number of new covers that this frame can load. */
+COLD static void render(int loads)
 {
     int center = (pos + 128) >> 8, k, i;
-    loads_left = 1;
+    loads_left = loads;
     missing = 0;
     clear();
-    /* the farthest covers first, the centre cover last */
+    /* Load the centre cover first, then the covers near it. */
+    for (k = 0; k <= SIDE && loads_left > 0; k++)
+        for (i = center - k; i <= center + k; i += (k ? 2 * k : 1)) {
+            Place p;
+            if (visible(i, &p))
+                cover(i);
+        }
+    /* Draw the farthest covers first, the centre cover last. */
     for (k = SIDE; k >= 0; k--) {
         for (i = center - k; i <= center + k; i += (k ? 2 * k : 1)) {
             const unsigned short *tex;
             Place p;
             int d = i * 256 - pos;
-            if (i < 0 || i >= (int)count || d > (SIDE + 1) * 256 || d < -(SIDE + 1) * 256)
+            if (!visible(i, &p))
                 continue;
-            place(d, &p);
-            if (p.x0 >= W || p.x1 <= 0)
-                continue;                 /* outside the screen: do not load it */
             tex = cover(i);
             if (!tex)
                 continue;
@@ -951,7 +968,11 @@ COLD static int open_cover_flow(int *list)
     caption_album = -1;
     animating = 0;
     active = 1;
-    render();
+    render(OPEN_LOADS);
+    if (missing) {                        /* the timer loads the other covers, one in each frame */
+        animating = 1;
+        arm_timer();
+    }
     return 1;
 }
 
@@ -1033,7 +1054,7 @@ COLD static void tick(void)
             move = diff > 0 ? SNAP : -SNAP;
         pos += move;
     }
-    render();
+    render(1);
     animating = 1;                        /* the next tick draws again, or preloads, or stops */
 }
 

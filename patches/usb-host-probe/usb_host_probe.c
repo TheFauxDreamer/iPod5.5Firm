@@ -116,7 +116,30 @@
 #define KEY_PLAY_PAUSE  0x1c                            /* the key codes of the Simple Remote table at 0x63ef30 */
 #define KEY_VOLUME_UP   0x20
 #define KEY_VOLUME_DOWN 0x1f
+#define KEY_NEXT        0x1e                            /* version 1.25: two presses of the middle button */
+#define KEY_PREVIOUS    0x1d                            /* three presses */
+#define MULTI_PRESS_US  400000                          /* the time after the last release for one more press */
+#define KEY_PAUSE       0x3c                            /* version 1.26: the pause key of the Simple Remote */
+#define TAG_PLAYER               (18 * 4 + 3)           /* r0 play state (1 play, 2 pause), r1 moment, r2 codec buffers, r3 USB buffers */
+#define PLAYER_BEFORE_STOP 1
+#define PLAYER_AFTER_STOP  2
+#define PLAYER_PAUSE_SENT  3
+#define PLAYER_LATER       5
+int fw_play_state(unsigned database);                  /* 0x9ba00: 1 playing, 2 paused, else stopped */
 void fw_key(unsigned code, int down, unsigned interrupt);  /* 0x1ac198: a key push or release to the UI task */
+/* Version 1.24: the USB device task (0x170f2c) and the host mode (re/usb-host.md, "The freeze"). */
+#define TAG_DEVICE               (18 * 4 + 2)           /* r0 event, r1 argument, r2 ms, r3 OTGSC */
+#define DEVICE_START_BLOCKED     1
+#define DEVICE_START_ALLOWED     2
+#define DEVICE_STOP_DONE         3
+#define DEVICE_STOP_SKIPPED      4
+#define DEVICE_CHANGE            5                      /* r1: 1 the session stopped, 0 no session; r2: ms */
+#define DEVICE_MESSAGE_SKIPPED   6                      /* version 1.27: r1 the message type, r2 the error */
+void fw_usb_message(unsigned type, unsigned error);    /* 0xd9cec: the USB host message to the UI (notification 0x12) */
+#define DEVICE_ABORT  ((volatile unsigned char *)(0x108318ec + 5))   /* ends the session 0x24cd34 */
+#define DEVICE_WAIT_MS 2500
+int fw_device_start(void *device, unsigned mode);      /* 0x24d3c4: the original call at 0x170fc8 */
+int fw_device_stop(void *device);                      /* 0x24d49c: the original call at 0x170fe0 */
 /* The statistics of the idle routine 0xded04 (the kernel object at 0xdee84): +0 and +8 the idle
  * microseconds of the two cores (64 bits each, the timer 0x60005010). */
 #define IDLE_STATS ((volatile unsigned *)0x14983040)
@@ -198,6 +221,10 @@ void fw_route_usb(void *output, int on);               /* 0x1a2fa0 */
 void fw_rate_convert(void *source, unsigned rate);     /* 0x1e2f60 */
 void fw_route_flush(void *output, int flush);          /* 0x1a2fa8: gives the USB buffers back to the decoder */
 static void music_stop(int reason);
+static int music_wanted, music_restart;                 /* version 1.25: start the music again after a reconnection */
+static volatile unsigned stop_request;                  /* version 1.26: a stop for USBAudioTask */
+static unsigned output_volume(void);
+static unsigned volume_cur(unsigned v);
 
 struct record {
     unsigned char magic, tag;
@@ -562,7 +589,7 @@ int hook_port_status(int port, unsigned short *status)
     /* PORTSC bits 11:10 are the line state. They change all the time during high-speed traffic. */
     unsigned key = status[0] | (unsigned)status[1] << 16, sc = PORTSC1 & ~0xc00u;
     if (music_mode && !(status[0] & 1))
-        music_stop(1);                                  /* the dock was disconnected */
+        stop_request = 1;                               /* the dock was disconnected: USBAudioTask stops (1.26) */
     if (started && port_logs < PORT_LOGS && (key != last_status || sc != last_portsc)) {
         unsigned regs[4];
         last_status = key;
@@ -832,6 +859,29 @@ static int control(unsigned address, unsigned setup0, unsigned setup1, unsigned 
     return control_wait(setup0, setup1);
 }
 
+/* Version 1.25: take the probe's queue head out of the asynchronous ring (at a music stop). When the
+ * dock goes away, the UIM removes its queue heads and builds a new ring; the probe's link (qh[0]) can
+ * then point to a removed queue head. The next control_arm() links the queue head again after the
+ * head of the new ring. The memory of the queue head stays, thus the controller can finish a pass. */
+static void control_unlink(void)
+{
+    volatile unsigned *qh = (volatile unsigned *)dma_page;
+    unsigned head = ASYNCLIST & ~0x1fu, a = head, i;
+    if (!control_linked || !dma_page)
+        return;
+    control_linked = 0;
+    for (i = 0; i < 64 && a >= DMA_LOW && a < DMA_HIGH; i++) {
+        volatile unsigned *p = (volatile unsigned *)a;
+        if ((p[0] & ~0x1fu) == (unsigned)qh) {
+            p[0] = qh[0];
+            return;
+        }
+        a = p[0] & ~0x1fu;
+        if (a == head)
+            return;
+    }
+}
+
 /* Returns the count of received bytes (in CONTROL_IN), or -1. */
 static int control_in(unsigned address, unsigned setup0, unsigned setup1, unsigned length)
 {
@@ -878,6 +928,10 @@ static int audio_test(void)
         return 0;
     if (a.clock)
         control(a.address, 0x21 | 0x01 << 8 | 0x0100 << 16, a.clock << 8 | 4 << 16, 48000, 4);
+    if (a.volume_unit)                                  /* version 1.27: the tone at the iPod volume, not at full */
+        for (f = 1; f <= 2; f++)
+            control(a.address, 0x21 | 0x01 << 8 | (0x0200 | f) << 16, a.volume_unit << 8 | a.control_interface | 2 << 16,
+                    volume_cur(output_volume()), 2);
     tone_buffer = (unsigned)(dma_page + 0x100);
     pcm = (volatile short *)tone_buffer;
     for (i = 0; i < 48; i++)
@@ -1024,36 +1078,13 @@ static void music_check(void)
  * The volume: the iPod keeps its output volume (0-256, after the volume limit) at app + 0x40c; 0x1eee50
  * writes it at each change (re/usb-host.md). USBAudioTask reads it in each wait and sends SET_CUR volume
  * to channels 1 and 2 of the feature unit, without a wait: control_arm(), then control_check() in the
- * next waits. The curve is 40 log10(v / 256) dB (full volume 0 dB, half -12 dB), clamped to the range
- * of the device (UAC2 RANGE). v = 0 gives 0x8000, "silence" in UAC2.
+ * next waits. The curve is -48 (1 - v / 256) dB (version 1.27: full volume 0 dB, half -24 dB; version
+ * 1.21 used 40 log10(v / 256), which was too loud), clamped to the range of the device (UAC2 RANGE).
+ * v = 0 gives 0x8000, "silence" in UAC2.
  * The buttons: the HID interfaces of the device send their reports on interrupt IN endpoints. The probe
  * reads the report descriptors, finds the bits of the Consumer page usages (volume +, volume -,
  * play/pause, next, previous), and polls each endpoint with its own periodic queue head. Version 1.21
  * only logs the reports; the actions on the iPod follow in version 1.22. */
-static const short volume_db[257] = {                  /* 1/256 dB; index 0 is not used */
-0, -24660, -21578, -19775, -18495, -17503, -16692, -16007, -15413, -14889, -14420, -13997,
-    -13610, -13254, -12924, -12617, -12330, -12061, -11806, -11566, -11338, -11121, -10914, -10716,
-    -10527, -10345, -10171, -10003,  -9841,  -9685,  -9535,  -9389,  -9248,  -9111,  -8978,  -8849,
-     -8724,  -8602,  -8483,  -8368,  -8255,  -8145,  -8038,  -7934,  -7831,  -7731,  -7634,  -7538,
-     -7444,  -7353,  -7263,  -7175,  -7089,  -7004,  -6921,  -6839,  -6759,  -6680,  -6603,  -6527,
-     -6452,  -6379,  -6306,  -6235,  -6165,  -6096,  -6028,  -5961,  -5895,  -5831,  -5767,  -5703,
-     -5641,  -5580,  -5519,  -5460,  -5401,  -5343,  -5285,  -5229,  -5173,  -5117,  -5063,  -5009,
-     -4956,  -4903,  -4851,  -4800,  -4749,  -4699,  -4649,  -4600,  -4551,  -4503,  -4456,  -4408,
-     -4362,  -4316,  -4270,  -4225,  -4180,  -4136,  -4092,  -4049,  -4006,  -3963,  -3921,  -3879,
-     -3838,  -3797,  -3757,  -3716,  -3676,  -3637,  -3598,  -3559,  -3520,  -3482,  -3444,  -3407,
-     -3370,  -3333,  -3296,  -3260,  -3224,  -3188,  -3153,  -3117,  -3083,  -3048,  -3014,  -2980,
-     -2946,  -2912,  -2879,  -2846,  -2813,  -2780,  -2748,  -2716,  -2684,  -2652,  -2621,  -2590,
-     -2559,  -2528,  -2497,  -2467,  -2437,  -2407,  -2377,  -2348,  -2318,  -2289,  -2260,  -2231,
-     -2203,  -2174,  -2146,  -2118,  -2090,  -2062,  -2035,  -2008,  -1980,  -1953,  -1926,  -1900,
-     -1873,  -1847,  -1821,  -1794,  -1769,  -1743,  -1717,  -1692,  -1666,  -1641,  -1616,  -1591,
-     -1566,  -1542,  -1517,  -1493,  -1469,  -1445,  -1421,  -1397,  -1373,  -1349,  -1326,  -1303,
-     -1279,  -1256,  -1233,  -1210,  -1188,  -1165,  -1143,  -1120,  -1098,  -1076,  -1054,  -1032,
-     -1010,   -988,   -966,   -945,   -923,   -902,   -881,   -860,   -839,   -818,   -797,   -776,
-      -756,   -735,   -715,   -694,   -674,   -654,   -634,   -614,   -594,   -574,   -554,   -535,
-      -515,   -496,   -476,   -457,   -438,   -419,   -400,   -381,   -362,   -343,   -324,   -306,
-      -287,   -269,   -250,   -232,   -214,   -195,   -177,   -159,   -141,   -123,   -105,    -88,
-       -70,    -52,    -35,    -17,      0
-};
 
 static int vol_min = -60 * 256, vol_max = 0;            /* the range of the device, in 1/256 dB */
 static int vol_step;                                    /* 0: idle; 1, 2: the channel in transfer */
@@ -1070,7 +1101,7 @@ static unsigned volume_cur(unsigned v)
     int db;
     if (v == 0)
         return 0x8000;
-    db = volume_db[v];
+    db = (int)(48 * v) - 48 * 256;                     /* version 1.27: -48 dB (1 - v / 256), in 1/256 dB */
     if (db < vol_min)
         db = vol_min;
     if (db > vol_max)
@@ -1105,7 +1136,7 @@ static void volume_poll(void)
         }
         vol_step = 0;
         vol_sent = vol_value;
-        if (++vol_sets <= 100)
+        if (++vol_sets <= 30)
             log_regs(TAG_VOLUME_SET, vol_value, volume_cur(vol_value), vol_status1 | (status & 0xff) << 8, vol_sets | vol_errors << 16);
         return;
     }
@@ -1361,22 +1392,45 @@ static void hid_stop(void)
  * sends a "kDwn" or "kUp " message (0x151a40) to the UI task, which makes the key events, the repeats
  * and the volume bar. The third argument 0 selects the queue for a task (not an interrupt). */
 static unsigned key_down, key_posts;
+static unsigned middle_presses, middle_deadline;        /* version 1.25: the presses of the middle button */
 
+static void send_key(unsigned code, unsigned down)
+{
+    fw_key(code, down, 0);
+    if (key_posts++ < 40)
+        log_regs(TAG_KEY_POST, code | down << 8, 0, 0, 0);
+}
+
+/* Volume + and - go to the UI task at once (push and release; the UI task makes the repeats). The
+ * middle button counts its releases: after MULTI_PRESS_US without a new press, one press is
+ * play/pause, two presses are the next track and three the previous track (as on an iPhone). */
 static void buttons_changed(unsigned mask)
 {
-    static const unsigned char code[3] = { KEY_VOLUME_UP, KEY_VOLUME_DOWN, KEY_PLAY_PAUSE };
+    static const unsigned char code[2] = { KEY_VOLUME_UP, KEY_VOLUME_DOWN };
     unsigned k;
     if (mask & 0x80)                                    /* a report with a different ID */
         return;
-    for (k = 0; k < 3; k++) {
+    for (k = 0; k < 2; k++) {
         unsigned bit = 1u << k, down = (mask & bit) != 0;
-        if (down != ((key_down & bit) != 0)) {
-            fw_key(code[k], down, 0);
-            if (key_posts++ < 100)
-                log_regs(TAG_KEY_POST, code[k] | down << 8, 0, 0, 0);
-        }
+        if (down != ((key_down & bit) != 0))
+            send_key(code[k], down);
+    }
+    if (!(mask & 4) && (key_down & 4)) {                /* a release of the middle button */
+        middle_presses++;
+        middle_deadline = USEC + MULTI_PRESS_US;
     }
     key_down = mask & 7;
+}
+
+static void buttons_timer(void)
+{
+    unsigned code;
+    if (!middle_presses || (key_down & 4) || (int)(USEC - middle_deadline) < 0)
+        return;
+    code = middle_presses == 1 ? KEY_PLAY_PAUSE : middle_presses == 2 ? KEY_NEXT : KEY_PREVIOUS;
+    middle_presses = 0;
+    send_key(code, 1);
+    send_key(code, 0);
 }
 
 /* USBAudioTask, at each wait: a completed qTD has a report. Log each change, then arm the qTD again. */
@@ -1405,7 +1459,7 @@ static void hid_poll(void)
                 hid_last_length[i] = n;
                 if (n && hid_map[i].id && r[0] == hid_map[i].id)
                     buttons_changed(mask);      /* the buttons as iPod controls (version 1.23) */
-                if (hid_logs++ < 200)
+                if (hid_logs++ < 40)
                     log_regs(TAG_HID_REPORT, hid_interface[i] | n << 8 | mask << 16 | (hid_errors > 255 ? 255 : hid_errors) << 24,
                              r[0] | r[1] << 8 | r[2] << 16 | (unsigned)r[3] << 24, r[4] | r[5] << 8 | r[6] << 16 | (unsigned)r[7] << 24,
                              r[8] | r[9] << 8 | r[10] << 16 | (unsigned)r[11] << 24);
@@ -1413,6 +1467,24 @@ static void hid_poll(void)
         }
         hid_arm(i);
     }
+    buttons_timer();
+}
+
+/* Version 1.26: the player state around a stop. */
+static unsigned player_logs;
+
+static unsigned play_state(void)
+{
+    unsigned app = read32(APP_OBJECT), db = app ? read32(app + 0x1c) : 0;
+    return db ? (unsigned)fw_play_state(db) : 0xff;
+}
+
+static void player_log(unsigned moment)
+{
+    volatile unsigned char *output = (volatile unsigned char *)AUDIO_OUTPUT;
+    if (player_logs++ < 30)
+        log_regs(TAG_PLAYER, play_state(), moment, output ? read32((unsigned)output + 0x50) : 0,
+                 output ? read32((unsigned)output + 0x54) : 0);
 }
 
 /* Wait until AHEAD_LOW frames are in front of the controller, with one sleep (0x11c9fc). The emulator
@@ -1423,6 +1495,20 @@ static int music_wait(void *device, int endpoint)
     unsigned ahead;
     if (!music_mode)
         return music_used ? 0 : fw_usb_wait(device, endpoint);
+    if (stop_request) {                                 /* version 1.26: the stop in this task, between sets */
+        unsigned playing = play_state() == 1;
+        stop_request = 0;
+        player_log(PLAYER_BEFORE_STOP);
+        music_stop(1);
+        player_log(PLAYER_AFTER_STOP);
+        if (playing) {                                  /* pause, as an iPhone does when the headphones go */
+            fw_key(KEY_PAUSE, 1, 0);
+            fw_key(KEY_PAUSE, 0, 0);
+            player_log(PLAYER_PAUSE_SENT);
+        }
+        music_wait_end = USEC;
+        return 0;
+    }
     ahead = (next_frame - frame_now()) & (FRAMES - 1);
     if (ahead > AHEAD_LOW && ahead <= FRAMES / 2) {
         task_sleep(ahead - AHEAD_LOW);
@@ -1452,6 +1538,12 @@ static void music_stop(int reason)
     USB_AUDIO_STATE[2] = 0;
     music_mode = 0;
     hid_stop();
+    control_unlink();                                   /* version 1.25: for a new start after a reconnection */
+    audio_found = 0;                                    /* the next enumeration gives the new address */
+    vol_step = 0;
+    vol_sent = 0xffffffff;
+    key_down = middle_presses = 0;
+    music_restart = music_wanted;
     for (f = 0; f < FRAMES; f++) {
         volatile unsigned *sd = sitd + 8 * f;
         sd[3] = 0;
@@ -1562,6 +1654,72 @@ static void music_stats(void)
     music_logged = music_packets;
 }
 
+/* ---- Version 1.24: the device task and the host mode ------------------------------------------------
+ * The device task (0x170f2c) starts a device session (0x24d3c4 -> 0x220e0c: the device interrupt handler
+ * and the endpoints) when USB power comes, and stops it (0x24d49c -> 0x220f34: a controller reset with
+ * a wait without a limit) when the power goes away. In host mode both take the controller from the
+ * host stack: then the UIM unlink 0xe8c20 waits forever, and the iPod freezes at a new connection.
+ * While host_running is 1, the hooks do not call them. Before the host start, the probe ends the
+ * session of the start with Apple's own stop. */
+static int host_running, device_stopped, device_logs;
+
+static void device_log(unsigned event, unsigned argument, unsigned ms)
+{
+    if (device_logs++ < 50)
+        log_regs(TAG_DEVICE, event, argument, ms, OTGSC);
+}
+
+int hook_device_start(void *device, unsigned mode)
+{
+    if (host_running) {
+        device_log(DEVICE_START_BLOCKED, mode, 0);
+        tone(HIGH, 30000);                              /* the owner hears it also if a freeze follows */
+        return 1;                                       /* "the start failed": the task waits again */
+    }
+    device_log(DEVICE_START_ALLOWED, mode, 0);
+    return fw_device_start(device, mode);
+}
+
+int hook_device_stop(void *device)
+{
+    device_stopped = 1;
+    if (host_running) {
+        device_log(DEVICE_STOP_SKIPPED, 0, 0);
+        return 0;
+    }
+    device_log(DEVICE_STOP_DONE, 0, 0);
+    return fw_device_stop(device);
+}
+
+/* Version 1.27: no USB host message while host mode runs. The dock has devices without a driver of
+ * the probe (the card slot, the billboard): add device (0xd377c) then sends error 0x68c, and the UI
+ * shows "unsupported device". At a reconnection that screen ended the playback. Three call sites:
+ * 0xd399c (0xd377c), 0x10c204 and 0xe2be0; the code after each call only returns. */
+int hook_usb_message(unsigned type, unsigned error)
+{
+    if (host_running) {
+        device_log(DEVICE_MESSAGE_SKIPPED, type, error);
+        return 0;
+    }
+    fw_usb_message(type, error);
+    return 0;
+}
+
+/* End the device session of the start, if one runs, before the host start resets the controller. */
+static void device_handover(void)
+{
+    unsigned waited = 0;
+    device_stopped = 0;
+    *DEVICE_ABORT = 1;
+    while (!device_stopped && waited < DEVICE_WAIT_MS) {
+        task_sleep(50);
+        waited += 50;
+    }
+    if (!device_stopped)
+        *DEVICE_ABORT = 0;                              /* no session: the next session must not end at once */
+    device_log(DEVICE_CHANGE, device_stopped, waited);
+}
+
 int hook_event(void *ui, void *event)
 {
     int r = fw_long_play_timer(ui, event);
@@ -1609,6 +1767,8 @@ int hook_event(void *ui, void *event)
                 STORAGE_RECORD[0x35] = 0xff;
             }
             idle_mark(1);
+            device_handover();                          /* version 1.24 */
+            host_running = 1;
             host_start(0, 0, 0, 0);
             USB_GLOBALS[0] = 2;                         /* again: the host start clears parts of the block */
             log_registers();
@@ -1629,8 +1789,10 @@ int hook_event(void *ui, void *event)
                  * start a song. A later button event logs the statistics. Mode '2' (version 1.12):
                  * no music route, the music stays on the headphone jack (a test for the album art). */
                 idle_mark(3);
-                if (mode == '1')
+                if (mode == '1') {
+                    music_wanted = 1;
                     music_start(&found);
+                }
                 idle_mark(4);
                 if (write_log() == 0) {
                     tone(LOW, 60000);
@@ -1648,6 +1810,12 @@ int hook_event(void *ui, void *event)
             }
         }
     } else if (started && L) {
+        /* Version 1.25: after a reconnection, the first button press after the new enumeration of the
+         * device starts the music route again (the UI task can wait for the control requests). */
+        if (music_restart && !music_mode && audio_found) {
+            music_restart = 0;
+            music_start(&found);
+        }
         /* At most one write each 5 s (version 1.12; the art trace adds records all the time). */
         unsigned now = USEC;
         if (now - last_write_us >= 5000000) {
@@ -1656,6 +1824,8 @@ int hook_event(void *ui, void *event)
                 music_stats();
             else
                 idle_mark(5);
+            if (music_wanted)
+                player_log(PLAYER_LATER);           /* version 1.26 */
             write_log();
         }
     }

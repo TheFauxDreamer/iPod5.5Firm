@@ -322,3 +322,20 @@ Emulator test with `album-art` 2.4: a hold of Select opened Cover Flow, the whee
 The timer at list + 0xcc is the blink of the selected row, not a key repeat ([album-art-v2.md](album-art-v2.md), "Version 2.6"). `album-art` 2.6 also uses it as its tick. Thus version 0.6.2 takes a timer event of the list only in the first 0.3 s after the close (`STRAY_TICK_US`), and also if the count at list + 0xf8 is not 0. Before, it took each timer event with the count 0, at any time.
 
 Emulator test with `album-art` 2.6: hold of Select, wheel and Menu operated. After Menu, the selected row of the Albums list was "All" (the same as with version 0.6.1).
+
+## Version 0.6.3: the covers at the open (16 October 2026)
+
+The owner reported a problem with version 0.6.2. At the open, the selected album and the covers next to it showed grey squares. The farther covers showed their artwork. The grey squares changed only after a wheel turn.
+
+The code had two causes:
+
+1. Each frame loads at most one new cover. The draw loop goes from the farthest cover to the centre, so the load went to a far cover first.
+2. The open drew one frame and did not start the timer. Thus no tick loaded the other covers until a wheel step started the animation.
+
+Version 0.6.3 makes these changes:
+
+1. Before the draw loop, `render` loads the covers in the order of their distance from the centre: the centre, then centre ± 1, ± 2 and so on. Then the draw loop uses the cache.
+2. The first frame loads up to 3 covers (`OPEN_LOADS`): the centre and its two neighbours.
+3. If a visible cover is not loaded after the first frame, the open starts the animation timer. Each tick loads one more cover. When all the visible covers are loaded, `preload` continues as before.
+
+The code and data are 10888 bytes (`testPatchSizes`). Not tested in the emulator or on the real iPod yet.

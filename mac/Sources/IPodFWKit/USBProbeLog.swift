@@ -21,7 +21,7 @@ public enum USBProbeLog {
     static let artStepTag = 14 * 4 + 2, artSummaryTag = 14 * 4 + 3, artStateTag = 15 * 4, outputMadeTag = 15 * 4 + 1
     static let artCacheTag = 15 * 4 + 2, artGatesTag = 15 * 4 + 3, artQueuesTag = 16 * 4, artDBTag = 16 * 4 + 1, artLookupTag = 16 * 4 + 2, artAddTag = 16 * 4 + 3
     static let volumeRangeTag = 17 * 4, volumeSetTag = 17 * 4 + 1, hidDescTag = 17 * 4 + 2, hidReportTag = 17 * 4 + 3
-    static let keyPostTag = 18 * 4, keyActionTag = 18 * 4 + 1
+    static let keyPostTag = 18 * 4, keyActionTag = 18 * 4 + 1, deviceTag = 18 * 4 + 2, playerTag = 18 * 4 + 3
 
     public struct Entry: Hashable {
         public var driver: String
@@ -59,7 +59,7 @@ public enum USBProbeLog {
                 out.append(Entry(driver: "Audio", call: hidDescriptorText(regs, atR1 + atR2), device: nil, interface: nil, registers: regs))
                 continue
             }
-            if tag >= audioDeviceTag && tag <= keyActionTag {
+            if tag >= audioDeviceTag && tag <= playerTag {
                 out.append(Entry(driver: "Audio", call: audioText(tag, regs), device: nil, interface: nil, registers: regs))
                 continue
             }
@@ -268,6 +268,24 @@ public enum USBProbeLog {
                           keyName(r[0] & 0xFF), keyType(r[0] >> 8 & 0xFF), Int32(bitPattern: r[1]), r[2], r[3])
         case keyActionTag:
             return String(format: "key in the UI task — %@ %@, volume level %d → %d", keyName(r[0] & 0xFF), keyType(r[0] >> 8 & 0xFF), r[1], r[2])
+        case deviceTag:
+            let otg = String(format: "OTGSC 0x%08X (VBUS %@)", r[3], r[3] & 0x800 != 0 ? "present" : "absent")
+            switch r[0] {
+            case 1: return "device task — the start of the device mode is blocked (host mode runs); " + otg
+            case 2: return "device task — the start of the device mode is allowed; " + otg
+            case 3: return "device task — Apple's stop of the device session ran; " + otg
+            case 4: return "device task — the stop is skipped (host mode runs, no controller reset); " + otg
+            case 5: return String(format: "device task — before the host start: %@ (%d ms); %@",
+                                  r[1] != 0 ? "the device session stopped" : "no device session", r[2], otg)
+            case 6:
+                let error = [0x673: "a hub is not allowed", 0x67D: "too many hubs", 0x68C: "no driver"][Int(r[2])] ?? String(format: "error 0x%X", r[2])
+                return String(format: "USB host message not shown (host mode runs) — type %d, %@", r[1], error)
+            default: return String(format: "device task — event %d; %@", r[0], otg)
+            }
+        case playerTag:
+            let state = [1: "playing", 2: "paused", 0xFF: "unknown"][Int(r[0])] ?? "stopped (\(r[0]))"
+            let moment = [1: "before the stop", 2: "after the stop", 3: "after the pause key", 5: "later"][Int(r[1])] ?? "moment \(r[1])"
+            return String(format: "player — %@: %@; codec buffers %d, USB buffers %d", moment, state, r[2], r[3])
         case musicStopTag:
             let reason = [1: "the dock was disconnected", 2: "the device does not answer"][Int(r[0])] ?? "reason \(r[0])"
             return String(format: "music stopped — %@, %d packets, %d siTD errors, %d sleeps", reason, r[1], r[2], r[3])
@@ -280,7 +298,7 @@ public enum USBProbeLog {
     /// version 1.22 (0x3a is Stop, not Play/Pause; 0x7b and 0x7d were private codes).
     static func keyName(_ code: UInt32) -> String {
         [0x1C: "play/pause", 0x20: "volume +", 0x1F: "volume −", 0x1E: "next track", 0x1D: "previous track",
-         0x3A: "stop", 0x7B: "volume + (private)", 0x7D: "volume − (private)"][code] ?? String(format: "key 0x%02X", code)
+         0x3A: "stop", 0x3C: "pause", 0x7B: "volume + (private)", 0x7D: "volume − (private)"][code] ?? String(format: "key 0x%02X", code)
     }
 
     /// Version 1.23: 1 push, 0 release. Version 1.22: the event types 4, 5 and 7.
