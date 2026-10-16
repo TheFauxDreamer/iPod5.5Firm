@@ -120,6 +120,8 @@ final class AppModel: ObservableObject {
         let image: URL
         let reason: String
         let result: HelperResult
+        /// MiMusic was open when iPodFirm made the plan.
+        var musicAppRunning = false
     }
 
     static let supportDir: URL = {
@@ -891,6 +893,7 @@ final class AppModel: ObservableObject {
         busy = "Checking the iPod (nothing is written yet)…"
         defer { busy = nil }
         do {
+            try checkNoMusicSync()
             var reason = reason
             var r = try await runFlash(ipod, image: image, reason: reason, dryRun: true)
             if !r.ok, r.code == HelperResult.firmwareUnreadable, reason == "restore" {
@@ -902,9 +905,16 @@ final class AppModel: ObservableObject {
             if r.ranges?.isEmpty ?? true {
                 alert = AlertInfo(title: "Nothing to do", message: r.message)
             } else {
-                flashPlan = FlashPlan(ipod: ipod, image: image, reason: reason, result: r)
+                flashPlan = FlashPlan(ipod: ipod, image: image, reason: reason, result: r,
+                                      musicAppRunning: !NSRunningApplication.runningApplications(withBundleIdentifier: MusicAppCheck.miMusicBundleID).isEmpty)
             }
         } catch { fail("Cannot flash", error) }
+    }
+
+    /// Stop a firmware write while MiMusic writes to the iPod. The write unmounts the volume and stops the sync.
+    func checkNoMusicSync() throws {
+        guard let volume = ipodMusicVolume(), !MusicAppCheck.syncFiles(onVolume: volume).isEmpty else { return }
+        throw FirmwareError("MiMusic is writing to the iPod. Wait until the sync is complete. Then try again.")
     }
 
     /// Step 2: the helper backs up the current partition, writes only changed blocks, and verifies.
@@ -913,6 +923,8 @@ final class AppModel: ObservableObject {
         busy = "Backup, write and check in progress… Do not disconnect the iPod."
         defer { busy = nil; refreshBackups() }
         do {
+            // Do the check again: a sync can start while the sheet is open.
+            try checkNoMusicSync()
             let r = try await runFlash(plan.ipod, image: plan.image, reason: plan.reason, dryRun: false)
             guard r.ok else { throw FirmwareError(r.message, code: r.code) }
             if plan.reason == "flash" { isDirty = false }

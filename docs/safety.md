@@ -26,6 +26,11 @@ iPodFirm obeys these limits. The code enforces each limit. The "Where" column gi
 
 ## The checks before a flash
 
+The app does one check before it runs the helper. It does the check again before the write, after the owner confirms. A firmware write unmounts the iPod volume and stops a MiMusic sync.
+
+- If a MiMusic temporary file is on the iPod volume, the app stops. The files are `iTunesDB.tmp`, `ArtworkDB.tmp` and `iPodFirmAlbumArt.tmp` (`MusicAppCheck` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift)).
+- If MiMusic is open, the confirmation sheet shows a warning. The owner can quit MiMusic or continue.
+
 The helper does these checks in `Operations.flash` ([Operations.swift](../mac/Sources/IPodFWKit/Operations.swift)). Any failed check stops the flash before a write.
 
 1. Find the iPod again by its disk name. It must still be connected.

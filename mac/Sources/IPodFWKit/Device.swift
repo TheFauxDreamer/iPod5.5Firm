@@ -73,6 +73,24 @@ public enum Device {
     }
 }
 
+/// Find a MiMusic sync on the iPod. A firmware write unmounts the iPod volume and stops a sync.
+public enum MusicAppCheck {
+    /// The bundle identifier of MiMusic.
+    public static let miMusicBundleID = "com.thefauxdreamer.MiMusic"
+
+    /// The temporary files that MiMusic writes on the iPod during a sync. MiMusic renames each file after the write.
+    public static let tempFiles = [
+        "iPod_Control/iTunes/iTunesDB.tmp",
+        "iPod_Control/Artwork/ArtworkDB.tmp",
+        "iPod_Control/iTunes/iPodFirmAlbumArt.tmp",
+    ]
+
+    /// The temporary files of MiMusic that are on the volume now.
+    public static func syncFiles(onVolume volume: URL) -> [String] {
+        tempFiles.filter { FileManager.default.fileExists(atPath: volume.appendingPathComponent($0).path) }
+    }
+}
+
 public protocol BlockReader {
     var blockSize: Int { get }
     func read(_ offset: Int, _ length: Int) throws -> [UInt8]

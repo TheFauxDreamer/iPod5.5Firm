@@ -523,6 +523,17 @@ final class PatchAndArtTests: XCTestCase {
     }
 
     /// Each patch in the Patches pane has a valid version.
+    func testMusicAppSyncFiles() throws {
+        let volume = FileManager.default.temporaryDirectory.appendingPathComponent("music-sync-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: volume) }
+        let itunes = volume.appendingPathComponent("iPod_Control/iTunes")
+        try FileManager.default.createDirectory(at: itunes, withIntermediateDirectories: true)
+        try Data().write(to: itunes.appendingPathComponent("iTunesDB"))
+        XCTAssertEqual(MusicAppCheck.syncFiles(onVolume: volume), [])
+        try Data().write(to: itunes.appendingPathComponent("iTunesDB.tmp"))
+        XCTAssertEqual(MusicAppCheck.syncFiles(onVolume: volume), ["iPod_Control/iTunes/iTunesDB.tmp"])
+    }
+
     func testPatchVersions() {
         for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) where p.spec.internal != true {
             XCTAssertNotNil(p.spec.parsedVersion, "\(p.spec.name) has no valid version in patch.json")

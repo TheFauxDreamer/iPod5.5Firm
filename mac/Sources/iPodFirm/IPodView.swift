@@ -157,6 +157,12 @@ struct FlashConfirmSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            if plan.musicAppRunning {
+                Label("MiMusic is open. iPodFirm disconnects the iPod volume during the write. Let each MiMusic sync finish, or quit MiMusic, before you continue.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             VStack(alignment: .leading, spacing: 6) {
                 Label("First, iPodFirm makes a backup of the current firmware on the iPod.", systemImage: "externaldrive.badge.timemachine")
                 Label("iPodFirm writes \(ByteCountFormatter.string(fromByteCount: Int64(total), countStyle: .file)) in \(ranges.count) place(s). Then it reads the data again and checks it.", systemImage: "square.and.pencil")

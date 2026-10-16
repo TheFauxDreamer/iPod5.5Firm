@@ -132,11 +132,12 @@ macOS blocks raw disk access without Full Disk Access. The app tests the permiss
 ## The flash sequence
 
 1. "Flash Edited Firmware…" builds the partition (refer to [modifications.md](modifications.md#the-build-sequence)) and writes it to `~/Library/Application Support/iPodFirm/Staging/flash.bin`.
-2. The app runs the helper with `--dry-run`. The helper does all the checks and returns the block ranges that it will write. It writes nothing.
-3. If the iPod firmware is damaged and the action is a restore, the app tries the rescue restore with `--dry-run`.
-4. The app shows the ranges and the byte count. The owner must confirm.
-5. The app asks for Touch ID (daemon mode) or the password (password mode).
-6. The helper runs again without `--dry-run`. It saves a backup, unmounts the disk, writes the changed blocks, reads them again and compares them.
+2. The app makes sure that MiMusic does not write to the iPod (refer to [safety.md](safety.md#the-checks-before-a-flash)).
+3. The app runs the helper with `--dry-run`. The helper does all the checks and returns the block ranges that it will write. It writes nothing.
+4. If the iPod firmware is damaged and the action is a restore, the app tries the rescue restore with `--dry-run`.
+5. The app shows the ranges and the byte count. If MiMusic is open, it also shows a warning. The owner must confirm.
+6. The app does the MiMusic check again. Then it asks for Touch ID (daemon mode) or the password (password mode).
+7. The helper runs again without `--dry-run`. It saves a backup, unmounts the disk, writes the changed blocks, reads them again and compares them.
 
 [safety.md](safety.md) gives each check.
 
@@ -175,6 +176,7 @@ macOS blocks raw disk access without Full Disk Access. The app tests the permiss
 | `CGImageSource`, `CGContext` | Read and scale the cover images and the PNG files. |
 | `AVURLAsset` | Read the cover of a non-MP4 music file. |
 | `NSWorkspace` | Open Finder, System Settings and the emulator app. |
+| `NSRunningApplication` | Find out if MiMusic (`com.thefauxdreamer.MiMusic`) is open before a flash. |
 | Unix domain socket | Send commands to the emulator (`shot`, `press`, `wheel`). |
 | `UserDefaults` | The settings of the app (refer to [Settings of the app](#settings-of-the-app)). |
 
@@ -222,7 +224,7 @@ The app writes these files on the mounted iPod volume. A patch can also write fi
 | `iPod_Control/iTunes/iPodFirmDarkMode` | The `dark-mode` patch on the iPod | `dark-mode` patch |
 | `iPod_Control/iTunes/iPodFirmUSBProbe`, `iPod_Control/iTunes/iPodFirmUSBLog` | "Start the Probe at the Next Restart" (`ui.actions` of `usb-host-probe`) | `usb-host-probe` patch, "Show USB Log" |
 
-The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not change them.
+The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not change them. Before a flash, the app looks for the MiMusic temporary files `iTunesDB.tmp`, `ArtworkDB.tmp` and `iPodFirmAlbumArt.tmp`.
 
 ### Settings of the app
 
