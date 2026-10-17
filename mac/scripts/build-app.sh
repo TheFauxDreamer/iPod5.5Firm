@@ -7,10 +7,13 @@
 # signature, which contains no name and no e-mail address. The script does not install it.
 # Set RELEASE=both to make the release ZIP and install the app from the same build. The two
 # copies have the same version. The installed copy keeps the signature of a normal build.
+# On the main branch, the default is RELEASE=both. On other branches, the default is RELEASE=0.
+# Set RELEASE=0 or RELEASE=1 to change the default.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 APP_NAME="${APP_NAME:-iPodFirm}"
-RELEASE="${RELEASE:-0}"
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [ "$BRANCH" = main ]; then RELEASE="${RELEASE:-both}"; else RELEASE="${RELEASE:-0}"; fi
 case "$RELEASE" in
     0|1|both) ;;
     *) echo "error: RELEASE must be 0, 1 or both: $RELEASE" >&2; exit 1 ;;

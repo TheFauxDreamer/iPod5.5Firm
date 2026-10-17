@@ -69,6 +69,8 @@ The release build has an ad-hoc signature. The signature contains no name and no
 
 To make the release ZIP and install the app with the same version, use `RELEASE=both` in place of `RELEASE=1`. The installed app keeps the signature of a normal build, thus Touch ID and Full Disk Access continue to operate.
 
+On the `main` branch, `RELEASE=both` is the default. Thus each build from `main` installs the app and makes the release ZIP. On other branches, the default is a normal build. To change the default, set `RELEASE=0` or `RELEASE=1`.
+
 ### Open a release build
 
 1. Unzip the file and move `iPodFirm.app` to `/Applications`.

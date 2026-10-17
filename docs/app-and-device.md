@@ -75,7 +75,7 @@ A stable signature is necessary. macOS connects Full Disk Access to the signatur
 4. It makes the ZIP from the copy, as `RELEASE=1` does.
 5. It installs `build/<APP_NAME>.app` in `/Applications`, as a normal build does.
 
-The script refuses a value of `RELEASE` that is not `0`, `1` or `both`.
+The script refuses a value of `RELEASE` that is not `0`, `1` or `both`. If `RELEASE` is not set, the script uses `both` on the `main` branch (`git rev-parse --abbrev-ref HEAD`) and `0` on other branches.
 
 A developer certificate contains the e-mail address or the name of the owner. Any person can read it with `codesign -dvv`. An ad-hoc signature contains no name and no e-mail address.
 
