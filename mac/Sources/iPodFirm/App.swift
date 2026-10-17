@@ -20,6 +20,10 @@ struct IPodFirmApp: App {
                 }
                 .frame(minWidth: 980, minHeight: 640)
                 .onAppear { delegate.attach(model) }
+                // All copies of iPodFirm share the user patches folder. Another copy can add, change or remove a patch.
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    model.reloadPatches()
+                }
         }
         .handlesExternalEvents(matching: [])
         .commands {

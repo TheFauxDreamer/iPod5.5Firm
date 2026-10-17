@@ -1744,8 +1744,10 @@ final class PatchLibraryTests: XCTestCase {
         let patch = try userPatch("not-finished")
         XCTAssertNoThrow(try library.edit(patch, with: PatchDraft(spec: patch.spec)))
         XCTAssertNoThrow(try library.saveCode(try userPatch("not-finished"), PatchCode(patch: patch)))
-        try library.remove(try userPatch("not-finished"))
+        let old = try userPatch("not-finished")
+        try library.remove(old)
         XCTAssertFalse(library.list().contains { $0.spec.name == "not-finished" })
+        XCTAssertNoThrow(try library.remove(old))      // another copy of the app removed it already
     }
 
     // MARK: Code section

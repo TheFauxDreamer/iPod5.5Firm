@@ -72,7 +72,9 @@ A patch with no `version` is lower than all versions. The comparison uses number
 
 The install moves the old folder to the Trash. The patch keeps its switch state, because the app records the switched-on patches by name. If the patch is switched on, an alert tells the owner to flash the iPod again.
 
-**−** below the list, or **⋯** > Remove Patch…, moves a user patch to the Trash. This includes a patch that New Patch… made. `PatchLibrary.isUserPatch` compares the path of the folder with the user patches folder. If the user patch replaced a built-in patch, the built-in patch comes back. Built-in patches cannot be removed.
+**−** below the list, or **⋯** > Remove Patch…, moves a user patch to the Trash. This includes a patch that New Patch… made. `PatchLibrary.isUserPatch` compares the path of the folder with the user patches folder. If the folder does not exist, because another copy of iPodFirm removed it, the remove only updates the list.
+
+All copies of iPodFirm, also the test apps, use the same user patches folder. Each copy reads the folder again when it becomes the active app (`NSApplication.didBecomeActiveNotification` in [App.swift](../mac/Sources/iPodFirm/App.swift)). If the user patch replaced a built-in patch, the built-in patch comes back. Built-in patches cannot be removed.
 
 ### Make and share a patch
 

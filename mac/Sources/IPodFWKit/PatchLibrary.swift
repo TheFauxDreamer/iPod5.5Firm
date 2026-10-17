@@ -390,11 +390,13 @@ public struct PatchLibrary {
             && patch.folder.deletingLastPathComponent().standardizedFileURL.path == userDir.standardizedFileURL.path
     }
 
-    /// Move a user patch to the Trash.
+    /// Move a user patch to the Trash. If the folder does not exist (another copy of iPodFirm
+    /// removed it), nothing occurs.
     public func remove(_ patch: PatchInfo) throws {
         guard isUserPatch(patch) else {
             throw PatchError("Only a patch that you installed can be removed.")
         }
+        guard FileManager.default.fileExists(atPath: patch.folder.path) else { return }
         try FileManager.default.trashItem(at: patch.folder, resultingItemURL: nil)
     }
 
