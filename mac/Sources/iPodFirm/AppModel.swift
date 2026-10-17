@@ -68,6 +68,12 @@ final class AppModel: ObservableObject {
     @Published var themeReport: ImportedTheme?
     /// A patch that the owner opened, before the install (the install sheet shows it).
     @Published var pendingInstall: PatchCandidate?
+    /// The New Patch or Edit Patch sheet.
+    @Published var patchEditor: PatchEditorState?
+    /// The code of each user patch that has changes that are not saved, by patch name (PatchCodeView.swift).
+    @Published var codeDrafts: [String: PatchCode] = [:]
+    /// The result of the last Check Code, by patch name.
+    @Published var codeChecks: [String: PatchCodeCheck] = [:]
     /// The result of the last action of each patch (patch.json "ui"), by patch name.
     @Published var patchActionStatus: [String: String] = [:]
     /// The state of the switches of the patches (patch.json "ui"), by path on the iPod.
@@ -545,6 +551,56 @@ final class AppModel: ObservableObject {
     func cancelInstall(_ c: PatchCandidate) {
         pendingInstall = nil
         if let staging = c.staging { Self.patchLibrary.cleanStaging(staging) }
+    }
+
+    // MARK: New Patch, Edit Patch
+
+    func newPatch() {
+        section = .patches
+        patchEditor = PatchEditorState(draft: PatchDraft(), patch: nil)
+    }
+
+    func editPatch(_ patch: PatchInfo) {
+        guard patch.source == .user else { return }
+        section = .patches
+        patchEditor = PatchEditorState(draft: PatchDraft(spec: patch.spec), patch: patch)
+    }
+
+    /// Make the new patch, or write the edit. Then select the patch.
+    func savePatchEditor(_ state: PatchEditorState, _ draft: PatchDraft) {
+        let library = Self.patchLibrary
+        if let patch = state.patch {
+            do {
+                let version = try library.edit(patch, with: draft)
+                patchEditor = nil
+                reloadPatches()
+                patchSelection = patch.spec.name
+                if enabledPatches.contains(patch.spec.name) {
+                    alert = AlertInfo(title: "Patch Saved",
+                                      message: "The patch is now version \(version). Flash the iPod again to put the new text on it.")
+                }
+            } catch { fail("Cannot save the patch", error) }
+            return
+        }
+        Task {
+            do {
+                let folder = try await work("Making the patch…") { try library.create(draft) }
+                patchEditor = nil
+                reloadPatches()
+                patchSelection = folder.lastPathComponent
+                let steps = draft.kind == .code
+                    ? ["1. Write the code in the section \"C Code\" below the patch.",
+                       "2. Add the firmware functions and the hooks.",
+                       "3. Click Check Code, then click Save.",
+                       "4. Click Export Patch… to make a file for other people."]
+                    : ["1. Add the byte changes in the section \"Byte Changes\" below the patch.",
+                       "2. Click Check Code, then click Save.",
+                       "3. Click Export Patch… to make a file for other people."]
+                alert = AlertInfo(title: "Patch Made",
+                                  message: steps.joined(separator: "\n")
+                                    + "\n\ndocs/patch-system.md in the iPodFirm source code tells how to write a patch.")
+            } catch { fail("Cannot make the patch", error) }
+        }
     }
 
     func removePatch(_ patch: PatchInfo) {

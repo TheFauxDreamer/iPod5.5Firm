@@ -72,16 +72,65 @@ A patch with no `version` is lower than all versions. The comparison uses number
 
 The install moves the old folder to the Trash. The patch keeps its switch state, because the app records the switched-on patches by name. If the patch is switched on, an alert tells the owner to flash the iPod again.
 
-**−** below the list moves a user patch to the Trash. If the user patch replaced a built-in patch, the built-in patch comes back. Built-in patches cannot be removed.
+**−** below the list, or **⋯** > Remove Patch…, moves a user patch to the Trash. This includes a patch that New Patch… made. `PatchLibrary.isUserPatch` compares the path of the folder with the user patches folder. If the user patch replaced a built-in patch, the built-in patch comes back. Built-in patches cannot be removed.
 
 ### Make and share a patch
 
-1. Write the patch as in [Write a new patch](#write-a-new-patch). Use `"load_address": "extended"`, so that the patch does not use the area of another patch.
-2. Add `title`, `summary`, `symbol` and `category`.
-3. Add `details`. Add `requires`, `notes` and `caution` if necessary. Do not put all the text in `description`.
-4. Add `size`. If you do not add it, the export and the install record the measured size.
-5. In the Patches pane, select the patch. Click **⋯** > Export Patch…. iPodFirm compiles `patch.o`, records the measured `size` and writes the `.ipodpatch` file. The C file stays in the file as the source.
-6. Give the `.ipodpatch` file to other people.
+1. Select File > New Patch…, or click **⋯** > New Patch… below the list of patches.
+2. Type the title, the summary and the text of the sections. Select the group and the SF Symbol.
+3. Select the type: **C Code** or **Byte Changes**.
+4. Click **Make Patch**. iPodFirm makes the patch folder in the user patches folder and selects the patch.
+5. In the Code section of the patch, write the code, the firmware functions and the hooks, or write the byte changes. Refer to [The Code section](#the-code-section) and [Write a new patch](#write-a-new-patch).
+6. Click **Check Code**. Then click **Save as Version …**.
+7. In the Patches pane, select the patch. Click **⋯** > Export Patch…. iPodFirm compiles `patch.o`, records the measured `size` and writes the `.ipodpatch` file. The C file stays in the file as the source.
+8. Give the `.ipodpatch` file to other people.
+
+The New Patch sheet (`PatchEditorSheet` in [PatchEditor.swift](../mac/Sources/iPodFirm/PatchEditor.swift)) makes the name from the title, for example "Sleep Now" gives `sleep-now` (`PatchDraft.name(fromTitle:)`). You can change the name before the patch is made. The sheet refuses a name that another patch uses, also a built-in patch.
+
+`PatchLibrary.create` in [PatchLibrary.swift](../mac/Sources/IPodFWKit/PatchLibrary.swift) writes these keys:
+
+- The text keys from the sheet. It does not write an empty key.
+- `osos_sha256` and `targets` for the Apple firmware 1.3, `version` "1.0" and the first free `version_letter`.
+- For **Byte Changes**: an empty `bytes` array and `"size": 0`.
+- For **C Code**: `"load_address": "extended"`, empty `symbols` and `hooks`, and the C file `<name>.c` ("-" becomes "_"). The C file has a comment that tells the next steps, and one empty function `hook_example`. iPodFirm compiles it and records the measured `size`. If the compile fails, iPodFirm moves the new folder to the Trash.
+
+**C Code** needs the Xcode command line tools. Without them, the sheet makes only **Byte Changes** patches.
+
+### Edit a patch
+
+1. In the Patches pane, select a user patch.
+2. Click **⋯** > Edit Patch…, or Control-click the patch and select Edit Patch….
+3. Change the text.
+4. Click **Save as Version …**.
+
+### The Code section
+
+The detail of a user patch has a Code section (`PatchCodeSections` in [PatchCodeView.swift](../mac/Sources/iPodFirm/PatchCodeView.swift)). Thus a user can write a patch with no other editor. The section has these parts:
+
+| Part | Content | Key in `patch.json` |
+|---|---|---|
+| C Code | The C file of the patch. Only for a patch with a C file. | The C file |
+| Firmware Functions | A name and an osos offset for each firmware function or data that the C code declares. | `symbols` |
+| Hooks | The kind, `at`, `expect` and `to` of each hook. The menu at `to` shows the global functions of the code after a check. | `hooks` |
+| Byte Changes | `at`, `expect` and `value` of each byte change. | `bytes` |
+
+The code editor (`CodeTextView`) does not change quotes, dashes or spelling. The SwiftUI text editor changes `"` into curly quotes, and the compiler then refuses the code.
+
+If the open firmware has the `osos_sha256` of the patch, the wand button reads `expect` from the open firmware. For a byte change, it reads the same number of bytes as `value`.
+
+**Check Code** (`PatchLibrary.check` in [PatchCode.swift](../mac/Sources/IPodFWKit/PatchCode.swift)) does these steps:
+
+1. It examines the names, the hexadecimal values and the kinds.
+2. It compares each `expect` with the open firmware, if a firmware is open. A hook with `chain` is not compared.
+3. It compiles and links a copy of the code in `Staging/patch-<UUID>/`. The installed patch does not change.
+4. It makes sure that each `to` is a global function of the code, or a hexadecimal address.
+5. It shows the errors of the compiler, or the size on the iPod.
+
+**Save as Version …** (`PatchLibrary.saveCode`) does the check again. If there is no error, it writes the C file and `symbols`, `hooks` and `bytes`. It writes the measured `size` and adds 1 to the `version`. It moves `patch.o` to the Trash, because the build uses `patch.o` before the C file. A code patch keeps empty `symbols` and `hooks`. A data patch keeps an empty `bytes`.
+
+The changes stay in the app until Save or **Revert** (`AppModel.codeDrafts`), also if you select a different patch. If you quit the app, the changes that are not saved are lost. A patch that has only `patch.o` and no C file shows no code editor. A built-in patch has no Code section.
+
+`PatchLibrary.edit` writes the text keys into `patch.json` and removes each key that is now empty. It adds 1 to the last number of `version`, for example "1.0" gives "1.1" (`PatchVersion.next`). The name does not change, because the app records the switched-on patches by name. A built-in patch cannot be edited. If the patch is switched on, an alert tells the owner to flash the iPod again.
 
 ## The patch.json format
 

@@ -26,6 +26,10 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
         /// A "b" hook: the function in the patch that runs the replaced instruction and continues in the
         /// firmware. `chain` is this function if no earlier patch hooks the place.
         public var chain_default: String? = nil
+        public init(kind: String, at: String, expect: String, to: String, chain: String? = nil, chain_default: String? = nil) {
+            self.kind = kind; self.at = at; self.expect = expect; self.to = to
+            self.chain = chain; self.chain_default = chain_default
+        }
     }
     /// An On/Off item that the patch adds to the Settings menu (Menu 24598): a copy of the item with
     /// `template_key` (default: Sound Check), with the key `key` and the label `label_id`. The item
@@ -69,7 +73,10 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
         public var defaultValue: Int { `default` ?? choices.first?.value ?? 0 }
     }
     /// A data change: `expect` and `value` are hexadecimal bytes.
-    public struct Bytes: Codable, Hashable { public var at, expect, value: String }
+    public struct Bytes: Codable, Hashable {
+        public var at, expect, value: String
+        public init(at: String, expect: String, value: String) { self.at = at; self.expect = expect; self.value = value }
+    }
     /// A firmware build that the patch is for: the iPod model and the firmware version, for display.
     /// `osos_sha256` must be the same as the `osos_sha256` of the patch. The hash is the real check.
     public struct Target: Codable, Hashable {
@@ -184,6 +191,15 @@ public struct PatchVersion: Comparable, Hashable {
     }
 
     public static func < (a: PatchVersion, b: PatchVersion) -> Bool { a.parts.lexicographicallyPrecedes(b.parts) }
+
+    /// The version after an edit: 1 is added to the last number. "1.0" gives "1.1", "2" gives "3".
+    /// A missing or incorrect version gives "1.0".
+    public static func next(after text: String?) -> String {
+        guard let text, PatchVersion(text) != nil else { return "1.0" }
+        var items = text.split(separator: ".").map { Int($0)! }
+        items[items.count - 1] += 1
+        return items.map(String.init).joined(separator: ".")
+    }
 
     /// Compare two versions. nil (no version or not valid) is lower than all versions.
     public static func isLower(_ a: PatchVersion?, than b: PatchVersion?) -> Bool {
