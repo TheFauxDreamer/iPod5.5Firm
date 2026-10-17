@@ -67,6 +67,16 @@ A stable signature is necessary. macOS connects Full Disk Access to the signatur
 4. It makes `build/iPodFirm-<version>.zip` with `ditto -c -k --keepParent`.
 5. It does not install the app in `/Applications`.
 
+`RELEASE=both mac/scripts/build-app.sh` makes the release ZIP and installs the app from one build. The two copies have the same version and build number:
+
+1. It increases the version and the build number one time.
+2. Before the signature, it copies the app to `build/release/<APP_NAME>.app`.
+3. It signs `build/<APP_NAME>.app` with the identity of a normal build. It signs the copy with an ad-hoc signature.
+4. It makes the ZIP from the copy, as `RELEASE=1` does.
+5. It installs `build/<APP_NAME>.app` in `/Applications`, as a normal build does.
+
+The script refuses a value of `RELEASE` that is not `0`, `1` or `both`.
+
 A developer certificate contains the e-mail address or the name of the owner. Any person can read it with `codesign -dvv`. An ad-hoc signature contains no name and no e-mail address.
 
 An ad-hoc build has these limits:

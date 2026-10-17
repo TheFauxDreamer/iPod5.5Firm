@@ -67,6 +67,8 @@ The script increases the version number and the build number. Then it builds the
 
 The release build has an ad-hoc signature. The signature contains no name and no e-mail address. The script does not install the release build.
 
+To make the release ZIP and install the app with the same version, use `RELEASE=both` in place of `RELEASE=1`. The installed app keeps the signature of a normal build, thus Touch ID and Full Disk Access continue to operate.
+
 ### Open a release build
 
 1. Unzip the file and move `iPodFirm.app` to `/Applications`.

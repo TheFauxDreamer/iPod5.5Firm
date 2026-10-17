@@ -5,10 +5,16 @@
 #   APP_NAME="iPodFirm USB-C Test" mac/scripts/build-app.sh
 # Set RELEASE=1 to make a ZIP file for a GitHub release. A release build has an ad-hoc
 # signature, which contains no name and no e-mail address. The script does not install it.
+# Set RELEASE=both to make the release ZIP and install the app from the same build. The two
+# copies have the same version. The installed copy keeps the signature of a normal build.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 APP_NAME="${APP_NAME:-iPodFirm}"
 RELEASE="${RELEASE:-0}"
+case "$RELEASE" in
+    0|1|both) ;;
+    *) echo "error: RELEASE must be 0, 1 or both: $RELEASE" >&2; exit 1 ;;
+esac
 case "$APP_NAME" in
     */*|.*|*..*) echo "error: APP_NAME must be a plain name, not a path: $APP_NAME" >&2; exit 1 ;;
 esac
@@ -91,6 +97,33 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+sign_app() {    # $1 = the app, $2 = the identity
+    codesign --force --sign "$2" --identifier com.thefauxdreamer.ipodfirm.helper "$1/Contents/MacOS/ipodfw-helper"
+    codesign --force --sign "$2" "$1"
+    codesign --verify --strict "$1"
+}
+
+make_zip() {    # $1 = the app with an ad-hoc signature
+    # Stop if the signature contains a certificate (a name or an e-mail address).
+    if codesign -dvv "$1" 2>&1 | grep -q '^Authority='; then
+        echo "error: the release build has a certificate signature" >&2
+        exit 1
+    fi
+    ZIP="build/$APP_NAME-$MARKETING_VERSION.zip"
+    rm -f "$ZIP"
+    ditto -c -k --keepParent "$1" "$ZIP"
+    echo "==> Made $ZIP — version $MARKETING_VERSION (build $BUILD_NUMBER), ad-hoc signature"
+}
+
+# RELEASE=both: copy the unsigned app before the signature. The copy gets the ad-hoc signature.
+# The path is below build/ and APP_NAME is a plain name (examined above).
+RELEASE_APP="build/release/$APP_NAME.app"
+if [ "$RELEASE" = both ]; then
+    rm -rf "$RELEASE_APP"
+    mkdir -p build/release
+    ditto "$APP" "$RELEASE_APP"
+fi
+
 # Sign with a stable identity so macOS keeps Full Disk Access across rebuilds
 # (an ad-hoc signature changes every build and silently loses the permission).
 if [ "$RELEASE" = 1 ]; then
@@ -103,25 +136,17 @@ if [ -z "$IDENTITY" ]; then
     echo "warning: no signing identity found; ad-hoc signing (Full Disk Access must be re-granted after each build)"
     IDENTITY="-"
 fi
-codesign --force --sign "$IDENTITY" --identifier com.thefauxdreamer.ipodfirm.helper "$APP/Contents/MacOS/ipodfw-helper"
-codesign --force --sign "$IDENTITY" "$APP"
-codesign --verify --strict "$APP"
+sign_app "$APP" "$IDENTITY"
+if [ "$RELEASE" = both ]; then sign_app "$RELEASE_APP" "-"; fi
 
 # Only record the new numbers once the build has succeeded.
 printf 'MARKETING_VERSION=%s\nBUILD_NUMBER=%s\n' "$MARKETING_VERSION" "$BUILD_NUMBER" > version.env
 
 if [ "$RELEASE" = 1 ]; then
-    # Stop if the signature contains a certificate (a name or an e-mail address).
-    if codesign -dvv "$APP" 2>&1 | grep -q '^Authority='; then
-        echo "error: the release build has a certificate signature" >&2
-        exit 1
-    fi
-    ZIP="build/$APP_NAME-$MARKETING_VERSION.zip"
-    rm -f "$ZIP"
-    ditto -c -k --keepParent "$APP" "$ZIP"
-    echo "==> Made $ZIP — version $MARKETING_VERSION (build $BUILD_NUMBER), ad-hoc signature"
+    make_zip "$APP"
     exit 0
 fi
+if [ "$RELEASE" = both ]; then make_zip "$RELEASE_APP"; fi
 
 DEST="/Applications/$APP_NAME.app"
 if [ -d "$DEST" ]; then
