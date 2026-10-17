@@ -1055,6 +1055,20 @@ final class USBProbeLogTests: XCTestCase {
         XCTAssertTrue(lines[4].hasPrefix("audio class interface descriptor, subtype 2: format type 1, 2 channels, 2 bytes per sample, 16 bits, rates 44100 Hz"))
     }
 
+    /// The timing record of usb-audio-out 1.5 (tag 76).
+    func testTimingRecord() {
+        XCTAssertEqual(USBProbeLog.audioText(76, [0x0107_0005, 0x0258_0136, 0x0302_00F5, 0x1802_0329]),
+                       "timing 5 s — On, host mode, USB music route, playing; idle core 0 31.0 %, core 1 60.0 %; latest wake +24.5 ms, 2 wakes > 5 ms late, 3 > 20 ms; USBAudioTask 41 wakes, longest fill 0.3 ms, longest sleep +2 ms, fewest frames ahead 24")
+        XCTAssertEqual(USBProbeLog.audioText(77, [1000, 0x0080_0003, 120, 81_500]),
+                       "timing counts — 1000 USB interrupts, 3 siTD errors, host task 128 messages and 120 timeouts, packet fill 81.5 ms in total")
+        XCTAssertEqual(USBProbeLog.audioText(77, [1, 0, 0x03E8_0078, 12_000]),
+                       "timing counts — 1 USB interrupts, 0 siTD errors, host task 0 messages and 120 timeouts, packet fill 12.0 ms in total (1000 packets with the fast fill)")
+        XCTAssertEqual(USBProbeLog.audioText(78, [44100, 44100, 0x0100_0001, 120_500]),
+                       "timing source — input 44100 Hz, output 44100 Hz, converter flag 1, source +0 0, +1 0, route 1; Apple fill 120.5 ms")
+        XCTAssertEqual(USBProbeLog.audioText(76, [0x0001_0000, 0x03E8_03DE, 0, 0]),
+                       "timing 0 s — On, stopped; idle core 0 99.0 %, core 1 100.0 %; latest wake +0.0 ms, 0 wakes > 5 ms late, 0 > 20 ms")
+    }
+
     /// The records of the isochronous test (tags 48–51).
     func testAudioRecords() {
         XCTAssertEqual(USBProbeLog.audioText(48, [116, 0x020201, 192, 9]),

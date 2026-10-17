@@ -25,7 +25,17 @@
  *
  * Version 1.3: Settings > Main Menu > "USB-C Audio" shows or hides an item in the main menu (the main
  * menu mask bit 0x80000000, as album-artists does with 0x40000000). The item is a copy of Backlight.
- * A selection of it switches USB-C Audio On or Off, and the firmware does not run the Backlight action. */
+ * A selection of it switches USB-C Audio On or Off, and the firmware does not run the Backlight action.
+ *
+ * Version 1.4: fewer wakes while the route runs. Apple's USB host task (0xd3390) waits at most 1 tick
+ * for a message and then polls (0xb9004): 1000 times each second. While the route runs it waits at most
+ * HOST_TICKS. USBAudioTask makes two sets of 12 packets in each wake (about 41 wakes each second).
+ *
+ * Version 1.9: a fast fill. Apple's fill (0x1e3064) used about 13 % of core 0 on the real iPod, also
+ * with silence (measurement builds 1.5-1.8 of the branch usb-audio-speed, re/usb-host.md). While the
+ * route runs and the input rate equals the output rate, hook_fill does the same work with word loops:
+ * no 0x7cae0 copy, no 0x7cd28 clear, no software division (0x82694). At other rates (the option 48 kHz
+ * with a 44.1 kHz song) Apple's fill and its rate converter (about 12 % of core 0) do the work. */
 
 #define APP_OBJECT    0x1081da18                        /* RAM: the app object (+0x1c database, +0x40c output volume) */
 #define MODE_MANAGER  (*(volatile unsigned *)0x1081edc4)  /* the USB mode manager (made by the task 0xb95a4) */
@@ -45,6 +55,8 @@
 #define ERROR_STREAK 200                                /* siTD errors in a row: the device is gone */
 #define USEC       (*(volatile unsigned *)0x60005010)   /* the microsecond timer (0x282860) */
 #define AHEAD_LOW  24                                   /* the frames in front after a wait */
+#define AHEAD_HIGH 40                                   /* version 1.4: sleep only above this (two sets in each wake) */
+#define HOST_TICKS 8                                    /* version 1.4: the wait of the host task while the route runs */
 #define RING       64                                   /* the music buffers (one for each frame) */
 #define PACKET_MAX 192                                  /* the largest packet (48 kHz, 16 bits, stereo) */
 #define USB_AUDIO_STATE ((volatile unsigned char *)0x108234ec)   /* +1 speed, +2 stream on, +8 rate, +0x10 object, +0x18 event */
@@ -111,6 +123,11 @@ int fw_irq_disable(void *manager, int source);         /* 0x127888 */
 int fw_irq_remove(void *manager, int source, void *handler, int zero);  /* 0x1277d0 */
 void host_start(int a, int b, int c, int d);           /* 0x2860e8 */
 void task_sleep(int ms);                               /* 0x11c9fc */
+int fw_host_receive(void *queue, void *buffer, int size, int ticks);  /* 0x2782f4: a message, or -1 after the time */
+void *fw_fill(void *source, unsigned bytes);           /* 0x1e3064: Apple's packet fill */
+void *fw_pool_get(void);                               /* 0xd3e70: a 192-byte packet buffer of the pool */
+int fw_usb_music_ok(void *source);                     /* 0x1e2f74: 1 if the music may go to USB */
+void fw_decoder_give_back(void *handle, int flag);     /* 0xfed68: a decoder buffer back to the decoder */
 void *dma_alloc(unsigned size, int zero);              /* 0xad80c: the memory of the UIM */
 int fw_usb_send(void *device, int endpoint, int count, void *packets);   /* 0x24d518 */
 int fw_usb_wait(void *device, int endpoint);           /* 0x24c4cc */
@@ -556,6 +573,62 @@ static void sitd_packet(volatile unsigned *s, unsigned buffer, unsigned length)
     s[3] = 0x80 | length << 16;
 }
 
+/* Version 1.9: the fill of one packet (the two calls of 0x1e3064 in the stream loop 0x132038). The same
+ * steps as 0x1e3064 and 0x1e2c90 (re/usb-host.md). The queue of the source: source + 0x10, 6 entries of
+ * 12 bytes (+0 the frames, +4 the decoder buffer, +8 the count of frames, 16 bits), the read index at
+ * queue + 0x4e and the write index at queue + 0x4c. queue + 0x7c not 0: the rate converter runs; then,
+ * and for the test signal (source + 1), Apple's fill does the work. */
+void *hook_fill(unsigned char *source, unsigned bytes)
+{
+    unsigned char *queue = source + 0x10;
+    unsigned *out, *start, frames = bytes >> 2, k;
+    int silent;
+    if (!music_mode || source[1]
+        || (queue[0x7c] && *(volatile unsigned *)(source + 4) != *(volatile unsigned *)(source + 0xc))) {
+        return fw_fill(source, bytes);
+    }
+    out = start = fw_pool_get();
+    silent = source[0] ? 1 : !fw_usb_music_ok(source);
+    while (frames) {
+        volatile unsigned short *read = (volatile unsigned short *)(queue + 0x4e);
+        unsigned short write = *(volatile unsigned short *)(queue + 0x4c);
+        unsigned char *entry;
+        unsigned count, n;
+        if (silent || *read == write) {
+            for (k = 0; k < frames; k++)                /* silence */
+                out[k] = 0;
+            break;
+        }
+        entry = queue + 12 * *read;
+        count = *(volatile unsigned short *)(entry + 8);
+        if (count == 0) {                               /* this entry is empty: give it back, then the next */
+            void *handle = *(void **)(entry + 4);
+            if (handle) {
+                fw_decoder_give_back(handle, 0);
+                *(void **)(entry + 4) = 0;
+            }
+            if (*read == *(volatile unsigned short *)(queue + 0x4c)) {
+                for (k = 0; k < frames; k++)
+                    out[k] = 0;
+                break;
+            }
+            *read = *read + 1 >= 6 ? 0 : *read + 1;
+            continue;
+        }
+        n = count < frames ? count : frames;
+        {
+            const unsigned *in = *(const unsigned **)entry;
+            for (k = 0; k < n; k++)
+                out[k] = in[k];
+            *(const unsigned **)entry = in + n;
+        }
+        *(volatile unsigned short *)(entry + 8) = (unsigned short)(count - n);
+        out += n;
+        frames -= n;
+    }
+    return start;                                       /* as 0x1e3064: the packet buffer */
+}
+
 int hook_usb_send(void *device, int endpoint, int count, unsigned char *packets)
 {
     int i;
@@ -563,7 +636,7 @@ int hook_usb_send(void *device, int endpoint, int count, unsigned char *packets)
     if (!music_mode)
         return last_send = music_used ? 0 : fw_usb_send(device, endpoint, count, packets);
     if (music_wait_end)
-        music_fill_us += start - music_wait_end;        /* Apple's 12 packets (0x1e3064) and the buffers back */
+        music_fill_us += start - music_wait_end;        /* the 12 packets of the fill and the buffers back */
     DIGITAL_AUDIO_READY = 1;                            /* again, if the firmware cleared it */
     now = frame_now();
     ahead = (next_frame - now) & (FRAMES - 1);
@@ -991,7 +1064,18 @@ static unsigned play_state(void)
     unsigned app = read32(APP_OBJECT), db = app ? read32(app + 0x1c) : 0;
     return db ? (unsigned)fw_play_state(db) : 0xff;
 }
-/* Wait until AHEAD_LOW frames are in front of the controller, with one sleep (0x11c9fc). The emulator
+/* Version 1.4: the receive of Apple's USB host task (the bl at 0xd33b0). Without a message in the time,
+ * the task polls the host stack (0xb9004). A message (for example a completion from the interrupt path)
+ * ends the wait at once. While the route runs, a longer time gives fewer polls; enumeration and a new
+ * connection keep Apple's 1 tick. */
+int hook_host_receive(void *queue, void *buffer, int size, int ticks)
+{
+    return fw_host_receive(queue, buffer, size, music_mode ? HOST_TICKS : ticks);
+}
+
+/* Wait until AHEAD_LOW frames are in front of the controller, with one sleep (0x11c9fc).
+ * Version 1.4: no sleep while AHEAD_HIGH frames or fewer are in front. After one set (about 36 frames)
+ * Apple's loop makes the next set at once; after two sets (about 48) the task sleeps about 24 ms. The emulator
  * profile shows that this sleep blocks: the loop 0xa0be0/0xa69b4 takes less than 1.5 % of the CPU.
  * Probes 1.7 and 1.8 waited on an event from the USB interrupt; the iPod restarted. */
 static int music_wait(void *device, int endpoint)
@@ -1014,7 +1098,7 @@ static int music_wait(void *device, int endpoint)
         return 0;
     }
     ahead = (next_frame - frame_now()) & (FRAMES - 1);
-    if (ahead > AHEAD_LOW && ahead <= FRAMES / 2) {
+    if (ahead > AHEAD_HIGH && ahead <= FRAMES / 2) {
         task_sleep(ahead - AHEAD_LOW);
         music_sleeps++;
     }

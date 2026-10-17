@@ -5,8 +5,8 @@
   "symbol": "headphones",
   "category": "audio",
   "version_letter": "u",
-  "version": "1.3",
-  "size": 15452,
+  "version": "1.9",
+  "size": 15924,
   "description": "Adds the item USB-C Audio to Settings. When it is On, the iPod operates as the USB host and sends its music to USB Audio Class 2 headphones, for example the Apple USB-C EarPods. The volume of the iPod sets the volume of the headphones, and the buttons of the headphones operate the iPod.",
   "caution": "USB-C Audio needs a USB-C mod and a dock or an OTG adapter that gives 5 V. While USB-C Audio is On, a computer cannot see the iPod: set it to Off before a sync. The probe patch usb-host-probe uses the same hook sites: do not install both.",
   "details": [
@@ -24,7 +24,7 @@
     "USB Audio Class 2 headphones at full speed, for example the Apple USB-C EarPods."
   ],
   "notes": [
-    "The patch sends the music at the rate of the option Sample Rate: 44.1 kHz (the default) or 48 kHz. If the headphones refuse that rate, it uses the other one. 16 bits, stereo, at full speed. While the music plays, Settings shows the rate that the headphones report, for example \"On (48 kHz)\".",
+    "The patch sends the music at the rate of the option Sample Rate: 44.1 kHz (the default) or 48 kHz. If the headphones refuse that rate, it uses the other one. 16 bits, stereo, at full speed. While the music plays, Settings shows the rate that the headphones report, for example \"On (48 kHz)\". Caution: make sure that the Sample Rate matches the music in your library (most songs are 44.1 kHz). If the rates are different, Apple's rate converter runs, and it causes performance drops (about 12 % of the CPU; the scrolling is less smooth).",
     "The volume curve: full volume is 0 dB, half volume is -24 dB.",
     "Tested functions (probe 1.27): music, Now Playing art, volume, buttons, a pause at a disconnection, a new start after a reconnection.",
     "The iPod charges from the dock while USB-C Audio plays (the owner, 2026-10-17).",
@@ -113,7 +113,12 @@
     "menu_bit_continue": "0x105a08",
     "visible_continue": "0x19ed5c",
     "menu_item_at": "0x2183ec",
-    "list_select": "0x239f7c"
+    "list_select": "0x239f7c",
+    "fw_host_receive": "0x2782f4",
+    "fw_fill": "0x1e3064",
+    "fw_pool_get": "0xd3e70",
+    "fw_usb_music_ok": "0x1e2f74",
+    "fw_decoder_give_back": "0xfed68"
   },
   "hooks": [
     {
@@ -274,6 +279,24 @@
       "at": "0x6c8830",
       "expect": "0x00096ffc",
       "to": "hook_uim_control_transfer"
+    },
+    {
+      "kind": "bl",
+      "at": "0xd33b0",
+      "expect": "0xeb0693cf",
+      "to": "hook_host_receive"
+    },
+    {
+      "kind": "bl",
+      "at": "0x1320d4",
+      "expect": "0xeb02c3e2",
+      "to": "hook_fill"
+    },
+    {
+      "kind": "bl",
+      "at": "0x132154",
+      "expect": "0xeb02c3c2",
+      "to": "hook_fill"
     }
   ],
   "options": [
@@ -286,12 +309,12 @@
         {
           "value": 44100,
           "title": "44.1 kHz",
-          "description": "The rate of most songs. The headphones get the music without a conversion of the rate."
+          "description": "The rate of most songs. The headphones get the music without a conversion of the rate. Select this rate if the music in your library is 44.1 kHz."
         },
         {
           "value": 48000,
           "title": "48 kHz",
-          "description": "A test: the iPod converts the music to 48 kHz. Each packet has 192 bytes. If the headphones refuse 48 kHz, the patch uses 44.1 kHz."
+          "description": "The headphones get 48 kHz. Each packet has 192 bytes. If the headphones refuse 48 kHz, the patch uses 44.1 kHz. Caution: select 48 kHz only if the music in your library is 48 kHz. Apple's rate converter causes performance drops."
         }
       ]
     }
