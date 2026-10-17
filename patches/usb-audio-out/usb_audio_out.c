@@ -25,7 +25,11 @@
  *
  * Version 1.3: Settings > Main Menu > "USB-C Audio" shows or hides an item in the main menu (the main
  * menu mask bit 0x80000000, as album-artists does with 0x40000000). The item is a copy of Backlight.
- * A selection of it switches USB-C Audio On or Off, and the firmware does not run the Backlight action. */
+ * A selection of it switches USB-C Audio On or Off, and the firmware does not run the Backlight action.
+ *
+ * Version 1.4: fewer wakes while the route runs. Apple's USB host task (0xd3390) waits at most 1 tick
+ * for a message and then polls (0xb9004): 1000 times each second. While the route runs it waits at most
+ * HOST_TICKS. USBAudioTask makes two sets of 12 packets in each wake (about 41 wakes each second). */
 
 #define APP_OBJECT    0x1081da18                        /* RAM: the app object (+0x1c database, +0x40c output volume) */
 #define MODE_MANAGER  (*(volatile unsigned *)0x1081edc4)  /* the USB mode manager (made by the task 0xb95a4) */
@@ -45,6 +49,8 @@
 #define ERROR_STREAK 200                                /* siTD errors in a row: the device is gone */
 #define USEC       (*(volatile unsigned *)0x60005010)   /* the microsecond timer (0x282860) */
 #define AHEAD_LOW  24                                   /* the frames in front after a wait */
+#define AHEAD_HIGH 40                                   /* version 1.4: sleep only above this (two sets in each wake) */
+#define HOST_TICKS 8                                    /* version 1.4: the wait of the host task while the route runs */
 #define RING       64                                   /* the music buffers (one for each frame) */
 #define PACKET_MAX 192                                  /* the largest packet (48 kHz, 16 bits, stereo) */
 #define USB_AUDIO_STATE ((volatile unsigned char *)0x108234ec)   /* +1 speed, +2 stream on, +8 rate, +0x10 object, +0x18 event */
@@ -111,6 +117,7 @@ int fw_irq_disable(void *manager, int source);         /* 0x127888 */
 int fw_irq_remove(void *manager, int source, void *handler, int zero);  /* 0x1277d0 */
 void host_start(int a, int b, int c, int d);           /* 0x2860e8 */
 void task_sleep(int ms);                               /* 0x11c9fc */
+int fw_host_receive(void *queue, void *buffer, int size, int ticks);  /* 0x2782f4: a message, or -1 after the time */
 void *dma_alloc(unsigned size, int zero);              /* 0xad80c: the memory of the UIM */
 int fw_usb_send(void *device, int endpoint, int count, void *packets);   /* 0x24d518 */
 int fw_usb_wait(void *device, int endpoint);           /* 0x24c4cc */
@@ -991,7 +998,18 @@ static unsigned play_state(void)
     unsigned app = read32(APP_OBJECT), db = app ? read32(app + 0x1c) : 0;
     return db ? (unsigned)fw_play_state(db) : 0xff;
 }
-/* Wait until AHEAD_LOW frames are in front of the controller, with one sleep (0x11c9fc). The emulator
+/* Version 1.4: the receive of Apple's USB host task (the bl at 0xd33b0). Without a message in the time,
+ * the task polls the host stack (0xb9004). A message (for example a completion from the interrupt path)
+ * ends the wait at once. While the route runs, a longer time gives fewer polls; enumeration and a new
+ * connection keep Apple's 1 tick. */
+int hook_host_receive(void *queue, void *buffer, int size, int ticks)
+{
+    return fw_host_receive(queue, buffer, size, music_mode ? HOST_TICKS : ticks);
+}
+
+/* Wait until AHEAD_LOW frames are in front of the controller, with one sleep (0x11c9fc).
+ * Version 1.4: no sleep while AHEAD_HIGH frames or fewer are in front. After one set (about 36 frames)
+ * Apple's loop makes the next set at once; after two sets (about 48) the task sleeps about 24 ms. The emulator
  * profile shows that this sleep blocks: the loop 0xa0be0/0xa69b4 takes less than 1.5 % of the CPU.
  * Probes 1.7 and 1.8 waited on an event from the USB interrupt; the iPod restarted. */
 static int music_wait(void *device, int endpoint)
@@ -1014,7 +1032,7 @@ static int music_wait(void *device, int endpoint)
         return 0;
     }
     ahead = (next_frame - frame_now()) & (FRAMES - 1);
-    if (ahead > AHEAD_LOW && ahead <= FRAMES / 2) {
+    if (ahead > AHEAD_HIGH && ahead <= FRAMES / 2) {
         task_sleep(ahead - AHEAD_LOW);
         music_sleeps++;
     }

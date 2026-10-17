@@ -390,6 +390,10 @@ Refer to [re/album-artist.md](../re/album-artist.md#album-artists-menu-item-15-o
 | 0x088bc0 | Makes the extension object of a track (track + 0x10) when it is necessary. | Static |
 | 0x23ca4c | `activate(list, row)` of a menu list: calls 0x239f7c(list, row, tag), which sends the selection event. | Static, Emulator, Patch |
 | 0x239f7c | (list, row, tag): sets the selected row (vtable +0x15c). With tag 0 it returns before the selection event (vtable +0x194); `usb-audio-out` uses this to draw its main menu row again. | Static, Emulator, Patch |
+| 0xd3390 | The loop of Apple's USB host task (made at 0x119388 by the host start, priority 0x10): the message receive 0x2782f4 with 1 tick at 0xd33b0, then the poll 0xb9004 if no message came. About 1000 polls each second in host mode. `usb-audio-out` 1.4 hooks the receive. | Static, Emulator, Patch |
+| 0x2782f4 | (queue, buffer, size, ticks): receives a message. ticks 0: a wait with no limit (0xd1e78); else a wait of at most `ticks` (0xeb034 → 0xa0e44 → 0xa697c). Returns the size, or -1. | Static |
+| 0xb9004 | The poll of the USB host stack: method +0x64 of 16 slots (0xc7544), 0xf176c, 0xdda08, method +0x70 of 16 slots (0xeccec). | Static, Emulator |
+| 0x97230 | The UIM stop: USBCMD = 0, then a wait with no limit for HCHalted (USBSTS bit 12). In the emulator this wait does not end. | Static, Emulator |
 | 0x2183ec | (menu data, row): the item object of a visible row. Skips the hidden items. | Static, Patch |
 | 0x21845c | (menu data): the count of visible items. | Static |
 | 0x19e644 | (menu screen): the script calls it to activate the selected row. | Emulator |

@@ -5,8 +5,8 @@
   "symbol": "headphones",
   "category": "audio",
   "version_letter": "u",
-  "version": "1.3",
-  "size": 15452,
+  "version": "1.4",
+  "size": 15476,
   "description": "Adds the item USB-C Audio to Settings. When it is On, the iPod operates as the USB host and sends its music to USB Audio Class 2 headphones, for example the Apple USB-C EarPods. The volume of the iPod sets the volume of the headphones, and the buttons of the headphones operate the iPod.",
   "caution": "USB-C Audio needs a USB-C mod and a dock or an OTG adapter that gives 5 V. While USB-C Audio is On, a computer cannot see the iPod: set it to Off before a sync. The probe patch usb-host-probe uses the same hook sites: do not install both.",
   "details": [
@@ -113,7 +113,8 @@
     "menu_bit_continue": "0x105a08",
     "visible_continue": "0x19ed5c",
     "menu_item_at": "0x2183ec",
-    "list_select": "0x239f7c"
+    "list_select": "0x239f7c",
+    "fw_host_receive": "0x2782f4"
   },
   "hooks": [
     {
@@ -274,6 +275,12 @@
       "at": "0x6c8830",
       "expect": "0x00096ffc",
       "to": "hook_uim_control_transfer"
+    },
+    {
+      "kind": "bl",
+      "at": "0xd33b0",
+      "expect": "0xeb0693cf",
+      "to": "hook_host_receive"
     }
   ],
   "options": [

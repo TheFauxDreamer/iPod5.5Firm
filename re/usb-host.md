@@ -778,6 +778,26 @@ The owner asked for USB-C Audio in the main menu, as Album Artists. Results (sta
 
 The method of the patch is in [docs/modifications.md](../docs/modifications.md#usb-audio-out) ("Main menu item").
 
+## The slower scrolling with USB-C Audio On (2026-10-17)
+
+The owner: the menus, mostly the scrolling, are a little slower while USB-C Audio is On. Results (static, then the emulator):
+
+| Fact | Evidence |
+|---|---|
+| The card reader of the dock gets no driver (the storage record is 0xff), thus no transfers. The interrupt endpoint of the dock's hub (interval 255) is polled by the controller, not by the CPU. | Code, earlier results |
+| Apple's USB host task (entry 0xd3390, made at 0x119388 by the host start 0x2860e8, priority 0x10) loops: `0x2782f4(queue, buffer, 0x38, 1)` at 0xd33b0, then the poll 0xb9004 if no message came. | Static |
+| 0x2782f4: the last argument is the wait in ticks. Not 0: 0xeb034 → 0xa0e44(semaphore, ticks) → 0xa697c. 0: 0xd1e78, a wait with no limit. | Static (machine code) |
+| 0xb9004: method +0x64 of 16 slots (0xc7544), 0xf176c, 0xdda08, then method +0x70 of 16 slots (0xeccec). | Static |
+| With On and no device, 0xb9004 ran each 1.02 ms (`IPODFW_MARK_AT=0xb9004`, emulated µs): about 1000 times each second, about 1500 instructions each time. The two slot loops were 17 % of all instructions. | Emulator |
+| Busy instructions in 30 s: Off 298 M, On 364 M. | Emulator (`state`) |
+| After Off, 99.6 % of the instructions are in 0x97230: the UIM stop writes USBCMD = 0 and waits with no limit for HCHalted (USBSTS bit 12). The emulator has no USB controller. | Emulator, Static |
+| The UIM init (0x97300) sets USBINTR = 0x0b: the transfer interrupt, the error interrupt and the frame list rollover. No interrupt each 1 ms. | Static |
+| 0x264d78(3) and 0x266464(1) in the UIM init set power-chip registers and the USB PHY clock (0x70000020 bit 31, then a wait for 0x70000028 bit 7). They do not change the CPU clock. | Static |
+| USBAudioTask wakes once for each set of 12 packets: about 83 times each second. | Code |
+| The probe 1.11 value "host mode 10 % of the CPU" is not valid for the patch: that probe also wrote a log and called 0x19ff0c. | Earlier results |
+
+Version 1.4 of `usb-audio-out` (branch `usb-audio-speed`): a `bl` hook at 0xd33b0 gives 8 ticks while the route runs, and USBAudioTask makes two sets of packets in each wake. Emulator variant (the condition On): the poll each 8.17 ms, busy instructions with On 300 M in 30 s.
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).
