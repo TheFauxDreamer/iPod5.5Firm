@@ -39,6 +39,7 @@ struct IPodFirmApp: App {
                 Button("Import Pictures & Text…") { model.importFolder() }.disabled(model.editor == nil)
                 Divider()
                 Button("Import iPodWizard Theme…") { model.importTheme() }
+                Button("New Patch…") { model.newPatch() }
                 Button("Install Patch…") { model.choosePatchToInstall() }
             }
             CommandMenu("iPod") {
@@ -183,6 +184,7 @@ struct ContentView: View {
         .sheet(item: $model.flashPlan) { plan in FlashConfirmSheet(plan: plan) }
         .sheet(item: $model.themeReport) { t in ThemeReportSheet(theme: t) }
         .sheet(item: $model.pendingInstall) { c in InstallPatchSheet(candidate: c) }
+        .sheet(item: $model.patchEditor) { s in PatchEditorSheet(state: s) }
         .sheet(isPresented: $model.showFullDiskAccessHelp) { FullDiskAccessSheet() }
         .sheet(isPresented: $model.showFinderRestoreHelp) { FinderRestoreSheet() }
         .task { await model.refreshIPods() }

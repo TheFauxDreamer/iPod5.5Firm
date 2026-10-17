@@ -98,6 +98,7 @@ struct PatchList: View {
                                     Button("Export Patch…") { model.exportPatch(p) }
                                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([p.folder]) }
                                     if p.source == .user {
+                                        Button("Edit Patch…") { model.editPatch(p) }
                                         Divider()
                                         Button("Remove Patch…") { confirmRemove = p }
                                     }
@@ -128,8 +129,11 @@ struct PatchList: View {
                     .help("Remove the selected patch").accessibilityLabel("Remove Patch")
                 Spacer()
                 Menu {
+                    Button("New Patch…") { model.newPatch() }
                     Button("Install Patch…") { model.choosePatchToInstall() }
+                    Button("Edit Patch…") { if let p = selectedPatch { model.editPatch(p) } }.disabled(selectedPatch?.source != .user)
                     Button("Export Patch…") { if let p = selectedPatch { model.exportPatch(p) } }.disabled(selectedPatch == nil)
+                    Button("Remove Patch…") { confirmRemove = selectedPatch }.disabled(selectedPatch?.source != .user)
                     Divider()
                     Button("Show Patches Folder") { model.showPatchesFolder() }
                 } label: {
@@ -380,6 +384,7 @@ struct PatchDetail: View {
                 }
             }
             PatchControls(patch: patch)
+            if patch.source == .user { PatchCodeSections(patch: patch) }
         }
         .formStyle(.grouped)
         .task(id: "\(patch.spec.name) \(model.currentIPod?.disk ?? "")") { model.loadPatchToggles(patch) }

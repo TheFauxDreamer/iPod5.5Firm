@@ -24,7 +24,7 @@ The app needs macOS 14 or later and an Apple silicon Mac (`--arch arm64`).
 | Firmware | The images, the checksums and the model of the open file. | [OverviewView.swift](../mac/Sources/iPodFirm/OverviewView.swift) |
 | Pictures | Show, export and replace pictures. Show the dark theme pictures. | [PicturesView.swift](../mac/Sources/iPodFirm/PicturesView.swift) |
 | Text | Change the strings of each language. | [StringsView.swift](../mac/Sources/iPodFirm/StringsView.swift) |
-| Patches | A list at the left: iPod Appearance, Software Version and the patches (grouped by `category`: Display, Power and Storage, Fun, Tests). Below the list: **+** (install a patch), **−** (remove a user patch) and **⋯** (Export Patch…, Show Patches Folder). The list accepts a dropped `.ipodpatch` file or patch folder. Below the buttons, a bar shows the space after Apple's image (0x736800 to 0x7F8000) that the theme, the Dark Mode items and the extended patches use. The app measures it again 0.3 s after each change of a patch switch or of the appearance (`AppModel.refreshSpaceUse`: a build of the appearance, plus the code size of each switched-on patch, `Patcher.codeSize` and `Patcher.spaceUse`). If the firmware is too large, the bar is red and the text gives the excess. Each patch row has an SF Symbol, the title, the summary, the letter, the version, the size on the iPod and a switch. The detail at the right shows the selected row: the caution, the sections "What It Does", "You Need" and "Good to Know", the compatibility, the conflicts, the version, the size on the iPod (`size` in `patch.json`; the install, the export and the app start record the measured size), the source and the controls from the `ui` object of `patch.json`. | [PatchesView.swift](../mac/Sources/iPodFirm/PatchesView.swift) |
+| Patches | A list at the left: iPod Appearance, Software Version and the patches (grouped by `category`: Display, Power and Storage, Fun, Tests). Below the list: **+** (install a patch), **−** (remove a user patch) and **⋯** (New Patch…, Install Patch…, Edit Patch…, Export Patch…, Remove Patch…, Show Patches Folder). New Patch… and Edit Patch… open `PatchEditorSheet` ([PatchEditor.swift](../mac/Sources/iPodFirm/PatchEditor.swift)). The sheet writes the text of `patch.json`. Refer to [patch-system.md](patch-system.md#make-and-share-a-patch). The context menu of a user patch also has Edit Patch…. The detail of a user patch has a Code section with the C code, the firmware functions, the hooks, the byte changes, Check Code and Save ([PatchCodeView.swift](../mac/Sources/iPodFirm/PatchCodeView.swift); refer to [patch-system.md](patch-system.md#the-code-section)). The list accepts a dropped `.ipodpatch` file or patch folder. Below the buttons, a bar shows the space after Apple's image (0x736800 to 0x7F8000) that the theme, the Dark Mode items and the extended patches use. The app measures it again 0.3 s after each change of a patch switch or of the appearance (`AppModel.refreshSpaceUse`: a build of the appearance, plus the code size of each switched-on patch, `Patcher.codeSize` and `Patcher.spaceUse`). If the firmware is too large, the bar is red and the text gives the excess. Each patch row has an SF Symbol, the title, the summary, the letter, the version, the size on the iPod and a switch. The detail at the right shows the selected row: the caution, the sections "What It Does", "You Need" and "Good to Know", the compatibility, the conflicts, the version, the size on the iPod (`size` in `patch.json`; the install, the export and the app start record the measured size), the source and the controls from the `ui` object of `patch.json`. | [PatchesView.swift](../mac/Sources/iPodFirm/PatchesView.swift) |
 | iPod | Find the iPod, back up, flash, restore, eject and the recovery steps. A row shows the permission status and opens the Settings window. | [IPodView.swift](../mac/Sources/iPodFirm/IPodView.swift) |
 | Emulator | Install the emulator, start the firmware, show the screen and send button pushes. | [EmulatorView.swift](../mac/Sources/iPodFirm/EmulatorView.swift) |
 
@@ -36,7 +36,7 @@ The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
 | Menu | Commands |
 |---|---|
-| File | Open Firmware… (⌘O), Download Apple Firmware 1.3, Save Firmware As… (⇧⌘S), Export as .ipsw…, Export Pictures & Text…, Import Pictures & Text…, Import iPodWizard Theme…, Install Patch… |
+| File | Open Firmware… (⌘O), Download Apple Firmware 1.3, Save Firmware As… (⇧⌘S), Export as .ipsw…, Export Pictures & Text…, Import Pictures & Text…, Import iPodWizard Theme…, New Patch…, Install Patch… |
 | iPod | Flash to iPod… (⇧⌘F), Back Up iPod, Eject iPod (⌘E), Run in Emulator (⌘R) |
 
 The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the centre of its column. In a tall column, the iPod is larger, to a maximum of 1.4 times. The settings column has a maximum width of 520 points.
@@ -149,7 +149,7 @@ macOS blocks raw disk access without Full Disk Access. The app tests the permiss
 | `/usr/sbin/diskutil` | Helper | `unmountDisk DISK` | Unmount the iPod before a write. |
 | `/usr/sbin/diskutil` | App | `eject DISK` | Eject the iPod. |
 | `/usr/bin/xcrun clang` | `Patcher.compile` | Refer to [patch-system.md](patch-system.md#the-compiler) | Compile a patch. |
-| `/usr/bin/xcrun` | `PatchLibrary.hasCompiler` | `--find clang` | Find out if the Mac can compile a patch. |
+| `/usr/bin/xcrun` | `PatchLibrary.hasCompiler` (the install and `PatchEditorSheet`) | `--find clang` | Find out if the Mac can compile a patch. |
 | `/usr/bin/ditto` | `IPSW.unpack` | `-x -k IPSW DIR` | Extract an `.ipsw` file. |
 | `/usr/bin/ditto` | `PatchLibrary.inspect`, `PatchLibrary.export` | `-x -k FILE DIR`, `-c -k --keepParent DIR FILE` | Open and make a `.ipodpatch` file. |
 | `/usr/bin/zip` | `IPSW.repack` | `-q -X -r OUT .` | Make an `.ipsw` file. |
@@ -203,9 +203,9 @@ All paths are in `~/Library/Application Support/iPodFirm/`.
 | `Backups/Original (first backup).bin` | The first backup. The app never replaces it. |
 | `Firmware/iPod_25.1.3.ipsw` | The cached Apple firmware. |
 | `Themes/*.ipodtheme` | The imported themes (JSON). |
-| `Patches/<name>/` | The patches that the owner installed. At the start, the app writes the measured `size` into a `patch.json` that has no size. |
+| `Patches/<name>/` | The patches that the owner installed or made with New Patch…. At the start, the app writes the measured `size` into a `patch.json` that has no size. |
 | `Staging/flash.bin` | The partition that the helper writes. |
-| `Staging/patch-<UUID>/` | A `.ipodpatch` file during the install or the export. The app deletes it after use. |
+| `Staging/patch-<UUID>/` | A `.ipodpatch` file during the install or the export, or a copy of the code during Check Code. The app deletes it after use. |
 | `Emulator/` | The emulator work folder: the custom `.ipsw` and the music libraries. |
 | `EmulatorProfile/` | The private emulator profile (`IPOD_EMULATOR_DATA`): the drive and `settings.txt`. |
 | `emulator-src/` | The emulator source and its build. |

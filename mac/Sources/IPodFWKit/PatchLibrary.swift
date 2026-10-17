@@ -42,6 +42,82 @@ public struct PatchCandidate: Identifiable {
     }
 }
 
+/// The text of a new patch or of a patch to edit: the fields of the New Patch form (PatchEditor.swift
+/// in the app). `PatchLibrary.create` and `PatchLibrary.edit` write it into patch.json.
+public struct PatchDraft: Equatable {
+    /// A patch with C code, or a patch that changes only bytes of the firmware ("bytes").
+    public enum Kind: String, CaseIterable { case code, bytes }
+
+    public var title = ""
+    public var name = ""
+    public var summary = ""
+    public var description = ""
+    public var details: [String] = []
+    public var requires: [String] = []
+    public var notes: [String] = []
+    public var caution = ""
+    public var symbol = "puzzlepiece.extension"
+    public var category = "fun"
+    public var kind = Kind.code
+
+    public init() {}
+
+    /// The text of an installed patch, for an edit.
+    public init(spec: PatchSpec) {
+        title = spec.title ?? ""
+        name = spec.name
+        summary = spec.summary ?? ""
+        description = spec.description ?? ""
+        details = spec.details ?? []
+        requires = spec.requires ?? []
+        notes = spec.notes ?? []
+        caution = spec.caution ?? ""
+        symbol = spec.symbol ?? ""
+        category = spec.category ?? ""
+        kind = spec.load_address == nil ? .bytes : .code
+    }
+
+    /// The patch name for a title: lower case, and "-" in place of each other character.
+    /// For example "Sleep Now" gives "sleep-now".
+    public static func name(fromTitle title: String) -> String {
+        let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789")
+        let mapped = String(title.lowercased().map { allowed.contains($0) ? $0 : "-" })
+        return mapped.split(separator: "-").joined(separator: "-")
+    }
+
+    /// The problems that prevent a save. `existing` are the patches that the app has now. `editing`
+    /// is the patch that the owner edits, or nil for a new patch.
+    public func problems(existing: [PatchInfo], editing: PatchInfo? = nil) -> [String] {
+        var r = [String]()
+        if trim(title).isEmpty { r.append("Type a title.") }
+        if trim(summary).isEmpty { r.append("Type a summary.") }
+        if editing == nil {
+            if !PatchLibrary.isValidName(name) {
+                r.append("The name \"\(name)\" is not valid. Use only the letters a–z, the digits 0–9 and \"-\".")
+            } else if existing.contains(where: { $0.spec.name == name }) {
+                r.append("A patch with the name \"\(name)\" exists. Give the patch a different name.")
+            }
+        }
+        if !PatchSpec.categories.contains(category) { r.append("Select a group.") }
+        if trim(symbol).isEmpty { r.append("Type the name of an SF Symbol.") }
+        return r
+    }
+
+    /// The text keys of patch.json. An empty value is `NSNull()`, so that an edit removes the key.
+    var textKeys: [String: Any] {
+        func text(_ s: String) -> Any { trim(s).isEmpty ? NSNull() : trim(s) }
+        func list(_ a: [String]) -> Any {
+            let items = a.map(trim).filter { !$0.isEmpty }
+            return items.isEmpty ? NSNull() : items
+        }
+        return ["title": text(title), "summary": text(summary), "description": text(description),
+                "details": list(details), "requires": list(requires), "notes": list(notes),
+                "caution": text(caution), "symbol": text(symbol), "category": text(category)]
+    }
+
+    func trim(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
+}
+
 public struct PatchLibrary {
     public static let fileExtension = "ipodpatch"
     /// The SHA-256 of the osos image of the Apple firmware 1.3.
@@ -128,7 +204,7 @@ public struct PatchLibrary {
             return
         }
         c.spec = spec
-        if spec.name.isEmpty || spec.name.unicodeScalars.contains(where: { !"abcdefghijklmnopqrstuvwxyz0123456789-".unicodeScalars.contains($0) }) {
+        if !Self.isValidName(spec.name) {
             c.errors.append("The name \"\(spec.name)\" is not valid. Use only the letters a–z, the digits 0–9 and \"-\".")
         }
         if let v = spec.version, PatchVersion(v) == nil {
@@ -241,8 +317,7 @@ public struct PatchLibrary {
         let others = existing.filter { $0.spec.name != spec.name }
         let used = Set(others.compactMap(\.spec.version_letter))
         if spec.version_letter == nil || used.contains(spec.version_letter!) {
-            let free = "abcdefghijklmnopqrstuvwxyz".map(String.init).first { !used.contains($0) }
-            if let free {
+            if let free = Self.freeLetter(used: used) {
                 c.assignedLetter = free
                 c.notes.append(spec.version_letter == nil
                                ? "The patch has no version letter. iPodFirm gives it the letter \"\(free)\"."
@@ -258,11 +333,21 @@ public struct PatchLibrary {
         }
     }
 
+    /// true: the name has only the letters a–z, the digits 0–9 and "-". The name is also the folder name.
+    public static func isValidName(_ name: String) -> Bool {
+        !name.isEmpty && name.unicodeScalars.allSatisfy { "abcdefghijklmnopqrstuvwxyz0123456789-".unicodeScalars.contains($0) }
+    }
+
+    /// The first letter a–z that is not in `used`, or nil if all letters are in use.
+    static func freeLetter(used: Set<String>) -> String? {
+        "abcdefghijklmnopqrstuvwxyz".map(String.init).first { !used.contains($0) }
+    }
+
     static func isARMObject(_ e: [UInt8]) -> Bool {
         e.count > 52 && Array(e[0..<4]) == [0x7F, 0x45, 0x4C, 0x46] && e[4] == 1 && e[5] == 1 && e[18] == 40 && e[19] == 0
     }
 
-    static func hasCompiler() -> Bool {
+    public static func hasCompiler() -> Bool {
         (try? run("/usr/bin/xcrun", ["--find", "clang"])) != nil
     }
 
@@ -298,9 +383,16 @@ public struct PatchLibrary {
         return dest
     }
 
+    /// true: the patch is a folder in `userDir`. The paths are compared, not the URLs: a URL of a
+    /// folder that did not exist when the app started has no "/" at the end, and the URLs are then not equal.
+    func isUserPatch(_ patch: PatchInfo) -> Bool {
+        patch.source == .user
+            && patch.folder.deletingLastPathComponent().standardizedFileURL.path == userDir.standardizedFileURL.path
+    }
+
     /// Move a user patch to the Trash.
     public func remove(_ patch: PatchInfo) throws {
-        guard patch.source == .user, patch.folder.deletingLastPathComponent().standardizedFileURL == userDir.standardizedFileURL else {
+        guard isUserPatch(patch) else {
             throw PatchError("Only a patch that you installed can be removed.")
         }
         try FileManager.default.trashItem(at: patch.folder, resultingItemURL: nil)
@@ -324,7 +416,8 @@ public struct PatchLibrary {
         try Self.run("/usr/bin/ditto", ["-c", "-k", "--keepParent", copy.path, url.path])
     }
 
-    /// Write `changes` into the patch.json of `folder`. Nothing changes if `changes` is empty.
+    /// Write `changes` into the patch.json of `folder`. The value `NSNull()` removes the key.
+    /// Nothing changes if `changes` is empty.
     static func updateJSON(in folder: URL, _ changes: [String: Any]) throws {
         guard !changes.isEmpty else { return }
         let file = folder.appendingPathComponent("patch.json")
@@ -332,8 +425,103 @@ public struct PatchLibrary {
             throw PatchError("iPodFirm cannot write into patch.json.")
         }
         json.merge(changes) { $1 }
+        json = json.filter { !($0.value is NSNull) }
+        try writeJSON(json, to: file)
+    }
+
+    static func writeJSON(_ json: [String: Any], to file: URL) throws {
         try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
             .write(to: file, options: .atomic)
+    }
+
+    // MARK: create, edit
+
+    /// The name of the C file of a new code patch, for example "sleep_now.c" for "sleep-now".
+    public static func sourceFileName(_ name: String) -> String { name.replacingOccurrences(of: "-", with: "_") + ".c" }
+
+    /// Make a new user patch from the New Patch form. The patch gets the version 1.0, a free letter
+    /// and the targets of the Apple firmware 1.3. A code patch gets `"load_address": "extended"`, a C
+    /// file to start from and the measured size. Returns the new folder.
+    @discardableResult
+    public func create(_ d: PatchDraft) throws -> URL {
+        let fm = FileManager.default
+        let existing = list() + Patcher.list(in: builtInDir)
+        if let problem = d.problems(existing: existing).first { throw PatchError(problem) }
+        let folder = userDir.appendingPathComponent(d.name)
+        guard !fm.fileExists(atPath: folder.path) else {
+            throw PatchError("The folder \(d.name) exists in the patches folder. Give the patch a different name.")
+        }
+        var json = d.textKeys.filter { !($0.value is NSNull) }
+        let target: [String: Any] = ["model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": Self.firmware13OSOS]
+        json["name"] = d.name
+        json["osos_sha256"] = Self.firmware13OSOS
+        json["targets"] = [target]
+        json["version"] = "1.0"
+        if let letter = Self.freeLetter(used: Set(existing.compactMap(\.spec.version_letter))) { json["version_letter"] = letter }
+        switch d.kind {
+        case .bytes:
+            json["bytes"] = [Any]()
+            json["size"] = 0
+        case .code:
+            json["load_address"] = Patcher.extendedLoadAddress
+            json["symbols"] = [String: Any]()
+            json["hooks"] = [Any]()
+        }
+        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        do {
+            try Self.writeJSON(json, to: folder.appendingPathComponent("patch.json"))
+            if d.kind == .code {
+                let source = Self.starterSource(name: d.name, summary: d.trim(d.summary))
+                try Data(source.utf8).write(to: folder.appendingPathComponent(Self.sourceFileName(d.name)))
+                let spec = try JSONDecoder().decode(PatchSpec.self, from: Data(contentsOf: folder.appendingPathComponent("patch.json")))
+                try Self.updateJSON(in: folder, ["size": try Patcher.codeSize(PatchInfo(spec: spec, folder: folder))])
+            }
+        } catch {
+            try? fm.trashItem(at: folder, resultingItemURL: nil)
+            throw error
+        }
+        return folder
+    }
+
+    /// Write the text of the form into the patch.json of a user patch, and increase the version.
+    /// The name does not change. Returns the new version.
+    @discardableResult
+    public func edit(_ patch: PatchInfo, with d: PatchDraft) throws -> String {
+        guard isUserPatch(patch) else {
+            throw PatchError("Only a patch that you installed or made can be edited.")
+        }
+        if let problem = d.problems(existing: list(), editing: patch).first { throw PatchError(problem) }
+        let version = PatchVersion.next(after: patch.spec.version)
+        try Self.updateJSON(in: patch.folder, d.textKeys.merging(["version": version]) { $1 })
+        return version
+    }
+
+    /// The C file of a new code patch. It has one empty function, so that the link gives a size.
+    static func starterSource(name: String, summary: String) -> String {
+        """
+        /* \(name): \(summary)
+         *
+         * Write the code of the patch in this file. iPodFirm compiles it for the ARM7TDMI CPU of the iPod.
+         * The code has no C library. Use the functions of the firmware.
+         *
+         * To call a firmware function:
+         *   1. Declare the function in this file, for example: int fw_example(void *ctl);
+         *   2. Add the name and the osos offset to "symbols" in patch.json,
+         *      for example: "symbols": { "fw_example": "0x1d83fc" }
+         *
+         * To connect a function of this file to the firmware, add a hook to "hooks" in patch.json:
+         *   { "kind": "bl", "at": "<osos offset>", "expect": "<the word in the Apple firmware>", "to": "hook_example" }
+         *
+         * docs/patch-system.md tells about the compiler, the symbols and the hooks.
+         * docs/firmware-functions.md lists the firmware functions that are known.
+         * When the patch is complete, select it in the Patches pane. Then click Export Patch….
+         */
+
+        void hook_example(void)
+        {
+        }
+
+        """
     }
 
     // MARK: staging

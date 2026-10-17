@@ -1638,4 +1638,179 @@ final class PatchLibraryTests: XCTestCase {
         let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
         XCTAssertEqual(try Patcher.apply([PatchInfo(spec: sleep.spec, folder: folder)], to: osos), try Patcher.apply([sleep], to: osos))
     }
+
+    // MARK: New Patch and Edit Patch
+
+    func draft(_ title: String, kind: PatchDraft.Kind = .bytes) -> PatchDraft {
+        var d = PatchDraft()
+        d.title = title
+        d.name = PatchDraft.name(fromTitle: title)
+        d.summary = "A test."
+        d.category = "test"
+        d.symbol = "star"
+        d.kind = kind
+        return d
+    }
+
+    func testPatchNameFromTitle() {
+        XCTAssertEqual(PatchDraft.name(fromTitle: "Sleep Now"), "sleep-now")
+        XCTAssertEqual(PatchDraft.name(fromTitle: "  EU Volume!! "), "eu-volume")
+        XCTAssertEqual(PatchDraft.name(fromTitle: "Über 2"), "ber-2")
+    }
+
+    func testPatchVersionNext() {
+        XCTAssertEqual(PatchVersion.next(after: "1.0"), "1.1")
+        XCTAssertEqual(PatchVersion.next(after: "1.9"), "1.10")
+        XCTAssertEqual(PatchVersion.next(after: "2"), "3")
+        XCTAssertEqual(PatchVersion.next(after: "1.2.3"), "1.2.4")
+        XCTAssertEqual(PatchVersion.next(after: nil), "1.0")
+        XCTAssertEqual(PatchVersion.next(after: "x"), "1.0")
+    }
+
+    /// A new data patch installs with no errors: version 1.0, size 0, a free letter and the 1.3 target.
+    func testCreateBytesPatch() throws {
+        var d = draft("My Bytes")
+        d.details = ["One.", " ", "Two. "]
+        let folder = try library.create(d)
+        let c = try inspect(folder)
+        XCTAssertTrue(c.canInstall, c.errors.joined(separator: " "))
+        XCTAssertNil(c.assignedLetter)
+        XCTAssertNil(c.assignedSize)
+        let spec = try XCTUnwrap(c.spec)
+        XCTAssertEqual(spec.name, "my-bytes")
+        XCTAssertEqual(spec.version, "1.0")
+        XCTAssertEqual(spec.size, 0)
+        XCTAssertEqual(spec.details, ["One.", "Two."])
+        XCTAssertNil(spec.caution)
+        XCTAssertEqual(spec.targets, [PatchSpec.knownFirmware[0]])
+        let used = Patcher.list(in: library.builtInDir).compactMap(\.spec.version_letter)
+        XCTAssertFalse(used.contains(try XCTUnwrap(spec.version_letter)))
+        XCTAssertTrue(library.list().contains { $0.spec.name == "my-bytes" && $0.source == .user })
+    }
+
+    /// A new code patch compiles, links and records its measured size.
+    func testCreateCodePatch() throws {
+        guard PatchLibrary.hasCompiler() else { throw XCTSkip("no clang") }
+        let folder = try library.create(draft("My Code", kind: .code))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folder.appendingPathComponent("my_code.c").path))
+        let c = try inspect(folder)
+        XCTAssertTrue(c.canInstall, c.errors.joined(separator: " "))
+        XCTAssertNil(c.assignedSize)
+        let spec = try XCTUnwrap(c.spec)
+        XCTAssertEqual(spec.load_address, Patcher.extendedLoadAddress)
+        XCTAssertEqual(spec.size, c.codeSize)
+        XCTAssertGreaterThan(spec.size ?? 0, 0)
+    }
+
+    func testCreateRefusesUsedName() throws {
+        var d = draft("Sleep Now")
+        XCTAssertThrowsError(try library.create(d))            // a built-in patch
+        d = draft("Dark Mode")
+        XCTAssertThrowsError(try library.create(d))            // an internal built-in patch
+        d = draft("Mine")
+        try library.create(d)
+        XCTAssertThrowsError(try library.create(d))            // a user patch
+        XCTAssertFalse(d.problems(existing: library.list()).isEmpty)
+        d.name = "Bad_Name"
+        XCTAssertThrowsError(try library.create(d))
+    }
+
+    /// An edit writes the text, removes the empty keys and increases the version. The name stays.
+    func testEditPatchIncreasesVersion() throws {
+        var d = draft("Edit Me")
+        d.caution = "Be careful."
+        try library.create(d)
+        var patch = try XCTUnwrap(library.list().first { $0.spec.name == "edit-me" })
+        var e = PatchDraft(spec: patch.spec)
+        XCTAssertEqual(e, d)
+        e.summary = "A new summary."
+        e.caution = ""
+        XCTAssertEqual(try library.edit(patch, with: e), "1.1")
+        patch = try XCTUnwrap(library.list().first { $0.spec.name == "edit-me" })
+        XCTAssertEqual(patch.spec.summary, "A new summary.")
+        XCTAssertNil(patch.spec.caution)
+        XCTAssertEqual(patch.spec.version, "1.1")
+        XCTAssertEqual(patch.spec.size, 0)
+        let builtIn = try XCTUnwrap(library.list().first { $0.spec.name == "sleep-now" })
+        XCTAssertThrowsError(try library.edit(builtIn, with: PatchDraft(spec: builtIn.spec)))
+    }
+
+    /// A patch that New Patch made can be edited, saved and removed. In the app, the user folder did
+    /// not exist when the library started (a new user), thus `userDir` has no "/" at the end.
+    func testRemoveNewPatch() throws {
+        library = PatchLibrary(builtInDir: library.builtInDir, userDir: URL(fileURLWithPath: tmp.path + "/fresh", isDirectory: false),
+                               stagingDir: library.stagingDir)
+        try library.create(draft("Not Finished"))
+        let patch = try userPatch("not-finished")
+        XCTAssertNoThrow(try library.edit(patch, with: PatchDraft(spec: patch.spec)))
+        XCTAssertNoThrow(try library.saveCode(try userPatch("not-finished"), PatchCode(patch: patch)))
+        try library.remove(try userPatch("not-finished"))
+        XCTAssertFalse(library.list().contains { $0.spec.name == "not-finished" })
+    }
+
+    // MARK: Code section
+
+    func userPatch(_ name: String) throws -> PatchInfo { try XCTUnwrap(library.list().first { $0.spec.name == name }) }
+
+    /// Check Code compiles a copy and finds the errors. Save writes the code, the size and the next version.
+    func testCheckAndSaveCode() throws {
+        guard PatchLibrary.hasCompiler() else { throw XCTSkip("no clang") }
+        try library.create(draft("Coded", kind: .code))
+        var patch = try userPatch("coded")
+        var code = PatchCode(patch: patch)
+        XCTAssertTrue(code.source?.contains("hook_example") == true)
+        var r = library.check(patch, code)
+        XCTAssertTrue(r.isOK, r.errors.joined())
+        XCTAssertTrue(r.functions.contains("hook_example"))
+
+        code.source = "int broken(void) { return x; }\n"
+        r = library.check(patch, code)
+        XCTAssertFalse(r.isOK)
+        XCTAssertTrue(r.errors[0].contains("coded.c"), r.errors[0])
+        XCTAssertFalse(r.errors[0].contains("staging"), r.errors[0])
+
+        code.source = "int fw_example(int);\nint hook_example(int a) { return fw_example(a) + 1; }\n"
+        code.symbols = [PatchCode.Symbol(name: "fw_example", address: "0x1000")]
+        code.hooks = [PatchSpec.Hook(kind: "bl", at: "0x100", expect: "0x12345678", to: "hook_example")]
+        XCTAssertTrue(library.check(patch, code).isOK)
+        let osos = [UInt8](repeating: 0, count: 0x2000)
+        XCTAssertFalse(library.check(patch, code, osos: osos).isOK)       // the firmware has 0 at 0x100
+        XCTAssertEqual(PatchCode.word(at: "0x100", in: osos), "0x00000000")
+        code.hooks[0].to = "nothing"
+        XCTAssertFalse(library.check(patch, code).isOK)
+        code.hooks[0].to = "hook_example"
+
+        try Data("old".utf8).write(to: patch.folder.appendingPathComponent(Patcher.objectFile))
+        XCTAssertEqual(try library.saveCode(patch, code), "1.1")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: patch.folder.appendingPathComponent(Patcher.objectFile).path))
+        patch = try userPatch("coded")
+        XCTAssertEqual(patch.spec.symbols, ["fw_example": "0x1000"])
+        XCTAssertEqual(patch.spec.hooks?.first?.to, "hook_example")
+        XCTAssertNil(patch.spec.bytes)
+        XCTAssertEqual(patch.spec.size, try Patcher.codeSize(patch))
+        XCTAssertEqual(PatchCode(patch: patch), code)
+        XCTAssertTrue(try inspect(patch.folder).canInstall)
+    }
+
+    func testCheckAndSaveBytes() throws {
+        try library.create(draft("Data Only"))
+        let patch = try userPatch("data-only")
+        var code = PatchCode(patch: patch)
+        XCTAssertNil(code.source)
+        code.bytes = [PatchSpec.Bytes(at: "0x10", expect: "0100", value: "00")]
+        XCTAssertFalse(library.check(patch, code).isOK)                   // different lengths
+        code.bytes[0].value = "0001"
+        var osos = [UInt8](repeating: 0, count: 0x100)
+        XCTAssertFalse(library.check(patch, code, osos: osos).isOK)
+        osos[0x10] = 1
+        XCTAssertEqual(PatchCode.bytes(at: "0x10", count: 2, in: osos), "0100")
+        XCTAssertEqual(library.check(patch, code, osos: osos), PatchCodeCheck(size: 0))
+        XCTAssertEqual(try library.saveCode(patch, code), "1.1")
+        let saved = try userPatch("data-only")
+        XCTAssertEqual(saved.spec.bytes, code.bytes)
+        XCTAssertEqual(saved.spec.size, 0)
+        XCTAssertNil(saved.spec.hooks)
+        let builtIn = try userPatch("volume-unlimit")
+        XCTAssertThrowsError(try library.saveCode(builtIn, PatchCode(patch: builtIn)))
+    }
 }
