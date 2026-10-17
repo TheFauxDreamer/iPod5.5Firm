@@ -43,7 +43,8 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 
 - The iPod has no 5 V source for USB. VBUS must come from outside (a dock or an adapter with a charger).
 - Dock pin 18 supplies 3.3 V accessory power. The iPod Camera Connector has its own step-up converter that changes this 3.3 V to 5 V for its USB port. Thus the iPod never supplied a low USB voltage.
-- The USB-C mod connects VBUS to the USB power input of the iPod, not to pin 18. The firmware has no output that it can switch to VBUS.
+- The firmware switches pin 18 with 0x264d78 (PCF50605 D2REGC1: 0xf8 on, 0x18 off). The host start already turns it on (the UIM init 0x97300 calls 0x264d78(3)). The root hub driver already sets PP (PORTSC bit 12, 0x96a24). Refer to [re/usb-power.md](../../re/usb-power.md) (branch `usb-vbus-test`).
+- The USB-C mod probably connects VBUS to the USB power input of the iPod, not to pin 18. This is not measured. The firmware has no other output that it can switch to VBUS. The VBUS test (probe 1.29) measures it.
 - USB 2.0 devices must operate down to approximately 4.4 V. The minimum voltage of the USB-C EarPods is not known. No measurement is published.
 - Optional bench test (after the EarPods enumeration test): use a USB-C pass-through breakout with VBUS cut. Supply the data from a Mac and VBUS from an adjustable supply. Decrease the voltage in 0.1 V steps. Record the voltage where the audio stops.
 - If the EarPods operate at 3.3 V, a hardware change (pin 18 to VBUS through a switch) is possible. Else a 3.3 V to 5 V step-up converter is necessary.
@@ -159,6 +160,8 @@ Results for Stages 2 and 3:
 | 0x18a83c, 0x127888, 0x1277d0 | Interrupt: install, disable, remove |
 | 0xcd8e0, 0xffd1c | Interrupt handlers: device driver, host (UIM) |
 | 0x1083e0f8 | USB global block g (byte 0: hub policy, byte 1: hub count) |
+| 0x264d78 | Accessory power of dock pin 18 (1 off, 3 on at 3.3 V); the UIM init calls it with 3 |
+| 0x96a24 | Root hub port power (PORTSC bit 12) |
 
 ## The probe log
 
@@ -175,6 +178,8 @@ Records in `iPod_Control/iTunes/iPodFirmUSBLog` (511 records, 32 KB). iPodFirm s
 - the received bytes of each configuration descriptor, decoded (interfaces, endpoints, audio class descriptors).
 
 ## Next steps
+
+0. Branch `usb-vbus-test`: the VBUS test (probe 1.29, trigger '3'). It finds if the iPod can supply VBUS to the EarPods with no hardware change. Owner: run "Start the VBUS Test at the Next Restart" with no cable on the iPod. Refer to [re/usb-power.md](../../re/usb-power.md).
 
 1. Done: the configuration of the EarPods (UAC2, refer to "The USB-C EarPods").
 1a. Done: the probe 1.3 played a 1 kHz tone to the EarPods (2026-10-10).

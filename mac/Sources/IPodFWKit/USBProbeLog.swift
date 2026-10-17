@@ -22,6 +22,7 @@ public enum USBProbeLog {
     static let artCacheTag = 15 * 4 + 2, artGatesTag = 15 * 4 + 3, artQueuesTag = 16 * 4, artDBTag = 16 * 4 + 1, artLookupTag = 16 * 4 + 2, artAddTag = 16 * 4 + 3
     static let volumeRangeTag = 17 * 4, volumeSetTag = 17 * 4 + 1, hidDescTag = 17 * 4 + 2, hidReportTag = 17 * 4 + 3
     static let keyPostTag = 18 * 4, keyActionTag = 18 * 4 + 1, deviceTag = 18 * 4 + 2, playerTag = 18 * 4 + 3
+    static let vbusTag = 19 * 4
 
     public struct Entry: Hashable {
         public var driver: String
@@ -55,6 +56,10 @@ public enum USBProbeLog {
             let tag = Int(data[o + 1])
             let regs = (0..<4).map { le32(data, o + 4 + 4 * $0) }
             let atR1 = Array(data[o + 20..<o + 40]), atR2 = Array(data[o + 40..<o + 60])
+            if tag == vbusTag {
+                out.append(Entry(driver: "VBUS test", call: vbusText(regs), device: nil, interface: nil, registers: regs))
+                continue
+            }
             if tag == hidDescTag {
                 out.append(Entry(driver: "Audio", call: hidDescriptorText(regs, atR1 + atR2), device: nil, interface: nil, registers: regs))
                 continue
@@ -426,8 +431,31 @@ public enum USBProbeLog {
                                         (0x4000, "periodic running"), (0x8000, "asynchronous running")]),
                       r[2], bits(r[2], [(0x1, "connected"), (0x2, "connect change"), (0x4, "enabled"), (0x100, "reset"),
                                         (0x1000, "power"), (0x1000000, "full speed forced")]), speed,
-                      r[3], bits(r[3], [(0x100, "ID pin high"), (0x200, "VBUS valid"), (0x400, "B-session valid"),
-                                        (0x800, "A-session valid"), (0x1, "VBUS discharge"), (0x2, "VBUS charge")]))
+                      r[3], otgscText(r[3]))
+    }
+
+    /// The ARC OTGSC register: the VBUS comparators (bit 9 above approximately 4.4 V, bits 10 and 11 above
+    /// approximately 0.8–4.0 V, bit 12 below approximately 0.8 V) and the VBUS controls.
+    static func otgscText(_ v: UInt32) -> String {
+        let names: [(UInt32, String)] = [(0x100, "ID pin high"), (0x200, "VBUS valid"), (0x400, "A-session valid"),
+                                         (0x800, "B-session valid"), (0x1000, "B-session end"), (0x1, "VBUS discharge"), (0x2, "VBUS charge")]
+        let set = names.filter { v & $0.0 != 0 }.map(\.1)
+        return set.isEmpty ? "none" : set.joined(separator: ", ")
+    }
+
+    /// The VBUS test (version 1.29): r0 step | second << 8, r1 OTGSC, r2 PORTSC, r3 GPIOL. Step 0xFF: r1 PMU type, r2 hardware ID.
+    static func vbusText(_ r: [UInt32]) -> String {
+        let step = r[0] & 0xFF, second = r[0] >> 8 & 0xFF
+        if step == 0xFF {
+            let pmu = [2: "PMU type 2 (ID 0x24)", 3: "PCF50605 (D2REGC1 = register 0x25)"][Int(r[1])] ?? "PMU type \(r[1])"
+            return String(format: "start — %@, hardware ID 0x%08X", pmu, r[2])
+        }
+        let names = [1: "Apple's host mode state", 2: "accessory power (pin 18) off", 3: "port power (PP) inverted",
+                     4: "VBUS charge on", 5: "all on, connect the EarPods"]
+        let level = r[1] & 0x200 != 0 ? "above 4.4 V" : r[1] & 0xC00 != 0 ? "approximately 0.8–4.4 V" : r[1] & 0x1000 != 0 ? "below 0.8 V" : "low"
+        return String(format: "step %d (%@), %d s — VBUS %@; OTGSC 0x%08X (%@), PORTSC 0x%08X (power %@), USB power pin %@",
+                      step, names[Int(step)] ?? "step \(step)", second, level, r[1], otgscText(r[1]), r[2],
+                      r[2] & 0x1000 != 0 ? "on" : "off", r[3] & 0x10 != 0 ? "high" : "low")
     }
 
     /// USB 2.0 wPortStatus and wPortChange (low and high half of `status`), and the ARC PORTSC register.

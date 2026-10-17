@@ -9,7 +9,8 @@
  * or wheel event after the next start, the patch reads the file. Other event types do not count,
  * because they also occur during the start, before the disk is ready. If it contains '1', the patch
  * writes '0' first, so that the next start is normal again. Then it plays the sequence below and
- * starts the host stack (0x2860e8). With no file or '0', the patch does nothing.
+ * starts the host stack (0x2860e8). With no file or '0', the patch does nothing. With '2', the music
+ * stays on the headphone jack. With '3' (version 1.29), the probe does the VBUS test (vbus_test).
  *
  * The sequence, so that the owner knows the tones before the test:
  *  1. Demonstration: the hub sign, a pause, the storage sign, a pause.
@@ -128,6 +129,17 @@
 int fw_play_state(unsigned database);                  /* 0x9ba00: 1 playing, 2 paused, else stopped */
 void fw_key(unsigned code, int down, unsigned interrupt);  /* 0x1ac198: a key push or release to the UI task */
 /* Version 1.24: the USB device task (0x170f2c) and the host mode (re/usb-host.md, "The freeze"). */
+/* Version 1.29: the VBUS test (trigger '3', re/usb-power.md). Can the iPod supply VBUS itself? */
+#define TAG_VBUS                 (19 * 4 + 0)           /* r0 step | second << 8, r1 OTGSC, r2 PORTSC, r3 GPIOL */
+#define VBUS_INFO  0xff                                 /* step of the first record: r1 PMU type, r2 hardware ID, r3 0 */
+#define VBUS_HOLD_MS  10000                             /* the time of each step */
+#define VBUS_FINAL_MS 30000                             /* the last step: time to connect the EarPods directly */
+#define GPIOL_INPUT (*(volatile unsigned *)0x6000d13c)  /* bit 0x10: USB power (re/sleep.md) */
+#define ACC_OFF 1                                       /* 0x264d78: PCF50605 D2REGC1 = 0x18 (off) */
+#define ACC_ON  3                                       /* 0x264d78: D2REGC1 = 0xf8 (3.3 V on) */
+int fw_accessory_power(int mode);                      /* 0x264d78: the dock pin 18 supply and its GPIO pins */
+int fw_pmu_type(void);                                 /* 0x283704: 3 = PCF50605 (D2REGC1 is register 0x25) */
+unsigned fw_hardware_id(void);                         /* 0x265164: the hardware ID (>> 16 = the model) */
 #define TAG_DEVICE               (18 * 4 + 2)           /* r0 event, r1 argument, r2 ms, r3 OTGSC */
 #define DEVICE_START_BLOCKED     1
 #define DEVICE_START_ALLOWED     2
@@ -258,7 +270,8 @@ static void make_path(unsigned *path, const char *name)
     fw_strcpy((char *)path + 4, name);
 }
 
-/* Returns '1' (the full test) or '2' (no music route) from the trigger file, else 0. */
+/* Returns '1' (the full test), '2' (no music route) or '3' (the VBUS test) from the trigger file,
+ * else 0. */
 static int read_flag(void)
 {
     unsigned path[0x108 / 4], fh[0x30 / 4], got = 1;
@@ -270,7 +283,7 @@ static int read_flag(void)
         return 0;
     err = file_read(fh, &got, &c);
     file_close(fh);
-    return err == 0 && got == 1 && (c == '1' || c == '2') ? c : 0;
+    return err == 0 && got == 1 && (c == '1' || c == '2' || c == '3') ? c : 0;
 }
 
 /* Writes len bytes at the start of an existing file. Returns 0 if the write is correct.
@@ -1720,6 +1733,81 @@ static void device_handover(void)
     device_log(DEVICE_CHANGE, device_stopped, waited);
 }
 
+/* The VBUS test (version 1.29, trigger '3'). Question: can the iPod supply VBUS to USB-C headphones
+ * with no hardware change? The host start already does the two things that Apple's code can do:
+ *  - the UIM init 0x97300 calls 0x264d78(3): D2REGC1 of the PCF50605 = 0xf8, the 3.3 V accessory
+ *    power on dock pin 18 (Rockbox accessory_supply_set writes the same values);
+ *  - the root hub SET_FEATURE PORT_POWER (0xd26b0 -> 0x96a24) sets PORTSC bit 12 (PP).
+ * The test changes one item at a time and logs the VBUS comparators of the controller each second.
+ * OTGSC bit 9: A VBUS valid (above approximately 4.4 V). Bit 10: A session valid. Bit 11: B session
+ * valid (above approximately 0.8-4.0 V; the firmware uses it as "USB power"). Bit 12: B session end.
+ * Thus 3.3 V on VBUS sets bits 10 and 11, but not bit 9. Steps (n short beeps before step n):
+ *  1. Apple's host mode state (the baseline).
+ *  2. The accessory power off (0x264d78(1)). Then on again (0x264d78(3)).
+ *  3. PP inverted. Then as before.
+ *  4. OTGSC bit 1 (VBUS charge, a weak current for the session request) set. Then clear.
+ *  5. All on: the accessory power, PP and VBUS charge, for VBUS_FINAL_MS. The owner connects the
+ *     EarPods directly to the iPod. If they enumerate, audio_test() plays its 1 kHz tone.
+ * noinline: inline in hook_event, these functions made the patch approximately 2 KB larger. */
+__attribute__((noinline)) static void vbus_hold(unsigned step, unsigned ms)
+{
+    unsigned s;
+    for (s = 0; s < ms / 1000; s++) {
+        log_regs(TAG_VBUS, step | s << 8, OTGSC, PORTSC1, GPIOL_INPUT);
+        task_sleep(1000);
+    }
+}
+
+__attribute__((noinline)) static void vbus_beeps(unsigned n)
+{
+    unsigned i;
+    for (i = 0; i < n; i++) {
+        tone(HIGH, 60000);
+        task_sleep(BEEP_MS);
+    }
+    task_sleep(1000);
+}
+
+static void portsc_power(int on)
+{
+    unsigned v = PORTSC1 & ~0x2au;                      /* do not clear the change bits (write 1 to clear) */
+    PORTSC1 = on ? v | 0x1000 : v & ~0x1000u;
+}
+
+static void otgsc_charge(int on)
+{
+    unsigned v = OTGSC & ~0x007f0000u;                  /* do not clear the interrupt status bits */
+    OTGSC = on ? v | 2 : v & ~2u;
+}
+
+__attribute__((noinline)) static void vbus_test(void)
+{
+    int pp;
+    task_sleep(3000);                                   /* the root hub driver sets PP after the host start */
+    pp = (PORTSC1 & 0x1000) != 0;
+    log_regs(TAG_VBUS, VBUS_INFO, fw_pmu_type(), fw_hardware_id(), 0);
+    vbus_beeps(1);
+    vbus_hold(1, VBUS_HOLD_MS);
+    vbus_beeps(2);
+    fw_accessory_power(ACC_OFF);
+    vbus_hold(2, VBUS_HOLD_MS);
+    fw_accessory_power(ACC_ON);
+    vbus_beeps(3);
+    portsc_power(!pp);
+    vbus_hold(3, VBUS_HOLD_MS);
+    portsc_power(pp);
+    vbus_beeps(4);
+    otgsc_charge(1);
+    vbus_hold(4, VBUS_HOLD_MS);
+    otgsc_charge(0);
+    vbus_beeps(5);
+    portsc_power(1);
+    otgsc_charge(1);
+    vbus_hold(5, VBUS_FINAL_MS);
+    audio_test();
+    otgsc_charge(0);
+}
+
 int hook_event(void *ui, void *event)
 {
     int r = fw_long_play_timer(ui, event);
@@ -1772,6 +1860,15 @@ int hook_event(void *ui, void *event)
             host_start(0, 0, 0, 0);
             USB_GLOBALS[0] = 2;                         /* again: the host start clears parts of the block */
             log_registers();
+            if (mode == '3') {                          /* version 1.29: the VBUS test, no music */
+                vbus_test();
+                if (write_log() == 0) {
+                    tone(LOW, 60000);
+                    task_sleep(BEEP_MS);
+                    tone(LOW, 60000);
+                }
+                return r;
+            }
             /* The USB tasks find the devices during this wait. Then write the log here, because a
              * later button event possibly does not reach this hook: 0x1d81cc gives each event to
              * the active modal screen first (0x12d890, 0x12ddb8), for example the photo import

@@ -33,6 +33,20 @@
           }
         ],
         "status": "The probe starts at the next restart, without the music route: the music stays on the headphone jack."
+      },
+      {
+        "title": "Start the VBUS Test at the Next Restart",
+        "write": [
+          {
+            "path": "iPod_Control/iTunes/iPodFirmUSBLog",
+            "zeros": 32768
+          },
+          {
+            "path": "iPod_Control/iTunes/iPodFirmUSBProbe",
+            "text": "3"
+          }
+        ],
+        "status": "The VBUS test starts at the first button press after the next restart. Disconnect all cables from the iPod first."
       }
     ],
     "steps_title": "Test Procedure",
@@ -50,20 +64,28 @@
       "With USB-C headphones: the second double beep comes after the tone. Then play a song for 1 minute. Listen to the headphones. Press Select or Menu a few times during the song.",
       "Wait 15 seconds after the last button press, so that the firmware writes the log to the disk.",
       "Disconnect the adapter and restart the iPod. Hold Menu and Select until the Apple logo shows. The next start is normal.",
-      "Connect the iPod to the Mac and click Show USB Log."
+      "Connect the iPod to the Mac and click Show USB Log.",
+      "VBUS test: this test finds if the iPod can supply power to USB-C headphones without a hardware change. Click Start the VBUS Test at the Next Restart. Then eject and disconnect the iPod.",
+      "VBUS test: disconnect all cables from the iPod. Do not connect a charger, a dock or an adapter with power.",
+      "VBUS test (optional): connect a USB-C breakout board to the iPod. Connect a multimeter between VBUS and GND, in the 20 V DC range.",
+      "VBUS test: restart the iPod. Hold Menu and Select until the Apple logo shows. Then press a button.",
+      "VBUS test: the iPod plays the demonstration tones and three beeps. Then it gives 1 beep, 2 beeps, 3 beeps, 4 beeps and 5 beeps, at intervals of approximately 12 seconds. If you have a meter, write down the voltage after each group of beeps.",
+      "VBUS test: after the 5 beeps, connect the USB-C EarPods directly to the iPod within 30 seconds. Hold them near your ear. A 1 kHz tone means that the iPod supplies sufficient power.",
+      "VBUS test: wait for two short low beeps (the log is written). The iPod does not react for approximately 90 seconds during the test.",
+      "VBUS test: wait 15 seconds. Restart the iPod. Then connect it to the Mac and click Show USB Log. Click Copy Log and give the log to the developer."
     ],
     "tools": [
       "usb-log"
     ]
   },
   "version_letter": "h",
-  "version": "1.28",
-  "size": 22248,
+  "version": "1.29",
+  "size": 22864,
   "description": "A one-time test. It finds if the iPod can operate USB devices through a USB-C mod. It also sends a test tone, and then the music of the iPod, to USB-C headphones (USB-AUDIO-OUT.md, Stages 0, 2 and 4).",
   "caution": "Do not put USB headphones in your ears during the test. The test tone can be loud. While the test runs, the USB port possibly does not operate with a computer. To stop the test, hold Menu and Select until the iPod restarts.",
   "details": ["After the next restart, the first button press starts the test.", "The iPod plays tones that tell you the result.", "The iPod writes a log of the USB devices that it found. Click Show USB Log to see it.", "The test runs one time. The next restart is normal."],
   "requires": ["An iPod with a USB-C mod.", "A USB-C OTG adapter with a power input, and a charger.", "A USB flash drive or a card reader, or USB-C headphones (USB Audio Class 2)."],
-  "notes": ["First, the iPod plays each tone one time as an example: a long low tone, then high, low, high. Three short beeps and a silence follow.", "Result: a long low tone means that the USB host mode operates. A second long low tone means that the hub in the adapter operates.", "Result: high, low, high means that the iPod found the flash drive or the card reader. Since version 1.11 the probe gives no driver to storage devices (a test for the album art of Now Playing), thus this sign does not come.", "Two short low beeps mean that the iPod wrote the log.", "With USB-C headphones: after the first log, the iPod gives one short high beep. Then the headphones play a 1 kHz tone for 5 seconds. Then the iPod sends its music to the headphones and writes the log again (two short low beeps).", "After the beeps, play a song. The music comes from the USB-C headphones. The iPod volume sets their volume (version 1.21). The iPod headphone jack is silent. Each button press after 5 seconds of music adds status records and writes the log.", "Version 1.23: the buttons on the USB-C headphones operate the iPod, as an Apple Remote does. Volume + and volume − change the iPod volume; the middle button is Play/Pause.", "Version 1.24: while the probe runs, the iPod does not start its USB device mode. Thus a computer does not see the iPod, and a new connection of the dock or of a computer does not freeze it. Restart the iPod before a sync.", "Version 1.25: after you connect the dock again, press Play: the music goes to the USB-C headphones again. On the headphones, press the middle button two times for the next song and three times for the previous song.", "Version 1.26: when you disconnect the dock, the music pauses. Press Play to continue.", "Version 1.27: the headphones start at the iPod volume with a quieter curve (half volume is -24 dB). While the probe runs, the iPod does not show USB messages such as \"unsupported device\".", "Version 1.28: the patch usb-audio-out has the functions of this probe for daily use. Do not install both: they use the same hook sites.", "During the tones, the iPod does not react for approximately 7 seconds."],
+  "notes": ["First, the iPod plays each tone one time as an example: a long low tone, then high, low, high. Three short beeps and a silence follow.", "Result: a long low tone means that the USB host mode operates. A second long low tone means that the hub in the adapter operates.", "Result: high, low, high means that the iPod found the flash drive or the card reader. Since version 1.11 the probe gives no driver to storage devices (a test for the album art of Now Playing), thus this sign does not come.", "Two short low beeps mean that the iPod wrote the log.", "With USB-C headphones: after the first log, the iPod gives one short high beep. Then the headphones play a 1 kHz tone for 5 seconds. Then the iPod sends its music to the headphones and writes the log again (two short low beeps).", "After the beeps, play a song. The music comes from the USB-C headphones. The iPod volume sets their volume (version 1.21). The iPod headphone jack is silent. Each button press after 5 seconds of music adds status records and writes the log.", "Version 1.23: the buttons on the USB-C headphones operate the iPod, as an Apple Remote does. Volume + and volume − change the iPod volume; the middle button is Play/Pause.", "Version 1.24: while the probe runs, the iPod does not start its USB device mode. Thus a computer does not see the iPod, and a new connection of the dock or of a computer does not freeze it. Restart the iPod before a sync.", "Version 1.25: after you connect the dock again, press Play: the music goes to the USB-C headphones again. On the headphones, press the middle button two times for the next song and three times for the previous song.", "Version 1.26: when you disconnect the dock, the music pauses. Press Play to continue.", "Version 1.27: the headphones start at the iPod volume with a quieter curve (half volume is -24 dB). While the probe runs, the iPod does not show USB messages such as \"unsupported device\".", "Version 1.28: the patch usb-audio-out has the functions of this probe for daily use. Do not install both: they use the same hook sites.", "Version 1.29: the VBUS test (Start the VBUS Test at the Next Restart). It switches the accessory power of dock pin 18, the port power and the VBUS charge one at a time, and logs the VBUS of the USB-C port. The result shows if USB-C headphones can operate without a charger or a dock.", "During the tones, the iPod does not react for approximately 7 seconds."],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
@@ -82,6 +104,9 @@
     "fw_key": "0x1ac198",
     "fw_usb_message": "0x0d9cec",
     "fw_play_state": "0x09ba00",
+    "fw_accessory_power": "0x264d78",
+    "fw_pmu_type": "0x283704",
+    "fw_hardware_id": "0x265164",
     "fw_device_start": "0x24d3c4",
     "fw_device_stop": "0x24d49c",
     "host_start": "0x2860e8",

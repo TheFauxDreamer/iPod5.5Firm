@@ -1017,7 +1017,7 @@ final class USBProbeLogTests: XCTestCase {
         d[4] = 4
         let log = USBProbeLog.parse(d)!
         XCTAssertEqual(log.count, 4)
-        XCTAssertEqual(log[3].text, "Controller: USBCMD 0x00000001 (run), USBSTS 0x00001000 (halted), PORTSC 0x00001001 (connected, power, full speed), OTGSC 0x00000E00 (VBUS valid, B-session valid, A-session valid)")
+        XCTAssertEqual(log[3].text, "Controller: USBCMD 0x00000001 (run), USBSTS 0x00001000 (halted), PORTSC 0x00001001 (connected, power, full speed), OTGSC 0x00000E00 (VBUS valid, A-session valid, B-session valid)")
         XCTAssertEqual(log[2].text, "Root port 1: status 0x0101 (connected, power), change 0x0001 (connection), PORTSC 0x08001001 (connected, power, high speed, line SE0)")
         XCTAssertEqual(log[0].text, "Hub: initialize device — device 05AC:8031, class 09/00/00 (hub)")
         XCTAssertEqual(log[1].text, "Storage: initialize interface — interface 0 (alternate 0), class 08/06/50 (storage) — device 05AC:8031, class 09/00/00 (hub)")
@@ -1053,6 +1053,17 @@ final class USBProbeLogTests: XCTestCase {
         XCTAssertTrue(lines[2].hasPrefix("interface 1 alternate 1: 1 endpoints, class 01/02/20 (audio) (streaming), USB Audio Class 2"))
         XCTAssertTrue(lines[3].hasPrefix("endpoint 0x01 (OUT isochronous, asynchronous), max packet 192, interval 1"))
         XCTAssertTrue(lines[4].hasPrefix("audio class interface descriptor, subtype 2: format type 1, 2 channels, 2 bytes per sample, 16 bits, rates 44100 Hz"))
+    }
+
+    /// The records of the VBUS test (tag 76, version 1.29).
+    func testVBUSRecords() {
+        XCTAssertEqual(USBProbeLog.vbusText([0xFF, 3, 0x000B_0000, 0]),
+                       "start — PCF50605 (D2REGC1 = register 0x25), hardware ID 0x000B0000")
+        XCTAssertEqual(USBProbeLog.vbusText([2 | 4 << 8, 0x0000_1100, 0x0000_1000, 0]),
+                       "step 2 (accessory power (pin 18) off), 4 s — VBUS below 0.8 V; OTGSC 0x00001100 (ID pin high, B-session end), PORTSC 0x00001000 (power on), USB power pin low")
+        XCTAssertEqual(USBProbeLog.vbusText([5, 0x0000_0C02, 0, 0x10]),
+                       "step 5 (all on, connect the EarPods), 0 s — VBUS approximately 0.8–4.4 V; OTGSC 0x00000C02 (A-session valid, B-session valid, VBUS charge), PORTSC 0x00000000 (power off), USB power pin high")
+        XCTAssertEqual(USBProbeLog.otgscText(0x006F_4E00), "VBUS valid, A-session valid, B-session valid")
     }
 
     /// The records of the isochronous test (tags 48–51).

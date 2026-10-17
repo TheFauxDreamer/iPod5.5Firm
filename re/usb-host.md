@@ -783,4 +783,4 @@ The method of the patch is in [docs/modifications.md](../docs/modifications.md#u
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).
 2. The sign for a new device: confirm that 0xe7a50 runs when a device connects (needs the real iPod; the emulator has no USB).
 3. How to stop the device session when USB Audio Out is On (0x2856a4, 0x163ffc).
-4. Does the UIM init enable port power (PORTSC bit 12)? The port power is not important if VBUS comes from outside.
+4. Answered (2026-10-17, [usb-power.md](usb-power.md)): the UIM init does not set PORTSC bit 12, but the root hub SET_FEATURE PORT_POWER does (0x96a24). The UIM init also turns on the accessory power of dock pin 18 (0x264d78(3)).
