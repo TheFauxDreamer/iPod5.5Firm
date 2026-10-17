@@ -181,7 +181,7 @@ Records in `iPod_Control/iTunes/iPodFirmUSBLog` (511 records, 32 KB). iPodFirm s
 
 ## Next steps
 
-0. Done (branch `usb-vbus-test`, 2026-10-17): the VBUS test. The iPod cannot supply VBUS with no hardware change. Refer to [re/usb-power.md](../../re/usb-power.md). Next, only if the owner decides: the hardware research (pin 18 current, the minimum voltage of the EarPods, a step-up converter with back-feed protection).
+0. Done (branch `usb-vbus-test`, 2026-10-17): the VBUS test. The iPod cannot supply VBUS with no hardware change. Refer to [re/usb-power.md](../../re/usb-power.md). The hardware design for another person to build: [docs/usb-c-power-mod.md](../../docs/usb-c-power-mod.md) (a TUSB320LAI dual-role controller, a TPS61240 5 V boost converter from the battery, a TPS22918 load switch to pin 23). Not built.
 
 1. Done: the configuration of the EarPods (UAC2, refer to "The USB-C EarPods").
 1a. Done: the probe 1.3 played a 1 kHz tone to the EarPods (2026-10-10).

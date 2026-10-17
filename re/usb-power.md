@@ -78,7 +78,7 @@ Then the probe writes the log and gives two short low beeps. The UI task does no
 
 ## Hardware notes for later (no change before the owner decides)
 
-If the test shows that a hardware change is necessary, the next research items are:
+The hardware design is in [docs/usb-c-power-mod.md](../docs/usb-c-power-mod.md) (2026-10-17). The owner does not build it, but another person can. The design answers the items below:
 
 - The current that pin 18 can supply (no public value), and the current of the EarPods at 5 V (measure through the dock with the KWS-2302C).
 - The minimum voltage of the EarPods (a bench test with an adjustable supply).
@@ -125,4 +125,8 @@ Conclusions:
 1. With the 3.3 V accessory power on, VBUS stays below approximately 0.8 V. Thus **the USB-C mod does not connect dock pin 18 to VBUS**.
 2. PP (PORTSC bit 12) drives no supply on the iPod.
 3. VBUS charge (OTGSC bit 1) lifts the open VBUS line above approximately 0.8 V, but it cannot supply a device. The EarPods did not connect.
-4. **Gate result: fail.** The iPod cannot power USB-C headphones without a hardware change. The owner decides on a hardware change. The research items for it are in "Hardware notes for later".
+4. **Gate result: fail.** The iPod cannot power USB-C headphones without a hardware change. The research items for it are in "Hardware notes for later".
+
+## Pin 18 at the cold start (emulator, 2026-10-17)
+
+The emulator I²C log of the cold start has three writes to register 0x25: 0x18 (off) at 2.18 s (two times), then 0x58 (mode 2) at 3.40 s (two times). Only the host start writes 0xf8. Thus in normal use the regulator of pin 18 is in mode 2. The meaning of mode 2 is not published, so the voltage of pin 18 in normal use is not known. A measurement on the real iPod gives it.

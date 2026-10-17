@@ -17,6 +17,7 @@ All data is for Apple RetailOS 1.3 (`iPod_25.1.3.ipsw`). Other firmware versions
 | [ipod-shuffle.md](ipod-shuffle.md) | A specification of the iPod shuffle (Songs and Albums), with code in C and Swift to copy it into a music player. It has no links to other files, so you can share it alone. |
 | [porting.md](porting.md) | The parts that work only on macOS, the Swift and Python versions of each module, and a recommended path to a Windows or Linux version. |
 | [safety.md](safety.md) | The protections before and during a flash, the backups, the recovery procedure, and the known problems. |
+| [usb-c-power-mod.md](usb-c-power-mod.md) | A hardware design (not built) that lets the iPod supply 5 V to USB-C headphones: a USB-C dual-role controller, a 5 V boost converter and a load switch. It has no links to other files, so you can share it alone. |
 | [../USB-AUDIO-OUT.md](../USB-AUDIO-OUT.md) | The plan and the status of USB-C audio out: the USB host stack, the missing isochronous support, the stages and the gates. |
 
 The research notes in [../re/](../re/) record the experiments in the sequence that they occurred. This reference collects their results. When the two do not agree, the source code is correct.
