@@ -247,4 +247,4 @@ The TPS61240 supplies at least 200 mA. The design is for headphones and small US
 - TI SN74LVC1G04 datasheet. https://www.ti.com/product/SN74LVC1G04
 - Rockbox `accessory_supply_set`: PCF50605 register 0x25, 0xf8 on and 0x18 off. https://github.com/Rockbox/rockbox (firmware/target/arm/ipod/powermgmt-ipod-pcf.c)
 - Current of the Apple USB-C to 3.5 mm adapter (A2155): 10.9 mA and 32.1 mA. https://reference-audio-analyzer.pro/en/report/amp/apple-usb-c.php
-- The VBUS test on the real iPod and the firmware analysis: the iPodFirm project, `re/usb-power.md`.
+- The VBUS test on the real iPod and the firmware analysis: the iPodFirm project, `re/usb-power.md` on the branch `usb-vbus-test`.
