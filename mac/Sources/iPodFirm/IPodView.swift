@@ -306,6 +306,13 @@ struct HelperRow: View {
                 Spacer()
                 Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() }
                 Button("Check Again") { model.recheckFullDiskAccess() }
+            // An ad-hoc build has no team identifier, and the daemon refuses to start without one.
+            case _ where ownTeamIdentifier() == nil:
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("This build has no developer signature. Touch ID is not available.", systemImage: "touchid")
+                    Text("iPodFirm asks for your administrator password before it writes to the iPod.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             default:
                 VStack(alignment: .leading, spacing: 2) {
                     Label("Use Touch ID, not your password.", systemImage: "touchid")

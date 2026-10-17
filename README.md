@@ -54,6 +54,28 @@ The app has these functions:
 
 The script increases the version number and the build number. Then it builds the app and installs it in `/Applications/iPodFirm.app`.
 
+### Make a release build
+
+1. Enter this command:
+
+   ```sh
+   RELEASE=1 mac/scripts/build-app.sh
+   ```
+
+2. Upload the file `mac/build/iPodFirm-<version>.zip` to the GitHub release.
+
+The release build has an ad-hoc signature. The signature contains no name and no e-mail address. The script does not install the release build.
+
+### Open a release build
+
+1. Unzip the file and move `iPodFirm.app` to `/Applications`.
+2. Hold Control and click `iPodFirm.app`.
+3. Click **Open**. Then click **Open** again.
+
+If macOS does not show **Open**, open System Settings > Privacy & Security. Then click **Open Anyway**.
+
+A release build cannot use the Touch ID helper. The app asks for your administrator password before it writes to the iPod. After each update, turn on Full Disk Access again.
+
 To do the tests, enter these commands:
 
 ```sh

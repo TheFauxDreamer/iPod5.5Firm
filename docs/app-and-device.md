@@ -57,6 +57,24 @@ The variable `APP_NAME` changes the name of the app (the default is `iPodFirm`).
 
 A stable signature is necessary. macOS connects Full Disk Access to the signature. An ad-hoc signature changes with each build, and the permission is lost.
 
+### The release build
+
+`RELEASE=1 mac/scripts/build-app.sh` makes a build for a GitHub release:
+
+1. It increases the version and the build number, as a normal build does.
+2. It signs the helper and the app with an ad-hoc signature (`codesign --sign -`). It ignores `CODESIGN_IDENTITY`.
+3. It stops if `codesign -dvv` shows an `Authority=` line.
+4. It makes `build/iPodFirm-<version>.zip` with `ditto -c -k --keepParent`.
+5. It does not install the app in `/Applications`.
+
+A developer certificate contains the e-mail address or the name of the owner. Any person can read it with `codesign -dvv`. An ad-hoc signature contains no name and no e-mail address.
+
+An ad-hoc build has these limits:
+
+- Gatekeeper blocks the app at the first start. The user must open it with Control-click and **Open**.
+- The build has no team identifier. The daemon refuses to start, so the Touch ID helper is not available. `HelperRow` shows this and does not show "Set Up Touch ID". The app uses the password prompt.
+- macOS loses Full Disk Access after each update, because the signature changes. The user must turn on the permission again.
+
 ## The detection of the iPod
 
 `Device.findIPods` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift) does these steps:

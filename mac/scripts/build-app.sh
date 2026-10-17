@@ -3,9 +3,12 @@
 # Every run increments BOTH the version (patch) and the build number in version.env.
 # Set APP_NAME to install a second copy with a different name, for example a test build:
 #   APP_NAME="iPodFirm USB-C Test" mac/scripts/build-app.sh
+# Set RELEASE=1 to make a ZIP file for a GitHub release. A release build has an ad-hoc
+# signature, which contains no name and no e-mail address. The script does not install it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 APP_NAME="${APP_NAME:-iPodFirm}"
+RELEASE="${RELEASE:-0}"
 case "$APP_NAME" in
     */*|.*|*..*) echo "error: APP_NAME must be a plain name, not a path: $APP_NAME" >&2; exit 1 ;;
 esac
@@ -90,7 +93,12 @@ PLIST
 
 # Sign with a stable identity so macOS keeps Full Disk Access across rebuilds
 # (an ad-hoc signature changes every build and silently loses the permission).
-IDENTITY="${CODESIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development|Developer ID Application/ {print $2; exit}')}"
+if [ "$RELEASE" = 1 ]; then
+    # The certificate name of a developer identity contains the e-mail address or the name of the owner.
+    IDENTITY="-"
+else
+    IDENTITY="${CODESIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development|Developer ID Application/ {print $2; exit}')}"
+fi
 if [ -z "$IDENTITY" ]; then
     echo "warning: no signing identity found; ad-hoc signing (Full Disk Access must be re-granted after each build)"
     IDENTITY="-"
@@ -101,6 +109,19 @@ codesign --verify --strict "$APP"
 
 # Only record the new numbers once the build has succeeded.
 printf 'MARKETING_VERSION=%s\nBUILD_NUMBER=%s\n' "$MARKETING_VERSION" "$BUILD_NUMBER" > version.env
+
+if [ "$RELEASE" = 1 ]; then
+    # Stop if the signature contains a certificate (a name or an e-mail address).
+    if codesign -dvv "$APP" 2>&1 | grep -q '^Authority='; then
+        echo "error: the release build has a certificate signature" >&2
+        exit 1
+    fi
+    ZIP="build/$APP_NAME-$MARKETING_VERSION.zip"
+    rm -f "$ZIP"
+    ditto -c -k --keepParent "$APP" "$ZIP"
+    echo "==> Made $ZIP — version $MARKETING_VERSION (build $BUILD_NUMBER), ad-hoc signature"
+    exit 0
+fi
 
 DEST="/Applications/$APP_NAME.app"
 if [ -d "$DEST" ]; then
