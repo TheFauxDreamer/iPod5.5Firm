@@ -21,7 +21,11 @@
  *
  * While host mode runs, the device task cannot start or stop a device session (that takes the
  * controller from the host stack), the USB mode task cannot stop the host mode at a new VBUS, and the
- * iPod shows no USB host messages ("unsupported device"). */
+ * iPod shows no USB host messages ("unsupported device").
+ *
+ * Version 1.3: Settings > Main Menu > "USB-C Audio" shows or hides an item in the main menu (the main
+ * menu mask bit 0x80000000, as album-artists does with 0x40000000). The item is a copy of Backlight.
+ * A selection of it switches USB-C Audio On or Off, and the firmware does not run the Backlight action. */
 
 #define APP_OBJECT    0x1081da18                        /* RAM: the app object (+0x1c database, +0x40c output volume) */
 #define MODE_MANAGER  (*(volatile unsigned *)0x1081edc4)  /* the USB mode manager (made by the task 0xb95a4) */
@@ -74,6 +78,12 @@
 #define LABEL_ID   0x7e06                               /* the label "USB-C Audio" */
 #define ON_44_ID   0x7e07                               /* the value text "On (44.1 kHz)" (version 1.2) */
 #define ON_48_ID   0x7e08                               /* the value text "On (48 kHz)" (version 1.2) */
+#define MAIN_ITEM_ID 0x7e0a                             /* the label of the main menu item: "USB-C Audio: Off" and so on */
+#define ROW_KEY    0x7e09                               /* the row in Settings > Main Menu (patch.json: 0x60007e09) */
+#define SLEEP_LABEL 0x5f94                              /* Sleep: the template of that row */
+#define ARTISTS_LABEL 0x5f7c                            /* Artists in the main menu */
+#define MAIN_MENU_ID 24094
+#define MAIN_MENU_BIT 0x80000000u                       /* a free bit of the main menu mask (outside the merge mask 0x1fffffff) */
 #define ITEM_KEY   0x60e8                               /* the settings key 0x600060e8 (low 16 bits) */
 #define TAG_STR    0x53747220u                          /* 'Str ' */
 #define OP_TEXT_ID 0x70724944u                          /* 'prID': the ID of the value text */
@@ -119,6 +129,16 @@ void *lookup_next(void *provider, unsigned type, int id);
 int get_next(void *self, unsigned op, unsigned key, void *out);
 int set_next(void *self, unsigned op, unsigned key, void *value);
 void lookup_continue(void);                            /* 0x21f258 */
+void *settings_object(void);                           /* 0x193090 */
+int main_menu_visible(void *settings, int label);      /* 0x193470 */
+void set_main_menu_visible(void *settings, int label, int on);  /* 0x19351c */
+void menu_bit_continue(void);                          /* 0x105a08 */
+void visible_continue(void);                           /* 0x19ed5c */
+void *menu_item_at(void *menu_data, int row);          /* 0x2183ec */
+void list_select(void *list, int row, unsigned tag);   /* 0x239f7c: tag 0 = no selection event */
+unsigned menu_bit_next(int label);                     /* set by the patcher (chain) */
+int activate_next(void *list, int row);
+int visible_next(void *screen, int menu, int label, int kind, int visible);
 static void music_stop(int reason);
 static int music_wanted, music_restart;
 static volatile unsigned stop_request;                  /* a stop for USBAudioTask */
@@ -1312,6 +1332,10 @@ int hook_mode_stop(void *manager, unsigned mode)
 static const char label[] = "USB-C Audio";
 static const char on_44[] = "On (44.1 kHz)";
 static const char on_48[] = "On (48 kHz)";
+static const char main_off[] = "USB-C Audio: Off";
+static const char main_on[] = "USB-C Audio: On";
+static const char main_44[] = "USB-C Audio: 44.1 kHz";
+static const char main_48[] = "USB-C Audio: 48 kHz";
 
 /* The first instruction of the general lookup (0x21f254) is replaced by a branch. If no other patch
  * hooks the lookup, lookup_next is this function: it runs that instruction and continues in the firmware. */
@@ -1328,6 +1352,8 @@ void *hook_lookup(void *provider, unsigned type, int id)
         return (void *)on_44;
     if (type == TAG_STR && id == ON_48_ID)
         return (void *)on_48;
+    if (type == TAG_STR && id == MAIN_ITEM_ID)          /* the main menu item shows the state */
+        return (void *)(!audio_wanted ? main_off : rate_used == 48000 ? main_48 : rate_used == 44100 ? main_44 : main_on);
     return lookup_next(provider, type, id);
 }
 
@@ -1348,16 +1374,85 @@ int hook_settings_get(void *self, unsigned op, unsigned key, void *out)
         }
         return 0;
     }
+    if (key == ROW_KEY) {                               /* Settings > Main Menu > USB-C Audio */
+        short value = main_menu_visible(self, MAIN_ITEM_ID) ? STR_ON : STR_OFF;
+        if (op == OP_TEXT_ID) {
+            *(short *)((char *)self + 0x88) = value;
+            *(void **)out = (char *)self + 0x88;
+            return 1;
+        }
+        if (op == OP_TEXT) {
+            *(const char **)out = str_lookup(str_table(), value);
+            return 1;
+        }
+        key = SLEEP_LABEL;                              /* the other questions: as for the Sleep row */
+    }
     return get_next(self, op, key, out);
+}
+
+/* ---- Version 1.3: the item in the main menu ---------------------------------------------------------- */
+
+/* On or Off. The UI task does not wait: the task of the patch makes the change. */
+static void audio_toggle(void)
+{
+    audio_wanted = !audio_wanted;
+    if (!task_handle)
+        task_handle = task_create("USBAudioOut", audio_task, "USBAudioOut", 0x20, 0x1000, 1, 3);
+}
+
+/* A selection in a menu list (vtable slot 0x6776f8, chain: album-artists also hooks it). list + 0x144
+ * is the menu data (0 for other lists), the item + 0x10 its resource, and resource + 0x14 the label. */
+int hook_activate(void *list, int row)
+{
+    void *data = *(void **)((char *)list + 0x144);
+    void *item = data ? menu_item_at(data, row) : 0;
+    const char *res = item ? *(const char **)((char *)item + 0x10) : 0;
+    if (res && *(const short *)(res + 0x14) == MAIN_ITEM_ID) {
+        audio_toggle();
+        list_select(list, row, 0);                      /* the row again, with the new text */
+        return 0;                                       /* not the Backlight action of the template */
+    }
+    return activate_next(list, row);
+}
+
+/* The replaced first instruction of 0x105a04 (label -> bit of the main menu mask). */
+__attribute__((naked)) unsigned menu_bit_original(int label)
+{
+    __asm__ volatile("sub r0, r0, #0x5c00\n\tb menu_bit_continue\n");
+}
+
+/* The callers of 0x105a04 are the get (0x193470) and the set (0x19351c) of the main menu mask. */
+unsigned hook_menu_bit(int label)
+{
+    return label == MAIN_ITEM_ID ? MAIN_MENU_BIT : menu_bit_next(label);
+}
+
+/* The replaced first instruction of 0x19ed58 (show or hide an item of a menu). */
+__attribute__((naked)) int visible_original(void *screen, int menu, int label, int kind, int visible)
+{
+    __asm__ volatile("push {r2, r3, r4, lr}\n\tb visible_continue\n");
+}
+
+/* The UI script shows or hides each Apple item of the main menu. It does not know the copy, so the
+ * patch does it for the copy when the script does it for Artists. */
+int hook_set_visible(void *screen, int menu, int label, int kind, int visible)
+{
+    int result = visible_next(screen, menu, label, kind, visible);
+    if (menu == MAIN_MENU_ID && label == ARTISTS_LABEL)
+        visible_next(screen, menu, MAIN_ITEM_ID, kind, main_menu_visible(settings_object(), MAIN_ITEM_ID) != 0);
+    return result;
 }
 
 /* A selection changes the value. The UI task does not wait: the task of the patch makes the change. */
 int hook_settings_set(void *self, unsigned op, unsigned key, void *value)
 {
     if (key == ITEM_KEY) {
-        audio_wanted = !audio_wanted;
-        if (!task_handle)
-            task_handle = task_create("USBAudioOut", audio_task, "USBAudioOut", 0x20, 0x1000, 1, 3);
+        audio_toggle();
+        (*(void (**)(void *, unsigned, unsigned))(*(char **)self + 0x54))(self, NOTIFY_BOOL, key);
+        return 1;
+    }
+    if (key == ROW_KEY) {                               /* as the firmware does for its rows (0x192774) */
+        set_main_menu_visible(self, MAIN_ITEM_ID, !main_menu_visible(self, MAIN_ITEM_ID));
         (*(void (**)(void *, unsigned, unsigned))(*(char **)self + 0x54))(self, NOTIFY_BOOL, key);
         return 1;
     }

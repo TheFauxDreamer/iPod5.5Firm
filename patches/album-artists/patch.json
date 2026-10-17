@@ -5,7 +5,7 @@
   "symbol": "person.2.crop.square.stack",
   "category": "display",
   "version_letter": "l",
-  "version": "1.2",
+  "version": "1.3",
   "size": 3688,
   "description": "The Music menu has an Album Artists item after Artists. It shows one entry for each Album Artist. All the songs of a compilation are under one entry, for example \"Various Artists\".",
   "details": [
@@ -66,7 +66,7 @@
     { "kind": "bl", "at": "0x114354", "expect": "0xebfe2d6a", "to": "hook_filter_text" },
     { "kind": "b", "at": "0x1e7b98", "expect": "0xe92d4010", "to": "hook_reset" },
     { "kind": "b", "at": "0xa34b8", "expect": "0xe92d4070", "to": "hook_clear" },
-    { "kind": "b", "at": "0x19ed58", "expect": "0xe92d401c", "to": "hook_set_visible" },
+    { "kind": "b", "at": "0x19ed58", "expect": "0xe92d401c", "to": "hook_set_visible", "chain": "visible_next", "chain_default": "visible_original" },
     { "kind": "word", "at": "0x66c94c", "expect": "0x00190b00", "to": "hook_settings_get", "chain": "get_next" },
     { "kind": "word", "at": "0x66c950", "expect": "0x001919d8", "to": "hook_settings_set", "chain": "set_next" },
     { "kind": "bl", "at": "0x193488", "expect": "0xebfdc95d", "to": "hook_menu_bit" },

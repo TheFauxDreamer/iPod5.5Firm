@@ -389,13 +389,14 @@ Refer to [re/album-artist.md](../re/album-artist.md#album-artists-menu-item-15-o
 | 0x0a96c0 | Makes a track object from the slab at db + 0x38. | Static |
 | 0x088bc0 | Makes the extension object of a track (track + 0x10) when it is necessary. | Static |
 | 0x23ca4c | `activate(list, row)` of a menu list: calls 0x239f7c(list, row, tag), which sends the selection event. | Static, Emulator, Patch |
+| 0x239f7c | (list, row, tag): sets the selected row (vtable +0x15c). With tag 0 it returns before the selection event (vtable +0x194); `usb-audio-out` uses this to draw its main menu row again. | Static, Emulator, Patch |
 | 0x2183ec | (menu data, row): the item object of a visible row. Skips the hidden items. | Static, Patch |
 | 0x21845c | (menu data): the count of visible items. | Static |
 | 0x19e644 | (menu screen): the script calls it to activate the selected row. | Emulator |
 | 0x1e7b98 | (JS browser): resets the native browser (+0x1c) at the start of a browse. | Static, Emulator |
 | 0x1e7628 | (JS browser, mode): calls 0xb4038(browser, mode). Artists uses mode 1. | Static, Emulator |
 | 0x1e7b98 | (detail) The Artists item of the Music menu runs it one time, the Artists item of the main menu two times. Composers, Genres and Playlists do not run it when they open. | Emulator, Patch |
-| 0x105a04 | (label): the bit of a main-menu item in the main menu mask (a `switch` on the labels 0x5f7c–0x5f9f). Unused bits: 0x4000, 0x20000000, 0x40000000, 0x80000000. | Static, Patch |
+| 0x105a04 | (label): the bit of a main-menu item in the main menu mask (a `switch` on the labels 0x5f7c–0x5f9f). Unused bits: 0x4000, 0x20000000, 0x40000000, 0x80000000. `album-artists` uses 0x40000000 and `usb-audio-out` uses 0x80000000 (a `b` hook with `chain` on the first instruction, `sub r0, r0, #0x5c00`). | Static, Patch |
 | 0x193470 | (settings, label): 1 if the main-menu item is on (mask AND bit). | Static, Patch |
 | 0x19351c | (settings, label, on): writes the bit into the mask and sets the byte "changed" (+0xb74). It does not write the settings file. The `instant-save` patch hooks its first instruction. | Static, Emulator, Patch |
 | 0x09d880 | (settings): the main menu mask, (main browser + 0xca0) + 0xb34. Emulator default: 0x0e180201. | Static, Emulator |
@@ -673,6 +674,7 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | Str 0x7e01, 0x7e02 | "Something Comforting" and "Play" (added by the `something-comforting` patch). |
 | Str 0x7e06, 0x7e07, 0x7e08 | "USB-C Audio", "On (44.1 kHz)" and "On (48 kHz)" (added by the `usb-audio-out` patch). |
 | Str 0x7e03, 0x7e04 | "Album Artists", and the indented row text in Settings > Main Menu (added by the `album-artists` patch). |
+| Str 0x7e0a | The main menu item of `usb-audio-out`: "USB-C Audio: Off", "On", "44.1 kHz" or "48 kHz". Settings > Main Menu row key 0x60007e09. |
 
 ## Element IDs
 

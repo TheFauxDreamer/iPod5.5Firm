@@ -78,6 +78,7 @@ void lookup_continue(void);                                                     
 /* Set by the patcher (chain): the previous targets of the hooks. */
 void *lookup_next(void *provider, unsigned type, int id);
 int activate_next(void *list, int row);
+int visible_next(void *screen, int menu, int label, int kind, int visible);
 int get_next(void *self, unsigned op, unsigned key, void *out);
 int set_next(void *self, unsigned op, unsigned key, void *value);
 
@@ -502,7 +503,8 @@ void *hook_lookup(void *provider, unsigned type, int id)
     return lookup_next(provider, type, id);
 }
 
-/* The replaced first instruction of 0x19ed58, then the rest of the function. */
+/* The replaced first instruction of 0x19ed58, then the rest of the function. visible_next is this
+ * function if no other patch hooks 0x19ed58 (version 1.3: usb-audio-out also hooks it). */
 __attribute__((naked)) int visible_original(void *screen, int menu, int label, int kind, int visible)
 {
     __asm__ volatile("push {r2, r3, r4, lr}\n\tb visible_continue\n");
@@ -513,9 +515,9 @@ __attribute__((naked)) int visible_original(void *screen, int menu, int label, i
  * does it for the copy when the script does it for Artists. */
 int hook_set_visible(void *screen, int menu, int label, int kind, int visible)
 {
-    int result = visible_original(screen, menu, label, kind, visible);
+    int result = visible_next(screen, menu, label, kind, visible);
     if (menu == MAIN_MENU_ID && label == ARTISTS_LABEL)
-        visible_original(screen, menu, LABEL_ID, kind, main_menu_visible(settings_object(), LABEL_ID) != 0);
+        visible_next(screen, menu, LABEL_ID, kind, main_menu_visible(settings_object(), LABEL_ID) != 0);
     return result;
 }
 

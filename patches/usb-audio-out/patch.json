@@ -5,12 +5,13 @@
   "symbol": "headphones",
   "category": "audio",
   "version_letter": "u",
-  "version": "1.2",
-  "size": 14628,
+  "version": "1.3",
+  "size": 15452,
   "description": "Adds the item USB-C Audio to Settings. When it is On, the iPod operates as the USB host and sends its music to USB Audio Class 2 headphones, for example the Apple USB-C EarPods. The volume of the iPod sets the volume of the headphones, and the buttons of the headphones operate the iPod.",
   "caution": "USB-C Audio needs a USB-C mod and a dock or an OTG adapter that gives 5 V. While USB-C Audio is On, a computer cannot see the iPod: set it to Off before a sync. The probe patch usb-host-probe uses the same hook sites: do not install both.",
   "details": [
     "Settings > USB-C Audio is Off after each start. Then the USB port operates as usual: sync, disk mode and charging.",
+    "Settings > Main Menu > USB-C Audio puts the item in the main menu, after Settings. The default is Off. The main menu item shows the state, for example \"USB-C Audio: Off\" or \"USB-C Audio: 48 kHz\". Select it to switch USB-C Audio On or Off.",
     "Set USB-C Audio to On. Connect the headphones through the dock. The music comes from the headphones a few seconds after they connect.",
     "The click wheel sets the volume of the headphones.",
     "The headphone buttons: volume + and volume −; the middle button one time is Play/Pause, two times is the next song, three times is the previous song.",
@@ -26,7 +27,8 @@
     "The patch sends the music at the rate of the option Sample Rate: 44.1 kHz (the default) or 48 kHz. If the headphones refuse that rate, it uses the other one. 16 bits, stereo, at full speed. While the music plays, Settings shows the rate that the headphones report, for example \"On (48 kHz)\".",
     "The volume curve: full volume is 0 dB, half volume is -24 dB.",
     "Tested functions (probe 1.27): music, Now Playing art, volume, buttons, a pause at a disconnection, a new start after a reconnection.",
-    "The iPod charges from the dock while USB-C Audio plays (the owner, 2026-10-17)."
+    "The iPod charges from the dock while USB-C Audio plays (the owner, 2026-10-17).",
+    "Install Instant Save to keep the Main Menu row after a restart with Menu+Select."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
@@ -44,14 +46,31 @@
       "after_key": "0x60006088"
     }
   ],
+  "menu_items": [
+    {
+      "menu_id": 24094,
+      "label_id": "0x7e0a",
+      "template_label": "0x5f93",
+      "after_label": "0xff84"
+    },
+    {
+      "menu_id": 24600,
+      "label_id": "0x7e06",
+      "template_label": "0xff47",
+      "after_label": "0xff47",
+      "key": "0x60007e09"
+    }
+  ],
   "ui": {
     "steps_title": "Use USB-C Audio",
     "steps": [
       "Flash a firmware with this patch.",
       "Connect the USB-C dock (with its power supply) and the USB-C headphones to the iPod.",
       "On the iPod, open Settings and set USB-C Audio to On.",
-      "Play a song. The music comes from the headphones.", "Open Settings again. The item shows the rate that the headphones report, for example \"On (48 kHz)\".",
-      "Before a sync, set USB-C Audio to Off, disconnect the dock and connect the computer."
+      "Play a song. The music comes from the headphones.",
+      "Open Settings again. The item shows the rate that the headphones report, for example \"On (48 kHz)\".",
+      "Before a sync, set USB-C Audio to Off, disconnect the dock and connect the computer.",
+      "To put USB-C Audio in the main menu, open Settings > Main Menu and set USB-C Audio to On."
     ]
   },
   "symbols": {
@@ -87,7 +106,14 @@
     "task_create": "0x11c808",
     "str_lookup": "0x21f418",
     "str_table": "0x21f3b8",
-    "lookup_continue": "0x21f258"
+    "lookup_continue": "0x21f258",
+    "settings_object": "0x193090",
+    "main_menu_visible": "0x193470",
+    "set_main_menu_visible": "0x19351c",
+    "menu_bit_continue": "0x105a08",
+    "visible_continue": "0x19ed5c",
+    "menu_item_at": "0x2183ec",
+    "list_select": "0x239f7c"
   },
   "hooks": [
     {
@@ -111,6 +137,29 @@
       "expect": "0x001919d8",
       "to": "hook_settings_set",
       "chain": "set_next"
+    },
+    {
+      "kind": "b",
+      "at": "0x105a04",
+      "expect": "0xe2400b17",
+      "to": "hook_menu_bit",
+      "chain": "menu_bit_next",
+      "chain_default": "menu_bit_original"
+    },
+    {
+      "kind": "b",
+      "at": "0x19ed58",
+      "expect": "0xe92d401c",
+      "to": "hook_set_visible",
+      "chain": "visible_next",
+      "chain_default": "visible_original"
+    },
+    {
+      "kind": "word",
+      "at": "0x6776f8",
+      "expect": "0x0023ca4c",
+      "to": "hook_activate",
+      "chain": "activate_next"
     },
     {
       "kind": "bl",

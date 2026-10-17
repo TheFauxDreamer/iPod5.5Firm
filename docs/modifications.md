@@ -565,21 +565,40 @@ The dispatch tables are RW data. The start code copies them to RAM with the chan
 
 ## usb-audio-out
 
-**Effect.** Settings has the item "USB-C Audio" (On/Off) after Clicker. Off is the default after each start: the USB port operates as usual (sync, disk mode, charging). On: the iPod operates as the USB host and plays its music through USB Audio Class 2 headphones (for example the Apple USB-C EarPods) through a USB-C dock or OTG adapter with power. The click wheel sets the volume of the headphones. The buttons of the headphones operate the iPod: volume + and −; the middle button one time is play/pause, two times the next song, three times the previous song. A disconnection pauses the song, and after a new connection the music goes to the headphones again. Off gives the port back to the device mode at once.
+**Effect.** Settings has the item "USB-C Audio" (On/Off) after Clicker. Off is the default after each start: the USB port operates as usual (sync, disk mode, charging). On: the iPod operates as the USB host and plays its music through USB Audio Class 2 headphones (for example the Apple USB-C EarPods) through a USB-C dock or OTG adapter with power. The click wheel sets the volume of the headphones. The buttons of the headphones operate the iPod: volume + and −; the middle button one time is play/pause, two times the next song, three times the previous song. A disconnection pauses the song, and after a new connection the music goes to the headphones again. Off gives the port back to the device mode at once. Since version 1.3, Settings > Main Menu has a USB-C Audio row after Sleep. On puts the item "USB-C Audio: Off" in the main menu, after Settings. The default is Off. A selection of the item switches USB-C Audio On or Off. The item shows the state: Off, On, 44.1 kHz or 48 kHz.
 
 **User interface.** Patches pane > Audio > USB-C Audio, letter `u`. The section "Use USB-C Audio" gives the steps.
 
-**Load address.** `extended`. The compiled code and data are 14628 bytes (version 1.2). The control page (8 KB) and the siTDs (32 KB) come from 0xad80c at the first On, the music buffers (12 KB) at the first route start. After the code, the patcher writes the Settings menu with the new item.
+**Load address.** `extended`. The compiled code and data are 15452 bytes (version 1.3). The control page (8 KB) and the siTDs (32 KB) come from 0xad80c at the first On, the music buffers (12 KB) at the first route start. After the code, the patcher writes three menus: Settings with the new item, the main menu and Settings > Main Menu.
 
 **Option.** "Sample Rate" (`option_rate`): 44.1 kHz (the default) or 48 kHz (version 1.1). `music_start` sends SET_CUR with the rate of the option first, and the other rate if the headphones refuse it. Apple's converter (0x1e2f60) makes the output rate. At 48 kHz a packet has 192 bytes (two start splits). Version 1.2 sends GET_CUR sampling frequency after SET_CUR. The Settings value shows that rate (see below).
 
 **Settings item.** Key 0x600060e8, label ID 0x7e06 ("USB-C Audio"), value text IDs 0x7e07 ("On (44.1 kHz)") and 0x7e08 ("On (48 kHz)"), after Clicker (0x60006088), a copy of Sound Check (`settings_items`). The key 0x600060e8 is not a 32-bit word in osos 1.3. The value is in RAM only, thus each start gives Off. While the music goes to the headphones, the value is "On (44.1 kHz)" or "On (48 kHz)" from GET_CUR (version 1.2). If GET_CUR fails, the value shows the rate that the patch sent. Without a music route, or at a different rate, the value is "On". The text changes when the menu shows again.
 
+**Main menu item (version 1.3).** The method of [album-artists](#album-artists), with these values:
+
+| Menu | Template | New label | Key | Place |
+|---|---|---|---|---|
+| 24094 (main menu) | Backlight (0x5f93) | 0x7e0a | – | After Settings (0xff84) |
+| 24600 (Settings > Main Menu) | Sleep (0xff47) | 0x7e06 | 0x60007e09 | After Sleep |
+
+1. The main menu mask bit is 0x80000000. The firmware does not use it, and it is outside the merge mask 0x1fffffff (0xaf838). `album-artists` uses 0x40000000.
+2. `hook_menu_bit` replaces the first instruction of 0x105a04 (label → bit; `sub r0, r0, #0x5c00`) with `chain`. The label 0x7e0a gets the bit. The `bl` hooks of `album-artists` at 0x193488 and 0x19353c call 0x105a04, thus both patches operate together.
+3. `hook_set_visible` wraps 0x19ed58 with `chain`. When the UI script sets Artists (0x5f7c) in Menu 24094, the patch also sets 0x7e0a from the bit (0x193470).
+4. `hook_activate` (vtable slot 0x6776f8, `chain`) sees a selection of the item 0x7e0a. It switches USB-C Audio, calls 0x239f7c(list, row, 0) to draw the row again, and does not call the Backlight action.
+5. `hook_lookup` gives the text of 0x7e0a from the state: "USB-C Audio: Off", "USB-C Audio: On", "USB-C Audio: 44.1 kHz" or "USB-C Audio: 48 kHz".
+6. Hooks get and set give the row 0x7e09 its value (On or Off from the bit) and its action (0x19351c, then 'Bool'). For other questions, the patch asks the firmware with the key of Sleep (0x5f94).
+
+A copy of the Settings row (Sound Check) in the main menu is not usable: in the emulator the highlight did not stop on it.
+
 **Hooks.**
 
 | Kind | At | Expect | To | Chain | Function |
 |---|---|---|---|---|---|
-| `b` | 0x21f254 | 0xe92d40f8 | `hook_lookup` | `lookup_next` | The label "USB-C Audio" |
+| `b` | 0x21f254 | 0xe92d40f8 | `hook_lookup` | `lookup_next` | The label "USB-C Audio", the value texts and the main menu text |
+| `b` | 0x105a04 | 0xe2400b17 | `hook_menu_bit` | `menu_bit_next` | The main menu bit 0x80000000 for 0x7e0a |
+| `b` | 0x19ed58 | 0xe92d401c | `hook_set_visible` | `visible_next` | The main menu item is visible from the bit |
+| `word` | 0x6776f8 | 0x0023ca4c | `hook_activate` | `activate_next` | A selection of the main menu item switches On or Off |
 | `word` | 0x66c94c | 0x00190b00 | `hook_settings_get` | `get_next` | On or Off (0x602e, 0x602f) |
 | `word` | 0x66c950 | 0x001919d8 | `hook_settings_set` | `set_next` | Changes the value, makes the task "USBAudioOut" at the first change, sends 'Bool' |
 | `bl` | 0xd399c, 0x10c204, 0xe2be0 | 0xeb0018d2, 0xebff36b8, 0xebffdc41 | `hook_usb_message` | | No USB host message while host mode runs |
@@ -603,7 +622,7 @@ The dispatch tables are RW data. The start code copies them to RAM with the chan
 
 **Conflicts.** `usb-host-probe` uses the same hook sites (17 hooks without `chain`). The app does not turn on both (`Patcher.conflicts`; the Patches pane shows "Changes the same place as …"), and a build with both stops at the first shared hook. The test `testUSBAudioOutConflictsWithProbe` keeps this.
 
-**Test status.** Swift and Python tests pass (also with the IPSW). Emulator (2026-10-17): Settings shows "USB-C Audio" Off after Clicker; On and Off change the value; the iPod does not freeze, and the wheel and Now Playing operate after On. After the first On, the emulator ran at about 0.15× real time, also after Off and with the music paused; its counters were not consistent, thus the cause is not known (the emulator has no USB). Real iPod, version 1.0 (2026-10-17): **all test steps passed** (the owner: "flawlessly"): Off after the start and a sync; On with the dock and the EarPods, the music without a button press, the volume and the buttons; a pause at a disconnection and Play after a reconnection; Off, then the Mac sees the iPod; On, Off, On again. The iPod charges from the dock while USB-C Audio plays. Version 1.1 with the option 48 kHz: tested on the real iPod (2026-10-17). The owner heard no problems. Version 1.1 kept no log, so the accepted rate was not known. Version 1.2 shows the rate in Settings: not tested yet.
+**Test status.** Swift and Python tests pass (also with the IPSW). Emulator (2026-10-17): Settings shows "USB-C Audio" Off after Clicker; On and Off change the value; the iPod does not freeze, and the wheel and Now Playing operate after On. After the first On, the emulator ran at about 0.15× real time, also after Off and with the music paused; its counters were not consistent, thus the cause is not known (the emulator has no USB). Real iPod, version 1.0 (2026-10-17): **all test steps passed** (the owner: "flawlessly"): Off after the start and a sync; On with the dock and the EarPods, the music without a button press, the volume and the buttons; a pause at a disconnection and Play after a reconnection; Off, then the Mac sees the iPod; On, Off, On again. The iPod charges from the dock while USB-C Audio plays. Version 1.1 with the option 48 kHz: tested on the real iPod (2026-10-17). The owner heard no problems. Version 1.1 kept no log, so the accepted rate was not known. Version 1.2 shows the rate in Settings: not tested yet. Emulator, version 1.3 with `album-artists` 1.3 and `instant-save` (2026-10-17): Settings > Main Menu showed "USB-C Audio" Off after Sleep; On put "USB-C Audio: Off" in the main menu after Settings; a selection changed it to "USB-C Audio: On" at once, and a second selection to Off. Real iPod, version 1.3: not tested yet.
 
 ## volume-unlimit
 
@@ -682,7 +701,7 @@ Thus `0xa0348` always returns 0. The other match of the iPodWizard pattern, at 0
 | C | `word` | 0x6776f8 | 0x0023ca4c | `hook_activate` | `activate_next` |
 | G | `b` | 0x1e7b98 | 0xe92d4010 | `hook_reset` | – |
 | H | `b` | 0xa34b8 | 0xe92d4070 | `hook_clear` | – |
-| K | `b` | 0x19ed58 | 0xe92d401c | `hook_set_visible` | – |
+| K | `b` | 0x19ed58 | 0xe92d401c | `hook_set_visible` | `visible_next`; default `visible_original` (version 1.3) |
 | D | `b` | 0xd080c | 0xe92d5fff | `hook_build` | – |
 | E | `bl` | 0x114354 | 0xebfe2d6a | `hook_filter_text` | – |
 | L | `word` | 0x66c94c | 0x00190b00 | `hook_settings_get` | `get_next` |
@@ -704,7 +723,7 @@ The `b` hooks G, H, K and D replace the first instruction of a function. Each ha
 7. Hook E replaces the call of the Artist text in the filter. A wrapper passes r5 (the browser). For `aa_browser`, the filter compares the selected name (browser + 0x228) with the Album Artist of the track. The Albums and Songs levels then show the songs of the Album Artist.
 8. Hook F gives "Album Artists" for 'Str ' 0x7e03 (the label), U+2003 U+2060 "Album Artists" for 'Str ' 0x7e04 (the indented Settings row, as Str -162), and "Album Artists" for 'Str ' -30 (the title of the Artists screen) while `aa_browser` is set. For all other lookups it calls `lookup_next`.
 9. The main menu mask is at (main browser + 0xca0) + 0xb34. Hooks I and J replace the two calls of 0x105a04 (label → bit): the label 0x7e03 gets bit 0x40000000. The firmware does not use this bit, and the default mask (0x0e180201 in the emulator) does not have it.
-10. Hook K wraps 0x19ed58 (show or hide an item of a menu). The UI script calls it for each Apple item of the main menu at the start and each time the main menu shows. When it sets Artists (0x5f7c) in Menu 24094, the patch also sets 0x7e03 from the bit (0x193470).
+10. Hook K wraps 0x19ed58 (show or hide an item of a menu). The UI script calls it for each Apple item of the main menu at the start and each time the main menu shows. When it sets Artists (0x5f7c) in Menu 24094, the patch also sets 0x7e03 from the bit (0x193470). Since version 1.3, hook K has `chain`, because `usb-audio-out` 1.3 also hooks 0x19ed58.
 11. Hooks L and M give the Settings row its value and its action. The key 0x7e05 is not a label ID, because the list asks the value text with the resource lookup ('Str ', key), and hook F answers the label IDs first. For 'prID' and 'Str ', hook L gives On (0x602e) or Off (0x602f). For all other questions it asks the firmware with the key of Artists (0x5f7c). Hook M switches the bit with 0x19351c and sends the 'Bool' notice (settings method +0x54), as the firmware does at 0x192774.
 
 **Limits.**

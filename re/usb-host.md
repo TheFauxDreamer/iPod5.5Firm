@@ -762,6 +762,22 @@ The patch `patches/usb-audio-out` (version 1.0) uses the manager:
 - **Off:** USBAudioTask stops the route (the song pauses). Then the patch stops mode 2 (Apple's host stop) and, with USB power present, starts mode 1. Then a computer can see the iPod.
 - A `bl` hook at 0xb9614 keeps the host mode at a new VBUS while USB-C Audio is On. The patcher makes the conditional call unconditional, thus the hook acts only for the call with the manager and mode 2.
 
+## The main menu item of usb-audio-out 1.3 (2026-10-17)
+
+The owner asked for USB-C Audio in the main menu, as Album Artists. Results (static, then the emulator for the UI):
+
+| Fact | Evidence |
+|---|---|
+| The main menu (Menu 24094) has no On/Off row. Backlight (0x5f93), Shuffle Songs (0x5f9e) and Sleep (0x5f94) are action items: +0x04 = 0x20 (no arrow), +0x0c = their script. | Static |
+| The On/Off rows of Settings (Menu 24598) have +0x08 = 0x3eb2, +0x0c = 0x4382 and the settings key at +0x1c. | Static |
+| A copy of the Sound Check row in Menu 24094 shows its label, but no value, and the highlight does not stop on it. Thus it is not usable. | Emulator |
+| A copy of Backlight with a new label is selectable. The `activate` hook (vtable slot 0x6776f8) sees its selection. | Emulator |
+| 0x23ca4c (`activate`) only calls 0x239f7c(list, row, tag). 0x239f7c sets the selected row (vtable +0x15c, then list data + 0x14). With tag 0 it returns before the selection event (vtable +0x194). | Static |
+| A call of 0x239f7c(list, row, 0) after the toggle draws the row again with the new text. Without it, the text changed only at the next redraw. | Emulator |
+| The first instruction of 0x105a04 is `sub r0, r0, #0x5c00`. It does not use the PC, thus a `b` hook with `chain` can replace it. | Static |
+
+The method of the patch is in [docs/modifications.md](../docs/modifications.md#usb-audio-out) ("Main menu item").
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).
