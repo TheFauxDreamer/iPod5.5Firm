@@ -43,9 +43,8 @@ struct SpaceUseRow: View {
         Group {
             if let s = model.spaceUse {
                 VStack(alignment: .leading, spacing: 3) {
-                    ProgressView(value: Double(min(s.used, s.total)), total: Double(s.total))
-                        .tint(!s.fits ? .red : Double(s.used) > 0.9 * Double(s.total) ? .orange : .accentColor)
-                        .accessibilityLabel("Space used")
+                    SpaceBar(use: s, parts: parts(s))
+                    SpaceLegend(parts: parts(s))
                     if s.fits {
                         Text("Space for the theme and the patches: \(kb(s.used)) of \(kb(s.total)) used, \(kb(s.total - s.used)) free.")
                     } else {
@@ -66,6 +65,81 @@ struct SpaceUseRow: View {
     }
 
     func kb(_ bytes: Int) -> String { String(format: "%.1f KB", Double(bytes) / 1024) }
+
+    /// The parts of the bar with a name and a color: the patches get the colors of a fixed palette in
+    /// build order, so that two patches of the same category are different.
+    func parts(_ s: Patcher.SpaceUse) -> [SpacePart] {
+        var index = 0
+        return s.parts.map { part in
+            switch part.kind {
+            case .appearance:
+                return SpacePart(name: "Theme and Dark Mode", bytes: part.bytes, color: .indigo)
+            case .padding:
+                return SpacePart(name: "Rounding to 2 KB", bytes: part.bytes, color: .gray.opacity(0.5))
+            case .patch(let name):
+                defer { index += 1 }
+                let title = model.patches.first { $0.spec.name == name }?.spec.displayTitle ?? name
+                return SpacePart(name: title, bytes: part.bytes, color: SpacePart.palette[index % SpacePart.palette.count])
+            }
+        }
+    }
+}
+
+/// One part of the space bar.
+struct SpacePart: Identifiable {
+    let name: String
+    let bytes: Int
+    let color: Color
+    var id: String { name }
+    static let palette: [Color] = [.blue, .green, .orange, .pink, .teal, .yellow, .purple, .mint, .brown, .cyan]
+    var text: String { "\(name): " + String(format: "%.1f KB", Double(bytes) / 1024) }
+}
+
+/// The bar: a part for each patch, the theme and the rounding, on the free space. Too large: red at the end.
+struct SpaceBar: View {
+    let use: Patcher.SpaceUse
+    let parts: [SpacePart]
+
+    var body: some View {
+        GeometryReader { geo in
+            let scale = geo.size.width / Double(max(use.total, use.used, 1))
+            ZStack(alignment: .leading) {
+                Rectangle().fill(Color.secondary.opacity(0.2))
+                HStack(spacing: 0) {
+                    ForEach(parts) { p in
+                        Rectangle().fill(p.color)
+                            .frame(width: max(1, Double(p.bytes) * scale))
+                            .help(p.text)
+                    }
+                }
+                if !use.fits {                                  // the limit
+                    Rectangle().fill(Color.red).frame(width: 2).offset(x: Double(use.total) * scale - 1)
+                }
+            }
+        }
+        .frame(height: 8)
+        .clipShape(Capsule())
+        .accessibilityElement()
+        .accessibilityLabel("Space used")
+        .accessibilityValue(parts.map(\.text).joined(separator: ", "))
+    }
+}
+
+/// The names and the sizes of the parts of the bar.
+struct SpaceLegend: View {
+    let parts: [SpacePart]
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), alignment: .leading)], alignment: .leading, spacing: 2) {
+            ForEach(parts) { p in
+                HStack(spacing: 4) {
+                    Circle().fill(p.color).frame(width: 7, height: 7)
+                    Text(p.text).lineLimit(1).truncationMode(.middle)
+                }
+                .help(p.text)
+            }
+        }
+    }
 }
 
 struct PatchList: View {

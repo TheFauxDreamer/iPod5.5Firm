@@ -987,7 +987,12 @@ final class PatcherOptionTests: XCTestCase {
         let menus = all.filter { ["album-art", "album-artists", "cover-flow", "instant-save", "something-comforting", "usb-host-probe"].contains($0.spec.name) }
         let menuSizes = try menus.map { (patch: $0, size: try Patcher.codeSize($0)) }
         let built = try Patcher.apply(menus, to: osos)
-        XCTAssertEqual(Patcher.spaceUse(osos: osos, patches: menuSizes).end, built.count)
+        let menuUse = Patcher.spaceUse(osos: osos, patches: menuSizes)
+        XCTAssertEqual(menuUse.end, built.count)
+        // the parts of the bar: one for each patch in build order, then the rounding; their sum is the used space
+        XCTAssertEqual(menuUse.parts.reduce(0) { $0 + $1.bytes }, menuUse.used)
+        XCTAssertEqual(menuUse.parts.compactMap { if case .patch(let n) = $0.kind { n } else { nil } }, menus.map(\.spec.name))
+        XCTAssertTrue(menuUse.parts.allSatisfy { $0.bytes > 0 })
         let data = menuSizes.reduce(0) { $0 + $1.size } + (4 + 40 * 11) + (4 + 40 * 32) + (4 + 40 * 29) + (4 + 40 * 19)
         XCTAssertLessThan(built.count - Patcher.maxOSOSSize, data + 6 * 16 + 0x800)     // only the alignment and one rounding
         // after other data that leaves too little space

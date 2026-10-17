@@ -338,14 +338,30 @@ public enum Patcher {
     /// The use of the area after Apple's image (`maxOSOSSize` to `ThemeImport.ososLimit`). The
     /// theme, the Dark Mode items and the extended patches share this area.
     public struct SpaceUse: Equatable {
+        /// One part of the used space, for the bar of the Patches pane.
+        public struct Part: Equatable {
+            public enum Kind: Equatable {
+                /// The theme and the Dark Mode items (the appearance).
+                case appearance
+                /// The code, the data and the menus of one patch (its `name`).
+                case patch(String)
+                /// The rounding of the image end to 0x800 bytes.
+                case padding
+            }
+            public let kind: Kind
+            public let bytes: Int
+            public init(kind: Kind, bytes: Int) { self.kind = kind; self.bytes = bytes }
+        }
         /// The end of the image after the build.
         public let end: Int
+        /// The parts of `used`, in the order of the image. Their sum is `used`.
+        public let parts: [Part]
         public static let start = maxOSOSSize
         public static var limit: Int { ThemeImport.ososLimit }
         public var used: Int { max(0, end - Self.start) }
         public var total: Int { Self.limit - Self.start }
         public var fits: Bool { end <= Self.limit }
-        public init(end: Int) { self.end = end }
+        public init(end: Int, parts: [Part] = []) { self.end = end; self.parts = parts }
     }
 
     /// The space that a build uses: `osos` is the image after the appearance; `patches` are the
@@ -368,7 +384,14 @@ public enum Patcher {
             items[id] = n
             count = (max(count, maxOSOSSize) + 15) & ~15 + 4 + 40 * n
         }
+        var parts = [SpaceUse.Part]()
+        if osos.count > maxOSOSSize { parts.append(.init(kind: .appearance, bytes: osos.count - maxOSOSSize)) }
         for (p, size) in patches {
+            let before = max(count, maxOSOSSize)
+            defer {
+                let added = max(count, maxOSOSSize) - before
+                if added > 0 { parts.append(.init(kind: .patch(p.spec.name), bytes: added)) }
+            }
             if p.spec.load_address == extendedLoadAddress && size > 0 {
                 count = (max(count, maxOSOSSize) + 15) & ~15 + size
             }
@@ -377,7 +400,10 @@ public enum Patcher {
             for m in p.spec.menu_items ?? [] where !ids.contains(m.menu_id) { ids.append(m.menu_id) }
             for id in ids { addMenu(Int16(id), (p.spec.menu_items ?? []).filter { $0.menu_id == id }.count) }
         }
-        return SpaceUse(end: (count + 0x7FF) / 0x800 * 0x800)
+        let end = (count + 0x7FF) / 0x800 * 0x800
+        let padding = end - max(count, maxOSOSSize)
+        if padding > 0, end > maxOSOSSize { parts.append(.init(kind: .padding, bytes: padding)) }
+        return SpaceUse(end: end, parts: parts)
     }
 
     /// The image with zeros to the next multiple of 0x800 bytes, as in Apple's file.
