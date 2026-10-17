@@ -22,6 +22,7 @@ public enum USBProbeLog {
     static let artCacheTag = 15 * 4 + 2, artGatesTag = 15 * 4 + 3, artQueuesTag = 16 * 4, artDBTag = 16 * 4 + 1, artLookupTag = 16 * 4 + 2, artAddTag = 16 * 4 + 3
     static let volumeRangeTag = 17 * 4, volumeSetTag = 17 * 4 + 1, hidDescTag = 17 * 4 + 2, hidReportTag = 17 * 4 + 3
     static let keyPostTag = 18 * 4, keyActionTag = 18 * 4 + 1, deviceTag = 18 * 4 + 2, playerTag = 18 * 4 + 3
+    static let timingTag = 19 * 4, timing2Tag = 19 * 4 + 1, timing3Tag = 19 * 4 + 2
 
     public struct Entry: Hashable {
         public var driver: String
@@ -59,7 +60,7 @@ public enum USBProbeLog {
                 out.append(Entry(driver: "Audio", call: hidDescriptorText(regs, atR1 + atR2), device: nil, interface: nil, registers: regs))
                 continue
             }
-            if tag >= audioDeviceTag && tag <= playerTag {
+            if tag >= audioDeviceTag && tag <= timing3Tag {
                 out.append(Entry(driver: "Audio", call: audioText(tag, regs), device: nil, interface: nil, registers: regs))
                 continue
             }
@@ -286,6 +287,30 @@ public enum USBProbeLog {
             let state = [1: "playing", 2: "paused", 0xFF: "unknown"][Int(r[0])] ?? "stopped (\(r[0]))"
             let moment = [1: "before the stop", 2: "after the stop", 3: "after the pause key", 5: "later"][Int(r[1])] ?? "moment \(r[1])"
             return String(format: "player — %@: %@; codec buffers %d, USB buffers %d", moment, state, r[2], r[3])
+        case timingTag:
+            // usb-audio-out 1.5 (branch usb-audio-speed): one record each second.
+            let state = (r[0] >> 16 & 1 != 0 ? "On" : "Off") + (r[0] >> 17 & 1 != 0 ? ", host mode" : "")
+                + (r[0] >> 18 & 1 != 0 ? ", USB music route" : "")
+            let player = [1: "playing", 2: "paused", 0xFF: "unknown"][Int(r[0] >> 24)] ?? "stopped"
+            var s = String(format: "timing %d s — %@, %@; idle core 0 %.1f %%, core 1 %.1f %%; latest wake +%.1f ms, %d wakes > 5 ms late, %d > 20 ms",
+                           r[0] & 0xFFFF, state, player, Double(r[1] & 0xFFFF) / 10, Double(r[1] >> 16) / 10,
+                           Double(r[2] & 0xFFFF) / 10, r[2] >> 16 & 0xFF, r[2] >> 24)
+            if r[3] & 0xFF != 0 {
+                s += String(format: "; USBAudioTask %d wakes, longest fill %.1f ms, longest sleep +%d ms, fewest frames ahead %d",
+                            r[3] & 0xFF, Double(r[3] >> 8 & 0xFF) / 10, r[3] >> 16 & 0xFF, r[3] >> 24)
+            }
+            return s
+        case timing2Tag:
+            // usb-audio-out 1.6: the second record of each second.
+            // Version 1.7: r2 bits 16–31 are the packets of the fast fill.
+            var s = String(format: "timing counts — %d USB interrupts, %d siTD errors, host task %d messages and %d timeouts, packet fill %.1f ms in total",
+                           r[0], r[1] & 0xFFFF, r[1] >> 16, r[2] & 0xFFFF, Double(r[3]) / 1000)
+            if r[2] >> 16 != 0 { s += String(format: " (%d packets with the fast fill)", r[2] >> 16) }
+            return s
+        case timing3Tag:
+            // usb-audio-out 1.8: the rates of the USB source and the time in Apple's fill.
+            return String(format: "timing source — input %d Hz, output %d Hz, converter flag %d, source +0 %d, +1 %d, route %d; Apple fill %.1f ms",
+                          r[0], r[1], r[2] & 0xFF, r[2] >> 8 & 0xFF, r[2] >> 16 & 0xFF, r[2] >> 24, Double(r[3]) / 1000)
         case musicStopTag:
             let reason = [1: "the dock was disconnected", 2: "the device does not answer"][Int(r[0])] ?? "reason \(r[0])"
             return String(format: "music stopped — %@, %d packets, %d siTD errors, %d sleeps", reason, r[1], r[2], r[3])

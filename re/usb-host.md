@@ -798,6 +798,53 @@ The owner: the menus, mostly the scrolling, are a little slower while USB-C Audi
 
 Version 1.4 of `usb-audio-out` (branch `usb-audio-speed`): a `bl` hook at 0xd33b0 gives 8 ticks while the route runs, and USBAudioTask makes two sets of packets in each wake. Emulator variant (the condition On): the poll each 8.17 ms, busy instructions with On 300 M in 30 s.
 
+Real iPod, version 1.4: still stuttery. The owner's comparison on the same list: music through the headphone jack smooth; On, dock and EarPods, music paused: smooth; USB music at 48 kHz and at 44.1 kHz: stutters. Thus the cause is in the USB music path, not in host mode and not in the rate conversion.
+
+Task priorities (the `bl 0x11c808` calls, `mov r3, #priority`): a higher number is a higher priority. Examples: ATAWorkLoopTask 0xc0, a task class at 0xc52fc 0x80 (name from a parameter), USBDeviceTask, ArtworkLoadTask, TimeManager 0x20, WindowManager, EventManager, eAppMotor, USBStatusTask, USBTaskTimeTask (the host task 0xd3390) 0x10, LoadDataTasks and the photo tasks 0. The kernel task switch is in 0x27f5f0 (the kernel request 0x84644); the patch does not hook it.
+
+Version 1.5 is a measurement build: the task "USBMeasure" (priority 0x10) sleeps 10 ms and records how late it wakes; one record each second (tag 76).
+
+Real iPod, version 1.5 (2026-10-17, 220 records). Mean values of the periods without scrolling:
+
+| State | Core 0 idle | Core 1 idle | Latest wake of USBMeasure |
+|---|---|---|---|
+| Off, paused | 94 % | 100 % | 2–6 ms |
+| On, host mode, no route (1 record) | 85 % | 100 % | 0.7 ms |
+| On, USB route, paused (silence packets) | 78 % | 100 % | 4–8 ms |
+| Off, playing through the jack | 58–60 % | 69 % | 49 ms (one each second) |
+| On, playing through USB | 42–44 % | 69 % | 77–90 ms (one each second) |
+
+- While the owner scrolled, core 0 was 2–15 % idle in all states, also with the jack, and USBMeasure woke 100–300 ms late. Thus the scrolling uses all free time of core 0, and the lateness of a 0x10 task during the scrolling is not a measure of the cause.
+- The decoder load on core 1 (31 %) is the same for the jack and for USB.
+- USB music uses about 15 % more of core 0 than jack music. The USB route uses about 16 % also with the music paused.
+- USBAudioTask: 41–43 wakes each second, the longest packet fill (Apple's 12 packets, from the end of the wait to the send hook) 1.7–2.6 ms, also with the music paused; no sleep overshoot; at least 23 frames in front after each sleep (no underrun).
+- 83 sets each second × about 1.9 ms is about 16 % of core 0. This agrees with the difference. Thus the probable cause of the stutter is the time of Apple's packet fill (0x1e3064 and its rate converter 0x1e2de0), not the number of wakes. Version 1.4 changed only the number of wakes. Open: confirm the mean fill time and find the cost inside 0x1e3064.
+
+Ghidra (2026-10-17), the packet fill:
+
+| Address | Function |
+|---|---|
+| 0x1e3064 | (source, bytes): a packet buffer from the pool (0xd3e70, 24 entries), then 0x1e2c90, or the test signal 0xdbdb4. |
+| 0x1e2c90 | (queue, buffer, frames): takes the frames from the 6-entry queue (12 bytes each: pointer, count). An empty queue: 0x7cd28 clears the buffer (silence). An used entry goes back to the decoder (0xfed68). |
+| 0x1e2de0 | If source + 0x7c is 0: a copy (0x7cae0). Else the rate converter 0x1e0bd8 (state at source + 0x50). |
+| 0x1e2bdc | Gives a packet buffer back to the pool (a search of 24 entries). |
+| 0x10fbb4 | The packet size: two divisions (0x82694). |
+| 0x11c9fc | The sleep: the kernel delay 0xa62b4, then a yield loop (0xa69b4, request 0x1c) until the timer (0x28407c) shows the time. |
+
+Thus at equal rates a set of 12 packets is about 2 KB of copies or clears. That is not 1.9 ms of CPU, and the music route costs about 16 % also with silence packets. The probable cost is outside the fill. Version 1.6 counts the USB interrupts (a wrapper in front of Apple's host handler 0xffd1c), the siTD errors and the messages of the host task each second (tag 77). The siTDs and the HID qTDs of the patch do not set IOC; the controller still interrupts at a transfer error (USBERRINT) or a short packet.
+
+Real iPod, version 1.6 (2026-10-17): 1 USB interrupt each second (the frame list rollover), 0 siTD errors; the host task 90–120 timeouts and 0 messages each second (the 8-tick wait); **Apple's packet fill about 129 ms in each second**, with the music playing and paused (84 sets: about 1.5 ms for each set). Thus the interrupts are not the cause, and the fill is the cost after all, also when it only clears the buffers. From the code (0x1e3064, 0x1e2c90, 0xd3e70, 0x1e2f74, 0x10fbb4, 0x1e2bdc) a set should take about 0.1–0.5 ms. The cause of the difference is not known.
+
+The machine code of 0x1e3064: silence (r3 = 1 for 0x1e2c90) if source + 0 is not 0 or 0x1e2f74 returns 0. 0x1e2c90 reads the queue at source + 0x10: entries of 12 bytes (+0 the frames, +4 the decoder buffer, +8 the count, 16 bits), the read index at + 0x4e, the write index at + 0x4c, 6 entries (0x82694 for the next index). Version 1.7 does these steps in the patch (`hook_fill`) with word loops, while the route runs and no conversion is necessary.
+
+Real iPod, version 1.7 (2026-10-17): the sound was correct, but the log had no packet of the fast fill, and the fill stayed at about 130 ms each second. Thus `hook_fill` always called Apple's fill.
+
+Ghidra: 0x1e2f60 (source, rate) sets the output rate (+0xc, +0x6c), copies the input rate (+4) to +0x68, sets 16 bits and 2 channels (+0x70/+0x74, +0x78/+0x7c), and the converter flag +0x8c = 1 if one of the pairs is not equal (unless the byte at DAT_001e09ec is 2). The setup uses the software floating point (0x2a8a44, 0x2a85c4, 0x2a9310). 0x1e2de0 reads the flag as (source + 0x10) + 0x7c and then calls the converter 0x1e0bd8 (0x1e09f0 or 0x1e08f0). The patch calls 0x1e2f60 when the route starts, before a song plays. Hypothesis: the input rate at +4 is then not 44100, the flag stays 1, and the converter runs on each packet, also on the silence buffers of the decoder while paused. Version 1.8 records +4, +0xc and +0x8c each second (tag 78), and uses the fast fill when +4 equals +0xc.
+
+Real iPod, version 1.8 (2026-10-17): the sound was correct, the scrolling not better. Each record: input 44100 Hz, output 48000 Hz, converter flag 1, Apple's fill about 122 ms in each second, also while paused. The cause of the flag: the option Sample Rate was still 48 kHz (from the 48 kHz test). The conversion 44.1 → 48 kHz is thus necessary, and Apple's converter (0x1e0bd8, software floating point in its setup) costs about 12 % of core 0. The hypothesis "the input rate is not 44100 at the route start" is wrong. Next: the same test with 44.1 kHz (then the fast fill runs).
+
+Real iPod, version 1.8 at 44.1 kHz (2026-10-17): input and output 44100 Hz, converter flag 0; the fast fill made all packets (about 1008 each second), Apple's fill 0 ms; the fill 28–30 ms in each second (about 3 % of core 0, against about 130 ms before); core 0 idle without scrolling 51–55 % (USB 1.3–1.8: 42–44 %, the jack: 58–60 %); 0 siTD errors, at least 23 frames in front. The owner: the sound correct, the scrolling better. Thus Apple's packet fill was about 10 % of core 0 at 44.1 kHz, and Apple's converter (the option 48 kHz) is about 12 % of core 0.
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).
