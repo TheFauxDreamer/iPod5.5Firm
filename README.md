@@ -42,6 +42,7 @@ The app has these functions:
 - Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane). The pane shows the size that each appearance adds to the firmware.
 - Show a different version on the About screen of the iPod, for example 1.3.1 (Patches pane). This setting is off by default. iTunes and Finder continue to see version 1.3.
 - Set up the Touch ID helper and examine Full Disk Access in the Settings window (iPodFirm > Settings…).
+- Show the test patches (for example the USB host probe) with Settings > Patches > Enable Test Patches. They are for research only, and the Patches pane shows a red warning for them.
 
 ### Build and install the app
 
@@ -298,7 +299,7 @@ NOTE: In the emulator, the restart operates only with the iPodFirm emulator patc
 | `instant-save` | Saves each change in Settings > Main Menu at once. Without it, the iPod saves its settings only when it sleeps or connects to a computer, and a restart with Menu+Select removes the change. It is in the Power group. | Tested in the emulator. Not tested on a real iPod. |
 | `cover-flow` | Cover Flow: hold Select in the Albums list to browse the album covers in 3D, with the click of the lists. Turn the wheel to move. Push Select to open the album at the centre. Push Menu to go back. White background with the light theme, black with Dark Mode. It uses the artwork and the album names that the iPod already has. | Tested in the emulator. Version 0.1 tested on a real iPod (open, wheel, Menu, Dark Mode). |
 | `usb-audio-out` | Settings > USB-C Audio: plays the music through USB-C headphones (USB Audio Class 2) through a USB-C mod and a dock or OTG adapter with power. The click wheel sets the volume; the headphone buttons operate the iPod (volume, play/pause, two and three pushes for the next and the previous song). Off after each start; Off gives the port back for a sync. Settings > Main Menu can also put a USB-C Audio switch in the main menu. Refer to [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md). | Tested on a real iPod (17 October 2026): all test steps passed. |
-| `usb-host-probe` | The test probe of the USB host mode and of USB-C audio, for [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md). Do not install it together with `usb-audio-out`. | Tested on a real iPod up to version 1.27. |
+| `usb-host-probe` | The test probe of the USB host mode and of USB-C audio, for [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md). Do not install it together with `usb-audio-out`. A test patch: the app shows it only with Settings > Patches > Enable Test Patches. | Tested on a real iPod up to version 1.27. |
 
 The `album-art` patch gets the album thumbnails from the artwork that iTunes or Finder put on the iPod (`iPod_Control/Artwork`). The albums do not need a file. The playlists need the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds playlists. A restart of the iPod is not necessary. After you disconnect the iPod from the computer, the patch examines the file again when an album list or a playlist list shows.
 

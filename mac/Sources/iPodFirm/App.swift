@@ -108,6 +108,18 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Layout", systemImage: "square.stack.3d.up") }
+            Form {
+                Section {
+                    Toggle("Enable Test Patches", isOn: $model.showTestPatches)
+                    Text("Test patches are for research, for example the USB host probe. They have no function for normal use, and they can make the iPod unstable. When this setting is off, the Patches pane does not show them, and iPodFirm does not include them in a firmware.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Test Patches")
+                }
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Patches", systemImage: "puzzlepiece.extension") }
         }
         .frame(width: 560, height: 300)
         .onAppear { model.recheckFullDiskAccess() }

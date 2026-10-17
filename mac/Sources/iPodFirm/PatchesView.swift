@@ -214,7 +214,7 @@ struct PatchListRow: View {
                     Text(patch.spec.displayTitle)
                     LetterBadge(patch: patch)
                     if let v = patch.spec.version { Text(v).font(.caption).foregroundStyle(.secondary) }
-                    if let n = patch.spec.size { Text(n.formatted(.byteCount(style: .memory))).font(.caption).foregroundStyle(.secondary) }
+                    if let s = patch.spec.shortSizeText { Text(s).font(.caption).foregroundStyle(.secondary) }
                 }
                 if let summary = patch.spec.summary {
                     Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -346,6 +346,22 @@ struct DetailHeader: View {
     }
 }
 
+/// The red warning at the top of a test patch (category "test").
+struct TestPatchWarning: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Test Patch", systemImage: "exclamationmark.octagon.fill")
+                .font(.headline)
+            Text("This patch is for research and tests only. It has no function for normal use, and it can make the iPod unstable. Do not install it on an iPod that you use every day.")
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(.white)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.red, in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
 struct PatchDetail: View {
     @EnvironmentObject var model: AppModel
     let patch: PatchInfo
@@ -355,6 +371,7 @@ struct PatchDetail: View {
             Section {
                 DetailHeader(title: patch.spec.displayTitle, subtitle: patch.spec.summary,
                              symbol: validSymbol(patch.spec.symbol), tint: patch.tint, patch: patch)
+                if patch.spec.isTest { TestPatchWarning() }
                 if let caution = patch.spec.caution {
                     Label(caution, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)

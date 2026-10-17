@@ -40,7 +40,16 @@ final class AppModel: ObservableObject {
     @Published var flashPlan: FlashPlan?
     @Published var hasFullDiskAccess = AppModel.checkFullDiskAccess()
     @Published var helperStatus: SMAppService.Status = HelperClient.service.status
-    @Published var patches: [PatchInfo] = AppModel.patchLibrary.list().filter { $0.spec.internal != true }
+    @Published var patches: [PatchInfo] = PatchSpec.visible(AppModel.patchLibrary.list(),
+                                                            showTests: UserDefaults.standard.bool(forKey: "showTestPatches"))
+    /// Settings > Patches > Enable Test Patches. Off: the Patches pane hides the test patches, and a
+    /// build does not include them.
+    @Published var showTestPatches = UserDefaults.standard.bool(forKey: "showTestPatches") {
+        didSet {
+            UserDefaults.standard.set(showTestPatches, forKey: "showTestPatches")
+            reloadPatches()
+        }
+    }
     @Published var enabledPatches: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "enabledPatches") ?? []) {
         didSet { UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches") }
     }
@@ -493,7 +502,7 @@ final class AppModel: ObservableObject {
     }
 
     func reloadPatches() {
-        patches = Self.patchLibrary.list().filter { $0.spec.internal != true }
+        patches = PatchSpec.visible(Self.patchLibrary.list(), showTests: showTestPatches)
         if let s = patchSelection, s != "appearance", s != "version", !patches.contains(where: { $0.spec.name == s }) {
             patchSelection = "appearance"
         }

@@ -30,7 +30,7 @@ The app needs macOS 14 or later and an Apple silicon Mac (`--arch arm64`).
 
 [AppModel.swift](../mac/Sources/iPodFirm/AppModel.swift) holds the state and the actions of all panes.
 
-The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has two tabs. Permissions: the Touch ID helper, `requireTouchID` and Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`): 32 KB (the limit 0x7F8000, the default), 16 KB (the limit 0x7FC000, more space for patches) or 64 KB (the limit 0x7F0000, the value before 9 October 2026). The setting applies to the next build and to the space bar of the Patches pane.
+The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has three tabs. Permissions: the Touch ID helper, `requireTouchID` and Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`): 32 KB (the limit 0x7F8000, the default), 16 KB (the limit 0x7FC000, more space for patches) or 64 KB (the limit 0x7F0000, the value before 9 October 2026). The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`), and a build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`).
 
 The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
@@ -259,6 +259,7 @@ The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not ch
 | `UserDefaults` key | Content |
 |---|---|
 | `enabledPatches` | The names of the switched-on patches. |
+| `showTestPatches` | Settings > Patches > Enable Test Patches: true shows the test patches (category `test`). |
 | `patchOptions` | The selected choice of each patch option: patch name → option `id` → value (refer to [patch-system.md](patch-system.md#options)). |
 | `appearance` | `light`, `dark` or `switch`. |
 | `darkTheme` | The name of the selected theme. |

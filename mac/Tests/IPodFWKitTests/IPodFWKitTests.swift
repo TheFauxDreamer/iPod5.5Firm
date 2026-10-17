@@ -556,6 +556,31 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertFalse(Patcher.conflicts(pair).isEmpty)
     }
 
+    /// A patch with no code shows the bytes that it changes, not "0 KB".
+    func testChangedBytesText() {
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        let volume = all.first { $0.spec.name == "volume-unlimit" }!.spec
+        XCTAssertEqual(volume.size, 0)
+        XCTAssertEqual(volume.changedBytes, 2)
+        XCTAssertEqual(volume.shortSizeText, 2.formatted(.byteCount(style: .memory)))
+        XCTAssertEqual(volume.sizeText, "2 bytes")
+        let probe = all.first { $0.spec.name == "usb-audio-out" }!.spec
+        XCTAssertEqual(probe.changedBytes, 0)
+        XCTAssertEqual(probe.sizeText, PatchSpec.byteText(probe.size!))
+    }
+
+    /// The test patches (category "test") show only when Settings > Patches > Enable Test Patches is on.
+    func testTestPatchesHidden() {
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        XCTAssertTrue(all.first { $0.spec.name == "usb-host-probe" }!.spec.isTest)
+        XCTAssertFalse(all.first { $0.spec.name == "usb-audio-out" }!.spec.isTest)
+        let hidden = PatchSpec.visible(all, showTests: false), shown = PatchSpec.visible(all, showTests: true)
+        XCTAssertFalse(hidden.contains { $0.spec.name == "usb-host-probe" })
+        XCTAssertTrue(shown.contains { $0.spec.name == "usb-host-probe" })
+        XCTAssertFalse(shown.contains { $0.spec.internal == true })
+        XCTAssertEqual(shown.count - hidden.count, all.filter { $0.spec.isTest && $0.spec.internal != true }.count)
+    }
+
     func testPatchVersionCompare() {
         XCTAssertGreaterThan(PatchVersion("1.10")!, PatchVersion("1.9")!)
         XCTAssertEqual(PatchVersion("1"), PatchVersion("1.0.0"))

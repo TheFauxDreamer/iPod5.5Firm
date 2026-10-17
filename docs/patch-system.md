@@ -157,7 +157,7 @@ The changes stay in the app until Save or **Revert** (`AppModel.codeDrafts`), al
 | `notes` | array of strings, optional | More information. The section "Good to Know" shows each item. |
 | `caution` | string, optional | A caution. The pane shows it in orange above the switch of the patch. The install sheet also shows it. |
 | `symbol` | string | The name of an SF Symbol, for example `photo.on.rectangle.angled`. Do not use emoji. |
-| `category` | string | The group in the list of patches: `display`, `power`, `audio` (the group "Sound"), `fun` or `test`. |
+| `category` | string | The group in the list of patches: `display`, `power`, `audio` (the group "Sound"), `fun` or `test`. A `test` patch is a research patch: the app shows it only when Settings > Patches > Enable Test Patches is on, with a red warning, and a build includes it only then (`PatchSpec.isTest`, `PatchSpec.visible`, the test `testTestPatchesHidden`). |
 | `settings_items` | array, optional | On/Off items that the patch adds to the Settings menu. Refer to [Settings items](#settings-items). |
 | `menu_items` | array, optional | Copies of items that the patch adds to other menus, for example the Music menu. Refer to [Menu items](#menu-items). |
 | `options` | array, optional | Choices that the owner makes in the Patches pane before a build. Refer to [Options](#options). |
@@ -369,7 +369,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
 
-Each `patch.json` records the size of its code in `size`. The Patches pane shows it in the list and in the detail ("Size on iPod"). The install and **Export Patch…** link the code and write the measured size into `patch.json` if the value is missing or wrong. A user patch that an earlier version of iPodFirm installed can have no size. At each start, the app measures each user patch with no `size` and writes the value into its `patch.json` (`PatchLibrary.recordMissingSizes`). The `version` does not change. If the link fails, for example because the Mac has no clang, the patch keeps no size and the pane shows "–".
+Each `patch.json` records the size of its code in `size`. The Patches pane shows it in the list and in the detail ("Size on iPod"). A patch with `size` 0 that changes bytes (`bytes`) shows the count of the changed bytes in place of "0 KB", for example "2 bytes" for `volume-unlimit` (`PatchSpec.changedBytes`, `shortSizeText`, the test `testChangedBytesText`). Some owners thought that a patch with "0 KB" did nothing. The install and **Export Patch…** link the code and write the measured size into `patch.json` if the value is missing or wrong. A user patch that an earlier version of iPodFirm installed can have no size. At each start, the app measures each user patch with no `size` and writes the value into its `patch.json` (`PatchLibrary.recordMissingSizes`). The `version` does not change. If the link fails, for example because the Mac has no clang, the patch keeps no size and the pane shows "–".
 
 ### The extended area
 

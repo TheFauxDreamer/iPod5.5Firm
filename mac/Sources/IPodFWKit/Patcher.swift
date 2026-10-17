@@ -143,6 +143,14 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var ui: PatchUI?
 
     public static let categories = ["display", "power", "audio", "fun", "test"]
+    /// true: a research or test patch (the category "test"). The Patches pane shows it only when
+    /// Settings > Patches > Enable Test Patches is on, and then with a red warning.
+    public var isTest: Bool { category == "test" }
+    /// The patches that the Patches pane shows and that a build can include: no `internal` patch, and
+    /// a test patch only if `showTests` is true.
+    public static func visible(_ patches: [PatchInfo], showTests: Bool) -> [PatchInfo] {
+        patches.filter { $0.spec.internal != true && (showTests || !$0.spec.isTest) }
+    }
     /// The ids of the built-in Swift tools that `ui.tools` can name (PatchTools.swift in the app).
     public static let knownTools = ["album-thumbnails", "usb-log"]
     public var displayTitle: String { title ?? name }
@@ -152,7 +160,26 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var versionText: String { version ?? "–" }
 
     /// The size for display, for example "3,080 bytes (3.0 KB)", or "–" if the patch has no size.
-    public var sizeText: String { size.map(Self.byteText) ?? "–" }
+    public var sizeText: String {
+        guard let size else { return "–" }
+        return Self.byteText(size == 0 ? changedBytes : size)
+    }
+
+    /// The bytes of the firmware that `bytes` changes: each byte where `value` is not `expect`. A patch
+    /// with no code (size 0) shows this count as its size, for example volume-unlimit: 2 bytes.
+    public var changedBytes: Int {
+        (bytes ?? []).reduce(0) { n, b in
+            guard let e = try? Patcher.hexBytes(b.expect), let v = try? Patcher.hexBytes(b.value), e.count == v.count else { return n }
+            return n + zip(e, v).filter { $0 != $1 }.count
+        }
+    }
+
+    /// The short size for the list of patches: the added code, or the changed bytes of a patch with no
+    /// code, for example "3 KB" or "2 bytes".
+    public var shortSizeText: String? {
+        guard let size else { return nil }
+        return (size == 0 ? changedBytes : size).formatted(.byteCount(style: .memory))
+    }
 
     /// For example "3,080 bytes (3.0 KB)", or "188 bytes".
     public static func byteText(_ n: Int) -> String {
