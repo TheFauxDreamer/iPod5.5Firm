@@ -182,14 +182,15 @@ public enum ThemeImport {
     public static let ososMarginKey = "ososMargin"
 
     /// The empty margin below 8 MB.
+    /// The cases are in the order of the size of the margin; the picker shows them in this order.
     public enum OSOSMargin: String, CaseIterable, Identifiable {
+        /// 16 KB: the limit 0x7FC000. More space for patches, with a smaller reserve below 8 MB.
+        case compact
         /// 32 KB: the limit 0x7F8000 (the default since 9 October 2026).
         case current
         /// 64 KB: the limit 0x7F0000 (before 9 October 2026). A test: the Now Playing art with the
         /// USB host probe (patches/usb-host-probe/FINDINGS.md).
         case previous
-        /// 16 KB: the limit 0x7FC000. More space for patches, with a smaller reserve below 8 MB.
-        case compact
 
         public var id: String { rawValue }
         public var limit: Int {

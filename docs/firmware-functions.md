@@ -442,6 +442,12 @@ Refer to [re/usb-audio.md](../re/usb-audio.md). No patch uses these functions ye
 | 0xd9cec | (type, error): the USB host message to the UI (notification 0x12 through 0xcd314), for example "unsupported device". Callers: 0xd399c (add device 0xd377c), 0x10c204, 0xe2be0, 0xc0c38 (`bleq`). Errors of 0xd377c: 0x673 and 0x67d (hub not allowed), 0x68c (no driver). Static. |
 | 0x9ba00 | (database): the play state: 1 playing, 2 paused, else stopped. 0x1e798c (= 1) and 0x1e7848 (= 2) use it. Static. |
 | 0x13221c | Apple's USB stream stop: the stream off (state + 2), the cancel of endpoint 0x81 (0x24bf7c), the route to the codec (0x1a2fa0) and the flush of the USB buffers (0x1a2fa8). Static. |
+| 0xb95a4, 0x184aec | The USB mode task and its manager (pointer at RAM 0x1081edc4): the clients idle (0, 0x24d7a4), device (1, 0x170fec) and host (2, 0x1422e8). The task starts mode 1 at USB power and stops mode 2 at 0xb9614 (`bleq 0x18482c`). Static. |
+| 0x184860, 0x18482c | Manager: start mode m (only from mode 0; the stop of client 0, then +0x14 and +0x18 of client m) and stop mode m (+0x24 and +0x28 of client m, then the start of client 0). The mode is byte +0. Static. |
+| 0x1422c0, 0x142298 | The host client: start (Camera Connector "on", host start 0x2860e8, state 3) and stop (host stop 0x28608c, Camera Connector "off", state 5). Static. |
+| 0x28608c | Apple's host stop: 0xb9358(1), a sleep of 2 s, 0xb963c, the UIM finalize (dispatch table + 8), frees the pools at + 8 and + 0xc. Static. |
+| 0x170f24, 0x170ec0 | The device client start: 0x170ec0(obj, 3) writes the state + 6 and wakes USBDeviceTask (event + 0x10). Static. |
+| 0x11c808 | Makes a task: (name, entry, argument string, priority, stack size, a, b). Static. |
 | 0x170f2c | The USB device task: waits until its state (+6) is 3 (USB power), then the device start 0x24d3c4 (at 0x170fc8), the session 0x24cd34 (at 0x170fd8) and the stop 0x24d49c (at 0x170fe0). Static. |
 | 0x24d3c4, 0x24cfac, 0x220e0c | The device mode start: 0x220e0c sets up the endpoints, sets a USBCMD bit (0x2204f8) and installs and enables the device interrupt handler 0xcd8e0 (0x18a870, 0x18a824). 0x24d3c4 returns not 0 if the start failed. Static. |
 | 0x24cd34 | The device session: runs while OTGSC bit 11 (VBUS) is set (0x220278); tests and clears USBSTS bits (0x220b80); ends when the abort flag RAM 0x108318ec + 5 is set. Static. |

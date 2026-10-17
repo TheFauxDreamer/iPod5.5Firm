@@ -1,0 +1,229 @@
+{
+  "name": "usb-audio-out",
+  "title": "USB-C Audio",
+  "summary": "Plays the music through USB-C headphones (Settings > USB-C Audio).",
+  "symbol": "headphones",
+  "category": "audio",
+  "version_letter": "u",
+  "version": "1.0",
+  "size": 14176,
+  "description": "Adds the item USB-C Audio to Settings. When it is On, the iPod operates as the USB host and sends its music to USB Audio Class 2 headphones, for example the Apple USB-C EarPods. The volume of the iPod sets the volume of the headphones, and the buttons of the headphones operate the iPod.",
+  "caution": "USB-C Audio needs a USB-C mod and a dock or an OTG adapter that gives 5 V. While USB-C Audio is On, a computer cannot see the iPod: set it to Off before a sync. The probe patch usb-host-probe uses the same hook sites: do not install both.",
+  "details": [
+    "Settings > USB-C Audio is Off after each start. Then the USB port operates as usual: sync, disk mode and charging.",
+    "Set USB-C Audio to On. Connect the headphones through the dock. The music comes from the headphones a few seconds after they connect.",
+    "The click wheel sets the volume of the headphones.",
+    "The headphone buttons: volume + and volume −; the middle button one time is Play/Pause, two times is the next song, three times is the previous song.",
+    "When you disconnect the dock, the song pauses. When you connect it again, the music goes to the headphones again; press Play to continue.",
+    "Set USB-C Audio to Off: the music goes to the headphone jack, and a computer can see the iPod again."
+  ],
+  "requires": [
+    "An iPod Video (5G/5.5G) with a USB-C mod.",
+    "A USB-C dock or OTG adapter that gives 5 V to the headphones.",
+    "USB Audio Class 2 headphones at full speed, for example the Apple USB-C EarPods."
+  ],
+  "notes": [
+    "The patch sends the music at 44.1 kHz (48 kHz if the headphones do not accept 44.1 kHz), 16 bits, stereo, at full speed.",
+    "The volume curve: full volume is 0 dB, half volume is -24 dB.",
+    "Tested functions (probe 1.27): music, Now Playing art, volume, buttons, a pause at a disconnection, a new start after a reconnection."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    {
+      "model": "iPod Video (5G/5.5G)",
+      "firmware": "1.3",
+      "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251"
+    }
+  ],
+  "load_address": "extended",
+  "settings_items": [
+    {
+      "key": "0x600060e8",
+      "label_id": "0x7e06",
+      "after_key": "0x60006088"
+    }
+  ],
+  "ui": {
+    "steps_title": "Use USB-C Audio",
+    "steps": [
+      "Flash a firmware with this patch.",
+      "Connect the USB-C dock (with its power supply) and the USB-C headphones to the iPod.",
+      "On the iPod, open Settings and set USB-C Audio to On.",
+      "Play a song. The music comes from the headphones.",
+      "Before a sync, set USB-C Audio to Off, disconnect the dock and connect the computer."
+    ]
+  },
+  "symbols": {
+    "fw_play_state": "0x09ba00",
+    "fw_key": "0x1ac198",
+    "fw_usb_message": "0x0d9cec",
+    "fw_device_start": "0x24d3c4",
+    "fw_device_stop": "0x24d49c",
+    "fw_port_status": "0xe7980",
+    "fw_chip_check": "0x266794",
+    "fw_irq_attach": "0x18a83c",
+    "fw_irq_manager": "0x127618",
+    "fw_irq_disable": "0x127888",
+    "fw_irq_remove": "0x1277d0",
+    "host_start": "0x2860e8",
+    "task_sleep": "0x11c9fc",
+    "dma_alloc": "0xad80c",
+    "fw_usb_send": "0x24d518",
+    "fw_usb_wait": "0x24c4cc",
+    "fw_event_signal": "0xd1e70",
+    "fw_route_usb": "0x1a2fa0",
+    "fw_rate_convert": "0x1e2f60",
+    "fw_route_flush": "0x1a2fa8",
+    "__aeabi_uidiv": "0x82694",
+    "periodic_insert": "0xf5c80",
+    "completion_continue": "0xcb11c",
+    "uim_control_endpoint": "0x96f64",
+    "uim_control_transfer": "0x96ffc",
+    "fw_irq_install": "0x18a870",
+    "mode_activate": "0x184860",
+    "mode_deactivate": "0x18482c",
+    "usb_power": "0x17108c",
+    "task_create": "0x11c808",
+    "str_lookup": "0x21f418",
+    "str_table": "0x21f3b8",
+    "lookup_continue": "0x21f258"
+  },
+  "hooks": [
+    {
+      "kind": "b",
+      "at": "0x21f254",
+      "expect": "0xe92d40f8",
+      "to": "hook_lookup",
+      "chain": "lookup_next",
+      "chain_default": "lookup_original"
+    },
+    {
+      "kind": "word",
+      "at": "0x66c94c",
+      "expect": "0x00190b00",
+      "to": "hook_settings_get",
+      "chain": "get_next"
+    },
+    {
+      "kind": "word",
+      "at": "0x66c950",
+      "expect": "0x001919d8",
+      "to": "hook_settings_set",
+      "chain": "set_next"
+    },
+    {
+      "kind": "bl",
+      "at": "0xd399c",
+      "expect": "0xeb0018d2",
+      "to": "hook_usb_message"
+    },
+    {
+      "kind": "bl",
+      "at": "0x10c204",
+      "expect": "0xebff36b8",
+      "to": "hook_usb_message"
+    },
+    {
+      "kind": "bl",
+      "at": "0xe2be0",
+      "expect": "0xebffdc41",
+      "to": "hook_usb_message"
+    },
+    {
+      "kind": "bl",
+      "at": "0x170fc8",
+      "expect": "0xeb0370fd",
+      "to": "hook_device_start"
+    },
+    {
+      "kind": "bl",
+      "at": "0x170fe0",
+      "expect": "0xeb03712d",
+      "to": "hook_device_stop"
+    },
+    {
+      "kind": "bl",
+      "at": "0xb9614",
+      "expect": "0x0b032c84",
+      "to": "hook_mode_stop"
+    },
+    {
+      "kind": "bl",
+      "at": "0xd28f0",
+      "expect": "0xeb005422",
+      "to": "hook_port_status"
+    },
+    {
+      "kind": "bl",
+      "at": "0x10e75c",
+      "expect": "0xebff6487",
+      "to": "hook_port_status"
+    },
+    {
+      "kind": "bl",
+      "at": "0x97364",
+      "expect": "0xeb073d0a",
+      "to": "hook_chip_check"
+    },
+    {
+      "kind": "bl",
+      "at": "0x9741c",
+      "expect": "0xeb03cd13",
+      "to": "hook_irq_install"
+    },
+    {
+      "kind": "bl",
+      "at": "0x9761c",
+      "expect": "0xeb017997",
+      "to": "hook_periodic_insert"
+    },
+    {
+      "kind": "bl",
+      "at": "0x96d14",
+      "expect": "0xeb017bd9",
+      "to": "hook_periodic_insert"
+    },
+    {
+      "kind": "bl",
+      "at": "0x1320fc",
+      "expect": "0xeb046d05",
+      "to": "hook_usb_send"
+    },
+    {
+      "kind": "bl",
+      "at": "0x13217c",
+      "expect": "0xeb046ce5",
+      "to": "hook_usb_send"
+    },
+    {
+      "kind": "bl",
+      "at": "0x13218c",
+      "expect": "0x0b0468ce",
+      "to": "hook_usb_wait_if_sent"
+    },
+    {
+      "kind": "bl",
+      "at": "0x1321d0",
+      "expect": "0xeb0468bd",
+      "to": "hook_usb_wait"
+    },
+    {
+      "kind": "b",
+      "at": "0xcb118",
+      "expect": "0xe92d40fe",
+      "to": "hook_completion"
+    },
+    {
+      "kind": "word",
+      "at": "0x6c882c",
+      "expect": "0x00096f64",
+      "to": "hook_uim_control_endpoint"
+    },
+    {
+      "kind": "word",
+      "at": "0x6c8830",
+      "expect": "0x00096ffc",
+      "to": "hook_uim_control_transfer"
+    }
+  ]
+}

@@ -195,7 +195,7 @@ Records in `iPod_Control/iTunes/iPodFirmUSBLog` (511 records, 32 KB). iPodFirm s
 1q. Done: probe 1.25: the route again after a reconnection; two and three pushes operate.
 1r. Done: probe 1.26: a pause at the disconnection.
 1s. Done: probe 1.27: all as expected.
-1t. Next: Stage 3, the real patch `usb-audio-out`. The UI lag is closed: the owner found that a separate patch caused it, not the USB host probe (2026-10-16).
+1t. Done: Stage 3, the patch `usb-audio-out` 1.0 (the code of probe 1.27, Settings > USB-C Audio). Real iPod (2026-10-17): all test steps passed. The UI lag is closed: the owner found that a separate patch caused it, not the USB host probe (2026-10-16).
 1l. Later: the freeze when a computer or the dock connects in host mode; the volume (iPod volume to the feature unit, HID buttons; done in 1.21–1.23); the UI lag (closed: a separate patch); then Stage 3. Earlier item: probe 1.20 (1.19 with corrected test steps: wait 15 s, then restart; do not connect the Mac in host mode) with the music route ("Start the Probe at the Next Restart"). Then the freeze when a computer or the dock connects in host mode, and the UI lag.
 2. Optional: read configurations 2 and 3 and the clock ranges (UAC2 GET RANGE). The external test above makes this less important: the Stage 3 driver can try 44.1 kHz and use 48 kHz if the EarPods refuse it. The probe must read each buffer only one time, or clean the cache first.
 3. Optional bench test of the minimum voltage of the EarPods (refer to the hardware section).

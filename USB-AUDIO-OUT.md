@@ -4,9 +4,9 @@ This document is the plan for USB-C audio out on the iPod 5.5G. With this functi
 
 | Item | Value |
 |---|---|
-| Status | Stage 1 is done. The probe patch for Stage 0 is ready on the branch `usb-audio-out` and tested in the emulator. Waiting for the hardware test of the owner. |
+| Status | **Complete (17 October 2026).** The patch `usb-audio-out` 1.0 plays the music through USB-C headphones and passed all test steps on the real iPod. |
 | Firmware | Apple RetailOS 1.3 (`iPod_25.1.3.ipsw`) |
-| Patch | `patches/usb-host-probe` (letter `h`, Stage 0 test). Later `patches/usb-audio-out` (letter `u`). |
+| Patch | `patches/usb-audio-out` (letter `u`). The research probe is `patches/usb-host-probe` (letter `h`). |
 | Branch for the code | `usb-audio-out` |
 | Research notes | [re/usb-host.md](re/usb-host.md) (host direction), [re/usb-audio.md](re/usb-audio.md) (source direction) |
 
@@ -87,17 +87,17 @@ The patch is `patches/usb-audio-out`, with the version letter `u`.
 
 **First test (2026-10-09):** the probe `usb-host-probe` (version 1.2) has a Stage 2 test without the UIM. It makes its own siTDs in the frame list and sends a 1 kHz tone to the EarPods for 5 s. The `"word"` hooks on the stub entries come later, with the driver of Stage 3. Details: [docs/modifications.md](docs/modifications.md#usb-host-probe), item 16.
 
-## Stage 3: USB Audio Class 1 host driver
+## Stage 3: the patch usb-audio-out
 
-- Add a driver record and a dispatch table, in the format of the records at 0x6c86e8 and 0x6c8780, for interface class 1, subclass 2.
-- Add the driver to the driver list at 0x6bc3dc, with a `"word"` hook on the end of the list or a pointer to a longer copy.
-- The driver does these steps:
-  1. It reads the configuration descriptor.
-  2. It selects the alternate setting for 16-bit stereo PCM.
-  3. It sends SET_CUR for the sampling frequency: 44.1 kHz, else 48 kHz.
-  4. It opens the isochronous OUT pipe (Stage 2).
-  5. It sends 44 or 45 frames (or 48 frames) each 1 ms.
-- Do UAC1 first. Do UAC2 (high speed, clock source) only after UAC1 works.
+The probe showed that the patch does not need a class driver or the UIM isochronous entries: it finds the device in the configuration that the composite driver reads, sends its own control requests and makes its own siTDs. The old plan (a UAC1 class driver in the driver list, `"word"` hooks on 0x6c885c and 0x6c8860) is not used.
+
+The patch `patches/usb-audio-out` (letter `u`, version 1.0) is the code of probe 1.27 without the test parts, with:
+
+- the Settings item "USB-C Audio" (On/Off, Off after each start);
+- the task "USBAudioOut", which starts and stops host mode through Apple's USB mode manager (RAM 0x1081edc4) and starts the music route automatically when the headphones are enumerated;
+- Off at once: Apple's host stop, then the device mode again.
+
+Details: [docs/modifications.md](docs/modifications.md#usb-audio-out) and [re/usb-host.md](re/usb-host.md).
 
 ## Stage 4: audio path and user interface
 
@@ -178,3 +178,5 @@ The patch is `patches/usb-audio-out`, with the version letter `u`.
 | 2026-10-16 | Stage 4 | Probe 1.25: **the headphones operate again after a reconnection**; two and three pushes (next, previous) operate well. The playback stopped completely at the disconnection. Probe 1.26 stops the route in USBAudioTask between two sets and then pauses the player. | Owner: test probe 1.26 (the disconnection: a pause, then Play). |
 | 2026-10-16 | Stage 4 | Probe 1.26: **the song pauses at the disconnection.** The headphones start too loud, and at the reconnection the "unsupported device" screen ended the playback. Probe 1.27 shows no USB host messages while host mode runs, and uses a quieter volume curve (half volume −24 dB). | Owner: test probe 1.27. |
 | 2026-10-16 | Stage 4 | Probe 1.27: **all as expected.** No "unsupported device" at a reconnection; the song pauses at a disconnection and continues after Play; the volume levels are good. The probe now has all the functions of USB audio out. | Next: Stage 3, the real patch (a Settings item, no tones and no log). |
+| 2026-10-17 | Stage 3 | The patch `usb-audio-out` 1.0: Settings > USB-C Audio, the task USBAudioOut, Apple's USB mode manager for On and Off, the automatic route start. Swift and Python tests pass. | Owner: test on the real iPod (Off: sync; On: music, volume, buttons, reconnection; Off: the Mac sees the iPod). |
+| 2026-10-17 | Stage 3 | **The patch `usb-audio-out` 1.0 passed all test steps on the real iPod**: Off and sync; On, the music to the EarPods without a button press; the volume and the buttons; a pause at a disconnection and Play after a reconnection; Off and the Mac sees the iPod; On, Off, On again. | USB-C audio out is complete. |

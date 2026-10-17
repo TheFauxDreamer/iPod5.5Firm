@@ -732,6 +732,36 @@ Probe 1.27:
 
 Real iPod, probe 1.27: all as expected. No "unsupported device" at a reconnection, the song pauses and continues after Play, and the volume levels are good.
 
+## Stage 3: the USB mode manager and the patch usb-audio-out (Ghidra, 2026-10-16)
+
+The task 0xb95a4 makes the USB mode manager (0x184aec) and keeps its pointer at RAM 0x1081edc4. It registers three clients (0x184ab8; the client method +8 gives its mode id):
+
+| Client | Object | Mode id | Start (+0x18) | Stop (+0x24) |
+|---|---|---|---|---|
+| Idle | 0x24d7a4 | 0 | | |
+| Device | 0x170fec, vtable 0x66ad9c | 1 | 0x170f24: 0x170ec0(obj, 3), state 3, wakes USBDeviceTask | 0x170f0c → 0x24d0a4: if VBUS, the abort flag 0x108318ec + 5 and a wake of the session |
+| Host | 0x1422e8, vtable 0x668598 | 2 | 0x1422c0: Camera Connector "on" (0x1fb50c(1)), host start 0x2860e8, state 3 | 0x142298: host stop 0x28608c (0xb9358(1), a sleep of 2 s, 0xb963c, the UIM finalize, the pools free), Camera Connector "off", state 5 |
+
+The vtable offsets are from the vtable base (two zero words, then +8 the mode id). The shared methods are +0x14 0x224ae4 and +0x28 0x224af4.
+
+- The manager's mode is byte +0. Its lock is at + 0x10.
+- `0x184860(manager, m)` (0x184a04) starts mode m, but only from mode 0: the stop of client 0 (+0x24, +0x28), then the start of client m (+0x14, +0x18).
+- `0x18482c(manager, m)` (0x1849d4) stops mode m: the stop of client m, then the start of client 0. The mode is then 0.
+- The loop of the task 0xb95a4:
+  1. It waits for USB power (0xfdd38).
+  2. If the mode is 2, it stops the host at 0xb9614 (`bleq 0x18482c`).
+  3. It starts mode 1 (0xb9620).
+  4. It waits while the power stays (0x10c06c), then stops mode 1 (0xb9630).
+- The system notification handler 0x1e0084 starts and stops mode 2 for the Camera Connector (0x1e030c, 0x1e034c, 0x1e0370).
+- USBDeviceTask (0x170fec) gets the object address as a decimal string (0x7b240 "%u"); its entry 0x170ea4 converts it (0x260608).
+- The task creation is 0x11c808(name, entry, argument string, priority, stack size, a, b). The argument string is split at spaces into at most 10 words. USBDeviceTask uses priority 0x20 and the stack values 0x1000, 1, 3.
+
+The patch `patches/usb-audio-out` (version 1.0) uses the manager:
+
+- **On:** it stops mode 1 (Apple's end of the device session; it waits at most 2.5 s for the stop while VBUS is present), sets `host_running`, and starts mode 2. The host client starts the host stack. If the start fails, the patch calls 0x2860e8 itself.
+- **Off:** USBAudioTask stops the route (the song pauses). Then the patch stops mode 2 (Apple's host stop) and, with USB power present, starts mode 1. Then a computer can see the iPod.
+- A `bl` hook at 0xb9614 keeps the host mode at a new VBUS while USB-C Audio is On. The patcher makes the conditional call unconditional, thus the hook acts only for the call with the manager and mode 2.
+
 ## Open items
 
 1. The UIM interrupt handler that completes the periodic transfers (Stage 2).

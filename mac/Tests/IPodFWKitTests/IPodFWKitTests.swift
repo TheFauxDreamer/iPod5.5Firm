@@ -548,6 +548,14 @@ final class PatchAndArtTests: XCTestCase {
         }
     }
 
+    /// usb-audio-out has the code of usb-host-probe and the same hook sites: the app must not turn on both.
+    func testUSBAudioOutConflictsWithProbe() {
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        let pair = all.filter { ["usb-audio-out", "usb-host-probe"].contains($0.spec.name) }
+        XCTAssertEqual(pair.count, 2)
+        XCTAssertFalse(Patcher.conflicts(pair).isEmpty)
+    }
+
     func testPatchVersionCompare() {
         XCTAssertGreaterThan(PatchVersion("1.10")!, PatchVersion("1.9")!)
         XCTAssertEqual(PatchVersion("1"), PatchVersion("1.0.0"))
@@ -1131,6 +1139,11 @@ final class USBProbeLogTests: XCTestCase {
 
 /// The setting "Firmware layout": the empty margin below 8 MB (32 KB or 64 KB).
 final class OSOSMarginTests: XCTestCase {
+    func testOptionsInSizeOrder() {
+        let limits = ThemeImport.OSOSMargin.allCases.map(\.limit)
+        XCTAssertEqual(limits, limits.sorted(by: >))         // a higher limit is a smaller margin
+    }
+
     func testMarginSetting() {
         let key = ThemeImport.ososMarginKey
         let old = UserDefaults.standard.string(forKey: key)
