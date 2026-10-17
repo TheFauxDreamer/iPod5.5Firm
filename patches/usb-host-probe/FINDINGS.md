@@ -44,7 +44,8 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 - The iPod has no 5 V source for USB. VBUS must come from outside (a dock or an adapter with a charger).
 - Dock pin 18 supplies 3.3 V accessory power. The iPod Camera Connector has its own step-up converter that changes this 3.3 V to 5 V for its USB port. Thus the iPod never supplied a low USB voltage.
 - The firmware switches pin 18 with 0x264d78 (PCF50605 D2REGC1: 0xf8 on, 0x18 off). The host start already turns it on (the UIM init 0x97300 calls 0x264d78(3)). The root hub driver already sets PP (PORTSC bit 12, 0x96a24). Refer to [re/usb-power.md](../../re/usb-power.md) (branch `usb-vbus-test`).
-- The USB-C mod probably connects VBUS to the USB power input of the iPod, not to pin 18. This is not measured. The firmware has no other output that it can switch to VBUS. The VBUS test (probe 1.29) measures it.
+- **The USB-C mod does not connect pin 18 to VBUS** (VBUS test, probe 1.29, real iPod 2026-10-17): with the 3.3 V on, VBUS stayed below approximately 0.8 V, and the EarPods did not connect directly. PP and the VBUS charge supply no power. Thus a powered dock or adapter stays necessary unless the hardware changes.
+- In host mode, OTGSC bits 9–11 stay on. Only bit 12 (B-session end) measures VBUS there.
 - USB 2.0 devices must operate down to approximately 4.4 V. The minimum voltage of the USB-C EarPods is not known. No measurement is published.
 - Optional bench test (after the EarPods enumeration test): use a USB-C pass-through breakout with VBUS cut. Supply the data from a Mac and VBUS from an adjustable supply. Decrease the voltage in 0.1 V steps. Record the voltage where the audio stops.
 - If the EarPods operate at 3.3 V, a hardware change (pin 18 to VBUS through a switch) is possible. Else a 3.3 V to 5 V step-up converter is necessary.
@@ -99,6 +100,7 @@ USB-C audio out: the iPod as USB host to USB-C headphones and USB DACs. The prob
 | Probe 1.25 (iPodFirm 0.1.116), music route (2026-10-16) | Two and three pushes; dock disconnection and reconnection | **The headphones operate again after the reconnection** (after a button press). Two pushes (next) and three pushes (previous) operate well. At the disconnection the playback stopped completely. The log was full before the disconnection. | Probable cause: the stop ran in the UIM task while USBAudioTask held decoder packets. Probe 1.26 stops in USBAudioTask and then pauses. |
 | Probe 1.26 (iPodFirm 0.1.117), music route (2026-10-16) | Dock disconnection and reconnection | **The song pauses at the disconnection** (tag 75: playing, then paused). The headphones start too loud (the owner turned the volume down at once). At the reconnection the iPod shows "unsupported device", and that screen ends the playback. | The message comes from add device (0xd377c, error 0x68c for the devices without a driver) through 0xd9cec. Probe 1.27 skips the message while host mode runs, and uses the curve −48 · (1 − v/256) dB. |
 | Probe 1.27 (iPodFirm 0.1.118), music route (2026-10-16) | Start, volume, disconnection, reconnection, Play | **All as expected.** No "unsupported device"; the song pauses and continues; the volume levels are much better. | The probe is complete for Stage 4. |
+| 1.29 (VBUS test) | No cable; then the USB-C EarPods directly | VBUS below approximately 0.8 V with pin 18 on and off, and with PP off. VBUS charge: above 0.8 V with no load. The EarPods did not connect. | The mod does not connect pin 18 to VBUS. No power path without a hardware change. |
 
 ## The causes found
 
@@ -179,7 +181,7 @@ Records in `iPod_Control/iTunes/iPodFirmUSBLog` (511 records, 32 KB). iPodFirm s
 
 ## Next steps
 
-0. Branch `usb-vbus-test`: the VBUS test (probe 1.29, trigger '3'). It finds if the iPod can supply VBUS to the EarPods with no hardware change. Owner: run "Start the VBUS Test at the Next Restart" with no cable on the iPod. Refer to [re/usb-power.md](../../re/usb-power.md).
+0. Done (branch `usb-vbus-test`, 2026-10-17): the VBUS test. The iPod cannot supply VBUS with no hardware change. Refer to [re/usb-power.md](../../re/usb-power.md). Next, only if the owner decides: the hardware research (pin 18 current, the minimum voltage of the EarPods, a step-up converter with back-feed protection).
 
 1. Done: the configuration of the EarPods (UAC2, refer to "The USB-C EarPods").
 1a. Done: the probe 1.3 played a 1 kHz tone to the EarPods (2026-10-10).

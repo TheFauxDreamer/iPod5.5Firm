@@ -105,4 +105,24 @@ The emulator has no USB controller and no VBUS. Thus OTGSC showed no VBUS in eac
 
 ## Real iPod results
 
-Not tested yet.
+Probe 1.29, trigger '3', 2026-10-17. No cable on the iPod at the start. The owner connected the USB-C EarPods directly in step 5. PMU type 3 (PCF50605), hardware ID 0x000B0011.
+
+| Moment | OTGSC | PORTSC | Meaning |
+|---|---|---|---|
+| Before the host start (device task) | 0x00080000 | — | No comparator bit set: VBUS below approximately 0.2–0.8 V |
+| Step 1: Apple's host mode state (pin 18 on) | 0x003F1E00 / 0x003F3E00 | 0x21001000 | Bit 12 (B-session end) set: VBUS below approximately 0.8 V |
+| Step 2: pin 18 off | the same | 0x21001000 | No change |
+| Step 3: PP off | the same | 0x21000000 | No change |
+| Step 4: VBUS charge on | 0x003F0E02 / 0x003F2E02 after 1 s | 0x21001000 | Bit 12 clear: VBUS above approximately 0.8 V (the weak charge resistor, no load) |
+| Step 5: all on, the EarPods connected | 0x003F0E02 / 0x003F2E02 | 0x21001000 | No port connection, no tone |
+
+The GPIOL bit 0x10 (the USB power pin) was low in all steps. Bit 13 (0x2000) is the 1 ms toggle of the controller.
+
+**Caution for the log:** in host mode the controller holds OTGSC bits 9–11 on. The log showed "VBUS valid" (above 4.4 V) and "B-session end" (below 0.8 V) at the same time, which is not possible. In host mode, only bit 12 measures VBUS. The log decoder of the branch uses bit 12 first now.
+
+Conclusions:
+
+1. With the 3.3 V accessory power on, VBUS stays below approximately 0.8 V. Thus **the USB-C mod does not connect dock pin 18 to VBUS**.
+2. PP (PORTSC bit 12) drives no supply on the iPod.
+3. VBUS charge (OTGSC bit 1) lifts the open VBUS line above approximately 0.8 V, but it cannot supply a device. The EarPods did not connect.
+4. **Gate result: fail.** The iPod cannot power USB-C headphones without a hardware change. The owner decides on a hardware change. The research items for it are in "Hardware notes for later".

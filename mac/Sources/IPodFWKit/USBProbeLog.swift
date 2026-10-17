@@ -444,6 +444,7 @@ public enum USBProbeLog {
     }
 
     /// The VBUS test (version 1.29): r0 step | second << 8, r1 OTGSC, r2 PORTSC, r3 GPIOL. Step 0xFF: r1 PMU type, r2 hardware ID.
+/// The VBUS level comes from bit 12 (B-session end) first: in host mode bits 9–11 stay on.
     static func vbusText(_ r: [UInt32]) -> String {
         let step = r[0] & 0xFF, second = r[0] >> 8 & 0xFF
         if step == 0xFF {
@@ -452,7 +453,9 @@ public enum USBProbeLog {
         }
         let names = [1: "Apple's host mode state", 2: "accessory power (pin 18) off", 3: "port power (PP) inverted",
                      4: "VBUS charge on", 5: "all on, connect the EarPods"]
-        let level = r[1] & 0x200 != 0 ? "above 4.4 V" : r[1] & 0xC00 != 0 ? "approximately 0.8–4.4 V" : r[1] & 0x1000 != 0 ? "below 0.8 V" : "low"
+        // In host mode the controller holds bits 9–11 on (real iPod, 2026-10-17: "VBUS valid" and "B-session end" at the
+        // same time). Only bit 12 (B-session end) measures VBUS there.
+        let level = r[1] & 0x1000 != 0 ? "below approximately 0.8 V" : r[1] & 0xE00 == 0xE00 ? "above approximately 0.8 V" : "above approximately 0.8 V, below 4.4 V"
         return String(format: "step %d (%@), %d s — VBUS %@; OTGSC 0x%08X (%@), PORTSC 0x%08X (power %@), USB power pin %@",
                       step, names[Int(step)] ?? "step \(step)", second, level, r[1], otgscText(r[1]), r[2],
                       r[2] & 0x1000 != 0 ? "on" : "off", r[3] & 0x10 != 0 ? "high" : "low")

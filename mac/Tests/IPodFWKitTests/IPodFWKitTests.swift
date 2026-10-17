@@ -1060,10 +1060,13 @@ final class USBProbeLogTests: XCTestCase {
         XCTAssertEqual(USBProbeLog.vbusText([0xFF, 3, 0x000B_0000, 0]),
                        "start — PCF50605 (D2REGC1 = register 0x25), hardware ID 0x000B0000")
         XCTAssertEqual(USBProbeLog.vbusText([2 | 4 << 8, 0x0000_1100, 0x0000_1000, 0]),
-                       "step 2 (accessory power (pin 18) off), 4 s — VBUS below 0.8 V; OTGSC 0x00001100 (ID pin high, B-session end), PORTSC 0x00001000 (power on), USB power pin low")
+                       "step 2 (accessory power (pin 18) off), 4 s — VBUS below approximately 0.8 V; OTGSC 0x00001100 (ID pin high, B-session end), PORTSC 0x00001000 (power on), USB power pin low")
         XCTAssertEqual(USBProbeLog.vbusText([5, 0x0000_0C02, 0, 0x10]),
-                       "step 5 (all on, connect the EarPods), 0 s — VBUS approximately 0.8–4.4 V; OTGSC 0x00000C02 (A-session valid, B-session valid, VBUS charge), PORTSC 0x00000000 (power off), USB power pin high")
+                       "step 5 (all on, connect the EarPods), 0 s — VBUS above approximately 0.8 V, below 4.4 V; OTGSC 0x00000C02 (A-session valid, B-session valid, VBUS charge), PORTSC 0x00000000 (power off), USB power pin high")
         XCTAssertEqual(USBProbeLog.otgscText(0x006F_4E00), "VBUS valid, A-session valid, B-session valid")
+        // The real iPod in host mode (2026-10-17): bits 9–11 stay on; bit 12 gives the level.
+        XCTAssertTrue(USBProbeLog.vbusText([1, 0x003F_1E00, 0x2100_1000, 0]).contains("VBUS below approximately 0.8 V"))
+        XCTAssertTrue(USBProbeLog.vbusText([4 | 1 << 8, 0x003F_0E02, 0x2100_1000, 0]).contains("VBUS above approximately 0.8 V;"))
     }
 
     /// The records of the isochronous test (tags 48–51).
