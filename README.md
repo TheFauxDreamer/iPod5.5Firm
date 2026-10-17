@@ -313,6 +313,17 @@ The patch tool compiles C code with the Xcode compiler and links it at a fixed a
 
 ## Credits
 
-The file formats come from [iPodWizard](https://sourceforge.net/projects/ipodwizard/) and from the Rockbox tool [`ipodpatcher`](https://github.com/Rockbox/rockbox/tree/master/utils/ipodpatcher). Both use the GPLv2 license. Thus, this project uses the GPL-2.0-or-later license.
+The file formats come from [iPodWizard](https://sourceforge.net/projects/ipodwizard/) and from the Rockbox tool [`ipodpatcher`](https://github.com/Rockbox/rockbox/tree/master/utils/ipodpatcher). Both use the GPLv2 license. Thus, this project uses the GPL-2.0-or-later license. The license text is in [LICENSE](LICENSE).
+
+The file [0001-ipodfirm-instrumentation.patch](mac/Resources/emulator-patches/0001-ipodfirm-instrumentation.patch) changes [siggifly/ipod-emulator](https://github.com/siggifly/ipod-emulator). It contains lines of that project. Thus, this file uses the GPL-3.0 license of the emulator.
 
 The dark theme comes from the iPodWizard community: "5.5G Ultimate Background Hack" by Matthew98, dark mode by Milli5410.
+
+The `something-comforting` patch plays a short part of "Something Comforting" by Porter Robinson. The patch is an example only.
+
+## Legal
+
+- This project is not affiliated with Apple Inc. Apple and iPod are trademarks of Apple Inc.
+- The repository does not contain Apple firmware. The app downloads the firmware from Apple, or uses a backup of your iPod.
+- Do not commit Apple firmware, `.ipsw` files, theme files or iPod backups.
+- The software comes with no warranty. A change to the firmware can make the iPod unusable until you restore it with Finder. Use the software at your own risk.
