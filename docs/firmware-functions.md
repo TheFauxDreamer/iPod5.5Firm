@@ -671,6 +671,7 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | Str 0x602e, 0x602f | "On" and "Off". |
 | Str 0x7e00 | "Dark Mode" (added by the `dark-mode` patch). |
 | Str 0x7e01, 0x7e02 | "Something Comforting" and "Play" (added by the `something-comforting` patch). |
+| Str 0x7e06, 0x7e07, 0x7e08 | "USB-C Audio", "On (44.1 kHz)" and "On (48 kHz)" (added by the `usb-audio-out` patch). |
 | Str 0x7e03, 0x7e04 | "Album Artists", and the indented row text in Settings > Main Menu (added by the `album-artists` patch). |
 
 ## Element IDs

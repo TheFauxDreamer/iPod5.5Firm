@@ -569,9 +569,11 @@ The dispatch tables are RW data. The start code copies them to RAM with the chan
 
 **User interface.** Patches pane > Audio > USB-C Audio, letter `u`. The section "Use USB-C Audio" gives the steps.
 
-**Load address.** `extended`. The compiled code and data are 14176 bytes (version 1.0). The control page (8 KB) and the siTDs (32 KB) come from 0xad80c at the first On, the music buffers (12 KB) at the first route start. After the code, the patcher writes the Settings menu with the new item.
+**Load address.** `extended`. The compiled code and data are 14628 bytes (version 1.2). The control page (8 KB) and the siTDs (32 KB) come from 0xad80c at the first On, the music buffers (12 KB) at the first route start. After the code, the patcher writes the Settings menu with the new item.
 
-**Settings item.** Key 0x600060e8, label ID 0x7e06 ("USB-C Audio"), after Clicker (0x60006088), a copy of Sound Check (`settings_items`). The key 0x600060e8 is not a 32-bit word in osos 1.3. The value is in RAM only, thus each start gives Off.
+**Option.** "Sample Rate" (`option_rate`): 44.1 kHz (the default) or 48 kHz (version 1.1). `music_start` sends SET_CUR with the rate of the option first, and the other rate if the headphones refuse it. Apple's converter (0x1e2f60) makes the output rate. At 48 kHz a packet has 192 bytes (two start splits). Version 1.2 sends GET_CUR sampling frequency after SET_CUR. The Settings value shows that rate (see below).
+
+**Settings item.** Key 0x600060e8, label ID 0x7e06 ("USB-C Audio"), value text IDs 0x7e07 ("On (44.1 kHz)") and 0x7e08 ("On (48 kHz)"), after Clicker (0x60006088), a copy of Sound Check (`settings_items`). The key 0x600060e8 is not a 32-bit word in osos 1.3. The value is in RAM only, thus each start gives Off. While the music goes to the headphones, the value is "On (44.1 kHz)" or "On (48 kHz)" from GET_CUR (version 1.2). If GET_CUR fails, the value shows the rate that the patch sent. Without a music route, or at a different rate, the value is "On". The text changes when the menu shows again.
 
 **Hooks.**
 
@@ -601,7 +603,7 @@ The dispatch tables are RW data. The start code copies them to RAM with the chan
 
 **Conflicts.** `usb-host-probe` uses the same hook sites (17 hooks without `chain`). The app does not turn on both (`Patcher.conflicts`; the Patches pane shows "Changes the same place as …"), and a build with both stops at the first shared hook. The test `testUSBAudioOutConflictsWithProbe` keeps this.
 
-**Test status.** Swift and Python tests pass (also with the IPSW). Emulator (2026-10-17): Settings shows "USB-C Audio" Off after Clicker; On and Off change the value; the iPod does not freeze, and the wheel and Now Playing operate after On. After the first On, the emulator ran at about 0.15× real time, also after Off and with the music paused; its counters were not consistent, thus the cause is not known (the emulator has no USB). Real iPod, version 1.0 (2026-10-17): **all test steps passed** (the owner: "flawlessly"): Off after the start and a sync; On with the dock and the EarPods, the music without a button press, the volume and the buttons; a pause at a disconnection and Play after a reconnection; Off, then the Mac sees the iPod; On, Off, On again.
+**Test status.** Swift and Python tests pass (also with the IPSW). Emulator (2026-10-17): Settings shows "USB-C Audio" Off after Clicker; On and Off change the value; the iPod does not freeze, and the wheel and Now Playing operate after On. After the first On, the emulator ran at about 0.15× real time, also after Off and with the music paused; its counters were not consistent, thus the cause is not known (the emulator has no USB). Real iPod, version 1.0 (2026-10-17): **all test steps passed** (the owner: "flawlessly"): Off after the start and a sync; On with the dock and the EarPods, the music without a button press, the volume and the buttons; a pause at a disconnection and Play after a reconnection; Off, then the Mac sees the iPod; On, Off, On again. The iPod charges from the dock while USB-C Audio plays. Version 1.1 with the option 48 kHz: tested on the real iPod (2026-10-17). The owner heard no problems. Version 1.1 kept no log, so the accepted rate was not known. Version 1.2 shows the rate in Settings: not tested yet.
 
 ## volume-unlimit
 

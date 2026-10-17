@@ -5,8 +5,8 @@
   "symbol": "headphones",
   "category": "audio",
   "version_letter": "u",
-  "version": "1.0",
-  "size": 14176,
+  "version": "1.2",
+  "size": 14628,
   "description": "Adds the item USB-C Audio to Settings. When it is On, the iPod operates as the USB host and sends its music to USB Audio Class 2 headphones, for example the Apple USB-C EarPods. The volume of the iPod sets the volume of the headphones, and the buttons of the headphones operate the iPod.",
   "caution": "USB-C Audio needs a USB-C mod and a dock or an OTG adapter that gives 5 V. While USB-C Audio is On, a computer cannot see the iPod: set it to Off before a sync. The probe patch usb-host-probe uses the same hook sites: do not install both.",
   "details": [
@@ -23,9 +23,10 @@
     "USB Audio Class 2 headphones at full speed, for example the Apple USB-C EarPods."
   ],
   "notes": [
-    "The patch sends the music at 44.1 kHz (48 kHz if the headphones do not accept 44.1 kHz), 16 bits, stereo, at full speed.",
+    "The patch sends the music at the rate of the option Sample Rate: 44.1 kHz (the default) or 48 kHz. If the headphones refuse that rate, it uses the other one. 16 bits, stereo, at full speed. While the music plays, Settings shows the rate that the headphones report, for example \"On (48 kHz)\".",
     "The volume curve: full volume is 0 dB, half volume is -24 dB.",
-    "Tested functions (probe 1.27): music, Now Playing art, volume, buttons, a pause at a disconnection, a new start after a reconnection."
+    "Tested functions (probe 1.27): music, Now Playing art, volume, buttons, a pause at a disconnection, a new start after a reconnection.",
+    "The iPod charges from the dock while USB-C Audio plays (the owner, 2026-10-17)."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
@@ -49,7 +50,7 @@
       "Flash a firmware with this patch.",
       "Connect the USB-C dock (with its power supply) and the USB-C headphones to the iPod.",
       "On the iPod, open Settings and set USB-C Audio to On.",
-      "Play a song. The music comes from the headphones.",
+      "Play a song. The music comes from the headphones.", "Open Settings again. The item shows the rate that the headphones report, for example \"On (48 kHz)\".",
       "Before a sync, set USB-C Audio to Off, disconnect the dock and connect the computer."
     ]
   },
@@ -224,6 +225,26 @@
       "at": "0x6c8830",
       "expect": "0x00096ffc",
       "to": "hook_uim_control_transfer"
+    }
+  ],
+  "options": [
+    {
+      "id": "rate",
+      "title": "Sample Rate",
+      "symbol": "option_rate",
+      "default": 44100,
+      "choices": [
+        {
+          "value": 44100,
+          "title": "44.1 kHz",
+          "description": "The rate of most songs. The headphones get the music without a conversion of the rate."
+        },
+        {
+          "value": 48000,
+          "title": "48 kHz",
+          "description": "A test: the iPod converts the music to 48 kHz. Each packet has 192 bytes. If the headphones refuse 48 kHz, the patch uses 44.1 kHz."
+        }
+      ]
     }
   ]
 }

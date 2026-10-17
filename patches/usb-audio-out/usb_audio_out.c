@@ -72,6 +72,8 @@
 #define TAG_CONTROL_TRANSFER     26
 /* The Settings item. */
 #define LABEL_ID   0x7e06                               /* the label "USB-C Audio" */
+#define ON_44_ID   0x7e07                               /* the value text "On (44.1 kHz)" (version 1.2) */
+#define ON_48_ID   0x7e08                               /* the value text "On (48 kHz)" (version 1.2) */
 #define ITEM_KEY   0x60e8                               /* the settings key 0x600060e8 (low 16 bits) */
 #define TAG_STR    0x53747220u                          /* 'Str ' */
 #define OP_TEXT_ID 0x70724944u                          /* 'prID': the ID of the value text */
@@ -123,7 +125,9 @@ static volatile unsigned stop_request;                  /* a stop for USBAudioTa
 static unsigned output_volume(void);
 static unsigned volume_cur(unsigned v);
 static volatile int audio_wanted;                       /* the Settings item */
+unsigned option_rate = 44100;                           /* the option "Sample Rate" (patch.json): 44100 or 48000 */
 static int audio_on;                                    /* host mode of this patch */
+static unsigned rate_used;                              /* the rate that the headphones report, 0 = no music route */
 static int host_running, device_stopped, device_logs;
 static int music_mode;                                  /* 1: the music goes to the USB audio device */
 
@@ -1017,6 +1021,7 @@ static void music_stop(int reason)
         return;
     USB_AUDIO_STATE[2] = 0;
     music_mode = 0;
+    rate_used = 0;
     hid_stop();
     control_unlink();                                   /* version 1.25: for a new start after a reconnection */
     audio_found = 0;                                    /* the next enumeration gives the new address */
@@ -1057,7 +1062,7 @@ static void music_start(const struct audio *a)
 {
     volatile unsigned char *output = (volatile unsigned char *)AUDIO_OUTPUT;
     unsigned source = USB_AUDIO_SOURCE, object = *(volatile unsigned *)(USB_AUDIO_STATE + 0x10);
-    unsigned event = *(volatile unsigned *)(USB_AUDIO_STATE + 0x18), rate = 44100, f, ctrl;
+    unsigned event = *(volatile unsigned *)(USB_AUDIO_STATE + 0x18), rate = option_rate == 48000 ? 48000 : 44100, reported, f, ctrl;
     volatile unsigned *frames;
     log_regs(TAG_MUSIC_START, object, source, (unsigned)output, event);
     if (!object || !source || !output || !event || !dma_page)
@@ -1069,10 +1074,17 @@ static void music_start(const struct audio *a)
     copy_audio(&music_device, a);
     if (control(a->address, 0x01 | 0x0b << 8 | a->alt << 16, a->interface, 0, 0) != 0)
         return;
-    if (a->clock && control(a->address, 0x21 | 0x01 << 8 | 0x0100 << 16, a->clock << 8 | 4 << 16, 44100, 4) != 0) {
-        rate = 48000;
-        control(a->address, 0x21 | 0x01 << 8 | 0x0100 << 16, a->clock << 8 | 4 << 16, 48000, 4);
+    /* SET_CUR sampling frequency to the clock source: the rate of the option first, else the other one.
+     * The converter of Apple's USB source (0x1e2f60) makes the output rate from the rate of the song. */
+    if (a->clock && control(a->address, 0x21 | 0x01 << 8 | 0x0100 << 16, a->clock << 8 | 4 << 16, rate, 4) != 0) {
+        rate = rate == 48000 ? 44100 : 48000;
+        control(a->address, 0x21 | 0x01 << 8 | 0x0100 << 16, a->clock << 8 | 4 << 16, rate, 4);
     }
+    /* Version 1.2: GET_CUR sampling frequency. Settings shows this rate. If the headphones do not
+     * reply, Settings shows the rate that the patch sent. */
+    reported = rate;
+    if (a->clock && control_in(a->address, 0xa1 | 0x01 << 8 | 0x0100u << 16, a->clock << 8 | 4 << 16, 4) == 4)
+        reported = CONTROL_IN[0] | CONTROL_IN[1] << 8 | CONTROL_IN[2] << 16 | CONTROL_IN[3] << 24;
     /* The volume on the device: SET_CUR volume (control 2) for channels 1 and 2 of the unit before the
      * output terminal (the EarPods: feature unit 2), in 1/256 dB, from the iPod volume (version 1.21;
      * versions 1.9-1.20 used a fixed -20 dB). The digital route of the iPod has no volume. */
@@ -1103,6 +1115,7 @@ static void music_start(const struct audio *a)
     music_checked = frame_now();
     music_used = 1;
     music_mode = 1;
+    rate_used = reported;
     /* The steps of 0x132274 without the device endpoint (0x24bf74): stream on, the event for
      * USBAudioTask, and the route of the audio output to USB (+0x59, then 0x1a2fa0 sets +0x58 and
      * +0x5a). */
@@ -1243,6 +1256,7 @@ static void audio_stop(void)
     }
     stop_request = 0;
     music_used = 0;                                     /* the USBAudioTask hooks call Apple's functions again */
+    rate_used = 0;
     music_wanted = music_restart = 0;
     audio_found = 0;
     if (manager && mode_now() == 2)
@@ -1296,6 +1310,8 @@ int hook_mode_stop(void *manager, unsigned mode)
 /* ---- The Settings item "USB-C Audio" ---------------------------------------------------------------- */
 
 static const char label[] = "USB-C Audio";
+static const char on_44[] = "On (44.1 kHz)";
+static const char on_48[] = "On (48 kHz)";
 
 /* The first instruction of the general lookup (0x21f254) is replaced by a branch. If no other patch
  * hooks the lookup, lookup_next is this function: it runs that instruction and continues in the firmware. */
@@ -1308,13 +1324,19 @@ void *hook_lookup(void *provider, unsigned type, int id)
 {
     if (type == TAG_STR && id == LABEL_ID)
         return (void *)label;
+    if (type == TAG_STR && id == ON_44_ID)
+        return (void *)on_44;
+    if (type == TAG_STR && id == ON_48_ID)
+        return (void *)on_48;
     return lookup_next(provider, type, id);
 }
 
 int hook_settings_get(void *self, unsigned op, unsigned key, void *out)
 {
     if (key == ITEM_KEY) {
-        short value = audio_wanted ? STR_ON : STR_OFF;
+        /* Version 1.2: while the music goes to the headphones, the value also shows the rate that
+         * the headphones report. The text changes when the menu shows again. */
+        short value = !audio_wanted ? STR_OFF : rate_used == 48000 ? ON_48_ID : rate_used == 44100 ? ON_44_ID : STR_ON;
         if (op == OP_TEXT_ID) {
             *(short *)((char *)self + 0x88) = value;
             *(void **)out = (char *)self + 0x88;
