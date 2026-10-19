@@ -17,3 +17,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 dist/
+
+# macOS Finder files
+.DS_Store
