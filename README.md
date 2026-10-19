@@ -6,6 +6,11 @@ The changed firmware replaces the Apple firmware on the iPod. This is the same p
 
 For the research, the risks and the plan, refer to [FEASIBILITY.md](FEASIBILITY.md).
 
+## AI Disclosure
+
+Claude Code was used heavily in the research, use of Ghidra, and documentation in this project.
+
+
 ## Contents of the project
 
 | Part | Location | Function |
