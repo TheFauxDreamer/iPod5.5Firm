@@ -1,11 +1,11 @@
 {
   "name": "flash-wake-on-input",
   "title": "Wake Storage on Input",
-  "summary": "A button press starts the flash storage at once.",
+  "summary": "A button press starts the flash storage immediately.",
   "symbol": "hand.point.up.left",
   "category": "power",
   "version_letter": "w",
-  "version": "1.1",
+  "version": "1.2",
   "size": 132,
   "description": "Starts the flash storage when you press a button, so that the first song starts sooner.",
   "details": ["After a long pause, a button press starts the storage immediately.", "Thus the storage is ready when you choose a song.", "After a start, the iPod does not examine the storage again for 30 minutes.", "A turn of the click wheel does not start the storage."],

@@ -1,11 +1,11 @@
 {
   "name": "sleep-now",
   "title": "Sleep Now",
-  "summary": "The Sleep item puts the iPod to sleep at once.",
+  "summary": "Starts sleep mode when Flash Keep Awake is on.",
   "symbol": "moon.zzz",
   "category": "power",
   "version_letter": "s",
-  "version": "1.1",
+  "version": "1.2",
   "size": 181,
   "description": "The Sleep item puts the iPod to sleep immediately.",
   "details": ["The iPod saves the settings.", "The iPod switches off the display and the storage.", "The iPod goes to sleep."],

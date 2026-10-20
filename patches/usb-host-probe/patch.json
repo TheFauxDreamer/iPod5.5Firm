@@ -1,7 +1,7 @@
 {
   "name": "usb-host-probe",
   "title": "USB Host Probe",
-  "summary": "A one-shot test of the USB host mode.",
+  "summary": "A test patch for the USB host mode.",
   "symbol": "cable.connector",
   "category": "test",
   "ui": {
@@ -57,7 +57,7 @@
     ]
   },
   "version_letter": "h",
-  "version": "1.28",
+  "version": "1.29",
   "size": 22248,
   "description": "A one-time test. It finds if the iPod can operate USB devices through a USB-C mod. It also sends a test tone, and then the music of the iPod, to USB-C headphones (USB-AUDIO-OUT.md, Stages 0, 2 and 4).",
   "caution": "Do not put USB headphones in your ears during the test. The test tone can be loud. While the test runs, the USB port possibly does not operate with a computer. To stop the test, hold Menu and Select until the iPod restarts.",
