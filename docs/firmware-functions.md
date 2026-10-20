@@ -375,6 +375,34 @@ Refer to [re/shuffle.md](../re/shuffle.md). The reference model [re/shuffle-mode
 | 0x11ac38 | C `rand()`: `1103515245 × state + 12345`, `(state >> 16) & 0x7fff`. Not used for music. | Static |
 | 0x11bb18 | C `srand()`. | Static |
 
+### The play list and On-The-Go
+
+Refer to [re/play-next.md](../re/play-next.md).
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x196418 | Returns the play list object: the songs that play now (pointer at 0x1081d9cc, vtable 0x66cad4). The constructor is 0x196de0. | Static, Emulator |
+| 0x1960b0 | (play list, browser, list, start row, …): fills the play list from a list and sets the current index (+0x14). | Static |
+| 0x0abb98 | (browser, row, …): starts a list at a row. Calls 0x1960b0, then 0xacd80 or 0xac6f4 on the player. | Static |
+| 0x2358fc | (list object, browser, row, source list, sort, flag): adds one row (0x92bbc) or, with row −1, all rows (0x9388c) at the end of the track list at object + 4. | Static |
+| 0x0adbb8 | (browser, row): Add to On-The-Go (library + 0xce0). Row −1 adds all rows. Limit 1000 songs. If the play list is On-The-Go (+0x18), it also calls the play list + 0x10. | Static |
+| 0x1eb5a4 | The script function for Add to On-The-Go. Calls 0xadbb8. | Static |
+| 0x0bbf2c | Writes `iPod_Control\iTunes\OTGPlaylistInfo`. | Static |
+
+### The EQ
+
+Refer to [re/custom-eq.md](../re/custom-eq.md). The EQ is a software EQ. A preset is a chain of up to 5 filter numbers (0 = no filter, maximum 0x60).
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x0a6bd0 | Makes the 22 Apple presets: the names from 0x2a9cc0, 10 float values each from 0x2a9d18 (× 100, as i16). The values are filter numbers, for example Bass Booster = 4. | Static |
+| 0x0e07f4 | (library, name): finds a preset in the list at library + 0xbec. | Static |
+| 0x09bf6c | (library, name, out): copies the preamp (+0x21c) and the 10 values (+0x21e) of a preset. | Static |
+| 0x0ace48 | (player, values, per track): copies the values to player + 0x214 and calls 0x10191c. | Static, Emulator |
+| 0x10191c | (player, 0, values): with the EQ on (player + 0x235), calls 0xf4dc0 and 0xe6838; with the EQ off, 0xec450. | Static, Emulator |
+| 0x1446e8 | Sends command 0x1f with the first 5 values (each 0 … 0x60) to the audio engine (message queue 2). The selection of Bass Booster in the emulator wrote nothing to the codec. | Static, Emulator |
+| 0x14493c | Sends command 0x1a: the EQ on or off. | Static, Emulator |
+
 ### The browser and the menus
 
 Refer to [re/album-artist.md](../re/album-artist.md#album-artists-menu-item-15-october-2026). The `album-artists` patch uses these functions.
@@ -559,6 +587,7 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | 0x666920, 0x666958 | Vtables of the USB audio control and streaming objects. |
 | 0x677290 | Vtable of a browse list (for example Albums and Artists). +0x30 (0x6772c0): event method 0x23b704. +0x138 (0x6773c8): set the selection. |
 | 0x6701f0 | Slot of the UI event handler 0x1d81cc. |
+| 0x66cad4 | Vtable of the play list. +0x0c: count (0x195ef4). +0x10: add songs at the end (0x19602c). +0x14: remove songs (0x195f58). +0x18: clear (0x196584). |
 | 0x6775b8 | Vtable of a menu list. +0x140 (0x6776f8): `activate(list, row)` 0x23ca4c. The list has the Menu ID at +0x1c (i16) and the menu data at +0x144. |
 | 0x66ec80 | Vtable of a menu item object. Item + 0x10 points to the Menu resource item + 4. |
 | 0x66a510 | Vtable of the application object. +0x30: event method 0x1d3348. |
@@ -610,6 +639,9 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | Library | +0xc48, +0xc50 | The artist list (artist pool), filled when the Artists list opens |
 | Track list | +0x2fc + 4 × slot | Sorted array of items (the item at + 0x10 + 4 × i; item + 0x20 is the track). Slot 6: by album. |
 | Main provider | +0x1c, +0xc0 … +0xdc | The library; the row counts of the browse lists |
+| Track | +0x58, +0x6c, +0x70, +0x74, +0x76 | Length in ms, file size, sample rate (float), bit rate (kbps), year. Refer to [re/song-info.md](../re/song-info.md) for the other mhit fields. |
+| Track | +0x7a, +0x8c, +0x94 | Rating, play count, last played |
+| Play list (0x196418) | +0x04, +0x14, +0x18, +0x1c | The track list (count: u16 at (+0x28) + 0x32); the index of the current song; byte 1 if On-The-Go; the lock |
 | Track | +0x8b | Bit 1: mhit + 0xa5. This is not the artwork flag (libgpod: mhit + 0xa4 "has artwork"). |
 | View | +0x20 | Flags. (flags & 0x1800) == 0x800 if the view is visible. |
 | Browse list | +0xa4 | An object. Its word at +0x14 is the selected row. |
@@ -645,6 +677,8 @@ The physical address is 0x10000000 + the CPU address.
 | 0x1081e048 | State of the shuffle generator (Park–Miller). |
 | 0x1083e0ac | State of the card game generator. |
 | 0x1081dae4 | State of C `rand()`. |
+| 0x1081d9cc | Pointer to the play list object (vtable 0x66cad4). |
+| 0x1081e07c | The audio object of the EQ messages is the word at + 0xc. |
 
 The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No code refers to the area between the image end and 8 MB. The patches and the theme data use this area.
 
@@ -726,4 +760,5 @@ The emulator found these element IDs (view + 0x1c):
 - The function of the audio route flags at 0x1081ee48 + 0 and + 1.
 - The UIM interrupt handler that completes the periodic USB host transfers.
 - The cause of the empty artwork frame in Now Playing with the unchanged firmware in the emulator.
+- The receiver of the EQ command 0x1f and the filter table. Refer to [re/custom-eq.md](../re/custom-eq.md#open-questions).
 - Shuffle: does the firmware remove the tracks with "skip when shuffling" (mhit byte 0xa5)? Does Repeat All shuffle again at the end of the list? On the real iPod, one album with Album Mix and Repeat All plays with no end, and the songs stay shuffled. A new order at each pass is not known yet. Refer to [re/shuffle.md](../re/shuffle.md#open-questions).

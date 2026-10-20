@@ -18,11 +18,11 @@ The table "Collisions with the existing patches" shows where an idea can interfe
 
 | # | Idea | Source | Value | Work | First research step |
 |---|---|---|---|---|---|
-| 1 | Play Next and Play Last | osos-lab `play_next.c` | High | Medium to high | Find the playback list, the copy of an entry and the prepared next song in 1.3. |
-| 2 | Song Info | osos-lab `song_info.c` | High | Medium | Find the fields of the song record in RAM. Find a native list screen for text rows. |
+| 1 | Play Next and Play Last | osos-lab `play_next.c` | High | Medium to high | Done: refer to [play-next.md](play-next.md). Play Last can use the add method of the play list. Play Next must also move the songs. |
+| 2 | Song Info | osos-lab `song_info.c` | High | Medium | Done: refer to [song-info.md](song-info.md). The track object has most fields. A new Menu resource is necessary. |
 | 3 | USB-C charge icon | slushiimusic | Low for our mod | Low to medium | Probably not necessary. Refer to the item below. |
 | 4 | Patch list in Settings > About | osos-lab `cfw_info` | Medium | Low | Find the About screen and how it gets its rows. |
-| 5 | Custom EQ | osos-lab `custom_eq.c` | High | High | Find if 1.3 uses the EQ of the WM8758 codec or a software EQ. |
+| 5 | Custom EQ | osos-lab `custom_eq.c` | High | High | Done: refer to [custom-eq.md](custom-eq.md). A software EQ with a chain of up to 5 fixed filters. The filter table is not found. |
 | 6 | CJK fonts | ipod-cjk-patch | High for CJK users | Medium | Measure the free space in rsrc after the dark theme. |
 | 7 | Early cache refill | ipod-wav-fix, flashpod `flac-refill` | Medium | Medium | Play a long WAV or ALAC song without `flash-keep-awake`. Listen for a pause at the refill. |
 | 8 | Crash screen | osos-lab `panic.c` | For development | Medium | Find the crash handler of 1.3. |
@@ -49,7 +49,7 @@ In [../docs/usb-c-power-mod.md](../docs/usb-c-power-mod.md), the iPod charges th
 
 Firmware 1.3 has only fixed EQ presets. osos-lab adds a preset with three bands. Each band has a filter type, a frequency, a gain and a Q. A precut lowers the full volume to prevent clipping. The settings stay in a file on the iPod.
 
-If 1.3 uses the hardware EQ of the WM8758 codec, the patch writes only registers. If 1.3 uses a software EQ, the patch must calculate filter coefficients, and the CPU load can increase.
+The research found that 1.3 uses a software EQ. Each preset is a chain of up to 5 filters from a fixed table (refer to [custom-eq.md](custom-eq.md)). A free choice of frequency and gain needs the filter table, which the research did not find.
 
 ### 7. Early cache refill
 
@@ -88,7 +88,7 @@ Hook chains let two patches change the same hook word (refer to [../docs/patch-s
 | Play Next | `album-artists` | The Album Artists lists also need Play Next. | This is extra work, not a conflict. |
 | Song Info | `cover-flow`, On-The-Go | The hold of Select is already in use. | Open Song Info from Now Playing, or from the small menu of Play Next. |
 | Song Info | `dark-mode` | A new screen must use the colours of the theme. | Use the native list screen. |
-| Custom EQ | `usb-audio-out` | The USB output takes the decoder buffers before the codec (0x1a2d60). A hardware EQ in the WM8758 has no effect on USB-C audio. | Find where 1.3 applies the EQ. A software EQ also operates for USB. |
+| Custom EQ | `usb-audio-out` | The USB output takes the decoder buffers before the codec (0x1a2d60). The EQ of 1.3 is a software EQ, so it probably also changes the USB-C audio. | Test on the real iPod: play with an EQ preset through USB-C. |
 | Custom EQ | `volume-unlimit` | A boost with no volume limit causes clipping. | Add a precut, as in osos-lab. |
 | Early refill | `flash-keep-awake`, `flash-wake-on-input` | These patches hook the storage power (0x284c7c, 0x23344c, 0x1d8344). Keep-awake probably hides the pause. | Test without keep-awake first. Use a different hook word or a chain. |
 | Early refill, FLAC | `usb-audio-out` | The USB music buffers (52 KB) also use RAM. A larger cache needs more RAM. | Measure the free RAM. |
