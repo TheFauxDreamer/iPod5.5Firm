@@ -35,8 +35,9 @@ def cdiv(a: int, b: int) -> int:
 class Random:
     """The generator of 0xe5978: Park-Miller in Schrage form, and a float32 index."""
 
-    def __init__(self, seed: int):
+    def __init__(self, seed: int, patched: bool = False):
         self.state = s32(seed)
+        self.patched = patched
 
     @staticmethod
     def seed_from(a: int, b: int) -> int:
@@ -54,8 +55,15 @@ class Random:
         return v
 
     def index(self, n: int) -> int:
-        """A value in 0 ... n-1. The firmware gives n for 63 states (bug 1)."""
+        """A value in 0 ... n-1. The firmware gives n for 63 states (bug 1).
+
+        With `patched`, the model is the patch shuffle-large-library: n and the
+        result are 32-bit (bug 4), and a result of n becomes n-1 (bug 1).
+        """
         u = f32(f32(float(self.step())) * 2.0**-31)
+        if self.patched:
+            p = int(f32(f32(float(n)) * u))
+            return n - 1 if p >= n else p
         p = f32(f32(float(s16(n))) * u)
         return s16(int(p))
 
@@ -123,6 +131,34 @@ def check():
         return int(f32(float(n) * f32(f32(float(state)) * 2.0**-31)))
     assert index_at(0x7FFFFFBF, 60) == 59
     assert index_at(0x7FFFFFC0, 60) == 60
+
+    # Bug 4: the stock index is negative for n > 32767.
+    assert Random(0x12345678).index(50000) < 0
+
+    # The patch: the same order as the stock firmware for 60 tracks.
+    rng = Random(0x12345678, patched=True)
+    assert shuffle_songs(ids, rng) == songs and rng.state == 0x6C572DB3
+
+    # The patch: the same index as the stock firmware for n <= 32767, except at the 63 bug 1 states.
+    gen = Random(0x2468ACE)
+    for k in range(20000):
+        state = gen.step()
+        n = 2 + k % 32766
+        a, b = Random(state), Random(state, patched=True)
+        sa, sb = a.index(n), b.index(n)
+        assert sa == sb or (sa == n and sb == n - 1), (state, n, sa, sb)
+    for n in (2, 60, 32767, 50000):
+        r = Random(0, patched=True)
+        r.step = lambda: 0x7FFFFFC0  # a bug 1 state
+        assert r.index(n) == n - 1
+
+    # The patch: a shuffle of 50000 tracks is a permutation, and each index is in 0 ... n-1.
+    big = list(range(50000))
+    rng = Random(0x12345678, patched=True)
+    assert sorted(shuffle_songs(big, rng)) == big
+    rng = Random(0x12345678, patched=True)
+    for n in range(50000, 1, -1):
+        assert 0 <= rng.index(n) < n
     print("All checks pass.")
 
 

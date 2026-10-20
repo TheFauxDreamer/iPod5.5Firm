@@ -189,6 +189,59 @@ for k = end down to start + 1:
 
 The argument of `FUN_000e5978` is 16-bit. With more than 32767 tracks, `n` becomes negative. The index is then negative.
 
+The 3 callers in 0x94440 give a full 32-bit `n` (`add r0, r5, #1` at 0x94754, and the same at 0x94608 and 0x946d4). They use r0 as a 32-bit index. The cuts to 16 bits are in the index function:
+
+```text
+0xe59b0  e1a01805  mov r1, r5, lsl #16     ; r5 = n
+0xe59b4  e8bd4070  pop {r4-r6, lr}
+0xe59b8  e59f0008  ldr r0, [0xe59c8]       ; 0x1081e048, the state
+0xe59bc  e1a01841  mov r1, r1, asr #16     ; n = int16(n)
+0xe59c0  eaff26bb  b 0xaf4b4               ; the generator, (state pointer, n)
+...
+0xaf4b8  e1a07001  mov r7, r1              ; n stays in r7
+...
+0xaf510  eb07e4d2  bl 0x2a8860             ; float to int
+0xaf514  e1a00800  mov r0, r0, lsl #16
+0xaf518  e1a00840  mov r0, r0, asr #16     ; index = int16(index)
+0xaf51c  e8bd81f0  pop {r4-r8, pc}
+```
+
+For each step `i` > 32767 of the loop, the index is from −(65536 − i) to 0. The swap then reads and writes up to approximately 128 KB before the list. The heap can become damaged.
+
+0xb40c4 writes the new position to the track item `+0x24` with a 32-bit store. Thus the positions do not have a 16-bit limit.
+
+## The patch shuffle-large-library
+
+[patches/shuffle-large-library](../patches/shuffle-large-library/patch.json) changes 4 instruction words. It adds no code.
+
+| At | Stock | Patched |
+|---|---|---|
+| 0xe59b0 | `mov r1, r5, lsl #16` | `mov r1, r5` |
+| 0xe59bc | `mov r1, r1, asr #16` | `mov r0, r0` (no operation) |
+| 0xaf514 | `mov r0, r0, lsl #16` | `cmp r0, r7` |
+| 0xaf518 | `mov r0, r0, asr #16` | `subge r0, r7, #1` |
+
+- `n` and the index are 32-bit. float32(n) is exact for n < 2²⁴.
+- An index of `n` (Bug 1) becomes n − 1. With 50000 tracks, the stock probability of Bug 1 is approximately 0.15 % for each shuffle.
+- For n ≤ 32767, the index is the same as the stock index, except at the 63 states of Bug 1. Thus the order does not change.
+- The card game 0x12d494 calls 0xaf4b4 with `(short)n`, and n is a maximum of 52. The patch does not change the card game.
+- Bug 2 and Bug 3 do not change.
+
+`Random(seed, patched=True)` in [shuffle-model.py](shuffle-model.py) is the model of the patched index.
+
+Emulator tests with the fixed seed 0x12345678 (refer to [Emulator tests](#emulator-tests)), 20 October 2026:
+
+| Test | Result |
+|---|---|
+| Patched, 60 tracks, Shuffle Songs | Now Playing showed "1 of 60", Test Song 28. The state was 0x6c572db3. This is the same as the stock firmware. |
+| Patched, 40000 tracks (`make_library(total_tracks=40000)`), Shuffle Songs | The shuffle completed. The state was 0x4a615aa7. The patched model gives the same state after 39999 calls. Nothing played after the shuffle, because the emulator has no audio. |
+
+Notes on the test with 40000 tracks:
+
+- The emulator ran at approximately 0.19 × the real speed while the firmware loaded the library. The load took approximately 25 minutes.
+- Do not set `IPODFW_RESET_AFTER` for a large library. The start takes more than 10⁹ instructions, and a start check then restarts the emulated iPod.
+- The stock firmware with 40000 tracks was not tested. Its shuffle writes outside the list.
+
 ## How to copy the algorithm exactly
 
 1. Use a 32-bit state and the Schrage form above. Use signed division that truncates toward zero.
@@ -198,7 +251,7 @@ The argument of `FUN_000e5978` is 16-bit. With more than 32767 tracks, `n` becom
 5. For Albums mode, sort the tracks by album first, as the album index does. Then use the groups, the group shuffle and the swap of the current group.
 6. For a new seed, take two random 16-bit values A and B and use `A XOR (B << 16)`.
 
-A copy for normal use must not copy Bugs 1–4. MiMusic limits the index to n − 1 and does not use a seed that stops the generator.
+A copy for normal use must not copy Bugs 1–4. The patch `shuffle-large-library` corrects Bugs 1 and 4 on the iPod. MiMusic limits the index to n − 1 and does not use a seed that stops the generator.
 
 ## The copy in MiMusic
 

@@ -1,0 +1,40 @@
+{
+  "name": "shuffle-large-library",
+  "title": "Shuffle for Large Libraries",
+  "summary": "Corrects the shuffle for libraries with more than 32767 songs.",
+  "symbol": "shuffle",
+  "category": "audio",
+  "version_letter": "f",
+  "version": "1.0",
+  "size": 0,
+  "description": "The shuffle of the iPod keeps the count of songs in a 16-bit value. With more than 32767 songs, the value becomes negative. Then the shuffle writes outside the list, and the order is wrong. This patch gives the shuffle a 32-bit count.",
+  "details": [
+    "Shuffle Songs and Shuffle Albums operate correctly with more than 32767 songs.",
+    "The patch also corrects a rare error: the shuffle can use the position after the end of the list.",
+    "With 32767 songs or fewer, the shuffle gives the same order as before."
+  ],
+  "notes": [
+    "The patch changes 4 instructions in the firmware. It adds no code.",
+    "The deck shuffle of the card game does not change."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
+  "bytes": [
+    { "at": "0xe59b0", "expect": "0518a0e1", "value": "0510a0e1" },
+    { "at": "0xe59bc", "expect": "4118a0e1", "value": "0000a0e1" },
+    { "at": "0xaf514", "expect": "0008a0e1", "value": "070050e1" },
+    { "at": "0xaf518", "expect": "4008a0e1", "value": "010047a2" }
+  ],
+  "ui": {
+    "steps_title": "Test the Shuffle",
+    "steps": [
+      "Put more than 32767 songs on the iPod.",
+      "Flash a firmware with this patch.",
+      "On the iPod, select Shuffle Songs.",
+      "Make sure that Now Playing shows \"1 of\" and the full count of songs.",
+      "Push Next many times. Each song must play."
+    ]
+  }
+}

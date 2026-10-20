@@ -17,6 +17,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [flash-keep-awake](#flash-keep-awake) | Code patch | Patches | 4 `bl` | Partly (an earlier version) |
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
 | [volume-unlimit](#volume-unlimit) | Data patch | Patches | 2 bytes | No |
+| [shuffle-large-library](#shuffle-large-library) | Data patch | Patches | 4 instruction words (16 bytes) | No |
 | [something-comforting](#something-comforting) | Code patch (example) | Patches | 1 `b` and 2 vtable words (all with `chain`), a Settings menu | No |
 | [album-artists](#album-artists) | Code patch | Patches | 6 `b`, 4 `bl` and 3 vtable words (4 with `chain`), 3 menus | Version 1.1: yes. Version 1.2: no |
 | [instant-save](#instant-save) | Code patch | Patches | 1 `b` | No |
@@ -650,6 +651,32 @@ A copy of the Settings row (Sound Check) in the main menu is not usable: in the 
 Thus `0xa0348` always returns 0. The other match of the iPodWizard pattern, at 0x9f0f8, is a different function. The patch does not change it.
 
 **Test status.** A script applied the change to osos 1.3 and ran the iPodWizard search: "capped" before, "uncapped" after. The emulator cannot show the effect. Not tested on a real iPod. The test needs an iPod for the EU.
+
+## shuffle-large-library
+
+**User interface.** Patches pane > Sound > Shuffle for Large Libraries, letter `f`.
+
+**Effect.** Shuffle Songs and Shuffle Albums operate correctly with more than 32767 songs. With 32767 songs or fewer, the order is the same as without the patch. The only difference is the rare Bug 1 state, refer to below.
+
+**Research.** Refer to [re/shuffle.md](../re/shuffle.md#the-patch-shuffle-large-library).
+
+- The random index `0xe5978` cuts n to 16 bits. Then it jumps to the generator `0xaf4b4`.
+- `0xaf4b4` also cuts its result to 16 bits.
+- With more than 32767 songs, n is negative and the index is negative. The swap then writes before the start of the list.
+- The callers in `0x94440` give a full 32-bit n and use a 32-bit index.
+
+**Change.** This patch has no C code. It uses the `bytes` key of `patch.json`:
+
+| At | Expect | Value | Instruction after the change |
+|---|---|---|---|
+| 0xe59b0 | `0518a0e1` | `0510a0e1` | `mov r1, r5` (n with no cut) |
+| 0xe59bc | `4118a0e1` | `0000a0e1` | `mov r0, r0` (no operation) |
+| 0xaf514 | `0008a0e1` | `070050e1` | `cmp r0, r7` (the index against n) |
+| 0xaf518 | `4008a0e1` | `010047a2` | `subge r0, r7, #1` (an index of n becomes n − 1) |
+
+The last two words also correct Bug 1. The card game deck shuffle `0x12d494` also uses `0xaf4b4`. It cuts its own n to 16 bits, and n is a maximum of 52. Thus the card game does not change.
+
+**Test status.** Emulator (20 October 2026, fixed seed): with 60 tracks, the order is the same as the stock firmware. With 40000 tracks, the shuffle completes, and the generator state agrees with the model. The emulator has no audio, thus it cannot play the songs. Not tested on a real iPod.
 
 ## something-comforting
 
