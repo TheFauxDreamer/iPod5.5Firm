@@ -240,6 +240,8 @@ The script increases the version number and the build number. Then it builds the
 
 A build from your source code can use the Touch ID helper. To set it up, open iPodFirm > Settings…, then click "Set Up Touch ID". Then approve iPodFirm in System Settings > General > Login Items.
 
+The Settings window examines the helper each time it opens. If the helper does not reply, the window shows an orange warning. Click "Repair" to register the helper again.
+
 ### Make a release build
 
 1. Enter this command:

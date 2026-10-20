@@ -30,7 +30,7 @@ The app needs macOS 14 or later and an Apple silicon Mac (`--arch arm64`).
 
 [AppModel.swift](../mac/Sources/iPodFirm/AppModel.swift) holds the state and the actions of all panes.
 
-The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has three tabs. Permissions: the Touch ID helper, `requireTouchID` and Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`): 32 KB (the limit 0x7F8000, the default), 16 KB (the limit 0x7FC000, more space for patches) or 64 KB (the limit 0x7F0000, the value before 9 October 2026). The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`), and a build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`).
+The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has three tabs. Permissions: the Touch ID helper and its check (refer to [The helper check in the Settings window](#the-helper-check-in-the-settings-window)), `requireTouchID` and Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`): 32 KB (the limit 0x7F8000, the default), 16 KB (the limit 0x7FC000, more space for patches) or 64 KB (the limit 0x7F0000, the value before 9 October 2026). The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`), and a build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`).
 
 The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
@@ -128,6 +128,28 @@ The daemon is registered for the whole Mac. Each copy of the app with the same b
 - Before each backup, flash or restore, the app sends `status` (`isResponding`). If the daemon does not reply in 10 seconds, the app uses the password prompt.
 
 The second check is necessary because launchd can fail to start the daemon. Then a request gets no reply and no error. Before version 0.1.135, the app waited for ever in this condition.
+
+#### The helper check in the Settings window
+
+The status `.enabled` does not show that launchd can start the daemon. A registration can refer to an old copy of the app. Then launchd records `job state = spawn failed` and `last exit code = 78: EX_CONFIG`. The system log shows `Could not find and/or execute program specified by service`.
+
+Thus `HelperRow` shows the result of a `status` call (`AppModel.helperReply`), not only the macOS status:
+
+| `helperReply` | Settings window | Buttons |
+|---|---|---|
+| `.checking` | "iPodFirm examines the Touch ID helper…" | — |
+| `.replied(version:)` | Green: the helper is on. The protocol version. | Check Again, Turn Off |
+| `.noReply` | Orange: the helper does not reply. The app uses the password prompt. | Check Again, Repair |
+
+The app sends `status` when the Settings window or the iPod pane opens, and when the owner clicks **Check Again**. Each backup, flash and restore also records the result of `isResponding`.
+
+**Repair** (`AppModel.repairHelper`) does these steps:
+
+1. It unregisters the daemon (`SMAppService.unregister`).
+2. It registers the daemon again (`setUpHelper`). If macOS asks for approval, the app opens Login Items.
+3. It sends `status` again.
+
+The iPod pane and the flash sheet show "Touch ID" only if the helper replied (`AppModel.helperWorks`).
 
 The XPC protocol is `HelperXPCProtocol` in [HelperXPC.swift](../mac/Sources/IPodFWKit/HelperXPC.swift). The protocol version is 2.
 

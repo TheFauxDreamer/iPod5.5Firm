@@ -169,7 +169,7 @@ struct FlashConfirmSheet: View {
                 Label("iPodFirm does not change the boot-flash updater (aupd).", systemImage: "lock.shield")
             }
             .foregroundStyle(.secondary)
-            Text(model.helperStatus == .enabled
+            Text(model.helperWorks
                  ? "Keep the iPod connected until the operation is complete.\(model.requireTouchID ? " Touch ID asks for a confirmation." : "")"
                  : "Keep the iPod connected until the operation is complete. macOS asks for your administrator password.")
                 .font(.callout)
@@ -241,7 +241,7 @@ struct PermissionSummaryRow: View {
     var body: some View {
         HStack {
             if model.hasFullDiskAccess {
-                Label(model.helperStatus == .enabled ? "Full Disk Access and Touch ID are on." : "Full Disk Access is on.",
+                Label(model.helperWorks ? "Full Disk Access and Touch ID are on." : "Full Disk Access is on.",
                       systemImage: "checkmark.shield.fill")
                     .foregroundStyle(.green)
             } else {
@@ -297,9 +297,32 @@ struct HelperRow: View {
         HStack {
             switch model.helperStatus {
             case .enabled:
-                Label("The Touch ID helper is on. macOS does not ask for your password.", systemImage: "touchid").foregroundStyle(.green)
-                Spacer()
-                Button("Turn Off") { model.removeHelper() }
+                switch model.helperReply {
+                case .replied(let version):
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label("The Touch ID helper is on. macOS does not ask for your password.", systemImage: "touchid")
+                            .foregroundStyle(.green)
+                        Text("The helper replied (protocol version \(version)).").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Check Again") { model.recheckFullDiskAccess() }
+                    Button("Turn Off") { model.removeHelper() }
+                case .noReply:
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label("The Touch ID helper does not reply.", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("macOS shows the helper as on, but cannot start it. iPodFirm asks for your administrator password. Click Repair to register the helper again.")
+                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        if let err = model.helperSetupError { Text(err).font(.caption).foregroundStyle(.red) }
+                    }
+                    Spacer()
+                    Button("Check Again") { model.recheckFullDiskAccess() }
+                    Button("Repair") { model.repairHelper() }.buttonStyle(.borderedProminent)
+                case .checking, .unknown:
+                    ProgressView().controlSize(.small)
+                    Text("iPodFirm examines the Touch ID helper…").foregroundStyle(.secondary)
+                    Spacer()
+                }
             case .requiresApproval:
                 Label("Approve “iPodFirm” in System Settings → General → Login Items (Allow in the Background).", systemImage: "touchid")
                     .foregroundStyle(.orange)

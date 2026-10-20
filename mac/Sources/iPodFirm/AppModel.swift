@@ -40,6 +40,9 @@ final class AppModel: ObservableObject {
     @Published var flashPlan: FlashPlan?
     @Published var hasFullDiskAccess = AppModel.checkFullDiskAccess()
     @Published var helperStatus: SMAppService.Status = HelperClient.serviceStatus
+    /// The result of the last `status` call to the helper. macOS can show the helper as enabled
+    /// when launchd cannot start it. Only a reply shows that Touch ID operates.
+    @Published var helperReply: HelperReply = .unknown
     @Published var patches: [PatchInfo] = PatchSpec.visible(AppModel.patchLibrary.list(),
                                                             showTests: UserDefaults.standard.bool(forKey: "showTestPatches"))
     /// Settings > Patches > Enable Test Patches. Off: the Patches pane hides the test patches, and a
@@ -186,13 +189,40 @@ final class AppModel: ObservableObject {
         return true
     }
 
+    enum HelperReply: Equatable {
+        case unknown, checking, noReply
+        case replied(version: Int)
+    }
+
+    /// True if the helper is enabled and replied to the last check. Only then the app uses Touch ID.
+    var helperWorks: Bool {
+        if helperStatus == .enabled, case .replied = helperReply { return true }
+        return false
+    }
+
     func recheckFullDiskAccess() {
         hasFullDiskAccess = Self.checkFullDiskAccess()
         helperStatus = HelperClient.serviceStatus
-        guard helperStatus == .enabled else { return }
+        guard helperStatus == .enabled else { helperReply = .unknown; return }
+        helperReply = .checking
         Task {
             // The helper does the disk access, so its own permission is what counts.
-            if let s = try? await HelperClient.status() { hasFullDiskAccess = s.hasFullDiskAccess }
+            if let s = try? await HelperClient.status() {
+                hasFullDiskAccess = s.hasFullDiskAccess
+                helperReply = .replied(version: s.version)
+            } else {
+                helperReply = .noReply
+            }
+        }
+    }
+
+    /// Unregister the helper and register it again. This gives launchd a new registration
+    /// when the old one refers to an app that is not there (spawn failed, EX_CONFIG).
+    func repairHelper() {
+        helperReply = .checking
+        Task {
+            try? await HelperClient.unregister()
+            setUpHelper()
         }
     }
 
@@ -216,16 +246,24 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Ask the helper for a reply, and record the result for the Settings window.
+    private func helperResponds() async -> Bool {
+        guard HelperClient.isEnabled else { return false }
+        let ok = await HelperClient.isResponding()
+        if !ok { helperReply = .noReply } else if case .replied = helperReply {} else { recheckFullDiskAccess() }
+        return ok
+    }
+
     // Route privileged work through the daemon (Touch ID) when it replies, else the password prompt.
     private func runBackup(_ ipod: IPodDisk) async throws -> HelperResult {
-        if await HelperClient.isResponding() { return try await HelperClient.backup(disk: ipod.disk, backupDir: Self.backupDir) }
+        if await helperResponds() { return try await HelperClient.backup(disk: ipod.disk, backupDir: Self.backupDir) }
         return try await Privileged.run(helperArgs("backup", ipod))
     }
 
     /// reason is "flash", "restore", or "rescue" (a restore onto a damaged firmware partition).
     private func runFlash(_ ipod: IPodDisk, image: URL, reason: String, dryRun: Bool) async throws -> HelperResult {
         let rescue = reason == "rescue"
-        if await HelperClient.isResponding() {
+        if await helperResponds() {
             if !dryRun && requireTouchID {
                 try await HelperClient.authenticate(reason == "flash" ? "write new firmware to your iPod" : "restore a backup to your iPod")
             }
