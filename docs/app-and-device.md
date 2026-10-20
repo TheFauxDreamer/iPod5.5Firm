@@ -122,6 +122,13 @@ Both sides of the XPC connection examine the code signature:
 - The app accepts only the helper `identifier "com.thefauxdreamer.ipodfirm.helper"`, signed by the same team.
 - The daemon refuses to start if it has no team identifier (an ad-hoc signature).
 
+The daemon is registered for the whole Mac. Each copy of the app with the same bundle identifier sees the status `.enabled`, also a copy for a different user. Thus the app does two more checks (`HelperClient`):
+
+- An ad-hoc build always uses the password prompt. `serviceStatus` gives `.notRegistered` if the app has no team identifier.
+- Before each backup, flash or restore, the app sends `status` (`isResponding`). If the daemon does not reply in 10 seconds, the app uses the password prompt.
+
+The second check is necessary because launchd can fail to start the daemon. Then a request gets no reply and no error. Before version 0.1.135, the app waited for ever in this condition.
+
 The XPC protocol is `HelperXPCProtocol` in [HelperXPC.swift](../mac/Sources/IPodFWKit/HelperXPC.swift). The protocol version is 2.
 
 | Method | Arguments | Result |
@@ -135,13 +142,13 @@ The results are JSON data. The daemon writes backups only inside `~/Library/Appl
 
 ### Mode 2: the password prompt
 
-If the daemon is not enabled, the app runs the helper with AppleScript:
+If the daemon is not enabled or does not reply, the app runs the helper with AppleScript:
 
 ```applescript
 do shell script "'<app>/Contents/MacOS/ipodfw-helper' 'flash' '--disk' 'disk4' ..." with administrator privileges
 ```
 
-macOS asks for an administrator password. The helper writes one `HelperResult` JSON object to standard output and always exits with 0. Thus AppleScript returns the output also for an error. [Privileged.swift](../mac/Sources/iPodFirm/Privileged.swift) puts each argument in single quotes.
+macOS asks for the name and the password of an administrator. A user that is not an administrator can also use this mode. The helper writes one `HelperResult` JSON object to standard output and always exits with 0. Thus AppleScript returns the output also for an error. [Privileged.swift](../mac/Sources/iPodFirm/Privileged.swift) puts each argument in single quotes.
 
 The helper commands are:
 

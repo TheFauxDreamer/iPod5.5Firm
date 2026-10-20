@@ -1,53 +1,228 @@
-# iPod5.5Firm
+# iPodFirm
 
-This project allows you to modify the stock Apple firmware of an iPod Video (5th generation and 5.5th generation). Apple Silicon only.
+iPodFirm is a Mac app that adds new features to the iPod Video (5th generation and 5.5th generation). Examples are Dark Mode, small album artwork in the lists, Cover Flow, an Album Artists menu and USB-C headphones.
 
-The changed firmware replaces the Apple firmware on the iPod. This is the same process that iPodWizard used.
+iPodFirm changes the Apple operating system of the iPod ("RetailOS", firmware 1.3). It does not replace it, as Rockbox does. The iPod keeps its menus, its music library and its sync with Finder or iTunes.
 
-For the research, the risks and the plan, refer to [FEASIBILITY.md](FEASIBILITY.md).
+Each feature is a **patch**. You can switch each patch on or off in the app. When you switch off all the patches, the iPod gets the original Apple firmware again.
 
-## AI Disclosure
+**Download:** [GitHub Releases](https://github.com/TheFauxDreamer/iPod5.5Firm/releases)
 
-Claude Code was used heavily in the research, use of Ghidra, and documentation in this project.
+## Before you start
 
+WARNING: A change to the firmware can damage your iPod. The app makes a backup and has a recovery procedure, but this is not a guarantee. Use the app at your own risk. The author is not responsible if your iPod stops.
 
-## Contents of the project
+- This is a personal project. The author does not give technical support to each person.
+- You can open an issue or a pull request on GitHub. The author can add large corrections or well-tested changes.
+- For other iPod models or other firmware versions, make a fork of the project. Refer to [Other iPod models](#other-ipod-models).
 
-| Part | Location | Function |
+## What you need
+
+- A Mac with Apple silicon (M1 or later) and macOS 14 or later. The app does not operate on an Intel Mac or on Windows.
+- An iPod Video (5th generation or 5.5th generation) with the Apple firmware 1.3.
+- An iPod that is formatted for Mac. The author did not test an iPod that is formatted for Windows.
+- A charged battery. An iPod with an empty battery cannot show disk mode for a recovery.
+
+The author tested iPodFirm on an iPod 5.5th generation (64 MB of RAM) with 1 TB of flash storage. The 5th generation uses the same firmware, thus the patches must also operate on it. The author did not test this.
+
+## Install the app
+
+1. Download the ZIP file from [GitHub Releases](https://github.com/TheFauxDreamer/iPod5.5Firm/releases).
+2. Unzip the file.
+3. Move `iPodFirm.app` to `/Applications`.
+4. Hold Control and click `iPodFirm.app`.
+5. Click **Open**. Then click **Open** again.
+
+If macOS does not show **Open**, open System Settings > Privacy & Security. Then click **Open Anyway**.
+
+The app must read and write the disk of the iPod directly. Thus it needs Full Disk Access:
+
+1. Open System Settings > Privacy & Security > Full Disk Access.
+2. Turn on iPodFirm.
+
+Turn on Full Disk Access again after each update of the app. The app asks for your administrator password before it writes to the iPod.
+
+## Change your iPod
+
+1. Connect the iPod to the Mac.
+2. In iPodFirm, open the **iPod** pane. The app finds the iPod.
+3. Click **Back Up Now**. The app keeps the first backup as "Original (first backup)".
+4. Open the Apple firmware. Select File > Download Apple Firmware 1.3, or click **Edit a Copy** on a backup.
+5. Open the **Patches** pane.
+6. Switch on the patches that you want.
+7. Open the **iPod** pane.
+8. Click **Flash Edited Firmware…**.
+9. Read the list of changes. Then confirm.
+10. Click **Eject**. Then disconnect the iPod.
+
+To remove the changes, switch off all the patches. Then flash the firmware again.
+
+You can also try the changed firmware in the **Emulator** pane before you flash it. The emulator has no sound and no USB.
+
+## The patches
+
+The **Patches** pane shows the patches. Select a patch to see what it does, what it needs and its size on the iPod.
+
+Each patch has a letter. If you switch on "Add a letter for each switched-on patch" in **Software Version**, the About screen of the iPod shows the letters, for example "1.3abkw". Give this version when you report a problem.
+
+### Appearance and version
+
+| Item | Function | Tested on a real iPod |
 |---|---|---|
-| iPodFirm app | [mac/](mac/) | A macOS app. It does all the tasks in this project. |
-| `ipodfw` tool | [src/ipodfw/](src/ipodfw/) | A command-line tool in Python. It uses the same file formats as the app. |
-| Technical reference | [docs/](docs/README.md) | The formats, the patches, the Ghidra findings, the app structure and the safety limits. |
-| Research notes | [re/](re/) | Notes for the emulator and for Ghidra, in the sequence of the work. |
-| USB-C audio out plan | [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md) | The plan, the research results and the status of USB-C audio out (the iPod as USB host to headphones and USB DACs). |
+| iPod Appearance | Light, Dark, or Switch on iPod. "Switch on iPod" adds a "Dark Mode" item to Settings on the iPod. You can also import a custom theme from iPodWizard. | Yes |
+| Software Version | Shows a different version on the About screen, for example 1.3.1. Finder and iTunes continue to see version 1.3. | — |
 
-## The iPodFirm app
+### Built-in patches
 
-### Functions
+The table shows the status that the test notes record. For the full test record, refer to [docs/safety.md](docs/safety.md#test-status).
 
-The app has these functions:
+| Patch | Letter | Function | Tested on a real iPod |
+|---|---|---|---|
+| Album Artwork | a | Shows a small album cover at the left of each album and each playlist in the lists. | Yes (version 2.6) |
+| Album Artists | l | Adds an Album Artists item to the Music menu. All the songs of a compilation are under one entry. You can also put the item in the main menu. | Yes (version 1.1) |
+| Cover Flow | c | Hold Select in the Albums list to see the album covers in 3D. This is a new version for the iPod Video, not the Apple version from the iPod Classic. It replaces "hold Select to add an album to On-The-Go". | Yes (version 0.6.2) |
+| 60-Second Backlight | b | The Backlight Timer menu has 60 Seconds in place of 2 Seconds. | No |
+| SSD Mode | k | For flash storage. Keeps the storage on for 30 minutes after each access, not for 1 second. Songs start faster. | Only a test version |
+| Wake Storage on Input | w | For flash storage. Starts the storage when you push a button, so that the first song starts sooner after a long pause. | No |
+| Sleep Now | s | The Sleep item puts the iPod to sleep immediately. Use it with SSD Mode. | No |
+| Instant Save | i | Saves each change in Settings > Main Menu immediately. Without it, the iPod saves the change only when it sleeps. | No |
+| No EU Volume Limit | v | Removes the volume limit of iPods for the EU. | No |
+| Something Comforting | m | An example patch. A Settings item plays a short song on the internal speaker of the iPod. | No |
+| USB-C Audio | u | Plays the music through USB-C headphones. Refer to [USB-C Audio](#usb-c-audio). | Yes (up to version 1.8) |
+| USB Host Probe | h | A test patch for research only. Refer to [USB Host Probe](#usb-host-probe). | Yes (up to version 1.27) |
 
-- Open an Apple `.ipsw` file, a firmware file or a backup of the iPod.
-- Download the Apple firmware 1.3. The app examines the SHA-256 value of the download.
-- Show and replace the pictures in the firmware. Use PNG files that have the same size.
-- Show and change the text in the firmware. A gauge shows the bytes that are free in each language.
-- Make a backup of the firmware partition of the iPod.
-- Eject the iPod, so that you can disconnect it (iPod pane, Patches pane and iPod menu).
-- Write the changed firmware to the iPod.
-- Export the changed firmware as an `.ipsw` file (File > Export as .ipsw…).
-- Restore a backup to the iPod. If the firmware on the iPod is damaged, the app does a rescue restore.
-- Show the recovery steps, and get the Apple firmware for a restore with Finder.
-- Start the changed firmware in an emulator. The app shows the screen and has a click wheel.
-- Install a patch from other people: double-click a `.ipodpatch` file, or drag it onto the list of patches. The app shows the version of each patch. It tells you if a file is an update or an older version. Export a patch as a `.ipodpatch` file with its compiled code, so that other people do not need Xcode. Refer to [docs/patch-system.md](docs/patch-system.md#the-ipodpatch-file).
-- Make a new patch with File > New Patch…. The app writes `patch.json` and a C file to start from. Type or paste the C code, the firmware functions and the hooks in the Code section of the patch. Click Check Code to compile it, then click Save. Edit the text of your patch with Edit Patch…. Each save increases the version. Refer to [docs/patch-system.md](docs/patch-system.md#make-and-share-a-patch).
-- Switch code patches on or off (Patches pane). The pane shows a list of the patches at the left. Select a patch to see its description, its compatibility, its size on the iPod and its tools at the right. A bar below the list shows the space that the theme and the patches use. It is red if the firmware is too large. The patches are in [patches/](patches/).
-- Select the options of a patch, for example the thumbnail source of `album-art` (Patches pane).
-- Write the playlist thumbnail file to the iPod for the `album-art` patch. The albums use the artwork that is on the iPod, or the file if you select it.
-- Set a custom image for each playlist for the `album-art` patch.
-- Import an iPodWizard theme for firmware 1.2.1 into firmware 1.3. Select the iPod appearance: Light, Dark, or Switch on iPod (Patches pane). The pane shows the size that each appearance adds to the firmware.
-- Show a different version on the About screen of the iPod, for example 1.3.1 (Patches pane). This setting is off by default. iTunes and Finder continue to see version 1.3.
-- Set up the Touch ID helper and examine Full Disk Access in the Settings window (iPodFirm > Settings…).
-- Show the test patches (for example the USB host probe) with Settings > Patches > Enable Test Patches. They are for research only, and the Patches pane shows a red warning for them.
+### The space for patches
+
+RetailOS has a limit of 8 MB for its operating system. The patches and the dark theme must fit in this limit. The space for them is approximately 774 KB. The bar below the list of patches shows the space that you use. The bar is red if the firmware is too large.
+
+CAUTION: Do not try to put more data in the firmware than the space allows. If the firmware is too large, the iPod does not start, and you must restore it.
+
+### Album Artwork
+
+The albums use the artwork that Finder or iTunes put on the iPod. The playlists need a thumbnail file:
+
+1. In the **Patches** pane, select "Album Artwork".
+2. Click **Write Thumbnails to iPod**.
+
+Write the file again after each sync that adds playlists. A playlist shows a collage of the covers of its first four albums. To use your own image, click **Choose Image…** or drag an image onto the playlist.
+
+### Import an iPodWizard theme
+
+CAUTION: Use only a theme for firmware 1.2.1 and import it with iPodFirm. An old theme that you apply directly can damage the firmware.
+
+1. Get the theme file and the Apple firmware 1.2.1 (`iPod_25.1.2.1.ipsw`). The [iPod Wizard Themes](https://archive.org/details/b5ad5489368ba5f0fe19935e983faf2b) collection on the Internet Archive has both.
+2. In iPodFirm, select File > Import iPodWizard Theme….
+3. Select the theme file.
+4. Select `iPod_25.1.2.1.ipsw`.
+5. Read the import report.
+6. In the **Patches** pane, select "iPod Appearance".
+7. Click Dark or Switch on iPod.
+
+The tested theme is "Dark Gray (04_12_20)" for the 5.5G. To change the pictures of a theme, use the **Pictures** pane and click "Dark Theme".
+
+### USB-C Audio
+
+The USB-C Audio patch plays the music of the iPod through USB-C headphones. The inline volume buttons and the play/pause button operate the iPod. Two pushes go to the next song. Three pushes go to the previous song. The click wheel also sets the volume.
+
+WARNING: This patch needs an iPod with a USB-C mod and a USB-C dock with power. The iPod cannot supply 5 V to the headphones.
+
+- The patch is off after each restart. Switch it on in Settings > USB-C Audio on the iPod.
+- When the patch is on, the USB-C port cannot sync with a computer. Switch it off to sync.
+- When the patch is on, the 3.5 mm headphone jack does not play.
+- If you disconnect the dock or the headphones, the music pauses.
+- You can put a USB-C Audio switch in the main menu.
+- Select the sample rate in the **Patches** pane: 44.1 kHz or 48 kHz. Use the rate of most of your music. A song with a different rate needs a conversion, and the iPod becomes slow.
+
+The author tested the patch with Apple USB-C EarPods and an Anker PowerExpand+ dock (A8346).
+
+A hardware mod can give 5 V to the headphones without a dock. The author did not make this mod. For the design, refer to [docs/usb-c-power-mod.md](docs/usb-c-power-mod.md). Do your own research before you make a hardware change.
+
+The 3.5 mm jack cannot use the buttons of headphones. On the iPod Video, the fourth contact of the jack is for video out.
+
+### USB Host Probe
+
+WARNING: This is a test patch for research only. The iPod can stop in a condition that you cannot repair.
+
+The USB Host Probe puts the iPod in USB host mode. Then a computer cannot connect to the iPod until the iPod restarts. The probe also plays test beeps and a 1 kHz tone at full volume.
+
+- Before you install it, make sure that the click wheel and the Select button operate.
+- Make sure that you can put the iPod in disk mode.
+- Remove your headphones before the test tone plays.
+
+The app shows the probe only if you switch on iPodFirm > Settings… > Patches > Enable Test Patches. Do not install it together with USB-C Audio.
+
+### Make or install a patch
+
+- To install a patch from another person, double-click the `.ipodpatch` file. You can also drag it onto the list of patches.
+- To make a patch, select File > New Patch…. A patch is C code that you type in the app. You need Xcode to compile it.
+
+For the details, refer to [docs/patch-system.md](docs/patch-system.md).
+
+## Recovery
+
+A firmware write cannot damage disk mode. Disk mode is in the flash chip of the iPod, not on the disk. iPodFirm does not write to the flash chip.
+
+CAUTION: Charge the iPod before a recovery. An iPod with an empty battery does not show disk mode.
+
+If the iPod does not start after a write, do these steps:
+
+1. Push and hold Menu and Select until the iPod restarts.
+2. When the Apple logo shows, push and hold Select and Play until the iPod shows disk mode.
+3. Connect the iPod to the Mac.
+4. In iPodFirm, open the **iPod** pane.
+5. Click **Restore…** on a backup.
+
+If iPodFirm cannot restore a backup, use Finder.
+
+CAUTION: A restore with Finder erases the music on the iPod.
+
+1. In the Recovery section of the **iPod** pane, click "Restore with Finder…".
+2. In Finder, select the iPod.
+3. Push and hold the Option key.
+4. Click "Restore iPod".
+5. Select the file `iPod_25.1.3.ipsw`.
+
+After that, you can restore a backup in iPodFirm.
+
+### How the app protects the iPod
+
+- The app makes a backup of the firmware partition before each write or restore. It does not overwrite a backup.
+- It keeps the first backup as "Original (first backup).bin".
+- It does not change the `aupd` image. This image updates the boot flash memory.
+- It examines the checksums and the partition layout before it writes.
+- It shows the bytes that it will write. You must confirm before the write starts.
+- It writes only the blocks that changed. Then it reads each block again to make sure that it is correct.
+
+The app keeps the backups in `~/Library/Application Support/iPodFirm/Backups/`. For more details, refer to [docs/safety.md](docs/safety.md).
+
+## Other iPod models
+
+The author has only an iPod 5.5G. Thus the author does not add support for other models or for other firmware versions.
+
+To add a model, make a fork of the project. Each model and each firmware version needs new research in Ghidra: the functions, the addresses and the hooks. Use this repository as a reference, and use a real iPod for the tests. For the steps, refer to [docs/porting.md](docs/porting.md).
+
+For the iPod Classic (6th generation and 7th generation), refer to RepriseOS by osos-lab.
+
+## AI disclosure
+
+This project started as a personal project. The author used Claude Code for much of the reverse engineering in Ghidra and for solutions to difficult problems. Claude Code also keeps the documents and the code comments up to date with each change and each finding.
+
+## For developers
+
+### Contents of the project
+
+| Part | Location | Language | Function |
+|---|---|---|---|
+| iPodFirm app | [mac/](mac/) | Swift | The macOS app. It builds and applies the patches and writes the iPod. |
+| Patches | [patches/](patches/) | C | The code and the `patch.json` file of each patch. |
+| `ipodfw` tool | [src/ipodfw/](src/ipodfw/) | Python | A command-line tool. It uses the same file formats as the app. |
+| Ghidra scripts | [re/ghidra-scripts/](re/ghidra-scripts/) | Java | Scripts for the research in Ghidra. |
+| Technical reference | [docs/](docs/README.md) | — | The formats, the patches, the Ghidra findings, the app structure and the safety limits. |
+| Research notes | [re/](re/) | — | Notes for the emulator and for Ghidra, in the sequence of the work. Also the failed and stopped research. |
+| USB-C audio plan | [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md) | — | The plan, the research results and the status of USB-C audio out. |
+| Feasibility study | [FEASIBILITY.md](FEASIBILITY.md) | — | The first research, the risks and the plan. |
+
+For each patch, [docs/modifications.md](docs/modifications.md) gives the user interface, the Ghidra results and the limits.
 
 ### Build and install the app
 
@@ -61,6 +236,8 @@ The app has these functions:
 
 The script increases the version number and the build number. Then it builds the app and installs it in `/Applications/iPodFirm.app`.
 
+A build from your source code can use the Touch ID helper. To set it up, open iPodFirm > Settings…, then click "Set Up Touch ID". Then approve iPodFirm in System Settings > General > Login Items.
+
 ### Make a release build
 
 1. Enter this command:
@@ -71,23 +248,15 @@ The script increases the version number and the build number. Then it builds the
 
 2. Upload the file `mac/build/iPodFirm-<version>.zip` to the GitHub release.
 
-The release build has an ad-hoc signature. The signature contains no name and no e-mail address. The script does not install the release build.
+The release build has an ad-hoc signature. The signature contains no name and no e-mail address. The script does not install the release build. A release build cannot use the Touch ID helper.
 
-To make the release ZIP and install the app with the same version, use `RELEASE=both` in place of `RELEASE=1`. The installed app keeps the signature of a normal build, thus Touch ID and Full Disk Access continue to operate.
+To make the release ZIP and install the app with the same version, use `RELEASE=both` in place of `RELEASE=1`. The installed app keeps the signature of a normal build. Thus Touch ID and Full Disk Access continue to operate.
 
-On the `main` branch, `RELEASE=both` is the default. Thus each build from `main` installs the app and makes the release ZIP. On other branches, the default is a normal build. To change the default, set `RELEASE=0` or `RELEASE=1`.
+On the `main` branch, `RELEASE=both` is the default. On other branches, the default is a normal build. To change the default, set `RELEASE=0` or `RELEASE=1`.
 
-### Open a release build
+### Tests
 
-1. Unzip the file and move `iPodFirm.app` to `/Applications`.
-2. Hold Control and click `iPodFirm.app`.
-3. Click **Open**. Then click **Open** again.
-
-If macOS does not show **Open**, open System Settings > Privacy & Security. Then click **Open Anyway**.
-
-A release build cannot use the Touch ID helper. The app asks for your administrator password before it writes to the iPod. After each update, turn on Full Disk Access again.
-
-To do the tests, enter these commands:
+To do the tests of the app, enter these commands:
 
 ```sh
 cd mac
@@ -99,71 +268,7 @@ Two environment variables add more tests:
 - `IPODFW_IPSW=<path to iPod_25.1.3.ipsw>` adds tests with the Apple firmware.
 - `IPODFW_DISK_TEST=1` adds a test that writes firmware to a disk image.
 
-### Permissions
-
-The app must read and write the disk of the iPod directly. Thus, the app needs these permissions:
-
-1. Full Disk Access. Open System Settings > Privacy & Security > Full Disk Access. Then turn on iPodFirm.
-2. The Touch ID helper (optional). Open iPodFirm > Settings…, then click "Set Up Touch ID". Then approve iPodFirm in System Settings > General > Login Items.
-
-If you do not set up the Touch ID helper, the app asks for your administrator password.
-
-## Protecting the iPod
-
-The app has the following safety measures in place:
-
-- They make a backup of the firmware partition before each write or restore. They do not overwrite a backup.
-- They keep the first backup as "Original (first backup).bin".
-- They do not change the `aupd` image. This image updates the boot flash memory. A bad boot flash can make the iPod unrecoverable.
-- They do not write the `hibe` image. The iPod writes this image when it goes into deep sleep.
-- They examine the checksums and the partition layout before they write.
-- They show the bytes that they will write. You must confirm before the write starts.
-- They write only the blocks that changed. Then they read each block again to make sure that it is correct.
-
-The app keeps backups in `~/Library/Application Support/iPodFirm/Backups/`.
-
-### Recovery
-
-A firmware write cannot damage disk mode. The boot loader and disk mode are in the NOR flash chip of the iPod, not on the disk. The app and the tool do not write to the NOR flash.
-
-CAUTION: Charge the iPod before a recovery. An iPod with an empty battery does not show disk mode.
-
-If the iPod does not start after a write, do these steps:
-
-1. Push and hold Menu and Select until the iPod restarts.
-2. When the Apple logo shows, push and hold Select and Play until the iPod shows disk mode.
-3. Connect the iPod to the Mac.
-4. In iPodFirm, open the iPod pane and click "Restore…" on a backup.
-
-An interrupted write can damage the firmware on the iPod. Then iPodFirm does a rescue restore. The rescue restore compares the backup with the first backup ("Original"), not with the iPod. It keeps a copy of the damaged firmware as a backup. You cannot restore that copy.
-
-If iPodFirm cannot restore a backup, use Finder:
-
-1. In the Recovery section of the iPod pane, click "Restore with Finder…".
-2. In Finder, select the iPod.
-3. Push and hold the Option key, then click "Restore iPod".
-4. Select the file `iPod_25.1.3.ipsw`.
-
-CAUTION: A restore with Finder erases the music on the iPod.
-
-Finder installs the Apple firmware again and repairs a damaged partition table. After that, you can restore a backup in iPodFirm.
-
-### What is verified for the dark theme
-
-The dark theme makes osos larger and moves `rsrc`. These facts support a safe recovery:
-
-- Disk mode is in the boot loader in the flash memory of the iPod, not on the disk (Rockbox manual). iPodFirm never writes or moves `aupd`, the only image that changes this flash memory.
-- RetailOS finds `rsrc` through the directory, by its type and ID (Ghidra, function 0xc60ec). Rockbox `ipodpatcher` also moves `rsrc` when it installs its boot loader.
-- In the emulator, the firmware did not write to the RAM of the background picture during a long test.
-- On a disk image, a restore of the original backup gives the original partition again, byte for byte.
-
-Tested the dark theme and the move of `rsrc` on a real model iPod 5.5G. For the details, refer to [re/dark-theme.md](re/dark-theme.md).
-
-If the iPod does not show disk mode, charge it for one hour and try again. Diagnostic mode can test the disk: push and hold Menu and Select, then push and hold Select and Previous.
-
-## The ipodfw tool
-
-### Install the tool
+### The ipodfw tool
 
 1. Install `uv`.
 2. In the project folder, enter `uv sync`.
@@ -175,9 +280,9 @@ To get the Apple firmware 1.3, use this URL:
 
 CAUTION: Do not commit firmware files or backups to Git. The `.gitignore` file excludes them.
 
-### Change the firmware with the tool
-
 CAUTION: The commands that read or write the iPod need administrator rights. Use `sudo` for these commands.
+
+To change the pictures and the text with the tool, do these steps:
 
 1. Make a backup of the firmware partition:
 
@@ -221,8 +326,6 @@ sudo .venv/bin/ipodfw restore backups/firmware-backup.bin --rescue --reference b
 sudo .venv/bin/ipodfw restore backups/firmware-backup.bin --rescue --reference backups/firmware-backup.bin
 ```
 
-### Commands
-
 | Command | Function |
 |---|---|
 | `extract IPSW` | Copies the firmware partition image from an Apple `.ipsw` file. |
@@ -237,120 +340,20 @@ sudo .venv/bin/ipodfw restore backups/firmware-backup.bin --rescue --reference b
 | `devices`, `backup`, `flash`, `restore` | Operate on the iPod. These commands need `sudo`. |
 | `restore --rescue [--reference FILE]` | Restores a backup to an iPod that has damaged firmware. This command needs `sudo`. |
 
-## Dark theme
-
-iPodFirm can import a dark theme from iPodWizard into firmware 1.3. The tested theme is "Dark Gray (04_12_20)" for the 5.5G (by Matthew98 and Milli5410). It is in the [iPod Wizard Themes](https://archive.org/details/b5ad5489368ba5f0fe19935e983faf2b) collection on the Internet Archive.
-
-CAUTION: The theme files contain Apple code. Do not commit them to Git.
-
-### Import the theme
-
-1. Download the theme file from `3. Themes/5.5 gen/1. Tested _ Working/1. Dark Mode (Other Colors Inside)/`.
-2. Download the Apple firmware 1.2.1 from `1. iTunes Restore Firmware (recommend first step)/5.5 gen/iPod_25.1.2.1.ipsw`.
-3. In iPodFirm, select File > Import iPodWizard Theme.
-4. Select the theme file.
-5. Select `iPod_25.1.2.1.ipsw`.
-6. Read the import report.
-7. In the Patches pane, select "iPod Appearance". Then click Dark or Switch on iPod.
-
-iPodFirm applies the theme when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.
-
-### How the import operates
-
-- The import compares the theme with Apple firmware 1.2.1. Then it applies the changed pictures, colours and layouts to firmware 1.3.
-- The import keeps Apple's progress bar in Now Playing. The theme makes it almost invisible.
-- The lists keep Apple's blue highlight bar. The blue bar is easier to see than the grey bar of the theme.
-- The import does not apply changes to the program code. The tested theme removes a signature check; iPodFirm does not copy that change.
-- The theme has a full-screen background picture. The picture makes osos 38 KB larger. Thus iPodFirm moves the `rsrc` image (fonts and video firmware) to free space in the firmware partition. It does not move or change `aupd` or `hibe`.
-
-### Change the pictures of the dark theme
-
-iPodFirm keeps each imported theme in `~/Library/Application Support/iPodFirm/Themes/` (one `.ipodtheme` file for each theme). The file is a list of byte changes, not pictures. Thus, use the Pictures pane to change it.
-
-1. Open the firmware.
-2. In the Pictures pane, click "Dark Theme".
-3. Select a picture.
-4. Click "Export PNG…" to get the dark picture.
-5. Edit the PNG. Keep the same size.
-6. Click "Replace…", or drop the PNG on the picture.
-
-The replacement changes only the dark theme. The light picture does not change. To get the picture of the theme again, click "Use Theme Picture".
-
-### Switch on iPod
-
-This allows the user to toggle dark/light mode on the device. The firmware starts light, and Settings on the iPod has a "Dark Mode" item (On/Off).
-
-1. On the iPod, open Settings.
-2. Select "Dark Mode".
-3. Wait while the iPod restarts to apply the theme.
-
-The iPod saves its settings before it restarts. It keeps the choice in the file `iPod_Control/iTunes/iPodFirmDarkMode` (one byte: `0` light, `1` dark). If the file does not exist, the iPod starts light.
-
-The iPod must restart because RetailOS creates its screens one time, at the start. For the research, refer to [re/dark-theme.md](re/dark-theme.md).
-
-NOTE: In the emulator, the restart operates only with the iPodFirm emulator patch of this version. In the Emulator pane, click "Update Emulator" one time.
-
-## Patches
-
-| Patch | Function | Status |
-|---|---|---|
-| `album-art` | Shows a 20 × 20 thumbnail at the left of each album and each playlist in the lists. The album thumbnails come from the artwork on the iPod. | Version 1.0: tested in the emulator and on a real iPod. Version 2.0: tested in the emulator with 138 albums. Version 2.1: installed on a real iPod; the Albums list scrolls slowly. Version 2.3 has the option "Album Thumbnail Source"; the file source makes the scroll much better on a real iPod. Version 2.4 shows a grey square while the wheel moves and fills the covers when it stops (tested on a real iPod). Version 2.6 also loads the covers in the background while the Albums list shows (tested on a real iPod). Versions 2.2–2.6 are measurement builds. |
-| `flash-keep-awake` | SSD mode for flash storage (iFlash, CompactFlash and SSD adapters). Keeps the storage on for 30 minutes after each access, not for 1 second. Starts the storage at once when the iPod wakes from sleep. Waits 0.5 s before the storage power goes off. On a hard drive, the patch does nothing. |
-| `flash-wake-on-input` | For flash storage. Starts the storage at once when you press a button after a long pause. After a start, it does not examine the storage again for 30 minutes. A turn of the wheel does not start the storage. Switch it on if the first song after a long pause starts late. |
-| `backlight-60s` | The Backlight Timer menu has a 60 Seconds item in place of 2 Seconds. | Menu tested in the emulator. Not tested on a real iPod. |
-| `volume-unlimit` | Removes the volume limit of iPods for the EU. The full position of the volume control gives the full volume, not 84% of it. On other iPods it changes nothing. It is in the Sound group. For the research, refer to [re/volume-limit.md](re/volume-limit.md). | Byte change checked with the iPodWizard search. Not tested on a real iPod. |
-| `something-comforting` | An example patch. A Settings item plays approximately 13 seconds of "Something Comforting" by Porter Robinson on the internal speaker of the iPod. It is in the Fun group. | Tested in the emulator (the item and the note calls; the emulator has no audio). Not tested on a real iPod. |
-| `album-artists` | The Music menu has an Album Artists item after Artists. It shows one entry for each Album Artist, and all the songs of a compilation are under one entry. A song without an Album Artist is under its Artist. The Artists list and Now Playing do not change. Settings > Main Menu can also put Album Artists in the main menu. The idea comes from osos-lab (RepriseOS) for the iPod Classic. For the research, refer to [re/album-artist.md](re/album-artist.md). | Tested in the emulator. Version 1.0 on a real iPod: the list is correct, but it opens slowly. Version 1.1 corrects the speed and works well on a real iPod. Version 1.2 (the Main Menu row) is tested in the emulator only. Version 1.3 shares the hook at 0x19ed58 with `usb-audio-out`. |
-| `instant-save` | Saves each change in Settings > Main Menu at once. Without it, the iPod saves its settings only when it sleeps or connects to a computer, and a restart with Menu+Select removes the change. It is in the Power group. | Tested in the emulator. Not tested on a real iPod. |
-| `cover-flow` | Cover Flow: hold Select in the Albums list to browse the album covers in 3D, with the click of the lists. Turn the wheel to move. Push Select to open the album at the centre. Push Menu to go back. White background with the light theme, black with Dark Mode. It uses the artwork and the album names that the iPod already has. | Tested in the emulator. Version 0.1 tested on a real iPod (open, wheel, Menu, Dark Mode). |
-| `usb-audio-out` | Settings > USB-C Audio: plays the music through USB-C headphones (USB Audio Class 2) through a USB-C mod and a dock or OTG adapter with power. The click wheel sets the volume; the headphone buttons operate the iPod (volume, play/pause, two and three pushes for the next and the previous song). Off after each start; Off gives the port back for a sync. Settings > Main Menu can also put a USB-C Audio switch in the main menu. Refer to [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md). | Tested on a real iPod (17 October 2026): all test steps passed. |
-| `usb-host-probe` | The test probe of the USB host mode and of USB-C audio, for [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md). Do not install it together with `usb-audio-out`. A test patch: the app shows it only with Settings > Patches > Enable Test Patches. | Tested on a real iPod up to version 1.27. |
-
-The `album-art` patch gets the album thumbnails from the artwork that iTunes or Finder put on the iPod (`iPod_Control/Artwork`). The albums do not need a file. The playlists need the file `iPod_Control/iTunes/iPodFirmAlbumArt`. iPodFirm writes this file from the music on the iPod ("Write Thumbnails to iPod"). Write it again after each sync that adds playlists. A restart of the iPod is not necessary. After you disconnect the iPod from the computer, the patch examines the file again when an album list or a playlist list shows.
-
-The `cover-flow` patch needs no file of iPodFirm. It reads the album list of the iPod and the artwork that iTunes or Finder put on the iPod (`iPod_Control/Artwork`). After a sync, Cover Flow shows the new albums. Versions before 0.4 used the file `iPod_Control/iTunes/iPodFirmCoverFlow`. You can delete that file.
-
-A playlist gets a thumbnail too. In the Patches pane, select "Album Artwork". The section "Playlist Artwork" shows the playlists of the connected iPod:
-
-- A playlist without a custom image shows a collage of the covers of its first four albums. If the playlist has fewer than four albums, it shows the cover of the first album.
-- To set a custom image, click "Choose Image…" or drag an image onto the playlist. iPodFirm uses the centre square of the image.
-- To remove the custom image, click "Use Automatic".
-- After a change, click "Write Thumbnails to iPod" again.
-
-iPodFirm keeps the custom images on the iPod, in `iPod_Control/iTunes/iPodFirmPlaylistArt/`. Thus they stay with the iPod. A playlist and an album with the same name have different thumbnails.
-
-The patch draws a thumbnail only in the rows of a list. In Now Playing, RetailOS shows its own large artwork from `iPod_Control/Artwork/ArtworkDB`. Finder writes that database when it syncs music with artwork.
-
-The stock firmware switches off the storage power approximately 1 s after the last access. A flash adapter needs some seconds to start again after a power cut. Thus, the first song after idle time starts 3–6 s late. The `flash-keep-awake` patch changes the keep-awake time to 30 minutes. It also asks for the storage when the iPod wakes from sleep, so that the adapter starts while you look for a song. When the iPod goes to sleep, it switches off the storage as usual. The idea of an "SSD mode" comes from [rockpod](https://github.com/nuxcodes/rockpod), a Rockbox version for the iPod Classic. The separate patch `flash-wake-on-input` starts the storage when you press a button and the storage is off. After a start, it does not do this check again for 30 minutes. A turn of the wheel does not do the check. Switch it on only if the first song after a long pause starts late. Before the power cut, the patch waits 0.5 s, so that an iFlash can complete its writes. Use the patch only with flash storage. The Patches pane examines the size of the connected iPod. An original drive has approximately 30, 60 or 80 GB, thus another size shows that the storage is flash. If the size is near an original drive, iPodFirm asks you before you turn the patch on and before you flash. For the research, refer to [re/play-latency.md](re/play-latency.md).
-
-The `backlight-60s` patch changes only data, not code. A script in the firmware (TCmd resource 9088) converts the menu item to seconds. The patch changes the seconds of a hidden item from "10 seconds" to 60 seconds. Then it puts this item in the menu in place of 2 Seconds. If your iPod is set to 2 Seconds before the flash, it keeps 2 seconds, and the menu shows no check mark. Select a new item one time. For the research, refer to [re/backlight-timer.md](re/backlight-timer.md).
-
-The patch tool compiles C code with the Xcode compiler and links it at a fixed address in the free space after the osos image (maximum 3.9 KB in firmware 1.3).
-
-## Limits
+### Limits
 
 - Text cannot use more bytes than the language uses in the Apple firmware. To make one text longer, make other text shorter.
-- The emulator does not have audio. Thus, the iPod in the emulator does not play music.
-
-## Status
-
-- The firmware tools have tests with the Apple firmware 1.3.
-- A backup of a real iPod was made and examined.
-- The write to the iPod has tests on a disk image. The write was not done on a real iPod.
-- The rescue restore has tests on a disk image with a damaged firmware partition. It was not done on a real iPod.
-- The `album-art` patch has tests in the emulator. It was not done on a real iPod.
-- The `flash-keep-awake` and `flash-wake-on-input` patches have tests in the emulator. The SSD mode additions (2026-10-06) were not done on a real iPod.
-- The dark theme, with the `album-art` patch, operates on a real iPod 5.5G. This includes the move of `rsrc`.
-- The `backlight-60s` patch has tests in the emulator: the menu and the selection. The emulator does not show the backlight time. It was not done on a real iPod.
-- The "Dark Mode" item in Settings has tests in the emulator (light, dark and light again, also without the setting file). It was not done on a real iPod.
+- The emulator does not have audio or USB. Thus the iPod in the emulator does not play music.
 
 ## Credits
 
-The file formats come from [iPodWizard](https://sourceforge.net/projects/ipodwizard/) and from the Rockbox tool [`ipodpatcher`](https://github.com/Rockbox/rockbox/tree/master/utils/ipodpatcher). Both use the GPLv2 license. Thus, this project uses the GPL-2.0-or-later license. The license text is in [LICENSE](LICENSE).
+The file formats come from [iPodWizard](https://sourceforge.net/projects/ipodwizard/) and from the Rockbox tool [`ipodpatcher`](https://github.com/Rockbox/rockbox/tree/master/utils/ipodpatcher). Both use the GPLv2 license. Thus this project uses the GPL-2.0-or-later license. The license text is in [LICENSE](LICENSE).
 
-The file [0001-ipodfirm-instrumentation.patch](mac/Resources/emulator-patches/0001-ipodfirm-instrumentation.patch) changes [siggifly/ipod-emulator](https://github.com/siggifly/ipod-emulator). It contains lines of that project. Thus, this file uses the GPL-3.0 license of the emulator.
+The file [0001-ipodfirm-instrumentation.patch](mac/Resources/emulator-patches/0001-ipodfirm-instrumentation.patch) changes [siggifly/ipod-emulator](https://github.com/siggifly/ipod-emulator). It contains lines of that project. Thus this file uses the GPL-3.0 license of the emulator.
 
 The dark theme comes from the iPodWizard community: "5.5G Ultimate Background Hack" by Matthew98, dark mode by Milli5410.
+
+The idea of SSD Mode comes from [rockpod](https://github.com/nuxcodes/rockpod). The idea of the Album Artists menu comes from osos-lab (RepriseOS).
 
 The `something-comforting` patch plays a short part of "Something Comforting" by Porter Robinson. The patch is an example only.
 

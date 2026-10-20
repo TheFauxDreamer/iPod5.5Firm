@@ -39,7 +39,7 @@ final class AppModel: ObservableObject {
     @Published var backups: [BackupInfo] = []
     @Published var flashPlan: FlashPlan?
     @Published var hasFullDiskAccess = AppModel.checkFullDiskAccess()
-    @Published var helperStatus: SMAppService.Status = HelperClient.service.status
+    @Published var helperStatus: SMAppService.Status = HelperClient.serviceStatus
     @Published var patches: [PatchInfo] = PatchSpec.visible(AppModel.patchLibrary.list(),
                                                             showTests: UserDefaults.standard.bool(forKey: "showTestPatches"))
     /// Settings > Patches > Enable Test Patches. Off: the Patches pane hides the test patches, and a
@@ -188,7 +188,7 @@ final class AppModel: ObservableObject {
 
     func recheckFullDiskAccess() {
         hasFullDiskAccess = Self.checkFullDiskAccess()
-        helperStatus = HelperClient.service.status
+        helperStatus = HelperClient.serviceStatus
         guard helperStatus == .enabled else { return }
         Task {
             // The helper does the disk access, so its own permission is what counts.
@@ -204,7 +204,7 @@ final class AppModel: ObservableObject {
         } catch {
             helperSetupError = error.localizedDescription
         }
-        helperStatus = HelperClient.service.status
+        helperStatus = HelperClient.serviceStatus
         if helperStatus == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
         recheckFullDiskAccess()
     }
@@ -212,20 +212,20 @@ final class AppModel: ObservableObject {
     func removeHelper() {
         Task {
             try? await HelperClient.unregister()
-            helperStatus = HelperClient.service.status
+            helperStatus = HelperClient.serviceStatus
         }
     }
 
-    // Route privileged work through the daemon (Touch ID) when enabled, else the password prompt.
+    // Route privileged work through the daemon (Touch ID) when it replies, else the password prompt.
     private func runBackup(_ ipod: IPodDisk) async throws -> HelperResult {
-        if HelperClient.isEnabled { return try await HelperClient.backup(disk: ipod.disk, backupDir: Self.backupDir) }
+        if await HelperClient.isResponding() { return try await HelperClient.backup(disk: ipod.disk, backupDir: Self.backupDir) }
         return try await Privileged.run(helperArgs("backup", ipod))
     }
 
     /// reason is "flash", "restore", or "rescue" (a restore onto a damaged firmware partition).
     private func runFlash(_ ipod: IPodDisk, image: URL, reason: String, dryRun: Bool) async throws -> HelperResult {
         let rescue = reason == "rescue"
-        if HelperClient.isEnabled {
+        if await HelperClient.isResponding() {
             if !dryRun && requireTouchID {
                 try await HelperClient.authenticate(reason == "flash" ? "write new firmware to your iPod" : "restore a backup to your iPod")
             }

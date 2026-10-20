@@ -8,7 +8,19 @@ import ServiceManagement
 enum HelperClient {
     static let service = SMAppService.daemon(plistName: helperPlistName)
 
-    static var isEnabled: Bool { service.status == .enabled }
+    /// The status of the helper for this copy of the app. The daemon is registered for the whole Mac, and each
+    /// copy with the same bundle identifier sees it. An ad-hoc build cannot use the daemon, because the
+    /// daemon accepts only a signed app. Thus an ad-hoc build always gets `.notRegistered`.
+    static var serviceStatus: SMAppService.Status { ownTeamIdentifier() == nil ? .notRegistered : service.status }
+
+    static var isEnabled: Bool { serviceStatus == .enabled }
+
+    /// True if the helper replies to `status` in a short time. If launchd cannot start the helper,
+    /// the helper never replies, and the app must use the password prompt.
+    static func isResponding() async -> Bool {
+        guard isEnabled else { return false }
+        return (try? await call(timeout: 10) { p, reply in p.status(reply: reply) }) != nil
+    }
 
     static func register() throws {
         if service.status == .enabled { return }
@@ -38,7 +50,9 @@ enum HelperClient {
         func take() -> Bool { lock.lock(); defer { lock.unlock() }; if done { return false }; done = true; return true }
     }
 
-    static func call(_ body: @escaping (HelperXPCProtocol, @escaping (Data) -> Void) -> Void) async throws -> Data {
+    /// Without `timeout`, the call waits until the helper replies. A backup or a flash can take a long time.
+    static func call(timeout: TimeInterval? = nil,
+                     _ body: @escaping (HelperXPCProtocol, @escaping (Data) -> Void) -> Void) async throws -> Data {
         let conn = NSXPCConnection(machServiceName: helperMachService, options: .privileged)
         conn.remoteObjectInterface = NSXPCInterface(with: HelperXPCProtocol.self)
         if let team = ownTeamIdentifier() {
@@ -52,12 +66,17 @@ enum HelperClient {
             let proxy = conn.remoteObjectProxyWithErrorHandler { error in
                 if once.take() { cont.resume(throwing: FirmwareError("The iPodFirm helper did not respond: \(error.localizedDescription)")) }
             } as! HelperXPCProtocol
+            if let timeout {
+                DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+                    if once.take() { cont.resume(throwing: FirmwareError("The iPodFirm helper did not respond.")) }
+                }
+            }
             body(proxy) { data in if once.take() { cont.resume(returning: data) } }
         }
     }
 
     static func status() async throws -> HelperStatus {
-        try HelperJSON.decode(HelperStatus.self, try await call { p, reply in p.status(reply: reply) })
+        try HelperJSON.decode(HelperStatus.self, try await call(timeout: 10) { p, reply in p.status(reply: reply) })
     }
 
     static func backup(disk: String, backupDir: URL) async throws -> HelperResult {
