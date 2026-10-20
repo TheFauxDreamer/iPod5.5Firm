@@ -655,7 +655,7 @@ Thus `0xa0348` always returns 0. The other match of the iPodWizard pattern, at 0
 
 ## shuffle-fixes
 
-**User interface.** Patches pane > Sound > Shuffle Fixes, letter `f`. Version 1.0 had the name `shuffle-large-library` and corrected only Bugs 1 and 4.
+**User interface.** Patches pane > Playback > Shuffle Fixes, letter `f`. Version 1.0 had the name `shuffle-large-library` and corrected only Bugs 1 and 4.
 
 **Effect.** The patch corrects the four bugs of the shuffle in [re/shuffle.md](../re/shuffle.md#known-bugs-in-the-firmware):
 
@@ -697,7 +697,7 @@ The card game deck shuffle `0x12d494` also uses `0xaf4b4` and `0x55c`. It cuts i
 
 ## shuffle-album-mix
 
-**User interface.** Patches pane > Sound > Album Mix Shuffle, letter `x`. The patch needs [shuffle-fixes](#shuffle-fixes) (`needs`). The Patches pane turns on Shuffle Fixes with it.
+**User interface.** Patches pane > Playback > Album Mix Shuffle, letter `x`. The patch needs [shuffle-fixes](#shuffle-fixes) (`needs`). The Patches pane turns on Shuffle Fixes with it.
 
 **Effect.** Settings > Shuffle has a 4th value: Off → Songs → Albums → Album Mix → Off. Album Mix plays the albums in a random order, as Albums. It also shuffles the songs in each album. The iPod saves the value with the other settings. Accessories see Album Mix as Albums.
 

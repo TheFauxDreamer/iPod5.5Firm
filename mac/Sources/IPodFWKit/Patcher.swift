@@ -145,7 +145,7 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     /// Controls in the Patches pane that need no Swift code (see PatchUI).
     public var ui: PatchUI?
 
-    public static let categories = ["display", "power", "audio", "fun", "test"]
+    public static let categories = ["display", "power", "audio", "playback", "fun", "test"]
     /// true: a research or test patch (the category "test"). The Patches pane shows it only when
     /// Settings > Patches > Enable Test Patches is on, and then with a red warning.
     public var isTest: Bool { category == "test" }

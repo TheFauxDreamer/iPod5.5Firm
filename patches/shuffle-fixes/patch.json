@@ -3,9 +3,9 @@
   "title": "Shuffle Fixes",
   "summary": "Corrects four errors in the shuffle, also for libraries with more than 32767 songs.",
   "symbol": "shuffle",
-  "category": "audio",
+  "category": "playback",
   "version_letter": "f",
-  "version": "2.0",
+  "version": "2.1",
   "size": 64,
   "description": "The shuffle of the iPod has four errors. The most important error occurs with more than 32767 songs: the shuffle writes outside the list, and the order is wrong. This patch corrects the four errors.",
   "details": [
