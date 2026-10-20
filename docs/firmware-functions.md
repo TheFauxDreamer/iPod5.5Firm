@@ -578,6 +578,60 @@ Evidence for SpiderMonkey:
 
 The firmware does not contain JavaScript source text, or the names "SpiderMonkey" or "Mozilla".
 
+### The games
+
+Refer to [re/games.md](../re/games.md). The iPod reads the games from the folder `iPod_Control/games_RO`. The program of each game uses a FairPlay DRM. The key is in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The key is bound to the serial number of the iPod.
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0xd9d30 | (n): the name of a games folder. 0 = `games_RO`, 1 = `gamedata_RW`, 2 = `gamestats_WO`, 3 = `gamedata_ShareRW`. The names are at 0x2a9c3c. | Static |
+| 0xdeff4 | (path, n, name, format): the full path of a games folder. The formats are `iPod_Control/%s/%s%s%s` at 0xdf0a8 and `iPod_Control/%s%s%s` at 0xdf094. | Static |
+| 0x24d88c | Makes the object of the games. The object is at 0x108711d4. | Static, Emulator |
+| 0x24d9f8 | (games): scans the folder of the games. It reads the directories. It sets the state of the scan to 3. | Static |
+| 0x24d7c0 | (games, path, game): makes the list of the games. It sets the state of the scan to 2. | Static |
+| 0x24dca0 | (games, n): 1 if the game n is in the list. The count is at most 0x5b (91). | Static |
+| 0x24dce8 | (games): makes the list of the games. It reads the directory. | Static |
+| 0x24d918 | (games, type, n, value): makes one item of the list of the games. | Static |
+| 0x24df00 | (games, size, ...): checks the files of the game. It has 7 steps. It reads the `Files` array of the manifest, the signature, the `iTunesMetaData` file and the other files. It reads the DRM key at 0x24df24 and at 0x24df44. | Static |
+| 0x24e240 | (games): reads and checks one game. It returns 1 when the game is valid. It reads the manifest, calls 0x24df00, calls 0x24e37c and calls 0x24e074. | Static |
+| 0x24e37c | (games): checks the platform of the game. It reads the `Platforms` array. It returns 0 when the game is valid, 0xffffff01 when the platform is not on the iPod and 0xffffff02 when the platform has no executable. | Static |
+| 0x24e554 | (games): the loop of the scan. It calls 0x24d9f8, 0x24e66c, 0x24de30, 0x24e0dc, 0x24dde8, 0x24db38, 0x24e64c and 0x24dc24. | Static |
+| 0x24e66c | (games): checks the game and starts it with 0x1d32e0. It runs only in the state 3. | Static |
+| 0x24e718 | (games, ...): the task of the scan. It makes the list of the platforms and the list of the games. | Static |
+| 0x24d87c | The loop of the scan in a task. | Static |
+| 0x24e9c0 | Draws the screen of the games. | Emulator |
+| 0x24dc0c | (games, state): sets the state of the scan. It accepts the values 1 to 10. | Static |
+| 0x12e3cc | The handler of the screen of the games. It starts the scan. | Static |
+| 0x12dd80 | The handler of the screen of the games when it closes. | Static |
+| 0x1e797c | Reads the DRM key. It calls the method +0xa8 of the object of 0x193090 with 0x6055 and 0x6000. | Static |
+| 0x1c2b78 | Makes the object of the DRM key store. | Static |
+| 0x1c2ca4 | (store, size): reads the key of the game. It opens the DRM library with 0x1b0700. | Static |
+| 0x1b0700 | Opens the DRM library. | Static |
+| 0x1b069c | Reads the key of the user ID. | Static |
+| 0x1b08f0 | Searches the list of the keys. | Static |
+| 0x105a04 | (label): the bit of a main-menu item. The bit for the games is not known yet. | Static |
+
+The names of the folders of the games and of the keys:
+
+| Address | Name | Use |
+|---|---|---|
+| 0x2a9c3c | `games_RO` | The game files. |
+| 0x2a9c48 | `gamedata_RW` | The data of the games. |
+| 0x2a9c54 | `gamestats_WO` | The scores of the games. |
+| 0x2a9c64 | `gamedata_ShareRW` | The data of the games for the shared mode. |
+| 0x6788bb | `iPod_Control/games_RO/` | The path of the games. |
+| 0x6788d2 | `Manifest.plist` | The manifest of a game. |
+| 0x678ddd | `Manifest.plist.p7b` | The signature of the manifest. |
+| 0x678df0 | `.sinf` | The FairPlay file of the program. |
+| 0x69f6fc | `IC-Info.sidd` | The data of the key file. |
+| 0x69f70c | `IC-Info.sidb` | The key file. |
+
+The keys of the manifest of a game are at 0x678d49. The keys are `GUID`, `BuildID`, `PlatformID`, `PlatformVersion`, `ExecutablePath`, `LaunchingArtwork`, `DRM`, `DRMLevel`, `BuildIdentifier`, `Files`, `LocalizedNames` and `Platforms`.
+
+The string `SerialNumber` is at 0x176b24. The string `GamesPlatformID` is at 0x177100. The string `GamesPlatformVersion` is at 0x177110. The function `FUN_00175c74` at 0x175c74 gives these two values to the computer.
+
+The word `Games` is in the JavaScript of the user interface at 0x4b145c, 0x4b38f2, 0x4b3b44 and 0x4b4308. The word `Resume Game` is at 0x4b14d8.
+
 ## Vtables and classes
 
 | Address | Content |
@@ -677,6 +731,7 @@ The physical address is 0x10000000 + the CPU address.
 | 0x1081ee48 | Audio route state. |
 | 0x108710dc | Device information object: +0x92 region code, +0x94 flags (bit 0 = EU volume limit). |
 | 0x1083de9c | SpiderMonkey opcode table. |
+| 0x108711d4 | The object of the games. The function 0x24d88c makes it. |
 | 0x10882c3c | The display server. |
 | 0x1081e0d4 | The layer index of the display (0). |
 | 0x1081ec54 | Byte: the damage callback binds the layer if it is not 0. |

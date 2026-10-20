@@ -2,21 +2,40 @@
 
 This note describes how the iPod Video with RetailOS 1.3 finds and runs iPod
 Games. The research uses Ghidra 12.1.4 on the osos image of firmware 1.3. It
-uses the game files of the owner in the folder
-`~/Downloads/iPod Games Files`.
+uses the game files of the owner in the folder `~/Downloads/iPod Games Files`.
 
 The goal is to add games to an iPod. The iPod cannot receive games from iTunes
 any more, because iTunes does not run on macOS. The iPodFirm app must copy the
 game files to the iPod instead.
 
+The game files use a DRM. The DRM is the reason that the app cannot add the
+games without a key. This note describes the DRM. It gives the result that the
+owner must decide.
+
+## The result in short
+
+The firmware reads the games from the folder `iPod_Control/games_RO`. It reads
+the `Manifest.plist` file of each game first. It checks the `PlatformID` and
+the `PlatformVersion` of the manifest. It then checks the files of the game
+against the `Files` array of the manifest. It then reads the DRM key of the
+game.
+
+The DRM key is in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The
+key is bound to the serial number of the iPod. The app cannot make this file
+for another iPod. The app can only copy this file from an iPod that has the
+key.
+
+The app must copy the game files and the key file to the iPod. The app must
+not make a key. The app must not copy the game files to the repository.
+
 ## The game files of the owner
 
 The owner has two folders with game files.
 
-| Folder | Content |
-|---|---|
-| `iPod Videos (5G and 5.5G only)` | 7 games. The `PlatformID` is 1. These games run on the iPod Video. |
-| `All iPods` | 44 games. The `PlatformID` is 123 or 1234. These games run on other iPods. |
+| Folder | Content | Size |
+|---|---|---|
+| `iPod Videos (5G and 5.5G only)` | 7 games. The `PlatformID` is 1. These games run on the iPod Video. | 218 MB |
+| `All iPods` | 44 games. The `PlatformID` is 123 or 1234. These games run on other iPods. | 2.9 GB |
 
 The `PlatformID` and the `PlatformVersion` in the manifest select the iPod. The
 iPod Video accepts the games with the `PlatformID` 1 only. The games with the
@@ -24,20 +43,26 @@ iPod Video accepts the games with the `PlatformID` 1 only. The games with the
 
 The games of the owner for the iPod Video are these.
 
-| Folder | Name | Executable |
-|---|---|---|
-| 11002 | iQuiz | `Executables/TWA_1_1_2902110.bin` |
-| 12345 | Vortex | `Executables/vortex_1_1_2563290.bin` |
-| 12346 | Vortex Demo | `Executables/vortexTrial_1_1_2759749.bin` |
-| 14005 | Ms. PAC-MAN Demo | `Executables/mspacman_demo_1_1_2906666.bin` |
-| 1B200 | LOST | `Executables/Lost_1_1_2917525.bin` |
-| 1C300 | musika | `Executables/molly_1_1_3028618.bin` |
-| 50514 | Royal Solitaire | `Executables/Solitaire_1_1_2703086.bin` |
+| Folder | Name | Size | Executable |
+|---|---|---|---|
+| 11002 | iQuiz | 31 MB | `Executables/TWA_1_1_2902110.bin` |
+| 12345 | Vortex | 30 MB | `Executables/vortex_1_1_2563290.bin` |
+| 12346 | Vortex Demo | 30 MB | `Executables/vortexTrial_1_1_2759749.bin` |
+| 14005 | Ms. PAC-MAN Demo | 6.7 MB | `Executables/mspacman_demo_1_1_2906666.bin` |
+| 1B200 | LOST | 43 MB | `Executables/Lost_1_1_2917525.bin` |
+| 1C300 | musika | 19 MB | `Executables/molly_1_1_3028618.bin` |
+| 50514 | Royal Solitaire | 57 MB | `Executables/Solitaire_1_1_2703086.bin` |
 
-## The folder on the iPod
+The folder name of a game is the GUID of the game. The GUID is the same as the
+name of the folder.
+
+## The folders on the iPod
 
 The firmware uses four folders in `iPod_Control`. The names are in the osos at
-0x2a9c3c.
+0x2a9c3c. The names are in small letters. The project
+[ipodclickwheelgamespreservationproject](https://github.com/Olsro/ipodclickwheelgamespreservationproject)
+uses the names `GameData_RW` and `GameStats_WO`. The osos of firmware 1.3 has
+only the small letter names.
 
 | Address | Name | Use |
 |---|---|---|
@@ -90,10 +115,64 @@ The string `iPod_Control/games_RO/` is at 0x6788bb. The string
 `Manifest.plist` is at 0x6788d2. Both are in the data area. The code that uses
 them is at 0x24e240.
 
+## The DRM of the games
+
+The program of each game uses a FairPlay DRM. The program file has high
+entropy. It is not ARM code. The file `Manifest.plist` and the file
+`iTunesMetaData` of the game are plain text. The program file is not.
+
+Each game has a file with the name of the program and the suffix `.sinf`. The
+file holds the FairPlay atoms. The file of the game `1C300` has these atoms.
+
+| Atom | Size | Content |
+|---|---|---|
+| `sinf` | 1032 | The whole file. |
+| `frma` | 12 | The name of the program. |
+| `schm` | 20 | The scheme `itun`. |
+| `schi` | 856 | The child atoms. |
+| `user` | 0x0c | The user ID. It is (account 1) in all 7 games. |
+| `key ` | 12 | The size of the key. |
+| `iviv` | 24 | The initialisation vector. It is the same in all 7 games. |
+| `name` | 264 | The name of the game. |
+
+The user ID is the same in all 7 games of the owner. The initialisation vector
+is the same in all 7 games. The key is not in the `sinf` file. The key is in
+the file `IC-Info.sidb` of the iPod.
+
+The firmware has the two names of the key file in the osos.
+
+| Address | Name | Use |
+|---|---|---|
+| 0x69f6fc | `IC-Info.sidd` | The data of the key file. |
+| 0x69f70c | `IC-Info.sidb` | The key file. |
+
+The key file is in the folder `iPod_Control/iTunes/`. The firmware builds this
+path with the string `iPod_Control\iTunes\` at 0xb4de0, 0xbc074, 0xf383c and
+0xf5384. The functions that use this path are 0xb4a64, 0xbbf2c, 0xf3794 and
+0xf52b8.
+
+The function `FUN_001e797c` at 0x1e797c reads the key. It calls the method
++0xa8 of the object of 0x193090 with the values 0x6055 and 0x6000. The
+function `FUN_001c2b78` at 0x1c2b78 calls this function. The function
+`FUN_0024df00` at 0x24df00 calls 0x1c2b78 at 0x24df24. The function
+`FUN_001c2ca4` at 0x1c2ca4 reads the key of the game. The function
+`FUN_0024df00` calls 0x1c2ca4 at 0x24df44.
+
+The function `FUN_001c2ca4` opens the key store with `FUN_001b0700` at
+0x1c2cc0. The function `FUN_001b0700` at 0x1b0700 opens the DRM library. The
+function `FUN_001b069c` at 0x1b069c reads the key of the user ID. The
+function `FUN_001b08f0` at 0x1b08f0 searches the list of the keys.
+
+The string `SerialNumber` is in the osos at 0x176b24. It is a key of the
+device information. The key of the DRM is bound to this number. The project
+[ipodclickwheelgamespreservationproject](https://github.com/Olsro/ipodclickwheelgamespreservationproject)
+says the same. It says that a copy of the folder `iPod_Control` does not work
+on another iPod.
+
 ## The code of the games
 
 The class of the games is at 0x24d000 to 0x24f000 in the osos. The object of
-this class has the fields at these offsets.
+this class has the fields at these offsets. The object is at 0x108711d4.
 
 | Offset | Field | Use |
 |---|---|---|
@@ -161,7 +240,7 @@ when the game is valid. It does these steps.
    argument 0 gives the folder `games_RO`. The last argument is the string
    `Manifest.plist` at 0x24e36c.
 2. It reads the manifest. The function `FUN_00256610` at 0x256610 reads the
-   file. The function `FUN_00115584` at 0x115584 parses the file.
+   file. The function `FUN_0011554c` at 0x11554c parses the file.
 3. It calls `FUN_0024df00` at 0x24df00. This function checks the files of the
    game. It has 7 steps. It reads the list of the files, the signature, the
    `iTunesMetaData` file, the resources and the other files.
@@ -201,7 +280,16 @@ and a number.
 The function `FUN_0024d7c0` at 0x24d7c0 makes the list of the games. It sets
 the state of the scan to 2. It sets the index of the game to 0xffffffff.
 
-## The menu
+## The screen of the games
+
+The function `FUN_0012e3cc` at 0x12e3cc is the handler of the screen. It calls
+the function `FUN_0024d88c` at 0x24d88c. This function gives the object of the
+games. The function `FUN_0024d99c` at 0x24d99c starts the scan. The function
+`FUN_0024e4b4` at 0x24e4b4 waits for the state 1. The function `FUN_0024e1e8`
+at 0x24e1e8 waits for the state 1 or 10.
+
+The function `FUN_0012dd80` at 0x12dd80 is the handler of the screen when it
+closes.
 
 The word `Games` is in the JavaScript of the user interface. The JavaScript is
 in the resource `TCmd` 9088 at 0x4b441c. The word `Games` is at these places.
@@ -221,29 +309,52 @@ settings. The function `FUN_001222c4` at 0x1222c4 reads a list of a key of the
 settings. The function `FUN_000deff4` at 0xdeff4 makes the path of a file of
 the `iPod_Control` folder.
 
-The main menu mask is at 0x9d880. The function `FUN_00193` at 0x193470 returns
-the state of a menu item. The bit for the games is not known yet.
+The main menu mask is at 0x9d880. The function `FUN_00193470` at 0x193470
+returns the state of a menu item. The function `FUN_00105a04` at 0x105a04 gives
+the bit of a menu item. The bit for the games is not known yet.
 
-## The result
+## The test in the emulator
 
-The firmware reads the games from the folder `iPod_Control/games_RO`. It reads
-the `Manifest.plist` file of each game first. It checks the `PlatformID` and
-the `PlatformVersion` of the manifest. It then checks the files of the game
-against the `Files` array of the manifest. It then reads the
-`iTunesMetaData` file of the game. The game runs when all these checks pass.
+The test used the emulator of the project. The games of the owner were copied
+to the folder `iPod_Control/Games_RO` of the volume of the emulator. The
+volume is FAT32.
 
-The app must copy these files to the folder `iPod_Control/games_RO` of the
-iPod. The app must not copy the game files to the repository. The app must
-copy the files that the owner selects in a dialog.
+The result of the test is this.
+
+- The item `Games` is in the main menu. The item opens the screen of the games.
+- The list of the games is empty.
+- The object of the games at 0x108711d4 is empty. All fields are 0. The
+  function `FUN_0024d88c` at 0x24d88c did not make the object.
+- The histogram shows that the code of the games at 0x24d000 to 0x24f000 did
+  not run. The blocks that ran are at 0x24e840 to 0x24ee80. These blocks are
+  the drawing of the screen. The function `FUN_0024e9c0` at 0x24e9c0 draws the
+  screen of the games.
+
+The cause of the empty list is not known yet. The two possible causes are the
+name of the folder and the key of the DRM. The name of the folder in the
+firmware is `games_RO` in small letters. The project
+[ipodclickwheelgamespreservationproject](https://github.com/Olsro/ipodclickwheelgamespreservationproject)
+uses the name `Games_RO`. The test used the name `Games_RO`. The test with the
+name `games_RO` gave the same result. The list was empty in both tests.
+
+The machine of the owner has no file `IC-Info.sidb`. The key of the DRM is
+therefore not present in the test.
 
 ## The open questions
 
-- The bit of the games in the main menu mask. The function `FUN_00193` at
-  0x193470 gives the state of a menu item.
+- The cause of the empty list in the emulator. The object of the games at
+  0x108711d4 is empty. The function `FUN_0024d88c` at 0x24d88c did not make
+  the object.
+- The bit of the games in the main menu mask. The function `FUN_00105a04` at
+  0x105a04 gives the bit of a menu item.
 - The check of the digest of the executable. The function `FUN_0024df00` at
   0x24df00 checks it. The app must know if the check uses the digest of the
   manifest or the signature of the file.
 - The list of the folders that the firmware makes on the iPod. The names are
   `gamedata_RW`, `gamestats_WO` and `gamedata_ShareRW`.
 - The state 5 and 6 of the class. The firmware runs a game in these states.
-- The task that runs the scan. The task starts at 0x24e718.
+- The function that reads the file `IC-Info.sidb`. The names are at 0x69f6fc
+  and 0x69f70c. The code that uses them is not found yet.
+- The way that the key is bound to the serial number. The string
+  `SerialNumber` is at 0x176b24. The code that uses it for the key is not
+  found yet.
