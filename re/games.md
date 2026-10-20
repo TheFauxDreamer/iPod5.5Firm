@@ -25,6 +25,10 @@ key is bound to the serial number of the iPod. The app cannot make this file
 for another iPod. The app can only copy this file from an iPod that has the
 key.
 
+The keys of the purchases are in the file `SC Info.sidb` of the computer with
+iTunes. This file is encrypted with a key that comes from the hardware of that
+computer. The app on macOS cannot read this file.
+
 The app must copy the game files and the key file to the iPod. The app must
 not make a key. The app must not copy the game files to the repository.
 
@@ -340,6 +344,121 @@ name `games_RO` gave the same result. The list was empty in both tests.
 The machine of the owner has no file `IC-Info.sidb`. The key of the DRM is
 therefore not present in the test.
 
+## The DRM of iTunes on Windows
+
+The owner has the installer of iTunes for Windows in the folder with the games.
+The file is `iTunes64Setup.exe`. The file is a PE32+ program. It holds a
+cabinet with 5 files. The cabinet holds `iTunes64.msi`, `AppleSoftwareUpdate.msi`,
+`AppleMobileDeviceSupport64.msi`, `Bonjour64.msi` and `SetupAdmin.exe`.
+
+The file `iTunes64.msi` is 165,765,120 bytes. Its header gives the version
+**12.10.11.2** for x64. The file holds a cabinet of 157,904,132 bytes with 963
+folders and 4616 files. The cabinet is in the format MSZIP.
+
+The names of the files of the MSI are in the string pool of the file. The names
+that matter for the DRM are these.
+
+| Name | Use |
+|---|---|
+| `CoreFP.dll` | The FairPlay core. The MSI names it `CoreFPFairPlay Core`. |
+| `iPodService.exe` | The service that talks to the iPod. |
+| `iPodService.dll` | The library of the service. |
+| `iTunes.exe` | The program. |
+
+The file `CoreFP.dll` is the library that makes and reads the keys. The file
+`iPodService.exe` is the program that writes `IC-Info.sidb` to the iPod.
+
+### Where the keys live
+
+The keys of the purchases are not in the program of iTunes. They are in a
+separate database. The database is in the folder `SC Info`. The folder is in
+this place.
+
+| System | Place |
+|---|---|
+| macOS | `/Users/Shared/SC Info` |
+| Windows | `C:\ProgramData\Apple Computer\iTunes\SC Info` |
+
+The folder holds the file `SC Info.sidb`. The file holds the keys. The file
+`SC Info.sidd` holds the certificates. The name `IC-Info.sidb` in the osos of
+the iPod has the same role. The iPod keeps a copy of the keys of the purchases
+in its own folder `iPod_Control/iTunes`.
+
+The database of the keys is encrypted. The key of the encryption is calculated
+from the hardware of the computer. The project
+[iTunes-Sid](https://metacpan.org/release/BILLH/iTunes-Sid-0.42) describes the
+format. Its function `get_sid_key` takes the MAC address of the computer and
+returns the key for AES. Its function `get_sid_iv` returns the vector. Its
+function `fetch_all_user_keys` reads all the keys of the file `SC Info.sidb`.
+Its function `find_veggie_for_userID` finds the rights of one account.
+
+The key of the database therefore belongs to the computer. The database of the
+keys belongs to the account. The copy of the keys on the iPod belongs to the
+iPod.
+
+### The two parts of the binding
+
+The research gives two parts.
+
+1. The account. The atom `user` of the file `sinf` holds the number of the
+   account. The number is the same in all 7 games of the owner: (account 1).
+   The file `sinf` of the game `1C300` has these atoms.
+
+   | Atom | Size | Content |
+   |---|---|---|
+   | `sinf` | 1032 | The whole file. |
+   | `frma` | 12 | The name of the program. |
+   | `schm` | 20 | The scheme `itun`. |
+   | `schi` | 856 | The child atoms. |
+   | `user` | 12 | The number of the account: (account 1). |
+   | `key ` | 12 | The size of the key. |
+   | `iviv` | 24 | The vector of AES. It is the same in all 7 games. |
+   | `name` | 264 | The name of the game. |
+
+   The project
+   [vnc0/fairplay-scinfo](https://github.com/vnc0/fairplay-scinfo) describes
+   the same format. It says that the atom `user` holds the number of the
+   account. It has ImHex patterns for the file `sinf`.
+
+2. The iPod. The iPod adds its own number to the key. The project
+   [ipodclickwheelgamespreservationproject](https://github.com/Olsro/ipodclickwheelgamespreservationproject)
+   says that the copy of the folder `iPod_Control` does not work on another
+   iPod. It says that the DRM is tied to the serial number of the iPod.
+
+   The osos of the firmware has the file `iPod_Control\Device\SysInfo` at
+   0xa275c. This file holds the identity of the iPod. The function
+   `FUN_001e797c` at 0x1e797c reads the key. It calls the method +0xa8 of the
+   object of 0x193090 with the values 0x6055 and 0x6000. The object of 0x193090
+   is the manager of the device.
+
+### The limit of five accounts
+
+The project documents the limit of Apple of 5 accounts on one iPod. The key of
+the account is in the file `SC Info.sidb` of the computer. The iPod stores the
+keys of all the accounts that made a purchase. The limit stops a user from
+playing the games of 6 accounts on one iPod.
+
+The community found a way around the limit. The user of the project found that
+iTunes keeps the keys of an account when the user removes the games of the
+account from the library. The user only needs to transfer one game of each
+account. The iPod then has the keys of all the accounts. The user can then copy
+all the game files to the iPod by hand.
+
+This finding is important for the app. The app does not need to make a key. The
+app only needs to copy the game files and the file of the keys.
+
+### The result of the research of iTunes
+
+The keys of the games are in the file `SC Info.sidb` of the computer with
+iTunes. The file is encrypted with a key that comes from the hardware of that
+computer. The app on macOS cannot read that file, because it cannot get the
+key of a Windows computer without the hardware data of that computer.
+
+The app can read the file `IC-Info.sidb` of an iPod. The firmware of the iPod
+can read it, because the iPod has the key. The app can copy the file from one
+iPod to another iPod. The key of the file is then the key of the first iPod,
+and the games do not run on the second iPod.
+
 ## The open questions
 
 - The cause of the empty list in the emulator. The object of the games at
@@ -358,3 +477,20 @@ therefore not present in the test.
 - The way that the key is bound to the serial number. The string
   `SerialNumber` is at 0x176b24. The code that uses it for the key is not
   found yet.
+- The code of `iPodService.exe` and `CoreFP.dll` in iTunes 12.10.11.2. The
+  files are in the cabinet of the MSI. The next step is to extract them and to
+  find the function that writes the file `IC-Info.sidb` to the iPod.
+
+## The sources of the research
+
+| Source | Use |
+|---|---|
+| [ipodclickwheelgamespreservationproject](https://github.com/Olsro/ipodclickwheelgamespreservationproject) | The method of the community. The key file on the iPod, the limit of 5 accounts, the way around the limit, the name of the folders of the games. |
+| [vnc0/fairplay-scinfo](https://github.com/vnc0/fairplay-scinfo) | The format of the file `sinf`. It says that the atom `user` holds the number of the account. It has ImHex patterns. |
+| [iTunes-Sid](https://metacpan.org/release/BILLH/iTunes-Sid-0.42) | The format of the file `SC Info.sidb`. The key of the database comes from the MAC address of the computer. |
+| [roothide/FairFree](https://github.com/roothide/FairFree) | The study of the atom `priv` of the file `sinf` and of the daemon `fairplayd`. It is for iOS. It is not for the iPod Video. |
+| [The night water article](https://www.nightwater.email/ipod-games/) | The story of the project. It says that a user can hold many accounts in one iTunes. |
+| [Apple's page of the games](https://github.com/Olsro/ipodclickwheelgamespreservationproject#preservation-status-for-each-game) | The list of the 54 games and the number of each game. |
+
+The sources are on the internet. The project keeps no copy of them. The owner
+reads them there.

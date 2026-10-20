@@ -649,6 +649,8 @@ The string `SerialNumber` is at 0x176b24. The string `GamesPlatformID` is at 0x1
 
 The word `Games` is in the JavaScript of the user interface at 0x4b145c, 0x4b38f2, 0x4b3b44 and 0x4b4308. The word `Resume Game` is at 0x4b14d8.
 
+The file `iPod_Control\Device\SysInfo` is at 0xa275c. It holds the identity of the iPod. The keys of the purchases are in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The same keys are in the file `SC Info.sidb` of the computer with iTunes. That file is encrypted with a key that comes from the hardware of the computer. The atom `user` of the file `sinf` of a game holds the number of the account. It is (account 1) in all 7 games of the owner. Refer to [re/games.md](../re/games.md).
+
 ## Vtables and classes
 
 | Address | Content |
