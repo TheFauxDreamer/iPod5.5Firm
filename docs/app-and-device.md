@@ -182,7 +182,7 @@ macOS blocks raw disk access without Full Disk Access. The app tests the permiss
 |---|---|---|---|
 | `/usr/sbin/diskutil` | `Device` (app and helper) | `list -plist external physical`, `info -plist DISK` | Find the iPod. |
 | `/usr/sbin/diskutil` | Helper | `unmountDisk DISK` | Unmount the iPod before a write. |
-| `/usr/sbin/diskutil` | App | `eject DISK` | Eject the iPod. |
+| `/usr/sbin/diskutil` | App | `eject DISK` | Eject the iPod. If macOS uses the volume, the app tries again. It tries a maximum of 5 times, 2 seconds apart. |
 | `/usr/bin/xcrun clang` | `Patcher.compile` | Refer to [patch-system.md](patch-system.md#the-compiler) | Compile a patch. |
 | `/usr/bin/xcrun` | `PatchLibrary.hasCompiler` (the install and `PatchEditorSheet`) | `--find clang` | Find out if the Mac can compile a patch. |
 | `/usr/bin/ditto` | `IPSW.unpack` | `-x -k IPSW DIR` | Extract an `.ipsw` file. |

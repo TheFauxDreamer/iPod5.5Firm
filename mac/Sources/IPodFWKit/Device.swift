@@ -67,9 +67,25 @@ public enum Device {
         _ = try runTool("/usr/sbin/diskutil", ["unmountDisk", ipod.disk])
     }
 
+    /// The maximum number of eject attempts, and the time between two attempts in seconds.
+    static let ejectAttempts = 5
+    static let ejectRetryDelay = 2.0
+
     /// Unmount all volumes of the iPod and eject it, as Finder does. Then the iPod can be disconnected.
+    /// Spotlight (mds) often reads the volume after a write and stops the unmount. Thus the eject
+    /// tries again after a short time. Other errors stop the eject immediately.
     public static func eject(_ ipod: IPodDisk) throws {
-        _ = try runTool("/usr/sbin/diskutil", ["eject", ipod.disk])
+        for attempt in 1...ejectAttempts {
+            do {
+                _ = try runTool("/usr/sbin/diskutil", ["eject", ipod.disk])
+                return
+            } catch {
+                let text = error.localizedDescription
+                guard text.contains("dissented") || text.contains("could not be unmounted") else { throw error }
+                if attempt < ejectAttempts { Thread.sleep(forTimeInterval: ejectRetryDelay) }
+            }
+        }
+        throw FirmwareError("We were unable to eject your iPod. macOS is currently accessing it. Try again.")
     }
 }
 
