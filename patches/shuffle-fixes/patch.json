@@ -1,7 +1,7 @@
 {
   "name": "shuffle-fixes",
   "title": "Shuffle Fixes",
-  "summary": "Corrects four errors in the shuffle, also for libraries with more than 32767 songs.",
+  "summary": "Fixes 4 bugs in shuffle on the iPod.",
   "symbol": "shuffle",
   "category": "playback",
   "version_letter": "f",
@@ -12,11 +12,11 @@
     "Shuffle Songs and Shuffle Albums operate correctly with more than 32767 songs.",
     "The shuffle does not use the position after the end of the list. Without the patch, this rare error can occur in approximately 1 of 700 shuffles of 50000 songs.",
     "Three rare start values of the random numbers do not stop the shuffle.",
-    "The shuffle of the songs in each album uses the correct positions. The Settings menu does not switch on this mode."
+    "The shuffle of the songs in each album uses the correct positions. The Settings menu does not switch on this mode.",
+    "Shuffle behaviour is unchanged other than the above fixes. The same start value gives the same order of songs as before."
   ],
   "notes": [
-    "With 32767 songs or fewer, the shuffle gives the same order as before for the same start value.",
-    "The deck shuffle of the card game does not change."
+    "With 32767 songs or fewer, the shuffle gives the same order as before for the same start value."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [

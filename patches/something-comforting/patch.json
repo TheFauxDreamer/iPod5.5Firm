@@ -1,7 +1,7 @@
 {
   "name": "something-comforting",
   "title": "Something Comforting",
-  "summary": "A Settings item plays a melody on the iPod speaker.",
+  "summary": "A Proof of Concept that plays a melody on the iPod speaker.",
   "symbol": "music.note",
   "category": "fun",
   "version_letter": "m",

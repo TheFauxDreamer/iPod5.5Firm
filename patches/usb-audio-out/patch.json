@@ -1,7 +1,7 @@
 {
   "name": "usb-audio-out",
   "title": "USB-C Audio",
-  "summary": "Plays the music through USB-C headphones (Settings > USB-C Audio).",
+  "summary": "Enables music through USB-C headphones (Settings > USB-C Audio).",
   "symbol": "headphones",
   "category": "audio",
   "version_letter": "u",

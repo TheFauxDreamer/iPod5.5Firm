@@ -1,7 +1,7 @@
 {
   "name": "album-artists",
   "title": "Album Artists",
-  "summary": "A Music menu item that lists the songs by Album Artist.",
+  "summary": "Adds a menu item that lists albums/songs by Album Artist.",
   "symbol": "person.2.crop.square.stack",
   "category": "display",
   "version_letter": "l",

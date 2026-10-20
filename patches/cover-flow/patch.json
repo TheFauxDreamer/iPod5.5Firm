@@ -1,7 +1,7 @@
 {
   "name": "cover-flow",
   "title": "Cover Flow",
-  "summary": "Browse the album covers in 3D, as on the iPod classic.",
+  "summary": "A recreation of Cover Flow from the iPod Classics.",
   "symbol": "square.stack.3d.forward.dottedline",
   "category": "display",
   "version_letter": "c",

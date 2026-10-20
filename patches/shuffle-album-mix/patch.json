@@ -1,7 +1,7 @@
 {
   "name": "shuffle-album-mix",
   "title": "Album Mix Shuffle",
-  "summary": "Adds Album Mix to Settings > Shuffle: the albums and the songs in each album play in a random order.",
+  "summary": "Enables an abandoned Apple feature: Album Shuffle Mix.",
   "symbol": "shuffle",
   "category": "playback",
   "version_letter": "x",
@@ -10,6 +10,7 @@
   "description": "Settings > Shuffle gets a 4th value, Album Mix. Like Albums, Album Mix plays the albums in a random order. It also shuffles the songs in each album. Apple put this mode in the firmware, but no menu item switched it on.",
   "needs": ["shuffle-fixes"],
   "details": [
+    "Resored the abandoned Apple feature: Album Mix Shuffle, and fixes bugs in the unfinished code.",
     "Settings > Shuffle: Off, Songs, Albums, Album Mix.",
     "The iPod keeps the setting after a sleep, as the other values.",
     "A change between Albums and Album Mix shuffles the play list again."

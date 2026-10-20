@@ -1,7 +1,7 @@
 {
   "name": "album-art",
   "title": "Album Artwork",
-  "summary": "Adds thumbnails next to the albums and the playlists.",
+  "summary": "Adds thumbnails next to albums and playlists.",
   "symbol": "photo.on.rectangle.angled",
   "category": "display",
   "ui": {
