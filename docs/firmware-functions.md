@@ -610,6 +610,23 @@ Refer to [re/games.md](../re/games.md). The iPod reads the games from the folder
 | 0x1b069c | Reads the key of the user ID. | Static |
 | 0x1b08f0 | Searches the list of the keys. | Static |
 | 0x105a04 | (label): the bit of a main-menu item. The bit for the games is not known yet. | Static |
+| 0x1d32e0 | Starts a game. The function 0x24e66c calls it. | Static |
+| 0x24d99c | Starts the scan of the games. | Static |
+| 0x24db38 | (games): waits for the state 7. It sets the state to 9. | Static |
+| 0x24dc24 | (games): waits for the state 10. It sets the state to 1. | Static |
+| 0x24dde8 | (games): waits for the state 6 or 3. It sets the state to 7. | Static |
+| 0x24de30 | (games): waits for the state 4. It sets the state to 5 or 6. | Static |
+| 0x24e074 | (games): makes the list of the games. | Static |
+| 0x24e0dc | (games): the run of a game. | Static |
+| 0x24e1e8 | (games): waits for the state 1 or 10. | Static |
+| 0x24e4b4 | (games): waits for the state 1. | Static |
+| 0x24e5d0 | (games): waits for the state 3. | Static |
+| 0x24e64c | (games): a step of the loop of the scan. | Static |
+| 0x11554c | Parses a property list. The function 0x24e240 calls it for the manifest. | Static |
+| 0x256610 | (path): reads a file. The function 0x24e240 calls it for the manifest. | Static |
+| 0x1222c4 | Reads a list of a key of the settings. | Static |
+| 0x131874 | (key): reads the value of a key of the settings. | Static |
+| 0x193470 | (settings, label): 1 if the main-menu item is on. | Static |
 
 The names of the folders of the games and of the keys:
 
