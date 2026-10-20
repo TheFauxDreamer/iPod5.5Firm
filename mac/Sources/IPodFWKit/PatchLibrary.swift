@@ -325,7 +325,7 @@ public struct PatchLibrary {
             }
         }
         if spec.title == nil || spec.symbol == nil || spec.category == nil {
-            c.notes.append("The patch has no title, symbol or category in patch.json. iPodFirm shows its name in the group \"Other\".")
+            c.notes.append("The patch has no title, symbol or category in patch.json. iPodFirm shows the name of the patch, and puts the patch in the group \"Community\".")
         }
         let me = PatchInfo(spec: spec, folder: c.folder, source: .user)
         for (_, other, place) in Patcher.conflicts([me] + others).filter({ $0.0.spec.name == spec.name }) {

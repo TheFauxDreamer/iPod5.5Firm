@@ -149,9 +149,18 @@ struct PatchList: View {
 
     static let groups = [("display", "Display"), ("power", "Power and Storage"), ("audio", "Sound"), ("playback", "Playback"), ("fun", "Fun"), ("test", "Tests")]
 
+    /// A patch in the group "Community": an installed patch (not a newer copy of a built-in patch), or
+    /// a patch with no known category.
+    static func isCommunity(_ p: PatchInfo) -> Bool {
+        (p.source == .user && !p.replacesBuiltIn) || !PatchSpec.categories.contains(p.spec.category ?? "")
+    }
+
     var groups: [(title: String, patches: [PatchInfo])] {
-        var result = Self.groups.map { key, title in (title, model.patches.filter { $0.spec.category == key }) }
-        result.append(("Other", model.patches.filter { !PatchSpec.categories.contains($0.spec.category ?? "") }))
+        let community = model.patches.filter(Self.isCommunity)
+        var result = Self.groups.map { key, title in
+            (title, model.patches.filter { $0.spec.category == key && !Self.isCommunity($0) })
+        }
+        result.append(("Community", community))
         return result.filter { !$0.1.isEmpty }
     }
 
