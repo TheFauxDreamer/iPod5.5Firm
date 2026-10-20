@@ -91,6 +91,49 @@ public enum MusicAppCheck {
     }
 }
 
+/// The settings file of the iPod, iPod_Control/Device/Preferences. The firmware loads it into its
+/// settings with no check. A field at settings + X is at file offset X − 8 (re/shuffle.md).
+public enum IPodPreferences {
+    public static let path = "iPod_Control/Device/Preferences"
+    /// The settings byte +0x93 ("shuffle the songs in each album too"), the Album Mix of the patch
+    /// shuffle-album-mix.
+    public static let albumMixOffset = 0x8b
+    /// The file version of firmware 1.3.
+    public static let version: UInt32 = 0x39
+
+    /// true if `osos` has the patch shuffle-album-mix: the Shuffle item wraps after mode 3
+    /// (`cmp r0, #3` at 0x191e9c).
+    public static func hasAlbumMix(osos: [UInt8]) -> Bool {
+        let at = 0x191e9c
+        return osos.count >= at + 4 && osos[at..<at + 4].elementsEqual([0x03, 0x00, 0x50, 0xe3])
+    }
+
+    /// true if the firmware partition image at `image` has the patch shuffle-album-mix.
+    public static func hasAlbumMix(partition image: URL) -> Bool {
+        guard let p = try? FirmwarePartition(contentsOf: image), let osos = try? p.image("osos") else { return false }
+        return hasAlbumMix(osos: osos)
+    }
+
+    /// Switch off Album Mix in the settings file on the mounted volume. A firmware without
+    /// shuffle-album-mix still loads the byte, and then shuffles the songs in each album with no menu
+    /// item to stop it. Albums stays Albums. Returns true if the file changed. The file stays as it
+    /// is if it is missing, if it is shorter than the byte, or if its version is not 0x39.
+    @discardableResult
+    public static func clearAlbumMix(onVolume volume: URL) throws -> Bool {
+        let url = volume.appendingPathComponent(path)
+        guard let handle = try? FileHandle(forUpdating: url) else { return false }
+        defer { try? handle.close() }
+        let head = [UInt8](try handle.read(upToCount: albumMixOffset + 1) ?? Data())
+        guard head.count > albumMixOffset,
+              UInt32(head[0]) | UInt32(head[1]) << 8 | UInt32(head[2]) << 16 | UInt32(head[3]) << 24 == version,
+              head[albumMixOffset] != 0 else { return false }
+        try handle.seek(toOffset: UInt64(albumMixOffset))
+        try handle.write(contentsOf: Data([0]))
+        try handle.synchronize()
+        return true
+    }
+}
+
 public protocol BlockReader {
     var blockSize: Int { get }
     func read(_ offset: Int, _ length: Int) throws -> [UInt8]

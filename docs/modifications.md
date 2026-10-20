@@ -719,9 +719,11 @@ The card game deck shuffle `0x12d494` also uses `0xaf4b4` and `0x55c`. It cuts i
 
 The `bytes` key changes 0x191e9c from `cmp r0, #2` to `cmp r0, #3`, so that Select wraps after Album Mix.
 
+Before a flash or a restore of a firmware without this patch, the app switches off Album Mix in `iPod_Control/Device/Preferences` (byte 0x8b). Else the firmware still loads the setting and shuffles the songs in each album with no menu item to stop it. Refer to [safety.md](safety.md).
+
 The setter 0xb3a04 does nothing for a change between Albums and Album Mix, because `+0x20` and `+0x92` do not change. For this change the hook calls 0xa983c (the settings are saved at the next sleep) and the refresh 0x11147c.
 
-**Test status.** Emulator (20 October 2026, with `shuffle-fixes` and the fixed seed, 60 tracks): Select on Shuffle gives Off → Songs → Albums → Album Mix → Off, and the bytes `+0x20`, `+0x92` and `+0x93` agree with each value. In Album Mix, Shuffle Songs played Test Song 43 first, as the model. The Repeat row stays correct. Not tested on a real iPod.
+**Test status.** Emulator (20 October 2026, with `shuffle-fixes` and the fixed seed, 60 tracks): Select on Shuffle gives Off → Songs → Albums → Album Mix → Off, and the bytes `+0x20`, `+0x92` and `+0x93` agree with each value. In Album Mix, Shuffle Songs played Test Song 43 first, as the model. The Repeat row stays correct. With all 13 patches that are not `internal` or `test` (20 October 2026): the firmware starts, Music has Album Artists, Settings shows Album Mix, Repeat Off, USB-C Audio Off and Something Comforting Play, and Album Mix gives the same order as the model. Not tested on a real iPod.
 
 ## something-comforting
 

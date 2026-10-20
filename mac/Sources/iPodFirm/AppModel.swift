@@ -1001,6 +1001,19 @@ final class AppModel: ObservableObject {
         } catch { fail("Cannot flash", error) }
     }
 
+    /// A firmware without the patch shuffle-album-mix still loads Album Mix from the settings file of
+    /// the iPod, and then shuffles the songs in each album with no menu item to stop it. Before such a
+    /// write, switch off Album Mix in the file (Albums stays Albums). Returns a note for the result.
+    func clearAlbumMixIfNeeded(image: URL) -> String? {
+        guard !IPodPreferences.hasAlbumMix(partition: image), let volume = ipodMusicVolume() else { return nil }
+        do {
+            guard try IPodPreferences.clearAlbumMix(onVolume: volume) else { return nil }
+            return "The new firmware has no Album Mix. iPodFirm changed Settings > Shuffle on the iPod from Album Mix to Albums."
+        } catch {
+            return "The new firmware has no Album Mix, but iPodFirm cannot change the settings file of the iPod (\(error.localizedDescription)). On the iPod, set Settings > Shuffle to Off, Songs or Albums."
+        }
+    }
+
     /// Stop a firmware write while MiMusic writes to the iPod. The write unmounts the volume and stops the sync.
     func checkNoMusicSync() throws {
         guard let volume = ipodMusicVolume(), !MusicAppCheck.syncFiles(onVolume: volume).isEmpty else { return }
@@ -1015,11 +1028,13 @@ final class AppModel: ObservableObject {
         do {
             // Do the check again: a sync can start while the sheet is open.
             try checkNoMusicSync()
+            // The write unmounts the volume, thus change the settings file first.
+            let mixNote = clearAlbumMixIfNeeded(image: plan.image)
             let r = try await runFlash(plan.ipod, image: plan.image, reason: plan.reason, dryRun: false)
             guard r.ok else { throw FirmwareError(r.message, code: r.code) }
             if plan.reason == "flash" { isDirty = false }
             alert = AlertInfo(title: plan.reason == "flash" ? "Flashed" : "Restored",
-                              message: "\(r.message)\nBackup taken first: \(r.backup?.file ?? "-")\n\nEject the iPod. If the iPod does not start, reset it (hold Menu and Select). Then hold Select and Play for disk mode, and restore a backup in iPodFirm.")
+                              message: "\(r.message)\nBackup taken first: \(r.backup?.file ?? "-")\(mixNote.map { "\n\n" + $0 } ?? "")\n\nEject the iPod. If the iPod does not start, reset it (hold Menu and Select). Then hold Select and Play for disk mode, and restore a backup in iPodFirm.")
         } catch { fail("Flash failed", error) }
     }
 

@@ -570,6 +570,40 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertThrowsError(try Patcher.apply([mix], to: [UInt8](repeating: 0, count: 16)))
     }
 
+    /// Before a write of a firmware without shuffle-album-mix, the app switches off Album Mix in the
+    /// settings file of the iPod. Only the byte 0x8b changes, and only in a file of version 0x39.
+    func testClearAlbumMix() throws {
+        let volume = FileManager.default.temporaryDirectory.appendingPathComponent("prefs-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: volume) }
+        XCTAssertFalse(try IPodPreferences.clearAlbumMix(onVolume: volume))           // no file
+        let url = volume.appendingPathComponent(IPodPreferences.path)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        var prefs = [UInt8](repeating: 0x55, count: 0xb6c)
+        prefs[0..<4] = [0x39, 0, 0, 0]
+        prefs[0x8a] = 1; prefs[0x8b] = 1
+        try Data(prefs).write(to: url)
+        XCTAssertTrue(try IPodPreferences.clearAlbumMix(onVolume: volume))
+        var expected = prefs
+        expected[0x8b] = 0
+        XCTAssertEqual([UInt8](try Data(contentsOf: url)), expected)                  // Albums (0x8a) stays
+        XCTAssertFalse(try IPodPreferences.clearAlbumMix(onVolume: volume))           // already off
+        prefs[0] = 0x38
+        try Data(prefs).write(to: url)
+        XCTAssertFalse(try IPodPreferences.clearAlbumMix(onVolume: volume))           // other version
+        XCTAssertEqual([UInt8](try Data(contentsOf: url)), prefs)
+    }
+
+    /// The app finds shuffle-album-mix in an osos image by the wrap of the Shuffle item.
+    func testHasAlbumMix() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        let fixes = all.first { $0.spec.name == "shuffle-fixes" }!, mix = all.first { $0.spec.name == "shuffle-album-mix" }!
+        XCTAssertFalse(IPodPreferences.hasAlbumMix(osos: osos))
+        XCTAssertFalse(IPodPreferences.hasAlbumMix(osos: try Patcher.apply([fixes], to: osos)))
+        XCTAssertTrue(IPodPreferences.hasAlbumMix(osos: try Patcher.apply([fixes, mix], to: osos)))
+    }
+
     /// A patch with no code shows the bytes that it changes, not "0 KB".
     func testChangedBytesText() {
         let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))

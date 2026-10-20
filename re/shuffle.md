@@ -424,6 +424,8 @@ Notes on the test with 40000 tracks:
 
 The other callers of 0x9edb0 (the accessory commands) do not change. Thus an accessory sees Album Mix as Albums.
 
+The iPod keeps `+0x93` in its settings file. A firmware without the patch still loads it. Thus the app sets the file byte 0x8b to 0 before it writes a firmware without the patch (`IPodPreferences.clearAlbumMix`).
+
 ### Emulator test
 
 With `shuffle-fixes`, the fixed seed 0x12345678 and 60 tracks, 20 October 2026:
