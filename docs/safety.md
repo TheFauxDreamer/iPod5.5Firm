@@ -156,6 +156,7 @@ A test in the emulator is strong evidence, but not proof:
 | `flash-keep-awake` | Yes, without a sleep | 2-minute version only |
 | `flash-wake-on-input` | Yes | No |
 | `volume-unlimit` | Byte check only (the emulator has no EU limit and no audio) | No |
+| `shuffle-album-mix` | Yes (20 October 2026): the 4 values, the settings bytes and the order of Album Mix | No |
 | `shuffle-fixes` | Yes (20 October 2026): version 1.0 with 60 and 40000 tracks; version 2.0 with 60 tracks: the seed fix, the stock order with a fixed seed and the inner album shuffle (no audio in the emulator) | No |
 | `something-comforting` | Yes: the Settings item and the `tone` calls (no audio in the emulator) | No |
 | `album-artists` | Yes (16 October 2026): the list, the albums and songs of an Album Artist, Artists and Genres after it, Now Playing; also with `album-art`, `cover-flow` and `something-comforting`. Version 1.1: the speed with 4000 tracks. Version 1.2: the Main Menu row and the main menu item (the emulator keeps no settings after a cold start) | Version 1.0 (16 October 2026): the list is correct, but the iPod stops for approximately 6 s when the list opens. Version 1.1 (16 October 2026): works well. Version 1.2 (16 October 2026): the Main Menu setting is lost at a restart with Menu+Select, as for the Apple rows (the firmware saves the settings only at a sleep or a disk change) |

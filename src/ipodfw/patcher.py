@@ -356,6 +356,12 @@ def padded(osos: bytes) -> bytes:
 def apply_all(osos: bytes, patch_dirs: list, original_sha256: str | None = None) -> bytes:
     """Apply several patches, as the app does: each one starts after the code, the variables and the
     menus of the patch before it (16-byte steps). Only the result is rounded to 0x800 bytes."""
+    names = {json.loads((Path(d) / "patch.json").read_text())["name"] for d in patch_dirs}
+    for d in patch_dirs:
+        spec = json.loads((Path(d) / "patch.json").read_text())
+        for need in spec.get("needs", []):
+            if need not in names:
+                raise PatchError(f'the patch "{spec["name"]}" needs the patch "{need}"')
     original = original_sha256 or hashlib.sha256(osos).hexdigest()
     out = bytes(osos)
     for d in patch_dirs:

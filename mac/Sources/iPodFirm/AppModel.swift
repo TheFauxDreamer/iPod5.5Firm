@@ -514,15 +514,40 @@ final class AppModel: ObservableObject {
             .filter { $0.0.spec.name == patch.spec.name }.map { ($0.1, $0.2) }
     }
 
-    /// Turn a patch on or off. A patch that conflicts with a turned-on patch stays off.
+    /// Turn a patch on or off. A patch that conflicts with a turned-on patch stays off. A patch turns
+    /// on the patches that it needs (`needs`), and a patch that is turned off turns off the patches
+    /// that need it.
     func setPatch(_ patch: PatchInfo, on: Bool) {
-        guard on else { enabledPatches.remove(patch.spec.name); return }
-        if let (other, place) = conflicts(patch).first {
-            alert = AlertInfo(title: "\(patch.spec.displayTitle) cannot be turned on",
-                              message: "The patch changes the same place as \"\(other.spec.displayTitle)\" (\(place)). Turn off \"\(other.spec.displayTitle)\" first.")
+        guard on else {
+            var off = [patch.spec.name]
+            while let name = off.popLast() {
+                enabledPatches.remove(name)
+                off += patches.filter { enabledPatches.contains($0.spec.name) && ($0.spec.needs ?? []).contains(name) }.map(\.spec.name)
+            }
             return
         }
-        enabledPatches.insert(patch.spec.name)
+        var add: [PatchInfo] = []
+        var todo = [patch]
+        while let p = todo.popLast() {
+            guard !enabledPatches.contains(p.spec.name), !add.contains(where: { $0.spec.name == p.spec.name }) else { continue }
+            add.append(p)
+            for name in p.spec.needs ?? [] {
+                guard let needed = patches.first(where: { $0.spec.name == name }) else {
+                    alert = AlertInfo(title: "\(patch.spec.displayTitle) cannot be turned on",
+                                      message: "The patch needs the patch \"\(name)\". Install it first.")
+                    return
+                }
+                todo.append(needed)
+            }
+        }
+        for p in add {
+            if let (other, place) = conflicts(p).first {
+                alert = AlertInfo(title: "\(patch.spec.displayTitle) cannot be turned on",
+                                  message: "\"\(p.spec.displayTitle)\" changes the same place as \"\(other.spec.displayTitle)\" (\(place)). Turn off \"\(other.spec.displayTitle)\" first.")
+                return
+            }
+        }
+        for p in add { enabledPatches.insert(p.spec.name) }
     }
 
     /// Examine a .ipodpatch file or a patch folder, then show the install sheet.

@@ -388,6 +388,58 @@ Notes on the test with 40000 tracks:
 - Do not set `IPODFW_RESET_AFTER` for a large library. The start takes more than 10⁹ instructions, and a start check then restarts the emulated iPod.
 - The stock firmware with 40000 tracks was not tested. Its shuffle writes outside the list.
 
+## The patch shuffle-album-mix
+
+[patches/shuffle-album-mix](../patches/shuffle-album-mix/patch.json) adds a 4th value to Settings > Shuffle: "Album Mix" (mode 3, `+0x93` = 1). It needs `shuffle-fixes` because of Bug 3.
+
+### The Shuffle item of the Settings menu
+
+- The key of the item is 0x6057. The Settings controller keeps the mode in the byte `controller + 0x1c`.
+- 0x192994 and 0x193b90 load the mode with 0x9edb0: `+0x20` ? (`+0x92` ? 2 : 1) : 0.
+- The value text (get method 0x190b00) is the string `0x6058 + mode`: 0x6058 Off, 0x6059 Songs, 0x605a Albums. The string 0x605b exists in no language, but it is the key of the Repeat item. The Repeat values start at 0x605c.
+- Select (set method 0x1919d8):
+
+```text
+0x191e90  e5d4001c  ldrb r0, [r4, #0x1c]
+0x191e94  e2800001  add r0, r0, #1
+0x191e98  e20000ff  and r0, r0, #0xff
+0x191e9c  e3500002  cmp r0, #2             ; the patch: cmp r0, #3
+0x191ea0  e5c4001c  strb r0, [r4, #0x1c]
+0x191ea4  85c4801c  strbhi r8, [r4, #0x1c] ; r8 = 0: wrap to Off
+0x191ea8  e5d4101c  ldrb r1, [r4, #0x1c]
+0x191eac  e5940098  ldr r0, [r4, #0x98]    ; app
+0x191eb0  ebfc86d3  bl 0xb3a04             ; the setter
+```
+
+- The setter 0xb3a04 returns early if `+0x20` and `+0x92` do not change. Else it writes them, calls 0xa983c (`+0xb74` = 1, "changed") and ends with a tail call to the refresh 0x11147c(app).
+
+### The hooks
+
+| At | Hook | Function |
+|---|---|---|
+| 0x1929a0, 0x193b9c | `hook_get_mode` | 3 if 0x9edb0 gives 2 and `+0x93` is set |
+| 0x191eb0 | `hook_set_mode` | Writes `+0x93` = (mode = 3). If it changes, calls 0xa983c. Between Albums and Album Mix, calls 0x11147c. Else calls the setter with mode 2 for Album Mix. |
+| 0x66c94c (`chain`) | `hook_settings_get` | For the Shuffle item (key 0x6057) in mode 3: the text ID 0x7e10 and the text "Album Mix" |
+| 0x21f254 (`chain`) | `hook_lookup` | The string 0x7e10 is "Album Mix" |
+
+The other callers of 0x9edb0 (the accessory commands) do not change. Thus an accessory sees Album Mix as Albums.
+
+### Emulator test
+
+With `shuffle-fixes`, the fixed seed 0x12345678 and 60 tracks, 20 October 2026:
+
+| Step | `+0x20` | `+0x92` | `+0x93` | Value text |
+|---|---|---|---|---|
+| Start | 0 | 0 | 0 | Off |
+| Select 1 | 1 | 0 | 0 | Songs |
+| Select 2 | 1 | 1 | 0 | Albums |
+| Select 3 | 1 | 1 | 1 | Album Mix |
+| Select 4 | 0 | 0 | 0 | Off |
+
+In Album Mix, Shuffle Songs gave "1 of 60", Test Song 43, state 0x6c572db3. `shuffle_albums(..., inner=True)` with the patched model gives the same first track (239) and state.
+
+A first version gave the text with the string 0x605b. Then the Repeat row also showed "Album Mix": 0x605b is the key of the Repeat item (0x602f + 0x2c), and the menu shows a string with the key of a row if the string exists. Version 1.0 thus hooks the "get" method and uses the string 0x7e10.
+
 ## How to copy the algorithm exactly
 
 1. Use a 32-bit state and the Schrage form above. Use signed division that truncates toward zero.
@@ -440,7 +492,7 @@ The differences from the firmware:
 - When Shuffle changes during playback, which caller of 0xb40c4 runs (0xb36b8, 0x9dc54, 0x9e710 or 0xb0d40)?
 - The sort of 0xddf94 for slot 6 when the database has no album index (0x1174b4 gives the compare).
 - A test on the real iPod: the same library on two starts must give two different orders.
-- Future work: a Shuffle value that sets `+0x93` (shuffle the songs in each album too). The patch `shuffle-fixes` corrects Bug 3, but this is only half of the work: no menu item sets `+0x93`.
+- Done: a Shuffle value that sets `+0x93` (shuffle the songs in each album too). The patch [shuffle-album-mix](#the-patch-shuffle-album-mix) adds the value "Album Mix". The notes below are the research before the patch.
   - Start points: the setter 0xb3a04 and the Settings controller 0x1919d8. They set only `+0x20` and `+0x92`.
   - The firmware saves `+0x93` at offset 0x8b of `/iPod_Control/Device/Preferences`, and loads it with no check (refer to [Who sets +0x93](#who-sets-0x93)). Thus the iPodFirm app can switch on the mode with a change of this file, with no new menu item in the firmware.
   - A menu item in the firmware needs a new string and research of the Settings menu.

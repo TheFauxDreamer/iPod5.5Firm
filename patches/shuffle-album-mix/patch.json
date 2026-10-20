@@ -1,0 +1,54 @@
+{
+  "name": "shuffle-album-mix",
+  "title": "Album Mix Shuffle",
+  "summary": "Adds Album Mix to Settings > Shuffle: the albums and the songs in each album play in a random order.",
+  "symbol": "shuffle",
+  "category": "audio",
+  "version_letter": "x",
+  "version": "1.0",
+  "size": 334,
+  "description": "Settings > Shuffle gets a 4th value, Album Mix. Like Albums, Album Mix plays the albums in a random order. It also shuffles the songs in each album. Apple put this mode in the firmware, but no menu item switched it on.",
+  "needs": ["shuffle-fixes"],
+  "details": [
+    "Settings > Shuffle: Off, Songs, Albums, Album Mix.",
+    "The iPod keeps the setting after a sleep, as the other values.",
+    "A change between Albums and Album Mix shuffles the play list again."
+  ],
+  "notes": [
+    "This patch needs Shuffle Fixes. Without it, Album Mix repeats some songs and does not play other songs.",
+    "The text \"Album Mix\" is in English for all languages.",
+    "Accessories see Album Mix as Albums."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "get_mode": "0x9edb0",
+    "set_shuffle": "0xb3a04",
+    "mark_changed": "0xa983c",
+    "refresh_shuffle": "0x11147c",
+    "lookup_continue": "0x21f258"
+  },
+  "hooks": [
+    { "kind": "bl", "at": "0x1929a0", "expect": "0xebfc3102", "to": "hook_get_mode" },
+    { "kind": "bl", "at": "0x193b9c", "expect": "0xebfc2c83", "to": "hook_get_mode" },
+    { "kind": "bl", "at": "0x191eb0", "expect": "0xebfc86d3", "to": "hook_set_mode" },
+    { "kind": "b", "at": "0x21f254", "expect": "0xe92d40f8", "to": "hook_lookup", "chain": "lookup_next", "chain_default": "lookup_original" },
+    { "kind": "word", "at": "0x66c94c", "expect": "0x00190b00", "to": "hook_settings_get", "chain": "get_next" }
+  ],
+  "bytes": [
+    { "at": "0x191e9c", "expect": "020050e3", "value": "030050e3" }
+  ],
+  "ui": {
+    "steps_title": "Test Album Mix",
+    "steps": [
+      "Flash a firmware with this patch and Shuffle Fixes.",
+      "On the iPod, open Settings.",
+      "Select Shuffle three times. The value is Album Mix.",
+      "Select Shuffle Songs in the main menu.",
+      "Make sure that the albums and the songs in each album play in a random order."
+    ]
+  }
+}

@@ -391,6 +391,9 @@ extension AppModel {
             return "The connected iPod probably has the original hard drive."
         }
         if let (other, _) = conflicts(patch).first { return "Changes the same place as \"\(other.spec.displayTitle)\"." }
+        if let name = (patch.spec.needs ?? []).first(where: { n in !patches.contains { $0.spec.name == n } }) {
+            return "Needs the patch \"\(name)\", which is not installed."
+        }
         return nil
     }
 }
@@ -521,7 +524,8 @@ struct PatchAbout: View {
             ForEach(spec.details ?? [], id: \.self) { BulletRow(text: $0) }
             if spec.description == nil && spec.details == nil { Text(spec.name).foregroundStyle(.secondary) }
         }
-        if let items = spec.requires, !items.isEmpty {
+        let items = (spec.requires ?? []) + (spec.needs ?? []).map { "The patch \"\($0)\" (it turns on with this patch)" }
+        if !items.isEmpty {
             Section("You Need") {
                 ForEach(items, id: \.self) { BulletRow(text: $0, symbol: "checkmark.circle", tint: .green) }
             }

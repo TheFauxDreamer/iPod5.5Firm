@@ -556,6 +556,20 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertFalse(Patcher.conflicts(pair).isEmpty)
     }
 
+    /// shuffle-album-mix needs shuffle-fixes: a build without it fails. Each name in `needs` is a patch.
+    func testPatchNeeds() {
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        let names = Set(all.map(\.spec.name))
+        for p in all {
+            for n in p.spec.needs ?? [] { XCTAssertTrue(names.contains(n), "\(p.spec.name) needs \(n), which is not in patches/") }
+        }
+        let mix = all.first { $0.spec.name == "shuffle-album-mix" }!
+        let fixes = all.first { $0.spec.name == "shuffle-fixes" }!
+        XCTAssertEqual(Patcher.missingNeeds([mix]).first?.1, ["shuffle-fixes"])
+        XCTAssertTrue(Patcher.missingNeeds([mix, fixes]).isEmpty)
+        XCTAssertThrowsError(try Patcher.apply([mix], to: [UInt8](repeating: 0, count: 16)))
+    }
+
     /// A patch with no code shows the bytes that it changes, not "0 KB".
     func testChangedBytesText() {
         let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))

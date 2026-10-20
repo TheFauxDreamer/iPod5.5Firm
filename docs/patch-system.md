@@ -154,6 +154,7 @@ The changes stay in the app until Save or **Revert** (`AppModel.codeDrafts`), al
 | `summary` | string | One line below the title in the list of patches. |
 | `details` | array of strings, optional | The changes that the owner sees on the iPod. The section "What It Does" shows each item as a bullet below `description`. Write one short sentence for each item. |
 | `requires` | array of strings, optional | The hardware or the files that the patch needs. The section "You Need" shows each item. |
+| `needs` | array of strings, optional | The names of other patches that this patch needs, for example `["shuffle-fixes"]`. Refer to [Patches that need other patches](#patches-that-need-other-patches). |
 | `notes` | array of strings, optional | More information. The section "Good to Know" shows each item. |
 | `caution` | string, optional | A caution. The pane shows it in orange above the switch of the patch. The install sheet also shows it. |
 | `symbol` | string | The name of an SF Symbol, for example `photo.on.rectangle.angled`. Do not use emoji. |
@@ -348,6 +349,15 @@ After the link, the patcher writes the value of the selected choice into the var
 
 After the checks, iPodFirm writes the code and the hooks. The build of several patches (`Patcher.apply` with a list, Python `apply_all`) does not round each patch: the image ends at the last byte of the code, the variables and the menus of a patch, and the next patch starts there (16-byte steps). Only the final image is extended with zeros to a multiple of 0x800 bytes. One patch alone (`apply` with one patch) is also rounded. The partition code then calculates the new length and checksum.
 
+## Patches that need other patches
+
+A patch can need other patches. Put their names in `needs`. For example, `shuffle-album-mix` needs `shuffle-fixes`, because the mode has an error without it.
+
+- The Patches pane turns on the needed patches when the owner turns on the patch. If a needed patch changes the same place as a turned-on patch, nothing turns on, and the pane tells why.
+- When the owner turns off a patch, the pane also turns off each turned-on patch that needs it.
+- The section "You Need" shows the needed patches. If a needed patch is not installed, the list shows a problem.
+- A build without a needed patch fails (`Patcher.missingNeeds`, `Patcher.apply`; in Python, `apply_all`). The tests `testPatchNeeds` and `test_needs` make sure of this.
+
 ## The free space
 
 Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker. Do not put code on them. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. Two parts are free: 0x7358d0–0x73658c (3260 bytes; `album-art` used it before version 2.0) and 0x736784–0x736800 (124 bytes). A larger patch uses the extended area (see below).
@@ -366,6 +376,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `album-artists` | `extended` | After all other data (3688 bytes), then three menus: Music (11 items, 444 bytes), the main menu (32 items, 1284 bytes) and Settings > Main Menu (29 items, 1164 bytes). Alone: code 0x736800–0x737668, menus at 0x737800, 0x738000 and 0x738800, osos end 0x739000 | Extended patch. The side table and the list come from the allocators. |
 | `instant-save` | `extended` | After all other data (36 bytes). Alone: 0x736800–0x736824, osos end 0x737000 | Extended patch. |
 | `shuffle-fixes` | `extended` | After all other data (64 bytes). Alone: 0x736800–0x736840, osos end 0x737000 | Extended patch. It also changes 4 words in Apple's code (`bytes`). |
+| `shuffle-album-mix` | `extended` | After all other data (334 bytes). After `shuffle-fixes`: 0x736840–0x73698e, osos end 0x737000 | Extended patch. It needs `shuffle-fixes`. It also changes 1 word (`bytes`). |
 | `cover-flow` | `extended` | After all other data (10888 bytes; approximately 600 KB for the screen copy, the covers and the read buffer come from the allocator while Cover Flow shows) | Extended patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.

@@ -130,6 +130,9 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var details: [String]?
     /// The hardware or the files that the patch needs ("You Need").
     public var requires: [String]?
+    /// The names of other patches that this patch needs. A build without them fails, and the
+    /// Patches pane turns them on with this patch.
+    public var needs: [String]?
     /// More information, one short sentence for each item ("Good to Know").
     public var notes: [String]?
     /// A caution that the Patches pane shows above the switch of the patch.
@@ -484,7 +487,19 @@ public enum Patcher {
     /// (picture and text changes are allowed: the hooks and the code area are examined byte by byte).
     /// The patches follow each other without a gap (16-byte steps): each one starts after the code,
     /// the variables and the menus of the patch before it. Only the result is rounded to 0x800 bytes.
+    /// Each patch in `patches` that needs a patch that is not in `patches`, with the missing names.
+    public static func missingNeeds(_ patches: [PatchInfo]) -> [(PatchInfo, [String])] {
+        let names = Set(patches.map(\.spec.name))
+        return patches.compactMap { p in
+            let missing = (p.spec.needs ?? []).filter { !names.contains($0) }
+            return missing.isEmpty ? nil : (p, missing)
+        }
+    }
+
     public static func apply(_ patches: [PatchInfo], to osos: [UInt8], originalSHA256: String? = nil) throws -> [UInt8] {
+        if let (p, missing) = missingNeeds(patches).first {
+            throw PatchError("The patch \"\(p.spec.displayTitle)\" needs the patch \"\(missing[0])\". Turn it on too.")
+        }
         let original = originalSHA256 ?? sha256(osos)
         var out = osos
         for p in patches { out = try apply(p, to: out, originalSHA256: original, pad: false) }

@@ -18,6 +18,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
 | [volume-unlimit](#volume-unlimit) | Data patch | Patches | 2 bytes | No |
 | [shuffle-fixes](#shuffle-fixes) | Code patch (extended) | Patches | 2 `bl` and 4 instruction words | No |
+| [shuffle-album-mix](#shuffle-album-mix) | Code patch (extended) | Patches | 3 `bl`, 1 `b` and 1 vtable word (both with `chain`), 1 instruction word | No |
 | [something-comforting](#something-comforting) | Code patch (example) | Patches | 1 `b` and 2 vtable words (all with `chain`), a Settings menu | No |
 | [album-artists](#album-artists) | Code patch | Patches | 6 `b`, 4 `bl` and 3 vtable words (4 with `chain`), 3 menus | Version 1.1: yes. Version 1.2: no |
 | [instant-save](#instant-save) | Code patch | Patches | 1 `b` | No |
@@ -665,7 +666,7 @@ Thus `0xa0348` always returns 0. The other match of the iPodWizard pattern, at 0
 
 With 32767 songs or fewer, the order for a given seed is the same as without the patch, except in the rare case of Bug 1.
 
-The fix of Bug 3 is only half of the work. The Settings menu has no item that sets `+0x93`. Refer to the open questions in [re/shuffle.md](../re/shuffle.md#open-questions).
+The fix of Bug 3 is only half of the work. The Settings menu has no item that sets `+0x93`. The patch [shuffle-album-mix](#shuffle-album-mix) adds this item.
 
 **Research.** Refer to [re/shuffle.md](../re/shuffle.md#the-patch-shuffle-fixes).
 
@@ -693,6 +694,34 @@ The `bytes` key changes 4 instruction words:
 The card game deck shuffle `0x12d494` also uses `0xaf4b4` and `0x55c`. It cuts its own n to 16 bits, n is a maximum of 52, and it has its own call of `0x55c`. Thus the card game does not change.
 
 **Test status.** Emulator (20 October 2026). Version 1.0: with 60 tracks, the order is the same as the stock firmware; with 40000 tracks, the shuffle completes and the state agrees with the model. Version 2.0, 60 tracks: the seed 0 of the emulator becomes 1; a fixed seed gives the stock order; the inner album shuffle (a test firmware sets `+0x93`) gives the first tracks of the model. The emulator has no audio, thus it cannot play the songs. Not tested on a real iPod.
+
+## shuffle-album-mix
+
+**User interface.** Patches pane > Sound > Album Mix Shuffle, letter `x`. The patch needs [shuffle-fixes](#shuffle-fixes) (`needs`). The Patches pane turns on Shuffle Fixes with it.
+
+**Effect.** Settings > Shuffle has a 4th value: Off → Songs → Albums → Album Mix → Off. Album Mix plays the albums in a random order, as Albums. It also shuffles the songs in each album. The iPod saves the value with the other settings. Accessories see Album Mix as Albums.
+
+**Research.** Refer to [re/shuffle.md](../re/shuffle.md#the-patch-shuffle-album-mix).
+
+- Album Mix is the hidden mode `+0x93` of the shuffle. No menu item of the firmware sets it.
+- The value text of the Shuffle item is the string `0x6058 + mode`. The string 0x605b exists in no language, but it is the key of the Repeat item. Thus the patch uses the string 0x7e10.
+- The Settings controller keeps the mode at `controller + 0x1c`. It loads the mode from 0x9edb0.
+
+**Change.** C file `shuffle_album_mix.c`, 334 bytes after osos (`load_address` "extended").
+
+| Kind | At | Expect | To |
+|---|---|---|---|
+| `bl` | 0x1929a0 | `0xebfc3102` (`bl 0x9edb0`) | `hook_get_mode`: 3 if the mode is 2 and `+0x93` is set |
+| `bl` | 0x193b9c | `0xebfc2c83` (`bl 0x9edb0`) | `hook_get_mode` |
+| `bl` | 0x191eb0 | `0xebfc86d3` (`bl 0xb3a04`) | `hook_set_mode`: writes `+0x93`, marks the change, then calls the setter with mode 2 for Album Mix |
+| `word` (`chain`) | 0x66c94c | `0x00190b00` (get method) | `hook_settings_get`: for the Shuffle item in mode 3, the text ID 0x7e10 |
+| `b` (`chain`) | 0x21f254 | `0xe92d40f8` | `hook_lookup`: the string 0x7e10 is "Album Mix" |
+
+The `bytes` key changes 0x191e9c from `cmp r0, #2` to `cmp r0, #3`, so that Select wraps after Album Mix.
+
+The setter 0xb3a04 does nothing for a change between Albums and Album Mix, because `+0x20` and `+0x92` do not change. For this change the hook calls 0xa983c (the settings are saved at the next sleep) and the refresh 0x11147c.
+
+**Test status.** Emulator (20 October 2026, with `shuffle-fixes` and the fixed seed, 60 tracks): Select on Shuffle gives Off → Songs → Albums → Album Mix → Off, and the bytes `+0x20`, `+0x92` and `+0x93` agree with each value. In Album Mix, Shuffle Songs played Test Song 43 first, as the model. The Repeat row stays correct. Not tested on a real iPod.
 
 ## something-comforting
 

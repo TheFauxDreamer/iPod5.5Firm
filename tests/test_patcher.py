@@ -295,3 +295,14 @@ def test_apply_all_packs_the_patches():
     # one patch alone is still rounded
     alone, _ = patcher.apply(osos, REPO / "patches/instant-save", 0x736800)
     assert len(alone) % 0x800 == 0
+
+
+def test_needs():
+    """shuffle-album-mix needs shuffle-fixes: a build without it fails. Each name in "needs" is a patch."""
+    names = {p.name for p in (REPO / "patches").iterdir() if (p / "patch.json").exists()}
+    for p in (REPO / "patches").iterdir():
+        if (p / "patch.json").exists():
+            for need in json.loads((p / "patch.json").read_text()).get("needs", []):
+                assert need in names, (p.name, need)
+    with pytest.raises(patcher.PatchError, match="needs the patch"):
+        patcher.apply_all(b"", [REPO / "patches/shuffle-album-mix"])

@@ -227,8 +227,8 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 
 | Address | Function | Evidence |
 |---|---|---|
-| 0x190b00 | "Get" method of the settings object (vtable slot 0x66c94c). Operations are four-character codes: `prID`, `Str `, `Ui32`. | Static, Patch |
-| 0x1919d8 | "Set" method of the settings object (vtable slot 0x66c950). | Static, Patch |
+| 0x190b00 | "Get" method of the settings object (vtable slot 0x66c94c). Operations are four-character codes: `prID`, `Str `, `Ui32`. The value text of the Shuffle item (key 0x6057) is the string `0x6058 + mode` (Off, Songs, Albums). The string 0x605b exists in no language. | Static, Patch |
+| 0x1919d8 | "Set" method of the settings object (vtable slot 0x66c950). Shuffle item (key 0x6057): Select adds 1 to the cached mode at `controller + 0x1c` and wraps after 2 (`cmp r0, #2` at 0x191e9c). Then it calls 0xb3a04 at 0x191eb0. | Static, Patch |
 | 0xb2e74, 0x9b240 | Setter and getter of the backlight setting (settings +0xaf8). | Static |
 | 0x193b90 | Copies a setting and posts event 0x60000006 when it changes. | Static |
 | 0x1eb65c | Native method: writes the backlight seconds to the application object +0x444. | Static, Emulator |
@@ -355,6 +355,9 @@ Refer to [re/shuffle.md](../re/shuffle.md). The reference model [re/shuffle-mode
 
 | Address | Function | Evidence |
 |---|---|---|
+| 0x09edb0 | (app) → the Shuffle mode: 0 if `+0x20` is 0, else 2 if `+0x92`, else 1. The Settings controller (0x1929a0, 0x193b9c) and the accessory commands (0x1f4a48, 0x1f4b70, …) call it. | Static |
+| 0x0a983c | (settings): sets the byte "changed" `+0xb74` = 1. The settings are then saved at the next sleep. | Static |
+| 0x11147c | (app): the refresh after a change of Shuffle. The setter 0xb3a04 ends with a tail call to it. | Static |
 | 0x0b3a04 | Shuffle setter (app, mode): 0 = Off, 1 = Songs, 2 = Albums. Sets the settings bytes +0x20 (on) and +0x92 (albums). | Static |
 | 0x0b40c4 | Starts a shuffled play list. Calls 0x94440 with settings +0x92 and +0x93. Writes the new position to the track item +0x24. | Static, Emulator |
 | 0x094440 | The music shuffle (list, current track, albums, shuffle in albums). Fisher–Yates from the end. Songs: slot 1, then the current track goes first. Albums: slot 6, groups of the same album name, then the group of the current track is swapped with group 0. | Static, Emulator |
