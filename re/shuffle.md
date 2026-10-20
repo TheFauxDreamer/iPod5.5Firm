@@ -210,6 +210,109 @@ For each step `i` > 32767 of the loop, the index is from −(65536 − i) to 0. 
 
 0xb40c4 writes the new position to the track item `+0x24` with a 32-bit store. Thus the positions do not have a 16-bit limit.
 
+## Who sets +0x93
+
+The aim: to find if the firmware can switch on the inner album shuffle (`+0x93`). Research on 20 October 2026 with Ghidra and a raw search of osos 1.3.
+
+### The Shuffle setter
+
+`0xb3a04(app, mode)` writes only `+0x20` (`mode != 0`) and `+0x92` (`mode == 2`) of `*(app + 0xca0)`. It never writes `+0x93`. It has 4 callers: 0x1919d8 (the Settings controller), 0x268d84, 0x1f4b70 and 0xf5904. All callers go through the same two writes.
+
+### A raw search for writes at offset 0x93
+
+The search looked for `strb rX, [rY, #0x93]` and for `strh rX, [rY, #0x92]`, which also writes byte 0x93.
+
+| At | Instruction | Function | Result |
+|---|---|---|---|
+| 0x00048c | `strh r0, [sp, #0x92]` | — | A stack variable. Not the settings. |
+| 0x0cd728 | `strh r1, [r0, #0x92]` | — | Offset 0xa92 of a different object (refer to below). |
+| 0x15dbcc | `strb r8, [r0, #0x93]` | 0x15d9bc | A constructor. Refer to below. |
+| 0x2002c4 | `strh r0, [r12, #0x92]` | 0x2001e8 | A stack variable (refer to below). |
+| 0x20b6b8 | `strh r8, [r5, #0x92]` | 0x20b39c | A list object (refer to below). |
+
+The reads with offset 0x93, or with a halfword at 0x92: 0xb4120 and 0xbb430 (the two callers of the shuffle), 0x9da30 (0x9da18, a global object; the iAP handler 0x1a3254 calls it), 0x9e95c (0x9e958, a global object) and 0x113798.
+
+The search cannot find a block copy, for example a load of the settings file that copies `+0x90` as a word.
+
+### The constructor 0x15d9bc
+
+- It writes `+0x90` … `+0x96`, `+0x98` … `+0x9e` and `+0xa8` of a part of the object. Then it returns the address of this part − 0x6c.
+- `+0x92` and `+0x93` come from its 2nd and 3rd arguments.
+- Ghidra finds no caller, because the analysis did not include the caller. A raw search found one `bl` at 0x25df0c, in 0x25de24.
+- 0x25de24 is a C++ static constructor. It constructs several global objects at the base 0x149dd438 and registers each one with 0x25aa40.
+- It calls `0x15d9bc(base + 0x200, 2, 2, 1, 0)`. Thus this object gets `+0x92` = 2, `+0x93` = 2, `+0x90` = 1 and `+0x91` = 0.
+- The objects at base + 0x90 (0x15bbb8) and base + 0x11c (0x15f8a0) get the same arguments `(2, 2, 1, 0)`.
+
+An emulator test showed that this object is not the playback settings (refer to below).
+
+### The settings pointer
+
+- `0xa2310(settings, …)` stores its first argument at `app + 0xca0` (the `str` at 0xa234c). It is the only store to offset 0xca0 in a heap object; the other three are stack stores.
+- `0x1ebe9c` calls 0xa2310 with its own second argument. `0x1d9430` calls 0x1ebe9c. The static trace stops here.
+
+### Emulator test of the setter
+
+Stock firmware with the fixed seed, 60 tracks, `IPODFW_REGS_AT=0xb3a04,4`. Settings > Shuffle, Select two times (Off → Songs → Albums):
+
+| Item | Value |
+|---|---|
+| Calls of 0xb3a04 | 2: r0 = app 0x13e27a78, r1 = 1, then r1 = 2 |
+| `*(app + 0xca0)`, the playback settings | 0x13e34c74 (heap) |
+| Settings `+0x20` | 1 |
+| Settings word `+0x90` | 0x00010000: `+0x92` = 1, `+0x93` = 0 |
+| The object of 0x15d9bc, word at 0x149dd638 | 0x00669b18, the method table that 0x15d9bc writes |
+| Its word at `+0x6c + 0x90` (0x149dd734) | 0x02020001, the values of 0x25de24 |
+
+Thus the playback settings and the object of 0x15d9bc are different objects. The `+0x93` of 0x15d9bc is a field of a different class.
+
+### The other writes at offset 0x92
+
+| At | Base | Result |
+|---|---|---|
+| 0x0cd728 | `add r0, r4, #0xa00`, then `strh r1, [r0, #0x92]` | Offset 0xa92 of a different object. |
+| 0x2002c4 | `add r12, sp, #0x300` | A stack variable. |
+| 0x20b6b8 | `r5` = object + 0x100 in 0x20b39c | `+0x190` and `+0x192` of a list object (it also reads `+0x1c6`). |
+
+None of these writes the playback settings.
+
+### The accessory and remote commands
+
+The 3 other callers of the setter, 0x268d84 (from 0x12e58c), 0x1f4b70 (from 0x1f3c18 and 0x1f5138) and 0xf5904 (from 0x24e074), give only a mode number to 0xb3a04. The setter writes `+0x20` = (mode ≠ 0) and `+0x92` = (mode = 2) for each value. Thus no command can set `+0x93`. These callers are probably the accessory (iAP) and remote commands. They were not identified in detail.
+
+### The settings file
+
+The playback settings are the settings data of the iPod. The block from `settings + 8` (0xb6c bytes) is the file `/iPod_Control/Device/Preferences`:
+
+- Save 0xbbf1c: copies the block (0xa8098) and writes it to the file.
+- Defaults 0xf3dc0: clears the block (0xb6c bytes), then sets some fields. It does not set `+0x93`. The version word at `+8` is 0x39.
+- Load 0xe1b64: clears the block, then reads the file from offset 0 into `settings + 8`, a maximum of 0xb6c bytes. There is no check of the content.
+- 0xaf698 calls the defaults and the load. Then it updates old versions. It clears `+0x92` only for a version below 6. It does not change `+0x93`.
+
+Thus the file offset of a field is (field − 8):
+
+| Field | File offset | Meaning |
+|---|---|---|
+| `+0x20` | 0x18 | Shuffle on |
+| `+0x92` | 0x8a | Albums |
+| `+0x93` | 0x8b | Shuffle the songs in each album too |
+
+### Emulator test of the settings file
+
+1. Stock firmware with the fixed seed, 60 tracks. At the main menu, the settings block was copied from memory (0x13e34c7c, 0xb6c bytes). The version was 0x39.
+2. The copy got 1 at the file offsets 0x18, 0x8a and 0x8b. It went on a new drive as `/iPod_Control/Device/Preferences`.
+3. Cold start. The iPod showed no Language screen, because the file has a language.
+4. The settings word `+0x90` was 0x01010000: `+0x92` = 1 and `+0x93` = 1. `+0x20` was 1.
+5. Shuffle Songs: Now Playing showed "1 of 60", Test Song 41. The state was 0x6c572db3. This is the result of the inner album shuffle with Bug 3, the same as the test firmware gave.
+
+A write watch on the settings word (`IPODFW_WATCH_RANGE=0x13e34d04:4`) counted 16 writes during a start with no file. The emulator does not give the code address of each write.
+
+### Result
+
+- The firmware has no menu item and no command that sets `+0x93`.
+- The only way to set `+0x93` is the Preferences file, at file offset 0x8b. The emulator test shows that a changed file switches the mode on in the stock firmware.
+- The inner shuffle has Bug 3, which loses and repeats tracks.
+- Thus the inner album shuffle is an unfinished feature: the back end and the saved setting exist, but no user interface sets it. It is not known if iTunes or another Apple program ever wrote this byte.
+
 ## The patch shuffle-fixes
 
 [patches/shuffle-fixes](../patches/shuffle-fixes/patch.json) corrects Bugs 1–4. Version 1.0 had the name `shuffle-large-library` and corrected only Bugs 1 and 4.
@@ -339,5 +442,6 @@ The differences from the firmware:
 - A test on the real iPod: the same library on two starts must give two different orders.
 - Future work: a Shuffle value that sets `+0x93` (shuffle the songs in each album too). The patch `shuffle-fixes` corrects Bug 3, but this is only half of the work: no menu item sets `+0x93`.
   - Start points: the setter 0xb3a04 and the Settings controller 0x1919d8. They set only `+0x20` and `+0x92`.
-  - Research is necessary: where the firmware saves `+0x93` in the settings file, and a menu item with its string.
+  - The firmware saves `+0x93` at offset 0x8b of `/iPod_Control/Device/Preferences`, and loads it with no check (refer to [Who sets +0x93](#who-sets-0x93)). Thus the iPodFirm app can switch on the mode with a change of this file, with no new menu item in the firmware.
+  - A menu item in the firmware needs a new string and research of the Settings menu.
   - Without `shuffle-fixes`, the mode has Bug 3. Thus a menu item for the mode needs `shuffle-fixes`.

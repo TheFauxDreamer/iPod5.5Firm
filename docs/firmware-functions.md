@@ -235,6 +235,9 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x1ee8b8 | Saves the settings and the database, as before a sleep. | Static, Patch |
 | 0x0bc094 | Saves all (the database, the settings with 0xbbf1c, and other data). Called by 0x1ee8b8, 0xb4fe4 and 0x248440. | Static |
 | 0x0bbf1c | (settings): writes the settings only if the byte "changed" (+0xb74) is set. Called by 0xbc094 and the sleep sequence 0x1ee8d0. A restart with Menu+Select runs no save, thus the changes since the last sleep are lost (real iPod, 16 October 2026, also for the Apple row Songs). The write itself is 0xbbdf8. | Static, Emulator, Real iPod |
+| 0x0af698 | (settings): makes the settings at a start. Calls the defaults 0xf3dc0 and the load 0xe1b64 on `settings + 8`, then updates old file versions (current version 0x39). Writes the maximum volume to `+0xb78`. | Static |
+| 0x0e1b64 | (block): clears the block and reads `/iPod_Control/Device/Preferences` into it, a maximum of 0xb6c bytes, with no check. A field at `settings + X` is at file offset X − 8, for example `+0x93` at 0x8b. | Static, Emulator |
+| 0x0f3dc0 | (block): the default settings. Clears 0xb6c bytes, then sets some fields. Version 0x39. | Static |
 | 0x1a0120, 0x19ff0c, 0x19ff6c | 0x1a0120 returns the memory cache manager. 0x19ff0c(manager) sets + 0x44 = 1 and sends the event 10 ("give back the memory", 0x19f9b0) to its users until the count + 0x6c is 0. 0x19ff6c sends the event 5 at the end. 0x19fd0c (a new block) sets + 0x44 = 0. Apple calls 0x19ff0c only before the sleep (0xb43dc) and before the disk mode (0x1ed828; 0x1ed918 then calls 0x19ff6c). Earlier this table called 0x19ff0c a disk cache flush; that was not correct. The USB host probe called it at each log write until version 1.18 (the probable cause of the missing Now Playing art). | Static, Emulator, Real iPod |
 | 0x1ee8d0 | Sleep sequence: saves, writes the cache (0x1ed828, 0x19ff0c), then calls the sleep method. Does not sleep if external power is found. | Static, Emulator |
 | 0x1ecc8c | External-power test, from saved copies of the power pins (vtable offset 0xb4 → 0x9e664). | Static |
@@ -361,6 +364,9 @@ Refer to [re/shuffle.md](../re/shuffle.md). The reference model [re/shuffle-mode
 | 0x1120bc | Gets the cached track list of a slot (1 = database order, 6 = album order). | Static, Emulator |
 | 0x0ddf94 | Sorts a track list for a slot. | Static |
 | 0x0bb28c | Smart playlist evaluation. Selection type 2 (random) calls 0x94440. | Static |
+| 0x0a2310 | Makes the object `app`. Stores its first argument (the playback settings) at `app + 0xca0`. Called from 0x1ebe9c. | Static, Emulator (settings 0x13e34c74) |
+| 0x15d9bc | Constructor of a global object (method table 0x669b18). Writes `+0x90` … `+0x96` of a part at `+0x6c` from its arguments. It is not the playback settings. | Static, Emulator |
+| 0x25de24 | C++ static constructor. Calls 0x15bbb8, 0x15f8a0 and 0x15d9bc with `(2, 2, 1, 0)` at base 0x149dd438 + 0x90, + 0x11c and + 0x200. | Static |
 | 0x0af4b4 | (state pointer, n) → index. Park–Miller (16807, 2³¹ − 1, Schrage form), then `int16(float32(n) × float32(state) × 2⁻³¹)`. Keeps n in r7. The 16-bit cut of the result is at 0xaf514–0xaf518. Users: 0xe5978 (music) and the card game deck shuffle 0x12d494. | Static |
 | 0x143660 | Photo slideshow shuffle. Only the window of loaded photos, with `rand() % n`. | Static |
 | 0x11ac38 | C `rand()`: `1103515245 × state + 12345`, `(state >> 16) & 0x7fff`. Not used for music. | Static |
