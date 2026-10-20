@@ -757,7 +757,7 @@ The firmware has a second option that also shuffles the songs in each album. The
 
 The firmware gives n to the random index as a 16-bit signed value. With more than 32767 songs, n is negative, and the index is wrong. The code here uses the full value of n.
 
-The iPodFirm patch `shuffle-large-library` corrects Bug 1 and Bug 4 on the iPod. With 32767 songs or fewer, the patched iPod gives the same order as before, except in the rare case of Bug 1.
+The iPodFirm patch `shuffle-fixes` corrects Bugs 1–4 on the iPod. With 32767 songs or fewer, the patched iPod gives the same order as before for the same seed, except in the rare case of Bug 1.
 
 ## 9. Limits of this document
 

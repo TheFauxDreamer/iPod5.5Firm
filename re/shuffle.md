@@ -210,9 +210,11 @@ For each step `i` > 32767 of the loop, the index is from −(65536 − i) to 0. 
 
 0xb40c4 writes the new position to the track item `+0x24` with a 32-bit store. Thus the positions do not have a 16-bit limit.
 
-## The patch shuffle-large-library
+## The patch shuffle-fixes
 
-[patches/shuffle-large-library](../patches/shuffle-large-library/patch.json) changes 4 instruction words. It adds no code.
+[patches/shuffle-fixes](../patches/shuffle-fixes/patch.json) corrects Bugs 1–4. Version 1.0 had the name `shuffle-large-library` and corrected only Bugs 1 and 4.
+
+### Bugs 1 and 4: 4 changed words
 
 | At | Stock | Patched |
 |---|---|---|
@@ -225,16 +227,57 @@ For each step `i` > 32767 of the loop, the index is from −(65536 − i) to 0. 
 - An index of `n` (Bug 1) becomes n − 1. With 50000 tracks, the stock probability of Bug 1 is approximately 0.15 % for each shuffle.
 - For n ≤ 32767, the index is the same as the stock index, except at the 63 states of Bug 1. Thus the order does not change.
 - The card game 0x12d494 calls 0xaf4b4 with `(short)n`, and n is a maximum of 52. The patch does not change the card game.
-- Bug 2 and Bug 3 do not change.
 
-`Random(seed, patched=True)` in [shuffle-model.py](shuffle-model.py) is the model of the patched index.
+### Bug 2: a hook on the seed
 
-Emulator tests with the fixed seed 0x12345678 (refer to [Emulator tests](#emulator-tests)), 20 October 2026:
+0xe5978 reads the seed only at one place:
+
+```text
+0xe59a0  ebfefd9d  bl 0xa501c              ; 0xa501c: b 0x55c, the seed
+0xe59a4  e5840008  str r0, [r4, #8]        ; the state
+```
+
+The patch changes this `bl` to `hook_seed`. The hook calls 0x55c. If the seed is 0, 0x7fffffff or 0x80000001, the hook uses `seed ^ 1`. The results 1, 0x7ffffffe and 0x80000000 do not stop the generator. For example, the first step from 0x80000000 gives 0x7fffbe58. All other seeds do not change.
+
+The card game 0x12d494 has its own call of 0x55c. The patch does not change it. In the emulator, the seed is now 1, not 0. Thus the shuffle in the emulator is not degenerate.
+
+### Bug 3: a hook on the inner album index
+
+```text
+0x946d0  e0470008  sub r0, r7, r8          ; k − start (r7 = k, r8 = start)
+0x946d4  e2800001  add r0, r0, #1
+0x946d8  eb0144a6  bl 0xe5978              ; j = 0 … k − start
+0x946dc  e0862107  add r2, r6, r7, lsl #2  ; &work[k]
+0x946e4  e0861100  add r1, r6, r0, lsl #2  ; &work[j], must be &work[start + j]
+```
+
+The patch changes the `bl` at 0x946d8 to `hook_album_index`: `push {r4, lr}; bl 0xe5978; add r0, r0, r8; pop {r4, pc}`. 0xe5978 and 0xaf4b4 keep r8, thus r8 is still `start`. The hook runs only when `+0x93` is set.
+
+The code of the two hooks is 64 bytes after osos (`load_address` "extended").
+
+### The model
+
+`Random(seed, patched=True)` and `shuffle_albums(..., inner=True)` in [shuffle-model.py](shuffle-model.py) are the model of the patch. With the seed 0x12345678 and `+0x93`, the stock model keeps only 51 different tracks of 60. The patched model gives 60.
+
+### Emulator tests of the patch
+
+Emulator tests of version 1.0 with the fixed seed 0x12345678 (refer to [Emulator tests](#emulator-tests)), 20 October 2026:
 
 | Test | Result |
 |---|---|
 | Patched, 60 tracks, Shuffle Songs | Now Playing showed "1 of 60", Test Song 28. The state was 0x6c572db3. This is the same as the stock firmware. |
 | Patched, 40000 tracks (`make_library(total_tracks=40000)`), Shuffle Songs | The shuffle completed. The state was 0x4a615aa7. The patched model gives the same state after 39999 calls. Nothing played after the shuffle, because the emulator has no audio. |
+
+Emulator tests of version 2.0, 60 tracks, 20 October 2026. The variants `inner-*` use a test firmware for the emulator only: `ldrb r2/r3, [r0, #0x92/#0x93]` at 0xb411c and 0xb4120 become `mov r2, #1` and `mov r3, #1`. Thus Shuffle Songs runs the Albums mode with the inner shuffle.
+
+| Test | Result |
+|---|---|
+| Patch, the seed of the emulator (0) | The hook changed the seed to 1. The state was 0x7460ee5a, as `Random(0, patched=True)` gives after 59 calls. Now Playing showed "3 of 60", Test Song 6, the third track of the model order. The first two tracks failed, because the emulator has no audio. |
+| Patch, fixed seed 0x12345678 | The state was 0x6c572db3, Test Song 28 first. This is the same as the stock firmware. |
+| Inner album shuffle, stock, fixed seed | Now Playing showed "1 of 60", Test Song 41 (track 237). The state was 0x6c572db3. The stock model gives the same first track. This model order has only 51 different tracks (Bug 3). |
+| Inner album shuffle, patch, fixed seed | Now Playing showed "2 of 60", Test Song 46 (track 242). The patched model order starts 239, 242. The first track failed, because the emulator has no audio. The model order has 60 different tracks. |
+
+The emulator tests read only the state and the first tracks, not the full lists.
 
 Notes on the test with 40000 tracks:
 
@@ -251,7 +294,7 @@ Notes on the test with 40000 tracks:
 5. For Albums mode, sort the tracks by album first, as the album index does. Then use the groups, the group shuffle and the swap of the current group.
 6. For a new seed, take two random 16-bit values A and B and use `A XOR (B << 16)`.
 
-A copy for normal use must not copy Bugs 1–4. The patch `shuffle-large-library` corrects Bugs 1 and 4 on the iPod. MiMusic limits the index to n − 1 and does not use a seed that stops the generator.
+A copy for normal use must not copy Bugs 1–4. The patch `shuffle-fixes` corrects Bugs 1–4 on the iPod. MiMusic limits the index to n − 1 and does not use a seed that stops the generator.
 
 ## The copy in MiMusic
 
@@ -294,3 +337,7 @@ The differences from the firmware:
 - When Shuffle changes during playback, which caller of 0xb40c4 runs (0xb36b8, 0x9dc54, 0x9e710 or 0xb0d40)?
 - The sort of 0xddf94 for slot 6 when the database has no album index (0x1174b4 gives the compare).
 - A test on the real iPod: the same library on two starts must give two different orders.
+- Future work: a Shuffle value that sets `+0x93` (shuffle the songs in each album too). The patch `shuffle-fixes` corrects Bug 3, but this is only half of the work: no menu item sets `+0x93`.
+  - Start points: the setter 0xb3a04 and the Settings controller 0x1919d8. They set only `+0x20` and `+0x92`.
+  - Research is necessary: where the firmware saves `+0x93` in the settings file, and a menu item with its string.
+  - Without `shuffle-fixes`, the mode has Bug 3. Thus a menu item for the mode needs `shuffle-fixes`.

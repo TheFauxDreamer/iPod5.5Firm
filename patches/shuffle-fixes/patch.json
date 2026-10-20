@@ -1,0 +1,50 @@
+{
+  "name": "shuffle-fixes",
+  "title": "Shuffle Fixes",
+  "summary": "Corrects four errors in the shuffle, also for libraries with more than 32767 songs.",
+  "symbol": "shuffle",
+  "category": "audio",
+  "version_letter": "f",
+  "version": "2.0",
+  "size": 64,
+  "description": "The shuffle of the iPod has four errors. The most important error occurs with more than 32767 songs: the shuffle writes outside the list, and the order is wrong. This patch corrects the four errors.",
+  "details": [
+    "Shuffle Songs and Shuffle Albums operate correctly with more than 32767 songs.",
+    "The shuffle does not use the position after the end of the list. Without the patch, this rare error can occur in approximately 1 of 700 shuffles of 50000 songs.",
+    "Three rare start values of the random numbers do not stop the shuffle.",
+    "The shuffle of the songs in each album uses the correct positions. The Settings menu does not switch on this mode."
+  ],
+  "notes": [
+    "With 32767 songs or fewer, the shuffle gives the same order as before for the same start value.",
+    "The deck shuffle of the card game does not change."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "seed_source": "0x55c",
+    "random_index": "0xe5978"
+  },
+  "hooks": [
+    { "kind": "bl", "at": "0xe59a0", "expect": "0xebfefd9d", "to": "hook_seed" },
+    { "kind": "bl", "at": "0x946d8", "expect": "0xeb0144a6", "to": "hook_album_index" }
+  ],
+  "bytes": [
+    { "at": "0xe59b0", "expect": "0518a0e1", "value": "0510a0e1" },
+    { "at": "0xe59bc", "expect": "4118a0e1", "value": "0000a0e1" },
+    { "at": "0xaf514", "expect": "0008a0e1", "value": "070050e1" },
+    { "at": "0xaf518", "expect": "4008a0e1", "value": "010047a2" }
+  ],
+  "ui": {
+    "steps_title": "Test the Shuffle",
+    "steps": [
+      "Put more than 32767 songs on the iPod.",
+      "Flash a firmware with this patch.",
+      "On the iPod, select Shuffle Songs.",
+      "Make sure that Now Playing shows \"1 of\" and the full count of songs.",
+      "Push Next many times. Each song must play."
+    ]
+  }
+}

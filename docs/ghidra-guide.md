@@ -520,6 +520,8 @@ CAUTION: iPodFirm supports one osos per patch folder. The app downloads and uses
 | 0x114354 | `album-artists` | `b802d8e1 000050e3 ??????0a 200094e5 04208de2 08108de2 ??????eb b832d8e1 08109de5 04209de5 00308de5 023c85e2 2a3083e2` |
 | 0x193488 | `album-artists` | `70402de9 980090e5 0140a0e1 ??????eb 0050a0e1 0400a0e1 ??????eb 000015e0 0100a013 7080bde8 70402de9 ????9fe5 0250a0e1` |
 | 0x19353c | `album-artists` | `980090e5 0270a0e1 0160a0e1 ??????eb 0050a0e1 0600a0e1 ??????eb 000057e3 0010c501 00108511 980094e5 f041bde8 ??????ea` |
+| 0xe59a0 | `shuffle-fixes` | `010010e3 ??????1a 040084e2 ??????eb 000050e3 ??????0a ??????eb 080084e5 040084e2 ??????eb 0518a0e1 7040bde8 ????9fe5` |
+| 0x946d8 | `shuffle-fixes` | `01005013 ??????da 0a70a0e1 ??????ea 080047e0 010080e2 ??????eb 072186e0 103092e5 001186e0 100091e5 103081e5 017047e2` |
 | 0x21f254 | `dark-mode`, `something-comforting`, `album-artists` | `050051e3 04005113 03005113 01005113 0000a013 1eff2fe1 f8402de9 0150a0e1 0010a0e3 0260a0e1 0040a0e1 00108de5 ??????ea` |
 | 0x9ee90 | Software version | `0040a0e1 0030a0e3 8000a0e3 00308de5 0030a0e1 08008de2 0110a0e3 3020a0e3 ??????eb 6420a0e3 24108de2 08008de2 ??????eb` |
 | 0x9ee70 | Software version | `0b0c80e2 d304d0e1 1eff2fe1 a00c90e5 510bd0e5 1eff2fe1 10402de9 62df4de2 0040a0e1 0030a0e3 8000a0e3 00308de5 0030a0e1` |

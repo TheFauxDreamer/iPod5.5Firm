@@ -355,8 +355,9 @@ Refer to [re/shuffle.md](../re/shuffle.md). The reference model [re/shuffle-mode
 | 0x0b3a04 | Shuffle setter (app, mode): 0 = Off, 1 = Songs, 2 = Albums. Sets the settings bytes +0x20 (on) and +0x92 (albums). | Static |
 | 0x0b40c4 | Starts a shuffled play list. Calls 0x94440 with settings +0x92 and +0x93. Writes the new position to the track item +0x24. | Static, Emulator |
 | 0x094440 | The music shuffle (list, current track, albums, shuffle in albums). Fisher–Yates from the end. Songs: slot 1, then the current track goes first. Albums: slot 6, groups of the same album name, then the group of the current track is swapped with group 0. | Static, Emulator |
-| 0x0e5978 | Random index 0 … n − 1. Seeds itself one time after a start. Then it cuts n to 16 bits (`asr #16` at 0xe59bc) and jumps to 0xaf4b4 with the state at 0x1081e048. The patch `shuffle-large-library` removes the cut. | Static, Emulator |
+| 0x0e5978 | Random index 0 … n − 1. Seeds itself one time after a start. Then it cuts n to 16 bits (`asr #16` at 0xe59bc) and jumps to 0xaf4b4 with the state at 0x1081e048. The patch `shuffle-fixes` removes the cut and hooks the seed call at 0xe59a0. | Static, Emulator |
 | 0x00055c | Seed: `A XOR (B << 16)`, A and B are two reads of 0x60006038. | Static, Emulator |
+| 0x0a501c | `b 0x55c`. 0xe5978 calls the seed through this jump (`bl` at 0xe59a0). | Static |
 | 0x1120bc | Gets the cached track list of a slot (1 = database order, 6 = album order). | Static, Emulator |
 | 0x0ddf94 | Sorts a track list for a slot. | Static |
 | 0x0bb28c | Smart playlist evaluation. Selection type 2 (random) calls 0x94440. | Static |
