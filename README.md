@@ -220,6 +220,7 @@ This project started as a personal project. The author used Claude Code for much
 | `ipodfw` tool | [src/ipodfw/](src/ipodfw/) | Python | A command-line tool. It uses the same file formats as the app. |
 | Ghidra scripts | [re/ghidra-scripts/](re/ghidra-scripts/) | Java | Scripts for the research in Ghidra. |
 | Technical reference | [docs/](docs/README.md) | — | The formats, the patches, the Ghidra findings, the app structure and the safety limits. |
+| Translations | [docs/translations.md](docs/translations.md) | — | The iPod text that the patches add. Help with a translation into your language. |
 | Research notes | [re/](re/) | — | Notes for the emulator and for Ghidra, in the sequence of the work. Also the failed and stopped research. |
 | USB-C audio plan | [USB-AUDIO-OUT.md](USB-AUDIO-OUT.md) | — | The plan, the research results and the status of USB-C audio out. |
 | Feasibility study | [FEASIBILITY.md](FEASIBILITY.md) | — | The first research, the risks and the plan. |

@@ -104,6 +104,8 @@ The RAM after the image is free. The memory set-up at 0xc90 starts a region at p
 
 osos has 25 resource blocks. One main block holds 403 pictures (`BMap`), 991 strings, 619 `View` records, 40 `Menu` records, 158 `Type` records and the `TCmd` resources. 24 language blocks hold the translated strings.
 
+The language blocks are in the alphabetical order of their four-character codes (table at 0x2aad9c): `csCZ`, `daDK`, `deCH`, `deDE` … `zhTW`. A table at 0x69cce4 has a pointer to each language block. Blocks 2, 7, 8 and 14 (`deCH`, `frBE`, `frCH`, `nlBE`) hold only the date strings. The Language menu does not select them. A string that a language block does not have comes from the main block. Refer to [re/languages.md](../re/languages.md).
+
 The block format is:
 
 ```

@@ -16,6 +16,7 @@ All data is for Apple RetailOS 1.3 (`iPod_25.1.3.ipsw`). Other firmware versions
 | [app-and-device.md](app-and-device.md) | The app structure, the detection of the iPod, the privileged helper, and each external process, system API and network call. |
 | [ipod-shuffle.md](ipod-shuffle.md) | A specification of the iPod shuffle (Songs and Albums), with code in C and Swift to copy it into a music player. It has no links to other files, so you can share it alone. |
 | [porting.md](porting.md) | The parts that work only on macOS, the Swift and Python versions of each module, and a recommended path to a Windows or Linux version. |
+| [translations.md](translations.md) | The iPod text that the patches add, and its translations. A guide for volunteer translators. |
 | [safety.md](safety.md) | The protections before and during a flash, the backups, the recovery procedure, and the known problems. |
 | [usb-c-power-mod.md](usb-c-power-mod.md) | A hardware design (not built) that lets the iPod supply 5 V to USB-C headphones: a USB-C dual-role controller, a 5 V boost converter and a load switch. It has no links to other files, so you can share it alone. |
 | [../USB-AUDIO-OUT.md](../USB-AUDIO-OUT.md) | The plan and the status of USB-C audio out: the USB host stack, the missing isochronous support, the stages and the gates. |
@@ -30,6 +31,7 @@ The research notes in [../re/](../re/) record the experiments in the sequence th
 - To know what one patch does, read its section in [modifications.md](modifications.md).
 - To know which programs and permissions the app uses, read [app-and-device.md](app-and-device.md).
 - To port the app to Windows or Linux, read [porting.md](porting.md).
+- To translate the iPod text of the patches, read [translations.md](translations.md).
 
 ## Keep the reference current
 
@@ -40,6 +42,7 @@ Use this table to find the documents to update:
 | When you change | Update |
 |---|---|
 | A patch: `patches/*/patch.json` or its C file | Increase the `version` in `patch.json`. Measure the code again and update `size` in `patch.json` (the test `testPatchSizes` gives the value). [modifications.md](modifications.md) (hooks, size, logic, test status), [patch-system.md](patch-system.md) (free space table), [firmware-format.md](firmware-format.md) (osos memory map), [firmware-functions.md](firmware-functions.md) (new firmware addresses), [safety.md](safety.md) (test status) |
+| A text that a patch shows on the iPod | [translations.md](translations.md) (the text table, the template and the status table) |
 | A new patch | All of the above, and the summary table in [modifications.md](modifications.md). Give it a `version_letter`, a `version` and a `size`. |
 | `Patcher.swift` or `patcher.py` | [patch-system.md](patch-system.md) |
 | `Partition.swift`, `Resources.swift`, `Pictures.swift` or their Python versions | [firmware-format.md](firmware-format.md) |

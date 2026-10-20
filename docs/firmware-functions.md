@@ -106,6 +106,13 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 | 0x21f408 | Lookup of a `BMap`. Continues in 0x21f254. | Static |
 | 0x21f418 | Lookup of a `Str ` (table, id). | Static, Patch |
 | 0x21f3b8 | Returns the string table. | Patch |
+| 0x192ca8 | Returns the language key: the settings key 0x6062, value 0x6063 (English) to 0x607b. The default is 0x6063. It reads address 0 + 0xa8 if the settings object does not exist, thus test `0x1d3050(0x6000)` first. Refer to [re/languages.md](../re/languages.md). | Static |
+| 0x1d3050 | Finds an object by its key in the object map, for example 0x6000 (the settings object). Returns 0 if the object does not exist. | Static |
+| 0x190a9c, 0x190a84 | 0x190a9c finds the language record of the current key in the table at 0x2a9a74. 0x190a84 returns its four-character code. | Static |
+| 0x140404 | At the start: makes the provider of the main block and one provider for each of the 24 language blocks (0x1406fc). | Static |
+| 0x14047c | Registers each language provider with its four-character code (method + 0x74 of the language manager). | Static |
+| 0x1529d4 | Method + 0x6c of the language manager: selects the language with a code (0x1aea64 writes the code to + 0x3c and the provider to + 0x40). Then it reads the date formats (`LDTm` 128). | Static |
+| 0x1528cc, 0x1ae9d4 | Method + 0x5c of the language manager: the lookup. It asks the current provider (+ 0x40). If the provider has no resource, the lookup continues in the main block. ID 0xa9 is the 24-hour clock flag. | Static |
 | 0xc60ec | Finds an image in the firmware directory by type and ID. Reads the sector with `]ih[`, then the directory. | Static |
 | 0xfc3bc | Calls 0xc60ec. Called with `crsr` at 0xaf548 and 0x1afe44. | Static |
 
@@ -581,6 +588,8 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 | 0x66b298 | Vtable of a plain view. The parent of a label in Now Playing has this class. |
 | 0x66d89c | Vtable of a picture view (for example the ">" arrow). |
 | 0x66c8c0 | Vtable of the Settings controller. |
+| 0x668f1c | Vtable of the language manager (made by 0x152a6c). + 0x10: the parent, the root object with the main block. + 0x14: the map from the four-character code to the provider. + 0x3c: the current code. + 0x40: the current provider. |
+| 0x66dddc | Vtable of the base class of the language manager and of the root object (0x1aeaa0). |
 | 0x66c94c, 0x66c950 | Slots of the "get" and "set" methods of the settings object. |
 | 0x670720 | Vtable of the power controller. +0x6c: display on/off. +0x70: sleep. +0xb4: external power. |
 | 0x69fd2c | A table entry that points to the Sleep item handler 0x1d83fc. |
@@ -718,6 +727,7 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | Str −4 | "iPod", the title of the main menu. |
 | Str −139 to −145 | The Backlight Timer items. |
 | Str 0x602e, 0x602f | "On" and "Off". |
+| Str 0x6063–0x607b | The names of the languages in the Language menu, for example 0x6063 "English". The keys 0x6065, 0x6069, 0x606a and 0x606f have no name. |
 | Str 0x7e00 | "Dark Mode" (added by the `dark-mode` patch). |
 | Str 0x7e01, 0x7e02 | "Something Comforting" and "Play" (added by the `something-comforting` patch). |
 | Str 0x7e06, 0x7e07, 0x7e08 | "USB-C Audio", "On (44.1 kHz)" and "On (48 kHz)" (added by the `usb-audio-out` patch). |
@@ -745,6 +755,7 @@ The emulator found these element IDs (view + 0x1c):
 | Key | Item |
 |---|---|
 | 0x60006031 | Backlight Timer command. The values are 0x6032–0x603a. |
+| 0x60006062 | Language. The value is the key of the Language menu item, 0x6063–0x607b. Refer to [re/languages.md](../re/languages.md). |
 | 0x60006088 | Clicker |
 | 0x600060b7 | Sound Check |
 | 0x600060e0 | Dark Mode (added by iPodFirm) |
@@ -752,6 +763,7 @@ The emulator found these element IDs (view + 0x1c):
 
 ## Open questions
 
+- The caller of the method + 0x6c of the language manager after a selection in the Language menu. Is a call of 0x192ca8 safe in the lookup hook? Refer to [re/languages.md](../re/languages.md#open-questions).
 - The function that gives the current time of day. A timed dark mode needs it.
 - The style of the rating stars in Now Playing. The table at 0x336190 gives a style object (0x192448 + 16 × n) for each Type ID.
 - Why the stock firmware defers Sleep after a computer session.
