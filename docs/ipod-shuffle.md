@@ -764,7 +764,7 @@ The iPodFirm patch `shuffle-fixes` corrects Bugs 1–4 on the iPod. With 32767 s
 These items are not known:
 
 - If the iPod removes the songs that have "skip when shuffling" set in iTunes.
-- If the iPod shuffles again at the end of the list when Repeat is All.
+- If the iPod shuffles again at the end of the list when Repeat is All. On the real iPod, one album with Album Mix and Repeat All plays with no end, and the songs stay shuffled.
 - The sort that the iPod uses for Albums mode when the database has no album index.
 - What the iPod does with the current list when the user changes the Shuffle setting during playback. The code in this document shuffles the list again and keeps the current song, as when the user selects a song.
 

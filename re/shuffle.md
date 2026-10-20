@@ -490,7 +490,7 @@ The differences from the firmware:
 ## Open questions
 
 - Does the list of slot 1 contain the tracks with "skip when shuffling" (mhit byte 0xa5)? No code was found that reads this byte from the track data.
-- With Repeat All, does the firmware shuffle again at the end of the list?
+- With Repeat All, does the firmware shuffle again at the end of the list? Real iPod (20 October 2026): one album with Album Mix and Repeat All plays with no end, and the songs stay shuffled. Not known: does each pass have a new order or the same order?
 - When Shuffle changes during playback, which caller of 0xb40c4 runs (0xb36b8, 0x9dc54, 0x9e710 or 0xb0d40)?
 - The sort of 0xddf94 for slot 6 when the database has no album index (0x1174b4 gives the compare).
 - A test on the real iPod: the same library on two starts must give two different orders.

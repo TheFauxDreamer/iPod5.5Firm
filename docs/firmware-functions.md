@@ -726,4 +726,4 @@ The emulator found these element IDs (view + 0x1c):
 - The function of the audio route flags at 0x1081ee48 + 0 and + 1.
 - The UIM interrupt handler that completes the periodic USB host transfers.
 - The cause of the empty artwork frame in Now Playing with the unchanged firmware in the emulator.
-- Shuffle: does the firmware remove the tracks with "skip when shuffling" (mhit byte 0xa5)? Does Repeat All shuffle again at the end of the list? Refer to [re/shuffle.md](../re/shuffle.md#open-questions).
+- Shuffle: does the firmware remove the tracks with "skip when shuffling" (mhit byte 0xa5)? Does Repeat All shuffle again at the end of the list? On the real iPod, one album with Album Mix and Repeat All plays with no end, and the songs stay shuffled. A new order at each pass is not known yet. Refer to [re/shuffle.md](../re/shuffle.md#open-questions).

@@ -18,7 +18,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
 | [volume-unlimit](#volume-unlimit) | Data patch | Patches | 2 bytes | No |
 | [shuffle-fixes](#shuffle-fixes) | Code patch (extended) | Patches | 2 `bl` and 4 instruction words | No |
-| [shuffle-album-mix](#shuffle-album-mix) | Code patch (extended) | Patches | 3 `bl`, 1 `b` and 1 vtable word (both with `chain`), 1 instruction word | No |
+| [shuffle-album-mix](#shuffle-album-mix) | Code patch (extended) | Patches | 3 `bl`, 1 `b` and 1 vtable word (both with `chain`), 1 instruction word | Partly: the order of one album |
 | [something-comforting](#something-comforting) | Code patch (example) | Patches | 1 `b` and 2 vtable words (all with `chain`), a Settings menu | No |
 | [album-artists](#album-artists) | Code patch | Patches | 6 `b`, 4 `bl` and 3 vtable words (4 with `chain`), 3 menus | Version 1.1: yes. Version 1.2: no |
 | [instant-save](#instant-save) | Code patch | Patches | 1 `b` | No |
@@ -723,7 +723,7 @@ Before a flash or a restore of a firmware without this patch, the app switches o
 
 The setter 0xb3a04 does nothing for a change between Albums and Album Mix, because `+0x20` and `+0x92` do not change. For this change the hook calls 0xa983c (the settings are saved at the next sleep) and the refresh 0x11147c.
 
-**Test status.** Emulator (20 October 2026, with `shuffle-fixes` and the fixed seed, 60 tracks): Select on Shuffle gives Off → Songs → Albums → Album Mix → Off, and the bytes `+0x20`, `+0x92` and `+0x93` agree with each value. In Album Mix, Shuffle Songs played Test Song 43 first, as the model. The Repeat row stays correct. With all 13 patches that are not `internal` or `test` (20 October 2026): the firmware starts, Music has Album Artists, Settings shows Album Mix, Repeat Off, USB-C Audio Off and Something Comforting Play, and Album Mix gives the same order as the model. Not tested on a real iPod.
+**Test status.** Emulator (20 October 2026, with `shuffle-fixes` and the fixed seed, 60 tracks): Select on Shuffle gives Off → Songs → Albums → Album Mix → Off, and the bytes `+0x20`, `+0x92` and `+0x93` agree with each value. In Album Mix, Shuffle Songs played Test Song 43 first, as the model. The Repeat row stays correct. With all 13 patches that are not `internal` or `test` (20 October 2026): the firmware starts, Music has Album Artists, Settings shows Album Mix, Repeat Off, USB-C Audio Off and Something Comforting Play, and Album Mix gives the same order as the model. Real iPod (20 October 2026): the owner played one album with Album Mix on. The songs of the album played in a random order. With Repeat All, the album plays with no end, and the songs stay shuffled. Not tested yet: a list with many albums, and if each pass has a new order.
 
 ## something-comforting
 
