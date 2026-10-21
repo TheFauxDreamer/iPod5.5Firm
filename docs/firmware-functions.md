@@ -224,6 +224,7 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x08f6f4 | Writes to a file (handle, pointer to length, buffer). | Patch |
 | 0x08f5c4 | Sets the file position. The 64-bit position is in r2:r3. | Patch |
 | 0x08f184 | Closes a file. Writes the buffer to the disk. | Patch |
+| 0x0e468c | (path record, type, folder, name): joins the folder and the name into the path record (0xc6994), deletes an old file (0xa4770) and makes an empty file (0xa449c with mode 2, then 0xa4400). The firmware uses it for `OTGPlaylistInfo` (type `'itun'`). The `up-next` patch uses it for its file; after a restart in the emulator, the value was still there. | Static, Emulator, Patch |
 | 0xb4a64 | Loads the music database from `iPod_Control\iTunes\iTunesDB`. Runs at the start and after each USB session. At 0xb4ad4 it adds the usage-log event 0xf ("Exit Disk Mode"). | Static, Patch (`album-art`) |
 | 0xa2310 | Makes the music database object and calls 0xb4a64 (at 0xa23fc). | Static |
 | 0x1edb9c | Loads the music database again (`blne 0xb4a64` at 0x1ed2d0) if the flag at +0x489 is 0. | Static |
@@ -284,6 +285,7 @@ Refer to [re/volume-limit.md](../re/volume-limit.md).
 
 | Address | Function | Evidence |
 |---|---|---|
+| 0x1d2ee8 | (ID): posts an event of type 8 with the ID (0x2141fc, 0x2141a0, 0x13d6d4). Native code asks the script for a screen with it. | Static |
 | 0x1d81cc | UI event handler. Runs in the UI task for each button and wheel event. | Emulator |
 | 0x1d813c | Starts the idle timer again and turns the display on. Called at 0x1d8344 for a button event, not for the wheel events 0x10 and 0x1c. | Emulator |
 | 0x1d8264 | UI event handler part: calls 0x94bbc(4) and then 0x94d80(4, 3000) while the storage is on. | Static |
@@ -395,6 +397,15 @@ Refer to [re/play-next.md](../re/play-next.md).
 | 0x0adbb8 | (browser, row): Add to On-The-Go (library + 0xce0). Row −1 adds all rows. Limit 1000 songs. If the play list is On-The-Go (+0x18), it also calls the play list + 0x10. | Static |
 | 0x1eb5a4 | The script function for Add to On-The-Go. Calls 0xadbb8. | Static |
 | 0x0bbf2c | Writes `iPod_Control\iTunes\OTGPlaylistInfo`. | Static |
+| 0x1eb5a4 | (JS browser, row, browser): `mov r4, r0`, `movs r0, r2`, `ldreq r0, [r4, #0x1c]`, then `bl 0xadbb8` at 0x1eb5b4 with r0 = browser and r1 = row. The script calls it at a hold of Select (lr 0x120bf0 in the interpreter). The `up-next` patch hooks 0x1eb5b4. | Static, Emulator, Patch |
+| 0x235a54 | (list object, i): the item at play position i: slot 1 with the shuffle bit (track list + 0xec bit 0) off, else slot 2. | Static, Patch |
+| 0x093504 | (item, track list, cursor, 0): a new item for the same song, linked with 0xd6614. | Static |
+| 0x0d6614 | (item, cursor {parent, after}, notify): links an item after `after` (−1: at the end, 0: at the start). Adds 1 to the count (parent + 0x32). With notify, calls 0x1137c4. | Static |
+| 0x1137c4 | (track list): frees the sorted arrays and index maps of all slots. | Static, Patch |
+| 0x0b0d0c | (track list, field): frees the caches of the slot of one field (+ 0x174, + 0x238, + 0x2fc, + 0x3c0, + 0x494). The shuffle uses the field 0x1000 (slot 2). | Static |
+| 0x09e57c | (item, 0x33, 0): the play position of an item. | Static, Patch |
+| 0x1968c0 | (play list, song, flags): the next item in the play order. Flag 4 writes its index to + 0x14. The "next song" action 0xac4c4 calls it at the change of song. | Static |
+| 0x2aa350 | Data: the sort description of slot 2 (first key: field 0x1000, the shuffle position at item + 0x24). | Static |
 
 ### The EQ
 
@@ -409,6 +420,7 @@ Refer to [re/custom-eq.md](../re/custom-eq.md). The EQ is a software EQ. A prese
 | 0x10191c | (player, 0, values): with the EQ on (player + 0x235), calls 0xf4dc0 and 0xe6838; with the EQ off, 0xec450. | Static, Emulator |
 | 0x1446e8 | Sends command 0x1f with the first 5 values (each 0 … 0x60) to the audio engine (message queue 2). The selection of Bass Booster in the emulator wrote nothing to the codec. | Static, Emulator |
 | 0x14493c | Sends command 0x1a: the EQ on or off. | Static, Emulator |
+| 0x20fcf8 | The task of message queue 2. Commands 0x1a and 0x1f go through the ring queue 0x2354cc to 0x249ab8, which writes the command to state + 0x12f8 and the data to state + 0x12fc. | Static |
 
 ### The browser and the menus
 

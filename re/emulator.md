@@ -47,6 +47,9 @@ RECIPE=... ipod-film run --out=_film         # one PNG for each different screen
 - The emulator has no USB. You can test `ipodfw flash` only on a real iPod.
 - The emulator answers 0 for the counter at 0x60006038. Thus the shuffle seed is 0, and the shuffle is not random. Refer to [shuffle.md](shuffle.md#emulator-tests) for a test firmware with a fixed seed.
 - The emulator keeps a restore point in its profile. A run with `--control` continues from it. Start the emulator with `--cold` to start from the drive.
+- Music playback makes the emulator very slow (measured on 21 October 2026). When a song starts, the firmware starts the second core (COP) for the decoder. The host process then uses 100 % of one CPU in the emulation of two cores. A sample (`sample PID 3`) showed most time in `Memory::fast_region`, the CPU step, `read32` and `run_cop`. The iPod time then advanced approximately 0.7 s in 120 s of host time. The firmware does not hang: when the music pauses, the speed returns to 1.00×. The screen then looks frozen, and inputs take effect much later.
+- The control socket measures `hold` and `sleep` in host time. When the emulator is slow, a hold of 900 ms can be a short push for the iPod, and a short push can arrive after the next input. Wait in emulated time (the instruction count, 75 M for each second) and make a hold longer when `realtime` is low. A push of 30 ms is a short push; a push of 120 ms or more at full speed can be a hold.
+- Pause the music directly after the start (Play/Pause) before you test other screens. Then the emulator runs at full speed. The player has a play list and a current song while it is paused.
 
 ## The iPodFirm additions to the emulator
 

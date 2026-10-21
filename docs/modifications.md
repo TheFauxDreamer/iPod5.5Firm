@@ -23,6 +23,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [album-artists](#album-artists) | Code patch | Patches | 6 `b`, 4 `bl` and 3 vtable words (4 with `chain`), 3 menus | Version 1.1: yes. Version 1.2: no |
 | [instant-save](#instant-save) | Code patch | Patches | 1 `b` | No |
 | [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | No |
+| [up-next](#up-next) | Code patch (extended) | Patches | 1 `bl`, 1 `b` and 2 vtable words (3 with `chain`), a Settings menu | Yes (version 0.4) |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
@@ -361,7 +362,7 @@ The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 min
 
 ## cover-flow
 
-**User interface.** Patches pane > Cover Flow, letter `c`, version 0.6.3. The patch needs no file of iPodFirm: it uses the albums, the names and the artwork that the iPod already has. The research is in [../re/cover-flow.md](../re/cover-flow.md).
+**User interface.** Patches pane > Cover Flow, letter `c`, version 0.6.4. The patch needs no file of iPodFirm: it uses the albums, the names and the artwork that the iPod already has. The research is in [../re/cover-flow.md](../re/cover-flow.md).
 
 **Effect.**
 
@@ -375,7 +376,9 @@ The background is white with the light theme and black with the dark theme. On w
 
 A short push of Select opens the album as usual. Play/Pause operates as usual. If the iPod shows a new screen (for example Now Playing), Cover Flow closes.
 
-**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 10888 bytes. The functions that run once for each event or each open have `__attribute__((minsize))`; the pixel loop `draw_cover` stays fast code. The framebuffer copy (153600 bytes), the cover cache (11 covers of 128 × 128, 360448 bytes), the read buffer (80000 bytes), the caption copy (26880 bytes) and the placeholder cover come from the allocator 0x25a974 when Cover Flow opens. They are released when it closes. The album table (about 9 bytes for each album) stays in memory while the database does not change. While the table is made, the patch also uses 12 bytes for each track and a 32 KB read window.
+Since version 0.6.4, the patch [up-next](#up-next) can take the hold. At each push of Select in the Albums list, Cover Flow reads `iPod_Control\iTunes\iPodFirmHoldSelect` (`hold_is_cover_flow`). It keeps the push only if the file does not exist or contains '3' (Settings > Hold Select = Cover Flow). Otherwise the push goes to the firmware, and the hold goes to Up Next.
+
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 11092 bytes. The functions that run once for each event or each open have `__attribute__((minsize))`; the pixel loop `draw_cover` stays fast code. The framebuffer copy (153600 bytes), the cover cache (11 covers of 128 × 128, 360448 bytes), the read buffer (80000 bytes), the caption copy (26880 bytes) and the placeholder cover come from the allocator 0x25a974 when Cover Flow opens. They are released when it closes. The album table (about 9 bytes for each album) stays in memory while the database does not change. While the table is made, the patch also uses 12 bytes for each track and a 32 KB read window.
 
 **Hooks.**
 
@@ -862,6 +865,49 @@ Real iPod (owner, 16 October 2026), version 1.2: after Settings > Main Menu > Al
 **Limits.** Each change writes the settings file. On an iPod with a hard drive, the drive can start.
 
 **Test status.** Emulator (2026-10-16), with `album-artists`: a change of the Songs row and of the Album Artists row each ran 0xbbf1c and the write 0xbbdf8 one time. A change of Playlists gave the ATA commands WRITE DMA (0xca) and READ DMA (0xc8). The emulator keeps no settings after a cold start, thus the result after a restart is not tested. Not tested on a real iPod.
+
+## up-next
+
+**User interface.** Patches pane > Playback > Up Next, letter `n`, version 0.4. The option "Hold Select" gives the value that the iPod uses before the first change in Settings: Cover Flow (default), Play Next, Play Last or On-The-Go. Without the Cover Flow patch, the value Cover Flow acts as Play Next. On the iPod: Settings > Hold Select, after Clicker. Each push of Select moves to the next value. The research is in [../re/play-next.md](../re/play-next.md).
+
+**Effect.** Hold Select on a song, an album or an artist while music plays:
+
+- Play Next: the songs play directly after the current song.
+- Play Last: the songs play after the last song of the list that plays now.
+- On-The-Go: the songs go into the On-The-Go playlist, as without the patch.
+- Cover Flow (only with [cover-flow](#cover-flow)): in the Albums list, the hold opens Cover Flow. In the other lists, the hold does Play Next.
+
+When no music plays, the hold adds the songs to On-The-Go. With Shuffle on, the songs also get the correct play positions.
+
+**The value.** The patch keeps the value in `iPod_Control\iTunes\iPodFirmHoldSelect`: '0' On-The-Go, '1' Play Next, '2' Play Last, '3' Cover Flow. It reads the file at the first View lookup after the start (the first screen). If the file does not exist, it writes the value of the option, so that `cover-flow` reads the same value. At a change, it makes the file again with 0xe468c (as the firmware does for `OTGPlaylistInfo`) and writes the value with 0x8f3f8 and 0x8f6f4. Without the file, it uses the option `hold_default`. The value Cover Flow is available only if the word at 0x6701f0 is not 0x1d81cc; else it becomes Play Next. Only `cover-flow` changes that word.
+
+**Load address.** `extended`. The compiled code and data are 1807 bytes, then the Settings menu.
+
+**Hooks.**
+
+| Kind | At | Expect | To |
+|---|---|---|---|
+| `bl` | 0x1eb5b4 | 0xebfb097f | `hook_add`: the call of "Add to On-The-Go" (0xadbb8) in its script function 0x1eb5a4. r0 is the browser, r1 the row (−1 for all rows). |
+| `b` | 0x21f254 | 0xe92d40f8 | `hook_lookup` (`chain`: `lookup_next`, `chain_default`: `lookup_original`): the strings 0x7e0b "Hold Select", 0x7e0c "Play Next", 0x7e0d "Play Last", 0x7e0e "Cover Flow" |
+| `word` | 0x66c94c | 0x00190b00 | `hook_settings_get` (`chain`: `get_next`): the value text of the key 0x60ec |
+| `word` | 0x66c950 | 0x001919d8 | `hook_settings_set` (`chain`: `set_next`): the next value |
+
+The Settings item has the key 0x600060ec and the label 0x7e0b (`settings_items`, after Clicker). The value On-The-Go uses the firmware string 0x63cc.
+
+**Runtime logic of a hold.**
+
+1. The script function of the hold (0x1eb5a4) calls `hook_add` in place of 0xadbb8.
+2. If the value is On-The-Go, or no song plays (play list 0x196418: no track list, or the index + 0x14 is −1), the patch calls 0xadbb8.
+3. The patch calls the add method of the play list (vtable 0x66cad4 + 0x10) with the browser, the row, the list of the browser (0x9bb98), its sort (0xa00d0) and its reverse byte (browser + 0xc38). The songs go to the end of the track list.
+4. Under the lock of the play list (+ 0x1c), the patch finds the new items (after the old last child of the root):
+   - Shuffle off, Play Next: it links the new items after the current item.
+   - Shuffle off, Play Last: no change.
+   - Shuffle on: it gives the new items the positions (item + 0x24) after the current item (Play Next) or after the last position (Play Last), and adds the count to each later position.
+5. It frees the sorted arrays of the track list (0x1137c4) and writes the new index of the current item (0x9e57c (item, 0x33, 0)) to + 0x14.
+
+**Limits.** An item in a group (an audiobook chapter, for example) is not changed: the patch then adds the songs to On-The-Go. The patch has no pop-up menu yet.
+
+**Test status.** Refer to [safety.md](safety.md). Emulator (2026-10-21), see the list in [../re/play-next.md](../re/play-next.md#emulator-tests-of-the-patch). Real iPod (2026-10-21), version 0.4 with `cover-flow` 0.6.4: the Settings item and its value after a restart, Play Next with Shuffle Off and Shuffle Songs (the song plays at the natural end of the current song), an album or an artist, Play Last, the hold in the Albums list with Cover Flow and with Play Next, the value On-The-Go, and a hold with no music (On-The-Go) all passed. The row blinks after a hold, Now Playing shows the new count, the artwork stays correct, and the iPod did not stop or restart.
 
 ## Storage type
 

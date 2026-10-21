@@ -525,7 +525,8 @@ CAUTION: iPodFirm supports one osos per patch folder. The app downloads and uses
 | 0x193b9c | `shuffle-album-mix` | `7080bde8 ???????? ??????2a f8402de9 0040a0e1 980090e5 ??????eb 1c10d4e5 ????9fe5 000051e1 ??????0a 1c00c4e5 000094e5` |
 | 0x191eb0 | `shuffle-album-mix` | `ff0000e2 020050e3 1c00c4e5 1c80c485 1c10d4e5 980094e5 ??????eb 000094e5 0720a0e1 543090e5 0400a0e1 0b10a0e1 0fe0a0e1` |
 | 0x946d8 | `shuffle-fixes` | `01005013 ??????da 0a70a0e1 ??????ea 080047e0 010080e2 ??????eb 072186e0 103092e5 001186e0 100091e5 103081e5 017047e2` |
-| 0x21f254 | `dark-mode`, `something-comforting`, `album-artists`, `shuffle-album-mix` | `050051e3 04005113 03005113 01005113 0000a013 1eff2fe1 f8402de9 0150a0e1 0010a0e3 0260a0e1 0040a0e1 00108de5 ??????ea` |
+| 0x21f254 | `dark-mode`, `something-comforting`, `album-artists`, `shuffle-album-mix`, `up-next` | `050051e3 04005113 03005113 01005113 0000a013 1eff2fe1 f8402de9 0150a0e1 0010a0e3 0260a0e1 0040a0e1 00108de5 ??????ea` |
+| 0x1eb5b4 | `up-next` | `???????? 65050000 10402de9 0040a0e1 0200b0e1 1c009405 ??????eb 000050e3 0000a013 1080bd18 0400a0e1 ??????eb 0100a0e3` |
 | 0x9ee90 | Software version | `0040a0e1 0030a0e3 8000a0e3 00308de5 0030a0e1 08008de2 0110a0e3 3020a0e3 ??????eb 6420a0e3 24108de2 08008de2 ??????eb` |
 | 0x9ee70 | Software version | `0b0c80e2 d304d0e1 1eff2fe1 a00c90e5 510bd0e5 1eff2fe1 10402de9 62df4de2 0040a0e1 0030a0e3 8000a0e3 00308de5 0030a0e1` |
 
@@ -536,8 +537,8 @@ The signatures of the methods for the vtable hooks. They start at the function e
 | 0x1bb260 | 0x66e470 | `album-art` | `f74f2de9 30d04de2 0040a0e1 741080e2 ??????eb 20108de2 0400a0e1 ??????eb 2c009de5 24109de5 14e08fe2 017040e0 000094e5` |
 | 0x244924 | 0x677a14 | `album-art` | `30402de9 01e0a0e1 0040a0e1 c81094e5 0250a0e1 0820f1e5 c00090e5 24d04de2 2020cde5 0120d1e5 20c08de2 2120cde5 0220d1e5` |
 | 0x1d83fc | 0x69fd2c | `sleep-now` | `10402de9 0040a0e1 180090e5 ??????eb 000050e3 18009415 ??????1b ??????eb 480084e2 ??????eb 480084e2 7d1fa0e3 ??????eb` |
-| 0x190b00 | 0x66c94c | `dark-mode`, `something-comforting`, `album-artists`, `shuffle-album-mix` | `ff4f2de9 0050a0e1 0100a0e3 83df4de2 04028de5 ????9fe5 0080a0e3 000090e5 0160a0e1 010010e3 0340a0e1 ??????1a ????9fe5` |
-| 0x1919d8 | 0x66c950 | `dark-mode`, `something-comforting`, `album-artists` | `f84f2de9 ????9fe5 0040a0e1 71c046e2 ????9fe5 0c0052e1 010086e2 01a0a0e3 0290a0e1 0080a0e3 0350a0e1 907046e2 ??????0a` |
+| 0x190b00 | 0x66c94c | `dark-mode`, `something-comforting`, `album-artists`, `shuffle-album-mix`, `up-next` | `ff4f2de9 0050a0e1 0100a0e3 83df4de2 04028de5 ????9fe5 0080a0e3 000090e5 0160a0e1 010010e3 0340a0e1 ??????1a ????9fe5` |
+| 0x1919d8 | 0x66c950 | `dark-mode`, `something-comforting`, `album-artists`, `up-next` | `f84f2de9 ????9fe5 0040a0e1 71c046e2 ????9fe5 0c0052e1 010086e2 01a0a0e3 0290a0e1 0080a0e3 0350a0e1 907046e2 ??????0a` |
 | 0x19351c | (`b` at the entry) | `instant-save` | `f0412de9 0040a0e1 980090e5 0270a0e1 0160a0e1 ??????eb 0050a0e1 0600a0e1 ??????eb 000057e3 0010c501 00108511 980094e5` |
 | 0x23ca4c | 0x6776f8 | `album-artists` | `????9fe5 ??????ea 43756e4d 70402de9 0040a0e1 440190e5 0150a0e1 000050e3 7080bd08 ??????eb 000050e3 0510a011 0400a011` |
 | 0x23b704 | 0x6772c0 | `cover-flow` | `70402de9 0040a0e1 200090e5 0160a0e1 061b00e2 040096e5 020b51e3 0050a0e3 ??????1a 040050e3 05005013 ??????0a 090050e3` |

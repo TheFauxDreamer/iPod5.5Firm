@@ -66,6 +66,21 @@ Test: the stock firmware 1.3, the 60-track test library, a song plays. The emula
 
 Thus the firmware sends the preset to the audio engine and does not change the codec registers. The EQ is a software EQ.
 
+## The receiver (research round 2, 20 October 2026)
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x0a6770 | (queue, message, size, …): system call 4 (0x84644 → 0x27f5f0): put a message into a queue. | Static |
+| 0x0a66a4, 0x0a661c | System call 5: get a message from a queue (with and without a wait). | Static |
+| 0x163c94 | (queue, &message, …): gets a message and returns the byte at message + 0x18: the command. For the EQ messages, this is object + 0x24. | Static |
+| 0x20fcf8 | The task of queue 2. A switch (0x20fdac) on the command. Commands 0x1a and 0x1f: it copies 0x1c bytes of the message (+ 0x2c) and passes them to 0x2354cc with the object at (task + 0x3c) + 0x12b0. Command 0x24 calls 0x24b580 directly. | Static |
+| 0x2354cc | Puts an item into a ring queue (0x235548) and signals the reader. | Static |
+| 0x2355ac | Takes an item from that ring queue and calls the first method of the item. | Static |
+| 0x678074 | The vtable of the item of 0x20fcf8. Slot 0: 0x249ab8. | Static |
+| 0x249ab8 | Writes the command to state + 0x12f8 and its 0x1c data bytes to state + 0x12fc. | Static |
+
+The 5 filter numbers of an EQ preset thus go to state + 0x12fc. The code that reads this state, and the filter table, are not found yet. The callers of 0x2355ac (0x216460, 0x249390) are the next step. The emulator cannot help with a profile: with music and the profiler, it runs at approximately 0.07× and does not react (refer to [emulator.md](emulator.md#limits)).
+
 ## Consequences for a patch
 
 - A custom EQ can be a new preset with up to 5 filter numbers. But only the 54 known filters (and possibly 55–96) exist. This gives no free choice of frequency and gain.
