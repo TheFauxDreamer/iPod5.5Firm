@@ -344,18 +344,17 @@ The result of the test is this.
   the drawing of the screen. The function `FUN_0024e9c0` at 0x24e9c0 draws the
   screen of the games.
 
-The cause of the empty list is not known yet. The two possible causes are the
-name of the folder and the key of the DRM. The research of iTunes for macOS
-gives a third cause. The program of iTunes uses the name `Games_RO` with a
-capital letter. The firmware uses the name `games_RO` with small letters. The
-file system of the iPod is FAT. It keeps the case of the names.
-
-The test used the name `Games_RO`. The test with the name `games_RO` gave the
-same result. The list was empty in both tests. The cause of the empty list is
-therefore not known for certain.
+The test of the emulator used the name `Games_RO`. The test of the real iPod
+on 21 October 2026 gave the cause. The cause is the case of the name of the
+folder. The firmware asks for the name `games_RO` with small letters. The
+file system of the emulator compares the names without the case. The emulator
+gave the same result for the two names. The details are in
+[games-real-ipod.md](games-real-ipod.md).
 
 The machine of the owner has no file `IC-Info.sidb`. The key of the DRM is
-therefore not present in the test.
+therefore not present in the test. The real iPod of the owner also has no
+file `IC-Info.sidb`. The game of the owner shows the message "This game cannot
+be played." The step of the key is the only step that fails.
 
 ## The DRM of iTunes on Windows
 
@@ -822,9 +821,6 @@ knowledge of the format of the key file.
 
 ## The open questions
 
-- The cause of the empty list in the emulator. The object of the games at
-  0x108711d4 is empty. The function `FUN_0024d88c` at 0x24d88c did not make
-  the object. The test must check both names of the folder in one run.
 - The bit of the games in the main menu mask. The function `FUN_00105a04` at
   0x105a04 gives the bit of a menu item.
 - The check of the digest of the executable. The function `FUN_0024df00` at
