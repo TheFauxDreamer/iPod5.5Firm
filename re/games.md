@@ -21,7 +21,10 @@ against the `Files` array of the manifest. It then reads the DRM key of the
 game.
 
 The DRM key is in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The
-key is bound to the serial number of the iPod. The app cannot make this file
+key is bound to the identity of the iPod. The research of the emulator
+measured that the key binds to the 8-byte FireWire GUID in the `sysinfo_t`
+block. The block is in the NOR flash. The block is not in the file
+`iPod_Control/Device/SysInfo` of the volume. The app cannot make this file
 for another iPod. The app can only copy this file from an iPod that has the
 key.
 
@@ -841,9 +844,12 @@ knowledge of the format of the key file.
   of the DRM is in [games-drm.md](games-drm.md). The osos has no cipher for
   the program of a game. The decryption is in the DRM library of the system.
   The library is outside the osos. The research must use the emulator.
-- The way that the key is bound to the serial number. The string
-  `SerialNumber` is at 0x176b24. The code that uses it for the key is not
-  found yet.
+- The way that the key is bound to the identity of the iPod. The research of
+  the emulator measured that the key binds to the 8-byte FireWire GUID in the
+  `sysinfo_t` block. The block is in the NOR flash. The string
+  `SerialNumber` is at 0x176b24. The function `FUN_00175c74` at 0x175c74 gives
+  the number of the iPod to the computer. The code that uses the number for
+  the key is not found yet.
 - The six functions of the library `CoreFP.framework` in the program of iTunes.
   The names are obfuscated. The app does not need them. The research is only
   for the knowledge of the format of the key file.

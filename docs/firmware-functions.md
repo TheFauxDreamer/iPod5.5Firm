@@ -580,7 +580,7 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 
 ### The games
 
-Refer to [re/games.md](../re/games.md). The iPod reads the games from the folder `iPod_Control/games_RO`. The program of each game uses a FairPlay DRM. The key is in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The key is bound to the serial number of the iPod.
+Refer to [re/games.md](../re/games.md). The iPod reads the games from the folder `iPod_Control/games_RO`. The program of each game uses a FairPlay DRM. The key is in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The key is bound to the identity of the iPod. The research of the emulator measured that the key binds to the 8-byte FireWire GUID in the `sysinfo_t` block. The block is in the NOR flash.
 
 | Address | Function | Evidence |
 |---|---|---|
