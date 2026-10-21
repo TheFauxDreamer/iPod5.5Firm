@@ -242,6 +242,23 @@ COLD static int open_path(unsigned *fh, const char *path, int number)
     return file_open(record, fh, 0, MODE_DATA);
 }
 
+/* The patch up-next keeps the value of Settings > Hold Select in this file: '0' On-The-Go,
+ * '1' Play Next, '2' Play Last, '3' Cover Flow. Cover Flow uses the hold in the Albums list only if
+ * the file does not exist (no up-next) or contains '3'. */
+#define HOLD_PATH      "iPod_Control\\iTunes\\iPodFirmHoldSelect"
+
+COLD static int hold_is_cover_flow(void)
+{
+    unsigned fh[0x30 / 4], got = 1;
+    unsigned char c = '3';
+    if (open_path(fh, HOLD_PATH, 0) != 0)
+        return 1;
+    if (file_read(fh, &got, &c) != 0 || got != 1)
+        c = '3';
+    file_close(fh);
+    return c == '3';
+}
+
 COLD static int read_at(unsigned *fh, unsigned offset, void *buf, unsigned len)
 {
     unsigned got = len;
@@ -1175,7 +1192,7 @@ COLD int hook_list_event(int *list, int *ev, void *a3, int a4)
         }
         send_copy(kept, EV_KEY_DOWN);     /* no cover file: do as the firmware does */
     }
-    if (type == EV_KEY_DOWN && KEY_OF(ev) == KEY_SELECT && is_albums_list(list)) {
+    if (type == EV_KEY_DOWN && KEY_OF(ev) == KEY_SELECT && is_albums_list(list) && hold_is_cover_flow()) {
         int i;
         for (i = 0; i < EVENT_WORDS; i++)
             kept[i] = ev[i];

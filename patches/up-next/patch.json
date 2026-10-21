@@ -1,0 +1,123 @@
+{
+  "name": "up-next",
+  "title": "Up Next",
+  "summary": "Hold Select to play a song, an album or an artist next or last.",
+  "symbol": "text.line.first.and.arrowtriangle.forward",
+  "category": "playback",
+  "version_letter": "n",
+  "version": "0.4",
+  "size": 1807,
+  "description": "Hold Select on a song, an album or an artist while music plays. Settings > Hold Select selects what the hold does: Play Next, Play Last, On-The-Go or Cover Flow.",
+  "details": [
+    "Play Next: the songs play directly after the current song.",
+    "Play Last: the songs play after the last song of the list that plays now.",
+    "On-The-Go: the songs go into the On-The-Go playlist, as without the patch.",
+    "Cover Flow (only with the Cover Flow patch): in the Albums list, the hold opens Cover Flow. In the other lists, the hold does Play Next.",
+    "Settings > Hold Select changes the value. Each push of Select moves to the next value.",
+    "With Shuffle on, Play Next and Play Last also put the songs in the correct position.",
+    "When no music plays, a hold of Select adds the songs to On-The-Go."
+  ],
+  "notes": [
+    "This is a test version.",
+    "The iPod keeps the value in the file iPod_Control/iTunes/iPodFirmHoldSelect. At the first start without the file, the patch writes the value of the option.",
+    "The Cover Flow patch reads the same file. Without the Up Next patch, a hold in the Albums list always opens Cover Flow."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    {
+      "model": "iPod Video (5G/5.5G)",
+      "firmware": "1.3",
+      "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251"
+    }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "otg_add": "0x0adbb8",
+    "playlist_get": "0x196418",
+    "playlist_item": "0x235a54",
+    "list_lock": "0x0c9a84",
+    "list_unlock": "0x0c9b58",
+    "browser_list": "0x09bb98",
+    "browser_sort": "0x0a00d0",
+    "tracklist_invalidate": "0x1137c4",
+    "item_position": "0x09e57c",
+    "str_lookup": "0x21f418",
+    "str_table": "0x21f3b8",
+    "fw_memset0": "0x07ccd0",
+    "fw_strcpy": "0x07cd6c",
+    "file_open": "0x08f38c",
+    "file_open_rw": "0x08f3f8",
+    "file_read": "0x08f464",
+    "file_write": "0x08f6f4",
+    "file_close": "0x08f184",
+    "file_create": "0x0e468c",
+    "lookup_continue": "0x21f258"
+  },
+  "hooks": [
+    {
+      "kind": "bl",
+      "at": "0x1eb5b4",
+      "expect": "0xebfb097f",
+      "to": "hook_add"
+    },
+    {
+      "kind": "b",
+      "at": "0x21f254",
+      "expect": "0xe92d40f8",
+      "to": "hook_lookup",
+      "chain": "lookup_next",
+      "chain_default": "lookup_original"
+    },
+    {
+      "kind": "word",
+      "at": "0x66c94c",
+      "expect": "0x00190b00",
+      "to": "hook_settings_get",
+      "chain": "get_next"
+    },
+    {
+      "kind": "word",
+      "at": "0x66c950",
+      "expect": "0x001919d8",
+      "to": "hook_settings_set",
+      "chain": "set_next"
+    }
+  ],
+  "settings_items": [
+    {
+      "key": "0x600060ec",
+      "label_id": "0x7e0b",
+      "after_key": "0x60006088"
+    }
+  ],
+  "options": [
+    {
+      "id": "hold",
+      "title": "Hold Select",
+      "symbol": "hold_default",
+      "default": 3,
+      "choices": [
+        {
+          "value": 1,
+          "title": "Play Next",
+          "description": "A hold of Select plays the songs directly after the current song."
+        },
+        {
+          "value": 2,
+          "title": "Play Last",
+          "description": "A hold of Select plays the songs after the last song of the list that plays now."
+        },
+        {
+          "value": 0,
+          "title": "On-The-Go",
+          "description": "A hold of Select adds the songs to On-The-Go, as without the patch."
+        },
+        {
+          "value": 3,
+          "title": "Cover Flow",
+          "description": "The default. In the Albums list, a hold of Select opens Cover Flow (only with the Cover Flow patch). In the other lists, and without the Cover Flow patch, it does Play Next."
+        }
+      ]
+    }
+  ]
+}

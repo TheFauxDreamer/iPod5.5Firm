@@ -80,7 +80,7 @@ The table shows the status that the test notes record. For the full test record,
 |---|---|---|---|
 | Album Artwork | a | Shows a small album cover at the left of each album and each playlist in the lists. | Yes (version 2.6) |
 | Album Artists | l | Adds an Album Artists item to the Music menu. All the songs of a compilation are under one entry. You can also put the item in the main menu. | Yes (version 1.1) |
-| Cover Flow | c | Hold Select in the Albums list to see the album covers in 3D. This is a new version for the iPod Video, not the Apple version from the iPod Classic. It replaces "hold Select to add an album to On-The-Go". | Yes (version 0.6.2) |
+| Cover Flow | c | Hold Select in the Albums list to see the album covers in 3D. This is a new version for the iPod Video, not the Apple version from the iPod Classic. It replaces "hold Select to add an album to On-The-Go". With Up Next, Settings > Hold Select decides if the hold opens Cover Flow. | Yes (version 0.6.2) |
 | 60-Second Backlight | b | The Backlight Timer menu has 60 Seconds in place of 2 Seconds. | No |
 | SSD Mode | k | For flash storage. Keeps the storage on for 30 minutes after each access, not for 1 second. Songs start faster. | Only a test version |
 | Wake Storage on Input | w | For flash storage. Starts the storage when you push a button, so that the first song starts sooner after a long pause. | No |
@@ -88,6 +88,7 @@ The table shows the status that the test notes record. For the full test record,
 | Instant Save | i | Saves each change in Settings > Main Menu immediately. Without it, the iPod saves the change only when it sleeps. | No |
 | No EU Volume Limit | v | Removes the volume limit of iPods for the EU. | No |
 | Shuffle Fixes | f | Corrects four errors in the shuffle. The most important: with more than 32767 songs, the shuffle writes outside the list and the order is wrong. | No |
+| Up Next | n | Hold Select on a song, an album or an artist while music plays: the songs play next (Play Next) or after the last song (Play Last). Settings > Hold Select selects the action: Play Next, Play Last, On-The-Go or Cover Flow (in the Albums list, with the Cover Flow patch). | No |
 | Album Mix Shuffle | x | Adds Album Mix to Settings > Shuffle: the albums and the songs in each album play in a random order. It needs Shuffle Fixes, and the app turns on Shuffle Fixes with it. | No |
 | Something Comforting | m | An example patch. A Settings item plays a short song on the internal speaker of the iPod. | No |
 | USB-C Audio | u | Plays the music through USB-C headphones. Refer to [USB-C Audio](#usb-c-audio). | Yes (up to version 1.8) |

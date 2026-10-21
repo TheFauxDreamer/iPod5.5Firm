@@ -95,6 +95,24 @@ The player does not keep a copy of the next song. It asks the play list at the t
 6. Play Next, shuffle on: do step 4. Then give the new items the positions after the current song (+0x24), add the count to each later position, and call 0xb0d0c (track list, 0x1000). The model in [shuffle-model.py](shuffle-model.py) can test this.
 7. Write 0x9e57c (current item, 0x33, 0) to + 0x14, as 0x196d48 does. Unlock (0xc9b58).
 
+## Emulator tests of the patch
+
+The patch `up-next` (patches/up-next) uses the method above. Tests with the stock firmware 1.3, the patch and the 60-track test library, 20 and 21 October 2026. The script presses Select for 30 ms (a short push) and for 0.9 s of emulated time (a hold); refer to [emulator.md](emulator.md#limits).
+
+| Test | Result |
+|---|---|
+| Version 0.1, Shuffle Songs, pause, hold Select on "Test Song 15" in the Songs list | The hook ran (0x1eb5a4, no call of 0xadbb8). The count went from 60 to 61. The new item got position 1 after the current item (position 0); the later positions moved by 1. Now Playing showed "1 of 61". Next: "2 of 61, Test Song 15". Next: "3 of 61, Test Song 2", the old order. |
+| The same, from a cold start again | The player had already moved to song 2 (no audio). The hold put Test Song 15 after it: "3 of 61, Test Song 15", then "4 of 61, Test Song 3". |
+| Version 0.2, Settings > Hold Select | The item shows after Clicker. Each push: Play Next → Play Last → On-The-Go. After a restart of the emulator, the value was still Play Last; the iPod did not keep its language, thus the file write reached the drive at once. |
+| Version 0.4 with `cover-flow` 0.6.4, a new drive (no file), no music | Settings showed "Hold Select: Cover Flow" (the start value, written at the first screen). A hold on Test Album 1 opened Cover Flow; the patch did not run. After one push of the item ("Play Next"), the same hold ran 0x1eb5a4 and 0xadbb8 (no music: On-The-Go), and Cover Flow did not open. |
+| Version 0.4, Settings > Hold Select = Play Last, Shuffle Songs, hold on Test Song 15 | 61 songs. The new item got position 257, after the old last position (256); the other positions did not change. "1 of 61", Next: "2 of 61, Test Song 2", Next: "3 of 61, Test Song 3" (the old order). |
+| Version 0.4, Play Next, Settings > Shuffle = Albums (the list shuffled again) | Before the hold: "10 of 61, Test Song 1". Next: "11 of 61, Test Song 15". Next: "12 of 61, Test Song 11" (the old order of the albums). |
+| A start of the music from the Songs list (shuffle off) | The screen froze in several runs, also without the patch. The cause is the slow emulation of the second core (refer to [emulator.md](emulator.md#limits)), not a hang. The shuffle-off path of the patch is not tested yet. |
+
+## The pop-up menu (research, 21 October 2026)
+
+A pop-up menu (Play Next, Play Last, Add to On-The-Go) needs a new screen. The firmware has 40 Menu resources, for example 24441 ("Cancel", "Confirm"). No ARM code refers to a Menu ID directly: the script (`TCmd` 9088) opens the menus through View resources. Native code asks for a screen with 0x1d2ee8 (event type 8 with an ID, through 0x13d6d4). The patcher can add items to a Menu, but it cannot add a Menu or a View. Thus the patch uses the Settings item "Hold Select" for now. The pop-up menu is a later step.
+
 ## Collisions
 
 - `cover-flow` uses the hold of Select in the Albums list. The small menu can have a fourth item "Cover Flow" in the Albums list. The owner decides.
