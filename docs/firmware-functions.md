@@ -44,12 +44,16 @@ A typical sequence:
 | Temurin JDK 21 | `~/Library/Application Support/iPodFirm/tools/jdk-21.0.12.1+1/` | Java runtime for Ghidra. |
 | Ghidra project `osos13` | `~/Library/Application Support/iPodFirm/re/ghidra-project/` | The analyzed osos 1.3, base address 0x0. |
 | [DecompileAt.java](../re/ghidra-scripts/DecompileAt.java) | `re/ghidra-scripts/` | Writes the C code, the callers and the callees of the functions at the given addresses. If no function contains an address, it makes a function at the nearest `stmdb sp!, {..., lr}` before the address. |
+| [DecompileAll.java](../re/ghidra-scripts/DecompileAll.java) | `re/ghidra-scripts/` | Writes the C code of every function of the program to one file. The file has one block for each function. The block starts with a line that has the address and the name. |
+| [decompile-all.sh](../re/decompile-all.sh) | `re/` | Decompiles the whole image `osos` with REA and with Ghidra. It writes the C code and the index of the functions. |
+| [make-function-index.py](../re/make-function-index.py) | `re/` | Makes the table of the functions from a file of decompiled C code. The table has the address, the name, the number of lines, the number of bytes and the number of calls of each function. |
 | [CallerTree.java](../re/ghidra-scripts/CallerTree.java) | `re/ghidra-scripts/` | Writes the caller tree of functions to a given depth. |
 | [SetArmOptions.java](../re/ghidra-scripts/SetArmOptions.java) | `re/ghidra-scripts/` | Pre-script. Turns on "ARM Aggressive Instruction Finder" for the first analysis. |
 | `FindXrefs.java`, `FindConstant.java`, `FindBytes.java`, `ListVtable.java`, `MakeSignature.java` | `re/ghidra-scripts/` | Search scripts. Refer to [ghidra-guide.md](ghidra-guide.md#2-the-scripts). |
 | [find-pattern.py](../re/find-pattern.py) | `re/` | Finds a byte pattern in a raw file without Ghidra. |
 | Instrumented emulator | `~/Library/Application Support/iPodFirm/emulator-src/target/release/ipod-emulator` | The emulator with the iPodFirm instrumentation patch. Refer to [re/emulator.md](../re/emulator.md). |
 | `ipodfw.emucontrol` | [src/ipodfw/emucontrol.py](../src/ipodfw/emucontrol.py) | Python control of the emulator socket. |
+| REA | `/tmp/rea` | The tool for the analysis. It has a provider for Ghidra. Refer to the note [../re/retailos-decompile.md](../re/retailos-decompile.md). |
 
 The tools are not in the repository. The Ghidra download does not include the native decompiler for Apple silicon. To build it:
 
@@ -96,6 +100,30 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 - The screens are objects with vtables (C++ classes). A vtable word hook changes the method for all objects of a class.
 
 ## Functions
+
+### The whole image
+
+The research of 21 October 2026 decompiled the whole image `osos` of RetailOS
+1.3 with REA and with Ghidra. The research gives 14,411 functions. The research
+failed for 0 functions. The C code has 551,459 lines.
+
+| The item | The value |
+|---|---|
+| The functions | 14,411 |
+| The C code | 551,459 lines. 13,378,201 bytes. |
+| The range of the addresses | 0x100000f0 to 0x10733b64 |
+| The median size of a function | 24 lines of C code |
+| The functions under 50 lines | 11,902 |
+| The functions over 500 lines | 31 |
+| The C code and the index | `~/Library/Application Support/iPodFirm/re/retailos-1.3-decompiled/` |
+
+The research confirmed the addresses of the other notes. The research confirmed
+the 6 addresses of the patch of the community with the graph of the basic
+blocks. Refer to [../re/retailos-decompile.md](../re/retailos-decompile.md).
+
+> CAUTION: The image has no symbols. The names of the functions are `FUN_` and
+> the address. The C code of a function with many paths has the name
+> `extraout_r1` many times. The logic of the code is still correct.
 
 ### Resources and strings
 

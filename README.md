@@ -208,6 +208,10 @@ CAUTION: The removal of the data of the app removes the backups of the iPod. Mak
 
 The research of the games is in [re/games.md](re/games.md) and in the notes beside it. The note [re/games-vm.md](re/games-vm.md) gives the virtual machine of the community that installs the games on an iPod. The note [re/games-drm.md](re/games-drm.md) gives the check of the DRM in the firmware.
 
+## The firmware
+
+The note [re/retailos-decompile.md](re/retailos-decompile.md) gives the decompilation of the whole image `osos` of RetailOS 1.3. The research gives 14,411 functions. The C code and the index of the functions are in `~/Library/Application Support/iPodFirm/re/retailos-1.3-decompiled/`. The script [re/decompile-all.sh](re/decompile-all.sh) does the work again.
+
 ## Other iPod models
 
 The author has only an iPod 5.5G. Thus the author does not add support for other models or for other firmware versions.
