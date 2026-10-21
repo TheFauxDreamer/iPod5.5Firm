@@ -109,6 +109,24 @@ The patch `up-next` (patches/up-next) uses the method above. Tests with the stoc
 | Version 0.4, Play Next, Settings > Shuffle = Albums (the list shuffled again) | Before the hold: "10 of 61, Test Song 1". Next: "11 of 61, Test Song 15". Next: "12 of 61, Test Song 11" (the old order of the albums). |
 | A start of the music from the Songs list (shuffle off) | The screen froze in several runs, also without the patch. The cause is the slow emulation of the second core (refer to [emulator.md](emulator.md#limits)), not a hang. The shuffle-off path of the patch is not tested yet. |
 
+## Test on the real iPod (21 October 2026)
+
+The owner tested version 0.4 with `cover-flow` 0.6.4 on the iPod 5.5G.
+
+| Test | Result |
+|---|---|
+| 1. Settings > Hold Select: the 4 values, the value after a restart (Menu+Select) | Pass |
+| 2. Play Next, Shuffle Off: the count is m + 1; at the end of the current song, the new song plays; then the album continues | Pass |
+| 3. Play Next, Shuffle Songs | Pass |
+| 4. A hold on an album or an artist: all its songs play next | Pass |
+| 5. Play Last: the song plays at the end of the list | Pass |
+| 6. The value On-The-Go; a hold with no music: the songs go into On-The-Go | Pass |
+| 7. Cover Flow in the Albums list with the value Cover Flow; Play Next in the Albums list with the value Play Next | Pass |
+
+Other observations of the owner: the row blinks after a hold, as for On-The-Go. Now Playing shows the new count normally. The artwork is correct (with `album-art`). The iPod did not stop or restart.
+
+Test 2 is the first test of the shuffle-off path (0xd6614 order, `move_after`). Tests 2 and 3 also show that the player takes the next song from the changed list at the natural end of a song, not only after Next.
+
 ## The pop-up menu (research, 21 October 2026)
 
 A pop-up menu (Play Next, Play Last, Add to On-The-Go) needs a new screen. The firmware has 40 Menu resources, for example 24441 ("Cancel", "Confirm"). No ARM code refers to a Menu ID directly: the script (`TCmd` 9088) opens the menus through View resources. Native code asks for a screen with 0x1d2ee8 (event type 8 with an ID, through 0x13d6d4). The patcher can add items to a Menu, but it cannot add a Menu or a View. Thus the patch uses the Settings item "Hold Select" for now. The pop-up menu is a later step.
@@ -121,6 +139,5 @@ A pop-up menu (Play Next, Play Last, Add to On-The-Go) needs a new screen. The f
 
 ## Open questions
 
-- Steps 5 and 6 are not tested. A test patch in the emulator must show the new order in Now Playing ("n of m") and after the end of the song.
-- Does the Now Playing screen draw the count again after a change? 0x1964bc sends an event; Play Next possibly must send the same event.
-- Does an insert during the playback of an album with album art need a stop of the artwork task (osos-lab does this)?
+- The answers of the real iPod test (21 October 2026): Now Playing shows the new count, and the artwork stays correct without a stop of the artwork task. Thus the patch does not need the event of 0x1964bc or a stop of the artwork task.
+- Songs in a group (for example audiobook chapters) are not tested. The patch then uses On-The-Go.
