@@ -1075,6 +1075,19 @@ final class PatcherOptionTests: XCTestCase {
     }
 }
 
+/// The text log of video-log: a padded header line, the lines, then zero bytes.
+final class VideoLogTests: XCTestCase {
+    func testText() {
+        let header = "VL01 video-log 1.0 lines=2 lost=0 writes=1"
+        var d = [UInt8](header.utf8) + [UInt8](repeating: 0x20, count: 63 - header.utf8.count) + [0x0A]
+        d += [UInt8]("     0.000 > mp_play\n     0.012 < 0 ok\n".utf8)
+        d += [UInt8](repeating: 0, count: VideoLog.fileSize - d.count)
+        XCTAssertEqual(VideoLog.text(d), header + "\n0.000 > mp_play\n0.012 < 0 ok")
+        XCTAssertNil(VideoLog.text([UInt8](repeating: 0, count: VideoLog.fileSize)))
+        XCTAssertNil(VideoLog.text([UInt8]("UL01".utf8)))
+    }
+}
+
 /// The USB log of usb-host-probe, with the root hub record that the emulator wrote (2026-10-07).
 final class USBProbeLogTests: XCTestCase {
     func testParseRootHubAndInterface() {

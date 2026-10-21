@@ -282,6 +282,7 @@ The app writes these files on the mounted iPod volume. A patch can also write fi
 | `iPod_Control/iTunes/iPodFirmDarkMode` | The `dark-mode` patch on the iPod | `dark-mode` patch |
 | `iPod_Control/iTunes/iPodFirmHoldSelect` | The `up-next` patch on the iPod (Settings > Hold Select) | `up-next` and `cover-flow` patches |
 | `iPod_Control/iTunes/iPodFirmUSBProbe`, `iPod_Control/iTunes/iPodFirmUSBLog` | "Start the Probe at the Next Restart" (`ui.actions` of `usb-host-probe`) | `usb-host-probe` patch, "Show USB Log" |
+| `iPod_Control/iTunes/iPodFirmVideoLog` | "Clear the Video Log" (`ui.actions` of `video-log`) | `video-log` patch, "Show Video Log" |
 
 The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not change them. Before a flash, the app looks for the MiMusic temporary files `iTunesDB.tmp`, `ArtworkDB.tmp` and `iPodFirmAlbumArt.tmp`.
 

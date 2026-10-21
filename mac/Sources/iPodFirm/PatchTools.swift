@@ -83,7 +83,45 @@ struct PatchTool: View {
         switch id {
         case "album-thumbnails": AlbumArtSections()
         case "usb-log": USBLogSection()
+        case "video-log": VideoLogSection()
         default: EmptyView()
+        }
+    }
+}
+
+// MARK: video-log
+
+/// The log that the video-log patch writes on the iPod: the commands to the video processor and the replies.
+struct VideoLogSection: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        Section {
+            HStack {
+                Button("Show Video Log") { model.readVideoLog() }.disabled(model.currentIPod == nil)
+                Spacer()
+                if let log = model.videoLog, !log.isEmpty {
+                    Button("Copy Log") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(log, forType: .string)
+                    }
+                }
+            }
+            if let log = model.videoLog {
+                if log.isEmpty {
+                    Text("The log is empty. Play a video. Then press a button in the menus, so that the iPod writes the log. Wait 15 seconds before you connect the iPod.")
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ScrollView {
+                        Text(log)
+                            .font(.caption.monospaced()).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(minHeight: 80, maxHeight: 400)
+                }
+            }
+        } header: {
+            Text("Video Log")
         }
     }
 }

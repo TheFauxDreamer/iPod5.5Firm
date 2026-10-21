@@ -1,0 +1,69 @@
+{
+  "name": "video-log",
+  "title": "Video Log",
+  "summary": "A test patch that records the commands of the video player.",
+  "symbol": "film",
+  "category": "test",
+  "ui": {
+    "actions": [
+      {
+        "title": "Clear the Video Log",
+        "write": [
+          {
+            "path": "iPod_Control/iTunes/iPodFirmVideoLog",
+            "zeros": 65536
+          }
+        ],
+        "status": "The video log is empty. The iPod writes the log after a button press."
+      }
+    ],
+    "steps_title": "Test Procedure",
+    "steps": [
+      "Flash a firmware with this patch.",
+      "Click Clear the Video Log.",
+      "Click Eject iPod. Then disconnect the iPod.",
+      "Restart the iPod. Hold Menu and Select until the Apple logo shows.",
+      "Play one video. Wait until the screen is black, or for 10 seconds.",
+      "Press Menu to go back to the menus.",
+      "Wait 5 seconds. Then press a button or turn the wheel. The iPod writes the log.",
+      "Wait 15 seconds, so that the firmware writes the log to the disk.",
+      "Connect the iPod to the Mac and click Show Video Log.",
+      "Click Copy Log and give the text to the developer."
+    ],
+    "tools": [
+      "video-log"
+    ]
+  },
+  "version_letter": "d",
+  "version": "1.0",
+  "size": 4816,
+  "description": "A test. It records each command that the firmware sends to the video processor (BCM2722), and each reply. Use the log to find why a video does not play.",
+  "caution": "Do not install this patch together with USB Host Probe. The two patches use the same hook site.",
+  "details": ["The iPod records the commands in RAM, for example load_application, mp_selectplay, mp_play and mp_get_status.", "After a video command, a button press also asks the video processor for its status and statistics.", "A button press writes the log to the disk, at most one time each 5 seconds.", "Click Show Video Log to see it."],
+  "notes": ["Each line starts with the time in seconds since the first command.", "\">\" is a command. \"<\" is the result (0: correct) and the reply of the video processor.", "\"[send -1]\": the firmware could not send the command, because the channel to the video processor was not open.", "The log keeps 64 KB. When it is full, the iPod stops the record and counts the lost lines in the first line."],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "fw_memset0": "0x07ccd0",
+    "fw_strcpy": "0x07cd6c",
+    "fw_vsnprintf": "0x07b114",
+    "fw_snprintf": "0x07b240",
+    "vc_command": "0x287664",
+    "vc_send_continue": "0x0e935c",
+    "vc_reply_continue": "0x2872c4",
+    "fw_new": "0x25a974",
+    "file_open_rw": "0x08f3f8",
+    "file_write": "0x08f6f4",
+    "file_seek": "0x08f5c4",
+    "file_close": "0x08f184",
+    "fw_long_play_timer": "0x1d8570"
+  },
+  "hooks": [
+    { "kind": "b", "at": "0xe9358", "expect": "0xe92d4070", "to": "hook_vc_send" },
+    { "kind": "b", "at": "0x2872c0", "expect": "0xe92d4070", "to": "hook_vc_reply" },
+    { "kind": "bl", "at": "0x1d8260", "expect": "0xeb0000c2", "to": "hook_event" }
+  ]
+}

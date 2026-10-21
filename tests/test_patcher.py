@@ -131,6 +131,22 @@ def test_usb_host_probe_extended_area():
 
 
 @pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_video_log_hooks():
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    out, report = patcher.apply(osos, REPO / "patches/video-log", 0x736800)
+    assert report["code"][0] == "0x736800"                     # extended: after the end of osos
+    for kind, at, hook in (("b", 0xe9358, "hook_vc_send"), ("b", 0x2872c0, "hook_vc_reply"),
+                           ("bl", 0x1d8260, "hook_event")):
+        target = int(report["symbols"][hook], 16)
+        assert struct.unpack_from("<I", out, at)[0] == patcher.branch(kind, at, target)
+    # the stubs run the replaced push {r4-r6, lr} and continue after it
+    for stub, cont in (("vc_send_original", 0xe935c), ("vc_reply_original", 0x2872c4)):
+        a = int(report["symbols"][stub], 16)
+        assert struct.unpack_from("<I", out, a)[0] == 0xe92d4070
+        assert struct.unpack_from("<I", out, a + 4)[0] == patcher.branch("b", a + 4, cont)
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
 def test_cover_flow():
     osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
     out, report = patcher.apply(osos, REPO / "patches/cover-flow", 0x736800)

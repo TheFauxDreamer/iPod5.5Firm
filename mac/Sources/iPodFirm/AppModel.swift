@@ -99,6 +99,8 @@ final class AppModel: ObservableObject {
     @Published var thumbnailStatus: String?
     /// The decoded USB log of the probe (nil: not read).
     @Published var usbProbeLog: [USBProbeLog.Entry]?
+    /// The text of the video log (nil: not read; empty: the file has no log).
+    @Published var videoLog: String?
     /// The playlists of the connected iPod and their thumbnails (album-art patch).
     @Published var playlistArt: [MusicImport.PlaylistArt] = []
     /// True after a change to a playlist image that is not yet in the thumbnail file on the iPod.
@@ -715,6 +717,7 @@ final class AppModel: ObservableObject {
                 try w.data.write(to: url, options: .atomic)
             }
             if action.write.contains(where: { $0.path == Self.usbProbeLogFile }) { usbProbeLog = nil }
+            if action.write.contains(where: { $0.path == Self.videoLogFile }) { videoLog = nil }
             patchActionStatus[patch.spec.name] = "\(action.status ?? "\(action.title): complete.") (\(Date().formatted(date: .omitted, time: .shortened)))"
         } catch { fail("Cannot write the file on the iPod", error) }
     }
@@ -860,6 +863,21 @@ final class AppModel: ObservableObject {
             return
         }
         usbProbeLog = USBProbeLog.parse([UInt8](data)) ?? []
+    }
+
+    /// The log of the video-log patch. The action in its patch.json makes it empty; the patch writes it on the iPod.
+    static let videoLogFile = "iPod_Control/iTunes/iPodFirmVideoLog"
+
+    func readVideoLog() {
+        guard let volume = ipodMusicVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            return
+        }
+        guard let data = try? Data(contentsOf: volume.appendingPathComponent(Self.videoLogFile)) else {
+            alert = AlertInfo(title: "No video log", message: "The iPod has no video log. Click Clear the Video Log. Then do the test.")
+            return
+        }
+        videoLog = VideoLog.text([UInt8](data)) ?? ""
     }
 
     /// Read the playlists of the connected iPod and their images.

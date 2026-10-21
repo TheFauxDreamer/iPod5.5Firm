@@ -527,6 +527,9 @@ CAUTION: iPodFirm supports one osos per patch folder. The app downloads and uses
 | 0x946d8 | `shuffle-fixes` | `01005013 ??????da 0a70a0e1 ??????ea 080047e0 010080e2 ??????eb 072186e0 103092e5 001186e0 100091e5 103081e5 017047e2` |
 | 0x21f254 | `dark-mode`, `something-comforting`, `album-artists`, `shuffle-album-mix`, `up-next` | `050051e3 04005113 03005113 01005113 0000a013 1eff2fe1 f8402de9 0150a0e1 0010a0e3 0260a0e1 0040a0e1 00108de5 ??????ea` |
 | 0x1eb5b4 | `up-next` | `???????? 65050000 10402de9 0040a0e1 0200b0e1 1c009405 ??????eb 000050e3 0000a013 1080bd18 0400a0e1 ??????eb 0100a0e3` |
+| 0xe9358 | `video-log` | `616c7761 ???????? 69737375 ???????? 6e616d65 3d000000 70402de9 42df4de2 0160a0e1 0050a0e1 ??????eb ????9fe5 040094e5` |
+| 0x2872c0 | `video-log` | `00209de5 0240c1e7 7c80bde8 30782578 00000000 ???????? 70402de9 0060a0e1 0150a0e1 0040a0e3 041045e0 040086e0 ??????eb` |
+| 0x1d8260 | `usb-host-probe`, `video-log` | `0510a0e1 ??????eb 000050e3 ??????0a 0510a0e1 0400a0e1 ??????eb 040095e5 040050e3 07005013 05005013 0f005013 ??????1a` |
 | 0x9ee90 | Software version | `0040a0e1 0030a0e3 8000a0e3 00308de5 0030a0e1 08008de2 0110a0e3 3020a0e3 ??????eb 6420a0e3 24108de2 08008de2 ??????eb` |
 | 0x9ee70 | Software version | `0b0c80e2 d304d0e1 1eff2fe1 a00c90e5 510bd0e5 1eff2fe1 10402de9 62df4de2 0040a0e1 0030a0e3 8000a0e3 00308de5 0030a0e1` |
 

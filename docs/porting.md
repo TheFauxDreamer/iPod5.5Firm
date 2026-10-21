@@ -39,6 +39,7 @@ Thus, about 8,500 lines of the app are in Swift. The UI and the helper (about 3,
 | `FirmwareVersion.swift` | None |
 | `PatchLibrary.swift` (install and export of a `.ipodpatch` file) | None |
 | `USBProbeLog.swift` | None |
+| `VideoLog.swift` | None |
 | `HelperXPC.swift` | None. The Python tool runs with `sudo`. |
 
 The Python tool also has modules that the app does not have: `emucontrol.py` and `emudrive.py` for the emulator.
@@ -65,7 +66,7 @@ Use the Python package as the shared engine for Windows and Linux. It already ha
 
 Do these tasks in this sequence:
 
-1. Add the Python versions of the modules that only Swift has: `FirmwareVersion`, `PatchLibrary` and `USBProbeLog`.
+1. Add the Python versions of the modules that only Swift has: `FirmwareVersion`, `PatchLibrary`, `USBProbeLog` and `VideoLog`.
 2. Add cover art for MP3 files and other formats to `libimport.py`.
 3. Add device code for Linux and for Windows to `device.py`. Keep the checks in [The checks before a flash](safety.md#the-checks-before-a-flash).
 4. Write a UI that runs on the three systems, for example with PySide6 (Qt). Each feature must have a UI. A command-line tool alone is not sufficient.
