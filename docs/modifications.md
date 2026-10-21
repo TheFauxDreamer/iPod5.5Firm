@@ -24,7 +24,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [instant-save](#instant-save) | Code patch | Patches | 1 `b` | No |
 | [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | No |
 | [up-next](#up-next) | Code patch (extended) | Patches | 1 `bl`, 1 `b` and 2 vtable words (3 with `chain`), a Settings menu | Yes (version 0.4) |
-| [hw-eq-test](#hw-eq-test) | Code patch (test) | Patches | 2 `b` | Version 0.1: no change heard |
+| [hw-eq-test](#hw-eq-test) | Code patch (test) | Patches | 3 `b` (1 with `chain`) | Versions 0.1 and 0.2: no change heard |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
@@ -912,11 +912,11 @@ The Settings item has the key 0x60007e0f and the label 0x7e0b (`settings_items`,
 
 ## hw-eq-test
 
-**User interface.** Patches pane > Test > Hardware EQ Test, letter `e`, version 0.2. It shows only when Settings > Patches > Enable Test Patches is on. The option "Test Setting" selects Bass −12 dB (default), Bass +12 dB, Treble +12 dB or Flat. The option "EQ Path" selects bit 8 of R18: DAC (1, default) or ADC (0). The research is in [../re/custom-eq.md](../re/custom-eq.md#the-hardware-eq-of-the-codec).
+**User interface.** Patches pane > Test > Hardware EQ Test, letter `e`, version 0.3. It shows only when Settings > Patches > Enable Test Patches is on. The option "Test Setting" selects Bass −12 dB (default), Bass +12 dB, Treble +12 dB or Flat. The option "EQ Path" selects bit 8 of R18: DAC (1, default) or ADC (0). The research is in [../re/custom-eq.md](../re/custom-eq.md#the-hardware-eq-of-the-codec).
 
 **Effect.** The patch sets the 5-band EQ of the WM8758 codec. The firmware applies its own EQ in software and never writes these registers. The EQ of Settings > EQ does not change.
 
-**Load address.** `extended`. The compiled code and data are 509 bytes.
+**Load address.** `extended`. The compiled code and data are 1945 bytes.
 
 **Hooks.**
 
@@ -924,6 +924,7 @@ The Settings item has the key 0x60007e0f and the label 0x7e0b (`settings_items`,
 |---|---|---|---|
 | `b` | 0x265e54 | 0xe92d4070 | `hook_state`; wrapper `state_original` (`push {r4-r6, lr}`, then 0x265e58) |
 | `b` | 0x2840d8 | 0xe92d4010 | `hook_write` (since version 0.2); wrapper `write_original` (`push {r4, lr}`, then 0x2840dc). After each codec write of the firmware, the patch writes the EQ again. |
+| `b` | 0x21f254 | 0xe92d40f8 | `hook_lookup` (since version 0.3, `chain`: `lookup_next`). At a `Str` lookup, it writes the log if a counter changed. |
 
 **Runtime logic.**
 
@@ -933,7 +934,7 @@ The Settings item has the key 0x60007e0f and the label 0x7e0b (`settings_items`,
 
 **Limits.** Only the headphone and line output. USB-C audio does not use the codec. A boost of +12 dB can cause distortion at a high volume.
 
-**Test status.** Emulator (2026-10-21): version 0.1 wrote the 5 registers after the start of the codec (R18 = 0x120 for Bass +12 dB). Version 0.2 writes them after each of the firmware's codec writes (R18 = 0x138 for Bass −12 dB). Real iPod (2026-10-21), version 0.1 with Bass +12 dB: the flashed firmware had the hook and the option value 1, but the bass sounded the same. Version 0.2 tests the two possible causes: the meaning of bit 8 (option "EQ Path") and a new setup of the codec at playback.
+**Test status.** Emulator (2026-10-21): version 0.1 wrote the 5 registers after the start of the codec (R18 = 0x120 for Bass +12 dB). Version 0.2 writes them after each of the firmware's codec writes (R18 = 0x138 for Bass −12 dB). Real iPod (2026-10-21), version 0.1 with Bass +12 dB: the flashed firmware had the hook and the option value 1, but the bass sounded the same. Version 0.2 (DAC and ADC): no change heard. Version 0.3 writes a diagnostic line to `iPod_Control/iTunes/iPodFirmEQLog`: the hardware ID (0x265164), the codec type, the calls of the hooks and the count of EQ writes. Emulator: `hwid=000b0010 type=3 state=1 write=8 eq=9`.
 
 ## Storage type
 

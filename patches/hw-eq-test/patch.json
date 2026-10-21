@@ -5,8 +5,8 @@
   "symbol": "slider.vertical.3",
   "category": "test",
   "version_letter": "e",
-  "version": "0.2",
-  "size": 509,
+  "version": "0.3",
+  "size": 1945,
   "description": "A test patch. It sets the hardware EQ of the WM8758 audio chip to a fixed setting, so that you can hear if the hardware EQ operates. Select the setting in the option below.",
   "details": [
     "The firmware never uses the EQ of the audio chip. The patch writes it after each start of the audio chip, and again after each register write of the firmware (for example at a change of the volume).",
@@ -16,7 +16,8 @@
   "notes": [
     "This is a test version for research.",
     "The hardware EQ changes only the headphone and line output, not USB-C audio.",
-    "A boost of +12 dB can cause distortion at a high volume."
+    "A boost of +12 dB can cause distortion at a high volume.",
+    "Version 0.3 writes a diagnostic line to iPod_Control/iTunes/iPodFirmEQLog at each change of screen."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
@@ -25,12 +26,21 @@
   "load_address": "extended",
   "symbols": {
     "write_continue": "0x2840dc",
+    "hardware_id": "0x265164",
+    "fw_memset0": "0x07ccd0",
+    "fw_strcpy": "0x07cd6c",
+    "file_open_rw": "0x08f3f8",
+    "file_write": "0x08f6f4",
+    "file_close": "0x08f184",
+    "file_create": "0x0e468c",
+    "lookup_continue": "0x21f258",
     "codec_type": "0x2653a4",
     "state_continue": "0x265e58"
   },
   "hooks": [
     { "kind": "b", "at": "0x265e54", "expect": "0xe92d4070", "to": "hook_state" },
-    { "kind": "b", "at": "0x2840d8", "expect": "0xe92d4010", "to": "hook_write" }
+    { "kind": "b", "at": "0x2840d8", "expect": "0xe92d4010", "to": "hook_write" },
+    { "kind": "b", "at": "0x21f254", "expect": "0xe92d40f8", "to": "hook_lookup", "chain": "lookup_next", "chain_default": "lookup_original" }
   ],
   "options": [
     {
