@@ -129,11 +129,32 @@ The iTunesDB record of the video is correct: file type `M4V `, media type 2 (mov
 
 The files from iTunes have the `moov` at the start and chunks of approximately 0.5 s. The two copied files do not have this structure. This is a probable cause: the ARM code possibly reads the sample tables in a limited buffer, or it expects the `moov` at the start. It is not confirmed.
 
+### The second test: the MiMusic conversion (2026-10-21)
+
+The owner played `F06/UEPB.m4v` (the T2 clip, converted by MiMusic, `moov` at the start, 0.5 s chunks) with `video-log` 1.1. The result is the same as for Big Buck Bunny:
+
+- `state=play substate=running duration=60000`, and `elapsed` stays 0 for 10 s (58 equal status replies).
+- The video decoder shows 3 frames (`last_displayed_frame=3`, 10698 bytes, 640 × 352). The audio decoder decodes 1 frame (403 bytes).
+- No lost frames. `min_time_ahead=73`, `max_time_ahead=198` in both tests.
+- The line of the repeats is correct in version 1.1.
+
+Thus the structure of the file is not the cause. The hypothesis of the first test is not correct.
+
+The two files stop at the same point. The decoders are approximately 200 ms ahead of the clock, and the clock does not start. In a player, the audio output usually gives the clock. The audio decoder has its first frame, but the audio output does not take it. Thus the probable cause is the audio output of the video processor, or the clock that it needs. This is not confirmed.
+
+Other possible causes:
+
+- The setting Videos > Video Settings > TV Out. If TV Out is On, the picture goes to the TV output.
+- A fault in the hardware path from the video processor to the audio codec. The stock firmware also fails, and music plays correctly through the main processor.
+
 ## Next steps
 
-1. The owner runs the test with `F06/UEPB.m4v` (the MiMusic conversion, with the `moov` at the start and 0.5 s chunks). If this video plays, the cause is the structure of the copied files. Then MiMusic must convert or rewrite each video, also when the codec is correct.
-2. Compare the two logs. Look for these signs:
+1. Done: `F06/UEPB.m4v` also fails (refer to the second test).
+2. The owner examines Videos > Video Settings > TV Out. It must be Off.
+3. The owner plays a video with no audio track. If the picture moves, the cause is the audio output.
+4. If possible, the owner plays a video that Finder put on the iPod.
+5. Compare the logs. Look for these signs:
    - no `mp_selectplay` or `mp_play`: the ARM code refused the file before the player started (the iTunesDB record or the MP4 parser);
    - `paused=eof` or `substate=starting` after `mp_play`: the player started but got no data;
    - lost frames in `mp_get_stats video`: the decoder refused the stream (the codec, the profile or the size).
-3. If the log shows no command, find the MP4 parser (the code that uses the string at 0x232a60). Then add hooks in the parser and in the DRM check 0xe2d30.
+6. If the log shows no command, find the MP4 parser (the code that uses the string at 0x232a60). Then add hooks in the parser and in the DRM check 0xe2d30.
