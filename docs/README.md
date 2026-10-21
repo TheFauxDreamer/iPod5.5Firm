@@ -24,7 +24,7 @@ All data is for Apple RetailOS 1.3 (`iPod_25.1.3.ipsw`). Other firmware versions
 
 The research notes in [../re/](../re/) record the experiments in the sequence that they occurred. This reference collects their results. When the two do not agree, the source code is correct.
 
-The note [../re/games-plans.md](../re/games-plans.md) gives three plans for the iPod games. The note [../re/games-keys.md](../re/games-keys.md) gives the deep research of the file of the keys and of the program of the games. The note [../re/games-real-ipod.md](../re/games-real-ipod.md) gives the research with a real iPod: the signature of the manifest, the name of the folder of a game and the file of the keys. The note [../re/games.md](../re/games.md) gives the research that the plans use.
+The note [../re/games-plans.md](../re/games-plans.md) gives three plans for the iPod games. The note [../re/games-keys.md](../re/games-keys.md) gives the deep research of the file of the keys and of the program of the games. The note [../re/games-real-ipod.md](../re/games-real-ipod.md) gives the research with a real iPod: the signature of the manifest, the name of the folder of a game and the file of the keys. The note [../re/games-drm.md](../re/games-drm.md) gives the full research of the check of the DRM in the firmware. The note [../re/games.md](../re/games.md) gives the research that the plans use.
 
 ## Where to start
 

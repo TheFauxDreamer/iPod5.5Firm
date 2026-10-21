@@ -170,7 +170,8 @@ The function `FUN_001e797c` at 0x1e797c reads the key. It calls the method
 function `FUN_001c2b78` at 0x1c2b78 calls this function. The function
 `FUN_0024df00` at 0x24df00 calls 0x1c2b78 at 0x24df24. The function
 `FUN_001c2ca4` at 0x1c2ca4 reads the key of the game. The function
-`FUN_0024df00` calls 0x1c2ca4 at 0x24df44.
+`FUN_0024df00` calls 0x1c2ca4 at 0x24df44. The full research of the check is
+in [games-drm.md](games-drm.md).
 
 The function `FUN_001c2ca4` opens the key store with `FUN_001b0700` at
 0x1c2cc0. The function `FUN_001b0700` at 0x1b0700 opens the DRM library. The
@@ -256,8 +257,11 @@ when the game is valid. It does these steps.
 2. It reads the manifest. The function `FUN_00256610` at 0x256610 reads the
    file. The function `FUN_0011554c` at 0x11554c parses the file.
 3. It calls `FUN_0024df00` at 0x24df00. This function checks the files of the
-   game. It has 7 steps. It reads the list of the files, the signature, the
-   `iTunesMetaData` file, the resources and the other files.
+   game. It has 7 steps. It counts the steps that passed at the offset 0x244.
+   The step 2 is the step of the DRM. The other steps read the name of the
+   folder, the list of the platforms, the state of the iPod and the files of
+   the game. The full research of the check is in
+   [games-drm.md](games-drm.md).
 4. It calls `FUN_0024e37c` at 0x24e37c. This function checks the platform of
    the game.
 5. It calls `FUN_0024e074` at 0x24e074. This function makes the list of the
@@ -831,7 +835,11 @@ knowledge of the format of the key file.
   `GameData_RW` and `GameStats_WO` in iTunes.
 - The state 5 and 6 of the class. The firmware runs a game in these states.
 - The function that reads the file `IC-Info.sidb` in the firmware. The names
-  are at 0x69f6fc and 0x69f70c. The code that uses them is not found yet.
+  are at 0x69f6fc and 0x69f70c. The DRM library of the system of the iPod
+  reads the file. The research found no code in the osos that opens the file.
+- The function that decrypts the program of a game. The research of the check
+  of the DRM is in [games-drm.md](games-drm.md). The research did not find the
+  function that decrypts the program.
 - The way that the key is bound to the serial number. The string
   `SerialNumber` is at 0x176b24. The code that uses it for the key is not
   found yet.
