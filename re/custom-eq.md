@@ -81,6 +81,39 @@ Thus the firmware sends the preset to the audio engine and does not change the c
 
 The 5 filter numbers of an EQ preset thus go to state + 0x12fc. The code that reads this state, and the filter table, are not found yet. The callers of 0x2355ac (0x216460, 0x249390) are the next step. The emulator cannot help with a profile: with music and the profiler, it runs at approximately 0.07× and does not react (refer to [emulator.md](emulator.md#limits)).
 
+## The reader of the EQ state (research round 3, 21 October 2026)
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x249390 | The main loop of the task that reads the ring queue at state + 0x12b0 (0x2355ac). After each item, it reads the command byte state + 0x12f8 and acts only on the values 0, 1 and 3. It does not use the commands 0x1a and 0x1f. It calls code in IRAM (0x4001d724). | Static |
+| 0x24b544, 0x249fa4, 0x24b338, 0x249f48, 0x249220, 0x24b3c0, 0x24b440 | The other functions of the loop. None reads state + 0x12f8 or + 0x12fc. | Static |
+
+Only 0x249ab8 and 0x249390 use the offset 0x12f8 as a constant. The reader of the filter numbers probably uses another base pointer.
+
+### The IRAM code
+
+The FIQ vector jumps to 0x40000000 and the SWI vector to 0x40000008 (the word at osos 0xec). A dump of IRAM from the emulator after the start (`peek`, 0x30000 bytes) found these copies of osos:
+
+| IRAM | osos |
+|---|---|
+| 0x40000000–0x40000f00 | 0x71619c–0x71709c |
+| 0x40001800–0x40002500 | 0x719af8–0x71a7f8 |
+| 0x40008000–0x4000c600 | 0x71a804–0x71ee04 |
+| 0x40010000–0x40013a00 | 0x71ee84–0x722884 |
+| 0x40018800–0x40019400 | 0x72292c–0x72352c |
+| 0x4001c900–0x4001df00 | 0x7326cc–0x733ccc |
+
+The other IRAM areas were zero or data at that time (probably the code of a decoder is loaded there at playback). The 83 jumps `ldr pc, [pc, #-4]` in osos go to these areas. A search of the six areas found no `cmp` with 0x5f–0x61 and no `add` with 0x1200–0x1300. Thus the EQ code is probably in an area that is loaded at playback.
+
+### The hardware EQ of the codec
+
+The WM8758 codec has a 5-band EQ (registers 0x12–0x16: gain −12 to +12 dB, and a choice of 4 frequencies for each band). The I²C log of the emulator showed that the firmware writes only the registers 0x34–0x37, 0x31 and 0x01–0x03 at the start, and nothing at a change of the EQ preset. Thus the hardware EQ stays flat, and a patch can set it.
+
+| Method | Advantages | Disadvantages |
+|---|---|---|
+| Hardware EQ of the WM8758 | No CPU load. Free frequency and gain for 5 bands. No need for the filter table. The firmware does not write these registers. | Only the headphone and line output, not USB-C audio. A test on the real iPod is necessary for the register values and for the effect on the sound. |
+| The software EQ of Apple | Also for USB-C audio (probably). | Needs the filter table and the reader of the EQ state, which are not found. |
+
 ## Consequences for a patch
 
 - A custom EQ can be a new preset with up to 5 filter numbers. But only the 54 known filters (and possibly 55–96) exist. This gives no free choice of frequency and gain.
