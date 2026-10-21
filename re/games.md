@@ -32,6 +32,12 @@ computer. The app on macOS cannot read this file.
 The app must copy the game files and the key file to the iPod. The app must
 not make a key. The app must not copy the game files to the repository.
 
+The program of iTunes for macOS has the code that writes the file
+`IC-Info.sidb` to the iPod. The function at 0x100a05005 writes the file. The
+function at 0x1006f588f makes the two paths of the files of the keys. The
+program uses the names of the folders of the games with a capital letter. The
+firmware uses the names with small letters.
+
 ## The game files of the owner
 
 The owner has two folders with game files.
@@ -491,10 +497,16 @@ The owner has installed iTunes 11.4 for macOS with Retroactive. The program is
 in `/Applications/iTunes.app`. The program is a Mach-O file with two slices:
 i386 and x86_64. The slice for x86_64 is 28,227,312 bytes.
 
-The program has the library `CoreFP.framework`. The library is a Mach-O file
-with two slices. It is 27,883,520 bytes. The names of its functions are
-obfuscated. It has only 6 exported names. The names have no meaning. The
-library `CoreFP.icxs` is 5,219,472 bytes.
+The program has the library `CoreFP.framework`. The library in the program is
+a Mach-O file with two slices. It is 27,883,520 bytes. The names of its
+functions are obfuscated. It has 6 exported names. The names have no meaning.
+The library `CoreFP.icxs` is 5,219,472 bytes. The file `CoreFP.icxs` holds the
+certificates of FairPlay. The string `Apple FairPlay AAA Certification
+Authority` is in it.
+
+The program does not use the library of its own folder. The string
+`/System/Library/PrivateFrameworks/CoreFP.framework/CoreFP` is in the program.
+The program uses the library of the system.
 
 The program of iTunes has the strings of the games and of the keys. The
 research gives the address of each string in the slice for x86_64. The address
@@ -575,23 +587,115 @@ The function at 0x1005d454e and the function at 0x1005d5134 build the path.
 ### The code of the key file
 
 The program has the names of the key file of the iPod. The code uses them in
-five places.
+several places. Each place is in a function. The table gives the address of the
+name and the address of the function that uses it.
 
-| Address in the memory of the process | The name |
-|---|---|
-| 0x1006f5af8 | `IC-Info.sidb` |
-| 0x1006f6694 | `IC-Info.sidb` |
-| 0x1006f6873 | `IC-Info.sidb` |
-| 0x1006f69c8 | `IC-Info.sidb` |
-| 0x100a05256 | `IC-Info.sidb` |
-| 0x1006f5b40 | `IC-Info.sidd` |
-| 0x1006f69fa | `IC-Info.sidd` |
+| Address of the name | The name | The address of the function | The work of the function |
+|---|---|---|---|
+| 0x1006f5af8 | `IC-Info.sidb` | 0x1006f588f | The file of the keys and the file of the certificates. It makes the two paths and copies the two names into them. |
+| 0x1006f5b40 | `IC-Info.sidd` | 0x1006f588f | The same function. |
+| 0x1006f6694 | `IC-Info.sidb` | 0x1006f6614 | Reads the file of the keys of the iPod. |
+| 0x1006f6873 | `IC-Info.sidb` | 0x1006f67e8 | Reads the file of the keys and the file of the certificates. |
+| 0x1006f69c8 | `IC-Info.sidb` | 0x1006f67e8 | The same function. |
+| 0x1006f69fa | `IC-Info.sidd` | 0x1006f67e8 | The same function. |
+| 0x100a05256 | `IC-Info.sidb` | 0x100a05005 | Writes the file of the keys to the iPod. |
+| 0x100268098 | `SC Info.sidb` | 0x100267f00 | Makes the path of the file of the keys of the computer. |
+| 0x10059dfdb | `IC-Info.sidl` | 0x10059d70a | Reads the file of the list of the purchases. |
+| 0x10059e3e6 | `IC-Info.sidr` | 0x10059d70a | The same function. |
+| 0x1005b1600 | `IC-Info.sidl` | 0x1005b1425 | Writes the file of the list of the purchases. |
+| 0x1005b15c7 | `IC-Info.sidr` | 0x1005b1425 | The same function. |
 
 The function at 0x1006f5d08 builds the path of the file. The function at
-0x100ec0a00 writes the file. The function at 0x100268098 makes the path of the
-folder `SC Info` on the computer. The function at 0x10059dfdb and the function
-at 0x1005b1600 use the name `IC-Info.sidl`. The function at 0x10059e3e6 and
-the function at 0x1005b15c7 use the name `IC-Info.sidr`.
+0x100ec0a00 writes the file. The function at 0x1006f5c28 and the function at
+0x1006f5ca9 are in the function that makes the two paths.
+
+The function at 0x1006f588f does this.
+
+1. It calls 0x100268004 and 0x10026800d. These functions make an object.
+2. It calls 0x100003184 and 0x10003a355. These functions make the path of
+   the folder of the iPod.
+3. It calls 0x1006f5c28. This function makes the path of the file.
+4. It copies the name `IC-Info.sidb` into the path with 0x10000db7a and
+   0xfa857a (`_memcpy`).
+5. It copies the name `IC-Info.sidd` into the other path in the same way.
+
+### The code of the games
+
+The program has two functions that make the path of a folder of the games.
+Each function has a switch on a code of four letters. The code tells the kind
+of the folder.
+
+| Address of the function | Address of the name | The name of the folder |
+|---|---|---|
+| 0x1005d454e | 0x1005d4b8a | `Games_RO` |
+| 0x1005d454e | 0x1005d4bf5 | `GameData_RW` |
+| 0x1005d454e | 0x1005d4c2d | `GameStats_WO` |
+| 0x1005d4f7d | 0x1005d551b | `Games_RO` |
+| 0x1005d4f7d | 0x1005d5567 | `GameData_RW` |
+| 0x1005d4f7d | 0x1005d558f | `GameStats_WO` |
+
+The other codes of the switch are `dmag`, `emag`, `smag`, `mcil`, `ncil`,
+`muti` and `nuti`. The code `ltrc` is the code of the files of the library.
+The function at 0x1005d454e and the function at 0x1005d5134 build the path.
+
+The program has the list of the games of the library and the list of the games
+of the iPod.
+
+| Address of the name | The name | The address of the function |
+|---|---|---|
+| 0x1005a8ad4 | `iTunesGameIDs` | 0x1005a7985 |
+| 0x1005b0736 | `iTunesGameIDs` | 0x1005b033f |
+
+### The library `CoreFP.framework` of the system
+
+The system has the library `CoreFP.framework` in the folder
+`/System/Library/PrivateFrameworks/CoreFP.framework`. The file is 94,842,464
+bytes. It has 3 slices: x86_64, arm64e and arm64e.x1. The file
+`fairplayd` in the same folder is 37,689,264 bytes.
+
+The file `CoreFP.tbd` in the SDK gives the version and the names of the
+functions. The version is 6.8.1. The names are the same 8 names in every
+slice.
+
+| Name | The address in the slice for x86_64 | The address in the slice for arm64e |
+|---|---|---|
+| `_WIn9UJ86JKdV4dM` | 0x1326110 | 0xb814 |
+| `_X46O5IeS` | 0x1308f40 | 0xba74 |
+| `_YlCJ3lg` | 0x133f150 | 0xbf48 |
+| `_dku592fbFAj` | 0x142dd00 | 0xd568 |
+| `_fdjkDSAFjklaf2s` | 0x13a4d00 | 0xc6b0 |
+| `_lxpgvVMLd0S7uRl` | 0x1334bd0 | 0xd368 |
+| `_uvbOOqb28APZ` | 0x12eeee0 | 0xc8c0 |
+| `_wnnzAiOPdQe2` | 0x1329990 | 0xcb4c |
+
+The library in the program of iTunes has only 6 of these names. The library of
+the system has 8. The names `_uvbOOqb28APZ` and `_wnnzAiOPdQe2` are new.
+
+The 8 functions have the same first instructions. Each one has the same
+prologue. The prologue sets up a frame of 0x1010 bytes and calls the same
+function. The bodies are different. The code of the bodies is made hard to
+read. The research did not find the names of the files of the keys in the
+library. The library has no string of `SC Info` and no string of `IC-Info`.
+The library has the classes of the receipts of the purchases.
+
+| Class | Use |
+|---|---|
+| `FP_asn1ReceiptToken` | A receipt of a purchase. |
+| `FP_asn1Token` | The base of the tokens. |
+| `FP_asn1IntegerToken` | A number in a receipt. |
+| `FP_asn1OSToken` | A string in a receipt. |
+| `FP_asn1SequenceToken` | A list in a receipt. |
+| `FP_asn1SetToken` | A set in a receipt. |
+| `FP_ISPurchaseReceipt` | The receipt of a purchase of a game or of a song. |
+
+The library has the methods `getAdamID`, `getBundleID`, `getReceiptPath`,
+`getReceiptType`, `getOpaqueDSIDBuffer`, `isVPPLicensed` and `isRevoked`.
+The method `isVPPLicensed` tells if the purchase has a key.
+
+> The app must not use the library of CoreFP to make a key. The app must not
+> need the library. The app can copy the file of the keys from one iPod to
+> another iPod. The library of the system has the 8 names, so the app can
+> find the library at the time of the run, but the app does not need it.
 
 ### The result of the research of iTunes for macOS
 
@@ -601,26 +705,17 @@ The program of iTunes for macOS has the code that writes the file
 server of Apple.
 
 The program is for macOS. The app of the owner is for macOS. The app can use
-the same library. The app can call the same functions of the library
-`CoreFP.framework`. The app does not need to know the format of the key file.
-The app does not need to know the algorithm of the key.
+the same code. The app does not need to know the format of the key file. The
+app does not need to know the algorithm of the key. The app needs the file of
+the keys of an iPod that has the key.
 
-> The app must not ship the library of Apple. The app must not copy the
-> program of Apple. The app must ask the user for the path of iTunes, or the
-> app must find the path of iTunes itself, and it must load the library from
-> that path at the time of the run.
+> The app must not ship the code of Apple. The app must not copy the program
+> of Apple. The app must copy the file of the keys of the iPod, and it must
+> copy the game files of the owner.
 
-The library `CoreFP.framework` has 6 exported names. The names are obfuscated.
-The names are these.
-
-| Name | The address in the slice for x86_64 |
-|---|---|
-| `_WIn9UJ86JKdV4dM` | 0xb509e0 |
-| `_X46O5IeS` | 0x70c6f0 |
-| `_YlCJ3lg` | 0x9ba620 |
-| `_dku592fbFAj` | 0xaea8f0 |
-| `_fdjkDSAFjklaf2s` | 0xcc0010 |
-| `_lxpgvVMLd0S7uRl` | 0x5ad400 |
+The research of the 8 functions of the library `CoreFP.framework` is not
+needed for the app. The app copies the file. The research is only for the
+knowledge of the format of the key file.
 
 ## The open questions
 
@@ -641,9 +736,9 @@ The names are these.
 - The way that the key is bound to the serial number. The string
   `SerialNumber` is at 0x176b24. The code that uses it for the key is not
   found yet.
-- The six functions of the library `CoreFP.framework`. The names are
-  obfuscated. The app must know which function makes a key and which function
-  reads a key.
+- The six functions of the library `CoreFP.framework` in the program of iTunes.
+  The names are obfuscated. The app does not need them. The research is only
+  for the knowledge of the format of the key file.
 - The code of `iPodService.exe` and `CoreFP.dll` in iTunes 12.10.11.2 for
   Windows. The files are in the cabinet of the MSI. The next step is to
   extract them and to find the function that writes the file `IC-Info.sidb` to

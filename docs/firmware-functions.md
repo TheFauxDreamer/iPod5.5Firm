@@ -653,6 +653,25 @@ The file `iPod_Control\Device\SysInfo` is at 0xa275c. It holds the identity of t
 
 The name of the folder of the games is in the osos in small letters: `games_RO`, `gamedata_RW`, `gamestats_WO` and `gamedata_ShareRW`. The program of iTunes for macOS 11.4 uses the same folders with a capital letter: `Games_RO`, `GameData_RW` and `GameStats_WO`. The file system of the iPod is FAT and it keeps the case of the names.
 
+The program of iTunes for macOS 11.4 has the code that writes the file `IC-Info.sidb` to the iPod. The addresses are in the slice for x86_64 of the program.
+
+| Address in the memory of the process | The work |
+|---|---|
+| 0x1006f588f | Makes the paths of the file of the keys and the file of the certificates of the iPod. It copies the names `IC-Info.sidb` and `IC-Info.sidd`. |
+| 0x1006f5c28 | Makes the path of one file of the keys. |
+| 0x1006f5ca9 | Makes the path of one file of the keys. |
+| 0x1006f5d08 | Makes the path of the file. |
+| 0x1006f6614 | Reads the file of the keys of the iPod. |
+| 0x1006f67e8 | Reads the file of the keys and the file of the certificates of the iPod. |
+| 0x100a05005 | Writes the file of the keys to the iPod. |
+| 0x100267f00 | Makes the path of the file `SC Info.sidb` of the computer. |
+| 0x10059d70a | Reads the files `IC-Info.sidl` and `IC-Info.sidr` of the iPod. |
+| 0x1005b1425 | Writes the files `IC-Info.sidl` and `IC-Info.sidr` of the iPod. |
+| 0x1005d454e | Makes the path of a folder of the games. The code `ltrc` selects `Games_RO`, `GameData_RW` or `GameStats_WO`. |
+| 0x1005d4f7d | Makes the path of a folder of the games. |
+| 0x1005a7985 | The list of the games of the library. The name is `iTunesGameIDs`. |
+| 0x1005b033f | The list of the games of the library. The name is `iTunesGameIDs`. |
+
 ## Vtables and classes
 
 | Address | Content |
