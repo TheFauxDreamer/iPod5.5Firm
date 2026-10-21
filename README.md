@@ -210,7 +210,7 @@ The research of the games is in [re/games.md](re/games.md) and in the notes besi
 
 ## The firmware
 
-The note [re/retailos-decompile.md](re/retailos-decompile.md) gives the decompilation of the whole image `osos` of RetailOS 1.3. The research gives 14,411 functions. The C code and the index of the functions are in `~/Library/Application Support/iPodFirm/re/retailos-1.3-decompiled/`. The script [re/decompile-all.sh](re/decompile-all.sh) does the work again.
+The note [re/retailos-decompile.md](re/retailos-decompile.md) gives the decompilation of the whole image `osos` of RetailOS 1.3. The research gives 14,411 functions. The research also gives the map of the strings. The map names 380 functions and puts each function into a group. The C code, the index of the functions and the map of the strings are in `~/Library/Application Support/iPodFirm/re/retailos-1.3-decompiled/`. The script [re/decompile-all.sh](re/decompile-all.sh) does the work again. The script [re/decompile-with-strings.sh](re/decompile-with-strings.sh) does the work with the map of the strings.
 
 ## Other iPod models
 

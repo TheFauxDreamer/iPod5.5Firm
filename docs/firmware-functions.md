@@ -46,6 +46,10 @@ A typical sequence:
 | [DecompileAt.java](../re/ghidra-scripts/DecompileAt.java) | `re/ghidra-scripts/` | Writes the C code, the callers and the callees of the functions at the given addresses. If no function contains an address, it makes a function at the nearest `stmdb sp!, {..., lr}` before the address. |
 | [DecompileAll.java](../re/ghidra-scripts/DecompileAll.java) | `re/ghidra-scripts/` | Writes the C code of every function of the program to one file. The file has one block for each function. The block starts with a line that has the address and the name. |
 | [decompile-all.sh](../re/decompile-all.sh) | `re/` | Decompiles the whole image `osos` with REA and with Ghidra. It writes the C code and the index of the functions. |
+| [decompile-with-strings.sh](../re/decompile-with-strings.sh) | `re/` | Decompiles the whole image `osos` and makes the map of the strings. It gives the words that hold the address of a string the type of a pointer. The decompiler then names every string that a function uses. |
+| [DefineStringPointers.java](../re/ghidra-scripts/DefineStringPointers.java) | `re/ghidra-scripts/` | Gives the type of a pointer to every word of the image that holds the address of a string. |
+| [DecompileWithStrings.java](../re/ghidra-scripts/DecompileWithStrings.java) | `re/ghidra-scripts/` | Writes the C code of every function. The C code has the name of every string that the function uses. |
+| [make-string-map.py](../re/make-string-map.py) | `re/` | Makes the map of the strings from a file of decompiled C code and from the image. The map has the name and the group of each function. |
 | [make-function-index.py](../re/make-function-index.py) | `re/` | Makes the table of the functions from a file of decompiled C code. The table has the address, the name, the number of lines, the number of bytes and the number of calls of each function. |
 | [CallerTree.java](../re/ghidra-scripts/CallerTree.java) | `re/ghidra-scripts/` | Writes the caller tree of functions to a given depth. |
 | [SetArmOptions.java](../re/ghidra-scripts/SetArmOptions.java) | `re/ghidra-scripts/` | Pre-script. Turns on "ARM Aggressive Instruction Finder" for the first analysis. |
@@ -124,6 +128,30 @@ blocks. Refer to [../re/retailos-decompile.md](../re/retailos-decompile.md).
 > CAUTION: The image has no symbols. The names of the functions are `FUN_` and
 > the address. The C code of a function with many paths has the name
 > `extraout_r1` many times. The logic of the code is still correct.
+
+### The map of the strings
+
+The research of 22 October 2026 made the map of the strings of the image
+`osos`. The map gives the name of each function and the group of each
+function. The name comes from the strings that the function uses.
+
+| The item | The value |
+|---|---|
+| The functions of the image | 14,411 |
+| The functions with a string | 382 |
+| The functions with a name | 380 |
+| The different strings | 841 |
+| The groups | Files and storage 60. System and services 31. Tools and build 29. Music and audio 27. Video and photo 26. DRM and FairPlay 1. |
+| The files of the map | `~/Library/Application Support/iPodFirm/re/retailos-1.3-decompiled/` |
+
+The function `FUN_10175c74` uses 83 strings. These strings are the names of the
+atoms of the files of the DRM. The list has `AppleDRM`, `AppleLossless`,
+`AppleVideoDRM`, `FireWireGUID` and `FireWireVersion`. The note
+[../re/games-drm.md](../re/games-drm.md) says that the key of the DRM binds to
+the number of the device in the NOR. The map of the strings confirms this.
+
+Refer to [../re/retailos-decompile.md](../re/retailos-decompile.md) for the
+method, the limits and the whole table.
 
 ### Resources and strings
 

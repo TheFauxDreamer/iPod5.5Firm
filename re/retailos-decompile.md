@@ -208,17 +208,175 @@ read the manifest and the file `sinf` of the game.
 | The image `hibe` | The image is a copy of the memory. The analysis needs more memory than the machine has. The image holds no code of the firmware. |
 | The image `aupd` | The image is encrypted. The engine reads 1 function. The image holds no code that the engine can read. |
 | The image `rsrc` | The image is a file system. The engine reads 1 function. |
-| The names of the functions | The image has no symbols. The names are `FUN_` and the address. |
+| The names of the functions | The image has no symbols. The names `FUN_` and the address are the names of the image. The map of the strings gives 380 functions a name from their strings. |
 | The size of the code | The C code of a function with many paths has the name `extraout_r1` many times. The logic of the code is still correct. |
 | The functions of the library | The engine reads the functions of the library of C as external. The research skipped them. |
+
+## The map of the strings
+
+The research made the map of the strings. The map gives the name of each
+function and the group of each function. The name comes from the strings that
+the function uses.
+
+### The method of the map
+
+The decompiler does not give the text of a string. The decompiler gives the
+address of the string. The research found 3 ways that the firmware reaches a
+string.
+
+| The way | The description |
+|---|---|
+| The name of the decompiler | The decompiler gives a string a name. The name starts with `s_` and ends with the address of the string. The address gives the text in the image. |
+| The word of a literal pool | The firmware puts the number of a string in a word. The word is in a literal pool. The number is the id of a string in the table of the resources. The text comes from that table. |
+| The table of the resources | The table of the resources of the image holds the strings. Each string has a number. The research read the table with the reader of the project, `ipodfw.resources.read_strings`. |
+
+The first way gives 814 uses of a string. The second way gives 58 uses. The
+research used 382 functions of the 14,411 functions. The functions use 841
+different strings.
+
+> The research first used the second way without a check. The check found that
+> the way gives false results. The value -511 is the id of the string "This game
+> cannot be played." The value is also a mask of the bits in a formula of a
+> function of the video processor. The false result was the function
+> `FUN_1003a89c`. The research now accepts a word only if the code passes the
+> word to a call.
+
+### The groups of the functions
+
+The research put each function into a group. The group comes from the strings
+that the function uses. The table has the rules of the groups. The first rule
+that matches a string gives the group.
+
+| The group | The functions with a string |
+|---|---|
+| Files and storage | 60 |
+| System and services | 31 |
+| Tools and build | 29 |
+| Music and audio | 27 |
+| Video and photo | 26 |
+| DRM and FairPlay | 1 |
+| No string | 206 |
+
+The 14,029 other functions use no string that the research can find. These
+functions are the parts of the library of C, the parts of the driver of the
+hardware and the parts of the code that use no text.
+
+### The functions with a name
+
+The research named 380 functions. The name comes from the longest string that
+the function uses. The name has only the letters, the digits and the
+underscore. The file `osos-function-names.tsv` has the name of each function.
+
+The names show the parts of the firmware.
+
+| The address | The name | The group |
+|---|---|---|
+| `10093ea0` | `iPod_Control` | Files and storage |
+| `10093ee0` | `iPod_Control_Device` | Files and storage |
+| `1009400c` | `Photo_Database` | Video and photo |
+| `1009483c` | `TrackCacheReadTask` | Music and audio |
+| `100a25b4` | `iPod_Control_Device_SysInfo` | Files and storage |
+| `100b78b8` | `iPod_Control_Music` | Music and audio |
+| `100bbf1c` | `iPod_Control_Device_Preferences` | Files and storage |
+| `100c22b4` | `FAT12` | Files and storage |
+| `100d1434` | `APPLE_HFS` | Files and storage |
+| `100d3b44` | `t_graphicsManager` | System and services |
+| `100db0fc` | `iMABlockManagerThread` | System and services |
+| `100de9d8` | `ICAPTPCameraIOTask` | System and services |
+| `100e2aa4` | `Add_Interface_for_device_lx_VID_d_PID_d` | System and services |
+| `100ebd84` | `iPod_Control_iTunes_Play_Counts` | Music and audio |
+| `10148108` | `PowerManager` | System and services |
+| `10148ca4` | `RtcTaskClass` | System and services |
+| `10151568` | `TimerEventManager` | System and services |
+| `10155e7c` | `SearchHelperThread` | System and services |
+| `10158124` | `TcMemManagerThread` | System and services |
+| `1016b0b0` | `MP3ExampleTask` | Music and audio |
+| `10165164` | `VCUpdateTask` | System and services |
+| `10170fec` | `USBDeviceTask` | System and services |
+| `101d62d4` | `CIapIncomingProcessThread` | System and services |
+| `101d73e4` | `CIapOutgoingProcessThread` | System and services |
+| `101e804c` | `Now_Playing` | Music and audio |
+| `101fb7a4` | `FAT32` | Files and storage |
+| `1020be1c` | `StreamCacheReadTask` | System and services |
+| `102860e8` | `USBTaskTimeTask` | System and services |
+
+> The names of the threads show the tasks of the system. The tasks of the
+> video, the camera, the interface of the computer and the disk all have a
+> name in the code.
+
+### The function of the DRM
+
+The function `FUN_10175c74` uses 83 strings. These strings are the names of
+the atoms of the files of the DRM. The table has the most important atoms.
+
+| The atom | The meaning |
+|---|---|
+| `AppleDRMVersion` | The version of the DRM. |
+| `AppleDRM` | The file of the DRM. |
+| `AppleLossless` | The file of the lossless codec of Apple. |
+| `AppleVideoDRM` | The file of the DRM of the video. |
+| `FireWireGUID` | The number of the device. The DRM uses this number to make the key. |
+| `FireWireVersion` | The version of the interface of the computer. |
+| `FamilyID` | The group of the devices that share a key. |
+| `AlbumArt` | The picture of the album. |
+| `BuildID` | The number of the build. |
+| `ConnectedBus` | The bus of the device. |
+| `MaxTransferSpeed` | The most speed of the transfer. |
+
+> The note [games-drm.md](games-drm.md) says that the key of the DRM binds to
+> the number of the device in the NOR. The map of the strings confirms this.
+> The function `FUN_10175c74` has the name `FireWireGUID` next to the names of
+> the atoms of the DRM.
+
+### The table of the strings
+
+The file `osos-strings.tsv` has each string and the functions that use the
+string. The table has 841 rows. The file `osos-string-map.tsv` has the use of
+each string in each function. The file has 872 rows.
+
+The strings that the most functions use are the strings of the format.
+
+| The string | The functions | The use |
+|---|---|---|
+| `%02d:%02d:%02d.%03d` | 5 | The time of the log. |
+| `%s, %s %s` | 4 | The name of a file with the path. |
+| `STANDARD` | 4 | The state of a task. |
+| `configuration complete - numluns is %d` | 3 | The state of the disk. The text has a new line at the end. |
+| `Season %d` | 3 | The season of a show of the television. |
+| `Roll #%d` | 3 | The number of the photo. |
+| `Error inside %s` | 2 | The error of a part of the system. |
+
+### The files of the map
+
+The research writes the files of the map in the folder
+`~/Library/Application Support/iPodFirm/re/retailos-1.3-decompiled`. The
+folder is not in the repository. The folder holds the image of the firmware.
+
+| The file | The content |
+|---|---|
+| `osos-strings.c` | The C code of every function. The code has the name of every string. |
+| `osos-string-map.tsv` | Each function and each string that the function uses. |
+| `osos-function-names.tsv` | Each function with its name and its group. |
+| `osos-strings.tsv` | Each string and the functions that use the string. |
+| `string-pointers.tsv` | Each word that holds the address of a string. |
+
+### The limits of the map
+
+| The limit | The result |
+|---|---|
+| The number of the functions with a string | 382 of the 14,411 functions. The other functions use no text, or they reach the text in a way that the research did not find. |
+| The false results of the literal pool | The check of the call removes the false results. The check is a rule, not a proof. |
+| The strings of the other languages | The image has 25 blocks of the resources. Each block has the strings of one language. The map uses the main block. |
+| The names of the functions | The name comes from the longest string. The name is often not the name of the function. The name is a hint. |
+| The groups of the functions | The group comes from the strings. A function of the group "Files and storage" can work on the music. |
 
 ## The next steps
 
 | The step | The work |
 |---|---|
-| 1 | Give a name to each function of the table. The name must come from the strings that the function uses. The research can do this for the functions of the user interface. |
-| 2 | Make the groups of the functions. The groups are the parts of the firmware: the user interface, the file system, the DRM, the video processor and the music. |
-| 3 | Make the table of the strings with the functions that use each string. The table gives the map of the firmware. |
+| 1 | Use the map of the strings to name the functions of the user interface. The name of the function must come from the class and from the method of the object. |
+| 2 | Read the strings of the other languages. The map must have the string of every language. |
+| 3 | Make the map of the classes. The image has the tables of the methods. The table of each class gives the methods. |
 
 ## The sources of the research
 
@@ -227,6 +385,11 @@ read the manifest and the file `sinf` of the game.
 | The image `osos` at `~/Library/Application Support/iPodFirm/re/osos-1.3.bin` | The code of the firmware. |
 | The tool REA, the provider for Ghidra 12.1.4 | The analysis and the dossiers. |
 | The script [ghidra-scripts/DecompileAll.java](ghidra-scripts/DecompileAll.java) | The decompilation of every function. |
+| The script [ghidra-scripts/DefineStringPointers.java](ghidra-scripts/DefineStringPointers.java) | The type of the words that hold the address of a string. |
+| The script [ghidra-scripts/DecompileWithStrings.java](ghidra-scripts/DecompileWithStrings.java) | The decompilation of every function with the name of every string. |
 | The script [make-function-index.py](make-function-index.py) | The table of the functions. |
+| The script [make-string-map.py](make-string-map.py) | The map of the strings. |
+| The script [decompile-with-strings.sh](decompile-with-strings.sh) | The whole run of the map. |
+| The module `ipodfw.resources` of the project | The table of the resources of the image. |
 | The note [games-drm.md](games-drm.md) | The check of the DRM. The research of REA confirms it. |
 | The note [ghidra.md](ghidra.md) | The use of Ghidra in this project. |

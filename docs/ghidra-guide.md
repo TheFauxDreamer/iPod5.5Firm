@@ -113,9 +113,18 @@ The scripts are in [re/ghidra-scripts/](../re/ghidra-scripts/). The first argume
 | `FindBytes.java` | OUT PATTERN... | pattern, address, function, instruction | Where are these bytes? |
 | `ListVtable.java` | OUT ADDRESS [COUNT] | slot, offset, value, kind, function | Which methods does this class have? |
 | `MakeSignature.java` | OUT ADDRESS [BEFORE] [AFTER] | pattern, offset, matches, fixed | How do I find this code in another version? |
+| `DecompileAll.java` | OUT | C code of every function | What does the whole image do? |
+| `DefineStringPointers.java` | OUT | pointer address, string address, text | Which words hold the address of a string? |
+| `DecompileWithStrings.java` | OUT | C code of every function | Which string does each function use? |
 | `SetArmOptions.java` | — | — | Pre-script for the import. |
 
 [re/find-pattern.py](../re/find-pattern.py) finds a pattern in a raw file without Ghidra. It uses the same pattern format as `FindBytes.java`.
+
+### The scripts for the whole image
+
+The 3 scripts `DecompileAll.java`, `DefineStringPointers.java` and `DecompileWithStrings.java` work on the whole image. The script [re/decompile-all.sh](../re/decompile-all.sh) uses the first one. The script [re/decompile-with-strings.sh](../re/decompile-with-strings.sh) uses the last two. It also makes the map of the strings. Refer to the note [../re/retailos-decompile.md](../re/retailos-decompile.md).
+
+> The script `DefineStringPointers.java` gives the type of a pointer to every word of the image that holds the address of a string. The decompiler follows a pointer. The decompiler then names every string that a function uses. The name of the string has the text of the string and the address of the string. Without the script, the decompiler names only 794 strings of the 11,232 strings of the image.
 
 ### Pattern format
 
