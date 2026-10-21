@@ -592,10 +592,13 @@ Refer to [re/games.md](../re/games.md). The iPod reads the games from the folder
 | 0x24dca0 | (games, n): 1 if the game n is in the list. The count is at most 0x5b (91). | Static |
 | 0x24dce8 | (games): makes the list of the games. It reads the directory. | Static |
 | 0x24d918 | (games, type, n, value): makes one item of the list of the games. | Static |
-| 0x24df00 | (games, size): checks the files of the game. It has 7 steps. It counts the steps that passed at the offset 0x244. The step 2 is the step of the DRM. The step 2 is the call at 0x24df44 to 0x1c2ca4. | Static |
+| 0x24df00 | (games, size): checks the files of the game. It has 7 steps. It counts the steps that passed at the offset 0x244. The step 2 is the step of the account. The step 2 is the call at 0x24df44 to 0x1c2ca4. | Static |
 | 0x24e074 | (games): frees the resources of the steps that failed. It uses the counter at the offset 0x244. The switch is at 0x24e080. | Static |
-| 0x24e240 | (games): reads and checks one game. It returns 1 when the game is valid. It reads the manifest, calls 0x24df00, calls 0x24e37c and calls 0x24e074. | Static |
-| 0x24e37c | (games): checks the platform of the game. It reads the `Platforms` array. It returns 0 when the game is valid, 0xffffff01 when the platform is not on the iPod and 0xffffff02 when the platform has no executable. | Static |
+| 0x131874 | (game, folder, size, key, out): checks the DRM of the game. It has 6 checks. Each check that fails goes to 0x131b84. It reads the file `sinf` of the game and unwraps the key of the content. | Static, Emulator |
+| 0x1314ec | (game): reads the manifest of the game. It returns 0 when the manifest is good. | Static |
+| 0x1315e8 | (game): reads the file `sinf` of the game and checks it against the manifest. | Static |
+| 0x24e37c | (games): checks the platform of the game and the DRM of the game. It reads the `Platforms` array. It returns 0 when the game is valid, 0xffffff01 when the platform is not on the iPod and 0xffffff02 when the platform has no executable. The call of the check of the DRM is at 0x24e3c0. | Static |
+| 0x24e37c | (games): checks the platform of the game and the DRM of the game. It reads the `Platforms` array. It returns 0 when the game is valid, 0xffffff01 when the platform is not on the iPod and 0xffffff02 when the platform has no executable. The call of the check of the DRM is at 0x24e3c0. | Static |
 | 0x24e554 | (games): the loop of the scan. It calls 0x24d9f8, 0x24e66c, 0x24de30, 0x24e0dc, 0x24dde8, 0x24db38, 0x24e64c and 0x24dc24. | Static |
 | 0x24e66c | (games): checks the game and starts it with 0x1d32e0. It runs only in the state 3. | Static |
 | 0x24e718 | (games, ...): the task of the scan. It makes the list of the platforms and the list of the games. | Static |
@@ -632,7 +635,7 @@ Refer to [re/games.md](../re/games.md). The iPod reads the games from the folder
 | 0x11554c | Parses a property list. The function 0x24e240 calls it for the manifest. | Static |
 | 0x256610 | (path): reads a file. The function 0x24e240 calls it for the manifest. | Static |
 | 0x1222c4 | Reads a list of a key of the settings. | Static |
-| 0x131874 | (key): reads the value of a key of the settings. | Static |
+| 0x131bc8 | Makes the object of the manifest of a game. | Static |
 | 0x193470 | (settings, label): 1 if the main-menu item is on. | Static |
 
 The names of the folders of the games and of the keys:
@@ -682,7 +685,9 @@ The function `FUN_0024df00` at 0x24df00 checks the files of a game. The function
 | 6 | 0x24dfbc | The firmware reads the files of the game. | 2 |
 | 7 | 0x24dfe4 | The firmware reads the last file of the game. | 1 |
 
-The step 2 is the step of the DRM. The step 2 is one call of 3 instructions. The call is at 0x24df44. The call is to `FUN_001c2ca4` at 0x1c2ca4. The compare of the result is at 0x24df48. A patch that makes this call give the value 1 removes the check of the DRM. The function `FUN_0024e074` at 0x24e074 uses the counter. It frees the resources of the steps that failed. The switch of the function is at 0x24e080. The call of `FUN_0024df00` is at 0x24e2ac. The bytes at 0x24e2ac are `13ffffeb`, which is the instruction `bl 0x24df00`. Refer to [re/games-drm.md](../re/games-drm.md).
+The step 2 is the step of the account. The step 2 is one call of 3 instructions. The call is at 0x24df44. The call is to `FUN_001c2ca4` at 0x1c2ca4. The compare of the result is at 0x24df48. The function `FUN_0024e074` at 0x24e074 uses the counter. It frees the resources of the steps that failed. The switch of the function is at 0x24e080. The call of `FUN_0024df00` is at 0x24e2ac. The bytes at 0x24e2ac are `13ffffeb`, which is the instruction `bl 0x24df00`. Refer to [re/games-drm.md](../re/games-drm.md).
+
+The check of the DRM of the game is a second function. The function is `FUN_00131874` at 0x131874. The function has 6 checks. Each check that fails goes to the address 0x131b84. The 6 addresses of the branch are the 6 sites of the patch of the community. The research measured all 6 sites in the osos. The sites are (address removed), (address removed), (address removed), (address removed), (address removed) and (address removed). The call of the function is at 0x24e3c0. The function `FUN_0024e37c` at 0x24e37c makes the call. The function also checks the platform of the game. The function `FUN_0014ec` at 0x1314ec reads the manifest of the game. The function `FUN_0015e8` at 0x1315e8 reads the file `sinf` of the game.
 
 The function `FUN_001c2ca4` at 0x1c2ca4 opens the DRM library with `FUN_001b0700` at 0x1b0700. The call is at 0x1c2cc0. The function asks the library for the number of the keys with `FUN_001b08ec` at 0x1b08ec. The call is at 0x1c2ce0. The function makes a table of 8 bytes for each account. The table holds the number of the account and the size of the key. The function reads the key of the next account with `FUN_001b069c` at 0x1b069c. The call is at 0x1c2d28. The function returns 0 when the library gives no key.
 

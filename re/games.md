@@ -325,8 +325,15 @@ in the resource `TCmd` 9088 at 0x4b441c. The word `Games` is at these places.
 The words `Resume Game` at 0x4b14d8 and `Testing` at 0x4b14d0 are in the same
 area.
 
-The function `FUN_00131874` at 0x131874 reads the value of a key of the
-settings. The function `FUN_001222c4` at 0x1222c4 reads a list of a key of the
+The function `FUN_00131874` at 0x131874 checks the DRM of a game. The research
+of the emulator found the function with a dynamic diff. The research of this
+project first found the function with a search of the strings. The research of
+this project called it the reader of the settings. That name was wrong. The
+function reads the manifest of the game and the file `sinf` of the game. The
+function unwraps the key of the content. The full research is in
+[games-drm.md](games-drm.md).
+
+The function `FUN_001222c4` at 0x1222c4 reads a list of a key of the
 settings. The function `FUN_000deff4` at 0xdeff4 makes the path of a file of
 the `iPod_Control` folder.
 
