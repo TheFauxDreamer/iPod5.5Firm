@@ -23,6 +23,8 @@ All data is for Apple RetailOS 1.3 (`iPod_25.1.3.ipsw`). Other firmware versions
 
 The research notes in [../re/](../re/) record the experiments in the sequence that they occurred. This reference collects their results. When the two do not agree, the source code is correct.
 
+The note [../re/games-plans.md](../re/games-plans.md) gives three plans for the iPod games. The note [../re/games.md](../re/games.md) gives the research that the plans use.
+
 ## Where to start
 
 - To know if a flash is safe, read [safety.md](safety.md) first.

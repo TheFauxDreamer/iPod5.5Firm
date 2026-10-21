@@ -655,7 +655,21 @@ The name of the folder of the games is in the osos in small letters: `games_RO`,
 
 The app cannot make the file `IC-Info.sidb`. The key of a game depends on the number of the account and on the number of the iPod. The research measured the 116 files `sinf` of the owner. The files give the numbers of 12 accounts. The account (account 1) has 31 games. The account (account 2) has 11 games. The accounts (account 3), (account 4) and (account 5) have 3, 2 and 2 games. The other 7 accounts have 1 game each. The atom `priv` of the file `sinf` holds 440 bytes of data. Each file has its own data. The data is the copy of the first part of the file `sinf`, encrypted with a key that comes from the device. The app can read the number of the account. The app cannot change it, because the file `sinf` has a signature. The app cannot know the number of the iPod for an iPod that never had the key. The app can only copy the file `IC-Info.sidb` from an iPod that has the key. Refer to [re/games.md](../re/games.md).
 
+The manifest of a game has an array `Files`. The array has 2,528 entries in the 56 games of the owner. Each entry has a `Path`, a `Size` and a `Digest`. The `Digest` has 40 hexadecimal characters. The digest is not the SHA-1 of the file. The osos has the constants of SHA-1 at 0xa7448 and the constants of MD5 at 0xedc18. The algorithm of the digest is not known yet. The `PlatformID` is 1 in all 56 games. It is 2 in 49 games, 3 in 49 games and 4 in 11 games.
+
+The function `FUN_0024df00` at 0x24df00 checks the files of a game. The function has 7 steps. The step 2 is the step of the DRM. The step 3 reads the signature. The step 4 reads the file `iTunesMetaData`. The step 5 reads the digest. The step 6 checks the files of the manifest. The step 7 checks the last file. The function writes the number of the failed steps at the offset 0x244 of the object of the games. The function `FUN_0024e074` at 0x24e074 uses this number. It frees the resources of the steps that failed. The call of `FUN_0024df00` is at 0x24e2ac. The bytes at 0x24e2ac are `13ffffeb`, which is the instruction `bl 0x24df00`.
+
 The program of iTunes for macOS 11.4 has the code that writes the file `IC-Info.sidb` to the iPod. The addresses are in the slice for x86_64 of the program.
+
+The names of the files of the keys are next to each other in the program.
+
+| Address in the memory of the process | The name |
+|---|---|
+| 0x10135c3c3 | `IC-Info.sidb` |
+| 0x10135c3d0 | `IC-Info.sidd` |
+| 0x10135c3dd | `iEKInfo` |
+| 0x10135c3e5 | `iSCInfo2` |
+| 0x10135c3ee | `iSCInfo` |
 
 | Address in the memory of the process | The work |
 |---|---|
@@ -663,8 +677,8 @@ The program of iTunes for macOS 11.4 has the code that writes the file `IC-Info.
 | 0x1006f5c28 | Makes the path of one file of the keys. |
 | 0x1006f5ca9 | Makes the path of one file of the keys. |
 | 0x1006f5d08 | Makes the path of the file. |
-| 0x1006f6614 | Reads the file of the keys of the iPod. |
-| 0x1006f67e8 | Reads the file of the keys and the file of the certificates of the iPod. |
+| 0x1006f6614 | Reads the file of the keys of the iPod. It uses the names `IC-Info.sidb` and `iEKInfo`. |
+| 0x1006f67e8 | Reads the file of the keys and the file of the certificates of the iPod. It uses the names `IC-Info.sidb` and `iEKInfo`. |
 | 0x100a05005 | Writes the file of the keys to the iPod. |
 | 0x100267f00 | Makes the path of the file `SC Info.sidb` of the computer. |
 | 0x10059d70a | Reads the files `IC-Info.sidl` and `IC-Info.sidr` of the iPod. |
