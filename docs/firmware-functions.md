@@ -659,6 +659,27 @@ The manifest of a game has an array `Files`. The array has 2,528 entries in the 
 
 The function `FUN_0024df00` at 0x24df00 checks the files of a game. The function has 7 steps. The step 2 is the step of the DRM. The step 3 reads the signature. The step 4 reads the file `iTunesMetaData`. The step 5 reads the digest. The step 6 checks the files of the manifest. The step 7 checks the last file. The function writes the number of the failed steps at the offset 0x244 of the object of the games. The function `FUN_0024e074` at 0x24e074 uses this number. It frees the resources of the steps that failed. The call of `FUN_0024df00` is at 0x24e2ac. The bytes at 0x24e2ac are `13ffffeb`, which is the instruction `bl 0x24df00`.
 
+The research of the file of the keys gave more. The file `IC-Info.sidb` has no reader in the osos. The names `IC-Info.sidb` at 0x69f70c and `IC-Info.sidd` at 0x69f6fc stand alone. 44 bytes of zeros come before `IC-Info.sidd` and 16 bytes of zeros come after `IC-Info.sidb`. The research found no reference to the names in the code, in the literal pools or in the data area. The DRM library of the system of the iPod opens the file. The firmware only asks the library for the key of a number of an account.
+
+The key store of the firmware has this path. The function `FUN_001b0758` at 0x1b0758 makes the object of the list of the keys. The class is `eAppBlockMgr` (the name is at 0x1b085c, the vtable is at 0x676a18). The function `FUN_001b0700` at 0x1b0700 opens the DRM library. It takes the provider of the application object at 0x1081da18 + 0x1c. The function `FUN_001b0870` at 0x1b0870 fills the list of the keys. The function `FUN_001b08f0` at 0x1b08f0 searches the list of the keys. The function `FUN_001b069c` at 0x1b069c reads the key of the user ID.
+
+The node of the list has this layout.
+
+| The offset | The content |
+|---|---|
+| +0x00 | The pointer to the next node. |
+| +0x04 | The pointer to the account. |
+| +0x08 | The pointer to the key. |
+| +0x0c | The byte that says that the key was used. |
+
+The method of the vtable at the slot +0x38 is `FUN_001b0ab4` at 0x1b0ab4. It asks the DRM library for the keys. It uses the message number 0xf00.
+
+The firmware has no reader for the file `sinf` of a game. The function `FUN_000e2d30` at 0xe2d30 is the only reader of a file `sinf`. The function reads the video DRM. The constants are `p608` at 0xe3014, `sinf` at 0xe301c, `fnis` at 0xe3020 and `cpsa` at 0xe3024. The function has no atom for the account, the vector or the data of the key. The research found the names `priv`, `righ`, `schi` and `sign` only in the data of the languages of the menus. The research found no `iviv` and no `key ` in the osos. The array `Files` of the manifest has the program, but it has no file `sinf`, no file `Manifest.plist.p7b` and no file `iTunesMetaData`. The names `.sinf` at 0x678df0 and `Manifest.plist.p7b` at 0x678ddd are in the table at 0x69cf30, which has no reference in the code. Refer to [re/games-keys.md](../re/games-keys.md).
+
+The program of a game is encrypted. The research measured the entropy of the 56 programs of the owner. Every program has an entropy of 8.000. The research tried the zlib format at the first 64 offsets of each program. The research found no result. The key of the account is therefore used only for the check. A patch that removes the check does not decrypt the program.
+
+The four names of the folders of the games are in the data area. The function `FUN_000d9d30` at 0xd9d30 gives the name by the number. The function uses the table of the pointers at 0xd9d64. The names are `games_RO` at 0x2a9c3c, `gamedata_RW` at 0x2a9c48, `gamestats_WO` at 0x2a9c54 and `gamedata_ShareRW` at 0x2a9c64. The game runs in the task `eAppMotor` (the name is at 0x24e7fc). The function `FUN_0024e718` at 0x24e718 makes this task. The function `FUN_001d32e0` at 0x1d32e0 starts the game. It gives a message to the application object at the RAM address 0x1081da80.
+
 The program of iTunes for macOS 11.4 has the code that writes the file `IC-Info.sidb` to the iPod. The addresses are in the slice for x86_64 of the program.
 
 The names of the files of the keys are next to each other in the program.
