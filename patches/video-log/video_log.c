@@ -142,7 +142,9 @@ static void end_line(void)
 static void flush_repeats(void)
 {
     if (repeats && begin_line()) {
-        add_number("= the last command and reply %d more times", repeats);
+        add("= the last command and reply ", 32);
+        add_number("%d", repeats);
+        add(" more times", 16);
         end_line();
     }
     repeats = 0;
@@ -246,7 +248,7 @@ int hook_vc_reply(char *reply, int size)
 static void header(void)
 {
     unsigned n, i;
-    n = fw_snprintf(L, HEADER, "VL01 video-log 1.0 lines=%u lost=%u writes=%u", lines, lost, writes);
+    n = fw_snprintf(L, HEADER, "VL01 video-log 1.1 lines=%u lost=%u writes=%u", lines, lost, writes);
     if (n > HEADER - 1)
         n = HEADER - 1;
     for (i = n; i < HEADER - 1; i++)

@@ -25,7 +25,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | No |
 | [up-next](#up-next) | Code patch (extended) | Patches | 1 `bl`, 1 `b` and 2 vtable words (3 with `chain`), a Settings menu | Yes (version 0.4) |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08) |
-| [video-log](#video-log) | Code patch (test) | Patches | 2 `b` and 1 `bl` | No |
+| [video-log](#video-log) | Code patch (test) | Patches | 2 `b` and 1 `bl` | Yes, as a test (version 1.0) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
 | [Dark Mode switch](#dark-mode-switch) | Code and data | Patches > iPod Appearance | 1 `b` and 2 vtable words, a table and a menu | No |
@@ -571,11 +571,11 @@ The dispatch tables are RW data. The start code copies them to RAM with the chan
 
 ## video-log
 
-**User interface.** Patches pane > Video Log, letter `d`, version 1.0. It shows only when Settings > Patches > Enable Test Patches is on. "Clear the Video Log" writes an empty 65536-byte `iPod_Control/iTunes/iPodFirmVideoLog` on the connected iPod. The tool `video-log` gives the section "Video Log" with "Show Video Log" and "Copy Log" (`VideoLog` in [VideoLog.swift](../mac/Sources/IPodFWKit/VideoLog.swift)). The research is in [re/video-player.md](../re/video-player.md).
+**User interface.** Patches pane > Video Log, letter `d`, version 1.1. It shows only when Settings > Patches > Enable Test Patches is on. "Clear the Video Log" writes an empty 65536-byte `iPod_Control/iTunes/iPodFirmVideoLog` on the connected iPod. The tool `video-log` gives the section "Video Log" with "Show Video Log" and "Copy Log" (`VideoLog` in [VideoLog.swift](../mac/Sources/IPodFWKit/VideoLog.swift)). The research is in [re/video-player.md](../re/video-player.md).
 
 **Effect.** The iPod records each command that the firmware sends to the video processor, and each reply, in a 64 KB text buffer in RAM. A button or wheel event writes the buffer to the log file, at most one time each 5 s. If a command that starts with `mp_` came since the last write, the event first sends `mp_get_status`, `mp_get_stats video` and `mp_get_stats audio`. The hooks record these replies too.
 
-**Load address.** `extended`. The compiled code and data are 4816 bytes (version 1.0). The 64 KB buffer comes from the allocator 0x25a974 at the first command.
+**Load address.** `extended`. The compiled code and data are 5036 bytes (version 1.1). The 64 KB buffer comes from the allocator 0x25a974 at the first command.
 
 **Hooks.**
 
@@ -591,9 +591,9 @@ The dispatch tables are RW data. The start code copies them to RAM with the chan
 2. A command is recorded when its reply comes, or when the next command comes (0x2874f0 sends no reply). A command that the firmware could not send has `[send <result>]`.
 3. The same command with the same reply gives no new line. A line "= the last command and reply N more times" comes before the next different line.
 4. Only the UI task writes the file. The file must exist, because the file functions write only to an existing file.
-5. Log format: a 64-byte header line `VL01 video-log 1.0 lines=N lost=N writes=N`, then one line for each record, then zero bytes. When the buffer is full, the lines are lost and counted.
+5. Log format: a 64-byte header line `VL01 video-log 1.1 lines=N lost=N writes=N`, then one line for each record, then zero bytes. When the buffer is full, the lines are lost and counted.
 
-**Test status.** Emulator (2026-10-21): the iPod starts, and the main menu and the Videos menu operate. The log had `set_vll_dir /Resources/VideoCore/Library`, `display_control 0 freeze=0` and `display_control 0 model=2 power=-2`, all with `[send -1]`, because the emulator has no video processor. A button press wrote the log file. Real iPod: not tested.
+**Test status.** Emulator (2026-10-21): the iPod starts, and the main menu and the Videos menu operate. The log had `set_vll_dir /Resources/VideoCore/Library`, `display_control 0 freeze=0` and `display_control 0 model=2 power=-2`, all with `[send -1]`, because the emulator has no video processor. A button press wrote the log file. Real iPod, version 1.0 (2026-10-21), the video Big Buck Bunny from MiMusic: the log operated (41 lines). The player started (`mp_selectplay`, `state=play substate=running`), but `elapsed` stayed 0, and the decoders got only 249 bytes of video and one audio frame. Version 1.0 cut the line of the repeats after "= the last command and". Version 1.1 corrects this.
 
 ## usb-audio-out
 

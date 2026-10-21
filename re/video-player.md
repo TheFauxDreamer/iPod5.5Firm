@@ -92,9 +92,46 @@ The emulator has no video processor. With `video-log` 1.0, the start of the iPod
 - A button press wrote the log file (the header line had `writes=1`).
 - The main menu and the Videos menu operated.
 
+## Real iPod result (2026-10-21)
+
+The owner played the video Big Buck Bunny (`F05/SGDN.mp4`, from MiMusic, copied with no conversion) with `video-log` 1.0. The screen stayed black, with no audio. A part of the log:
+
+```text
+41.421 > load_application mplayer.vll
+41.421 < 0 task=1028
+41.422 > mp_setvol 0
+41.422 < 0 error=1 error_msg="Command not registered"
+41.586 > mp_selectplay passthru:0 0
+41.588 < 0 state=play substate=starting duration=unknown elapsed=0 ...      (mp_get_status)
+41.843 < 0 state=play substate=running duration=596459 elapsed=0 ...       (mp_get_status)
+42.439 < 0 state=play substate=running duration=596459 elapsed=0 ...       (repeated until 52.651)
+52.651 < 0 last_frame_time=4916 num_frame_buffers=4 ... total_bytes_decoded=249 ... last_displayed_frame=3 ... Disp param1=320 Disp param2=180
+52.653 < 0 last_frame_time=4885 num_frame_buffers=1 ... total_bytes_decoded=397 ... Disp num_bytes=397 Disp param1=1024
+```
+
+Results:
+
+- The channel to the video processor operates. `mplayer.vll` loads, and the player starts.
+- The player knows the length (596459 ms, the same as the `mvhd` of the file) and the picture size (320 × 180).
+- `elapsed` stays 0 for 11 s. The video decoder got only 249 bytes (approximately 3 frames). The audio decoder got only one AAC frame (397 bytes). No lost frames are counted.
+- Thus the player stops after the first samples, because the ARM code does not send more data. The video processor does not refuse the stream.
+- `mp_setvol 0` gives "Command not registered" also in the normal sequence. This is probably not the cause.
+
+The iTunesDB record of the video is correct: file type `M4V `, media type 2 (movie), length 596458 ms, sample count 28629984 (48 kHz), movie flag 1.
+
+### The structure of the video files on the iPod
+
+| File | Source | `ftyp` | `moov` | Chunks | Video | Audio |
+|---|---|---|---|---|---|---|
+| `F05/SGDN.mp4` (Big Buck Bunny) | Copied with no conversion | `isom`, `mp41` | After `mdat` (at the end) | 1 sample in each chunk: 14315 video and 27949 audio chunks | H.264 Baseline 1.3, 320 × 180, 24 fps, no `uuid` atom | AAC, 48 kHz |
+| `F04/FZLB.mp4` (Gundam prologue) | Copied with no conversion | `mp42` | At the end | Video: 1 sample in each chunk (34190) | H.264 Baseline 1.3, 320 × 176, `uuid` atom | AAC, 44.1 kHz |
+| `F06/UEPB.m4v` (T2 clip) | Converted by MiMusic | `M4V ` | At the start | 118 video and 119 audio chunks (approximately 0.5 s each) | H.264 Baseline 3.0, 640 × 352, `uuid` atom | AAC, 44.1 kHz |
+
+The files from iTunes have the `moov` at the start and chunks of approximately 0.5 s. The two copied files do not have this structure. This is a probable cause: the ARM code possibly reads the sample tables in a limited buffer, or it expects the `moov` at the start. It is not confirmed.
+
 ## Next steps
 
-1. The owner runs the test on the real iPod with a video from MiMusic. If possible, the owner also runs it with a video that Finder or iTunes put on the iPod.
+1. The owner runs the test with `F06/UEPB.m4v` (the MiMusic conversion, with the `moov` at the start and 0.5 s chunks). If this video plays, the cause is the structure of the copied files. Then MiMusic must convert or rewrite each video, also when the codec is correct.
 2. Compare the two logs. Look for these signs:
    - no `mp_selectplay` or `mp_play`: the ARM code refused the file before the player started (the iTunesDB record or the MP4 parser);
    - `paused=eof` or `substate=starting` after `mp_play`: the player started but got no data;

@@ -93,7 +93,7 @@ The table shows the status that the test notes record. For the full test record,
 | Something Comforting | m | An example patch. A Settings item plays a short song on the internal speaker of the iPod. | No |
 | USB-C Audio | u | Plays the music through USB-C headphones. Refer to [USB-C Audio](#usb-c-audio). | Yes (up to version 1.8) |
 | USB Host Probe | h | A test patch for research only. Refer to [USB Host Probe](#usb-host-probe). | Yes (up to version 1.27) |
-| Video Log | d | A test patch. It records the commands of the video player in a log file, so that you can find why a video does not play. | No |
+| Video Log | d | A test patch. It records the commands of the video player in a log file, so that you can find why a video does not play. | Yes (version 1.0) |
 
 ### The space for patches
 

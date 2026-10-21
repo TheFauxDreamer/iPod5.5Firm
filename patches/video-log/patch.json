@@ -35,12 +35,12 @@
     ]
   },
   "version_letter": "d",
-  "version": "1.0",
-  "size": 4816,
+  "version": "1.1",
+  "size": 5036,
   "description": "A test. It records each command that the firmware sends to the video processor (BCM2722), and each reply. Use the log to find why a video does not play.",
   "caution": "Do not install this patch together with USB Host Probe. The two patches use the same hook site.",
   "details": ["The iPod records the commands in RAM, for example load_application, mp_selectplay, mp_play and mp_get_status.", "After a video command, a button press also asks the video processor for its status and statistics.", "A button press writes the log to the disk, at most one time each 5 seconds.", "Click Show Video Log to see it."],
-  "notes": ["Each line starts with the time in seconds since the first command.", "\">\" is a command. \"<\" is the result (0: correct) and the reply of the video processor.", "\"[send -1]\": the firmware could not send the command, because the channel to the video processor was not open.", "The log keeps 64 KB. When it is full, the iPod stops the record and counts the lost lines in the first line."],
+  "notes": ["Each line starts with the time in seconds since the first command.", "\">\" is a command. \"<\" is the result (0: correct) and the reply of the video processor.", "\"[send -1]\": the firmware could not send the command, because the channel to the video processor was not open.", "Version 1.1 corrects the line of the repeats. Version 1.0 cut the line after \"= the last command and\".", "The log keeps 64 KB. When it is full, the iPod stops the record and counts the lost lines in the first line."],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
