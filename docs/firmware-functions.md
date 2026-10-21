@@ -590,6 +590,175 @@ Evidence for SpiderMonkey:
 
 The firmware does not contain JavaScript source text, or the names "SpiderMonkey" or "Mozilla".
 
+### The games
+
+Refer to [re/games.md](../re/games.md). The iPod reads the games from the folder `iPod_Control/games_RO`. The program of each game uses a FairPlay DRM. The key is in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The key is bound to the identity of the iPod. The research of the emulator measured that the key binds to the 8-byte FireWire GUID in the `sysinfo_t` block. The block is in the NOR flash.
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0xd9d30 | (n): the name of a games folder. 0 = `games_RO`, 1 = `gamedata_RW`, 2 = `gamestats_WO`, 3 = `gamedata_ShareRW`. The names are at 0x2a9c3c. | Static |
+| 0xdeff4 | (path, n, name, format): the full path of a games folder. The formats are `iPod_Control/%s/%s%s%s` at 0xdf0a8 and `iPod_Control/%s%s%s` at 0xdf094. | Static |
+| 0x24d88c | Makes the object of the games. The object is at 0x108711d4. | Static, Emulator |
+| 0x24d9f8 | (games): scans the folder of the games. It reads the directories. It sets the state of the scan to 3. | Static |
+| 0x24d7c0 | (games, path, game): makes the list of the games. It sets the state of the scan to 2. | Static |
+| 0x24dca0 | (games, n): 1 if the game n is in the list. The count is at most 0x5b (91). | Static |
+| 0x24dce8 | (games): makes the list of the games. It reads the directory. | Static |
+| 0x24d918 | (games, type, n, value): makes one item of the list of the games. | Static |
+| 0x24df00 | (games, size): checks the files of the game. It has 7 steps. It counts the steps that passed at the offset 0x244. The step 2 is the step of the account. The step 2 is the call at 0x24df44 to 0x1c2ca4. | Static |
+| 0x24e074 | (games): frees the resources of the steps that failed. It uses the counter at the offset 0x244. The switch is at 0x24e080. | Static |
+| 0x131874 | (game, folder, size, key, out): checks the DRM of the game. It has 6 checks. Each check that fails goes to 0x131b84. It reads the file `sinf` of the game and unwraps the key of the content. | Static, Emulator |
+| 0x1314ec | (game): reads the manifest of the game. It returns 0 when the manifest is good. | Static |
+| 0x1315e8 | (game): reads the file `sinf` of the game and checks it against the manifest. | Static |
+| 0x24e37c | (games): checks the platform of the game and the DRM of the game. It reads the `Platforms` array. It returns 0 when the game is valid, 0xffffff01 when the platform is not on the iPod and 0xffffff02 when the platform has no executable. The call of the check of the DRM is at 0x24e3c0. | Static |
+| 0x24e37c | (games): checks the platform of the game and the DRM of the game. It reads the `Platforms` array. It returns 0 when the game is valid, 0xffffff01 when the platform is not on the iPod and 0xffffff02 when the platform has no executable. The call of the check of the DRM is at 0x24e3c0. | Static |
+| 0x24e554 | (games): the loop of the scan. It calls 0x24d9f8, 0x24e66c, 0x24de30, 0x24e0dc, 0x24dde8, 0x24db38, 0x24e64c and 0x24dc24. | Static |
+| 0x24e66c | (games): checks the game and starts it with 0x1d32e0. It runs only in the state 3. | Static |
+| 0x24e718 | (games, ...): the task of the scan. It makes the list of the platforms and the list of the games. | Static |
+| 0x24d87c | The loop of the scan in a task. | Static |
+| 0x24e9c0 | Draws the screen of the games. | Emulator |
+| 0x24dc0c | (games, state): sets the state of the scan. It accepts the values 1 to 10. | Static |
+| 0x12e3cc | The handler of the screen of the games. It starts the scan. | Static |
+| 0x12dd80 | The handler of the screen of the games when it closes. | Static |
+| 0x1e797c | Reads the DRM key. It calls the method +0xa8 of the object of 0x193090 with 0x6055 and 0x6000. The call is at 0x192eb8. | Static |
+| 0x1c2b78 | (store): makes the object of the DRM key store. It calls 0x1e797c. The call is at 0x1c2b88. | Static |
+| 0x1c2ca4 | (store, size): reads the key of the game. It opens the DRM library with 0x1b0700. It makes a table of 8 bytes for each account. The table holds the number of the account and the size of the key. It returns 0 when the library gives no key. | Static |
+| 0x1c2aa4 | Opens the DRM library for the check. | Static |
+| 0x1c2ba8 | Shows the notification of the error of the DRM library. It uses the View 0x66000018. | Static |
+| 0x1c2f10 | Closes the DRM key store. | Static |
+| 0x1b0700 | Opens the DRM library. It sends the message to the provider at 0x1081da18 + 0x1c. | Static |
+| 0x1b069c | Reads the key of the user ID. It walks the list of the accounts. It sets the byte at the offset 0x0c of the node to 1. | Static |
+| 0x1b08f0 | Searches the list of the keys. | Static |
+| 0x1b08ec | Gives the number of the keys in the library. It is a branch to 0x19f998. | Static |
+| 0x1b09bc | Counts the accounts of the library that have no key that was used. | Static |
+| 0x19f998 | Gives the size of one key of the DRM library. It reads the field at the offset 0x3c. | Static |
+| 0x105a04 | (label): the bit of a main-menu item. The bit for the games is not known yet. | Static |
+| 0x1d32e0 | Starts a game. The function 0x24e66c calls it. | Static |
+| 0x24d99c | Starts the scan of the games. | Static |
+| 0x24db38 | (games): waits for the state 7. It sets the state to 9. | Static |
+| 0x24dc24 | (games): waits for the state 10. It sets the state to 1. | Static |
+| 0x24dde8 | (games): waits for the state 6 or 3. It sets the state to 7. | Static |
+| 0x24de30 | (games): waits for the state 4. It sets the state to 5 or 6. | Static |
+| 0x24e074 | (games): makes the list of the games. | Static |
+| 0x24e0dc | (games): the run of a game. | Static |
+| 0x24e1e8 | (games): waits for the state 1 or 10. | Static |
+| 0x24e4b4 | (games): waits for the state 1. | Static |
+| 0x24e5d0 | (games): waits for the state 3. | Static |
+| 0x24e64c | (games): a step of the loop of the scan. | Static |
+| 0x11554c | Parses a property list. The function 0x24e240 calls it for the manifest. | Static |
+| 0x256610 | (path): reads a file. The function 0x24e240 calls it for the manifest. | Static |
+| 0x1222c4 | Reads a list of a key of the settings. | Static |
+| 0x131bc8 | Makes the object of the manifest of a game. | Static |
+| 0x193470 | (settings, label): 1 if the main-menu item is on. | Static |
+
+The names of the folders of the games and of the keys:
+
+| Address | Name | Use |
+|---|---|---|
+| 0x2a9c3c | `games_RO` | The game files. |
+| 0x2a9c48 | `gamedata_RW` | The data of the games. |
+| 0x2a9c54 | `gamestats_WO` | The scores of the games. |
+| 0x2a9c64 | `gamedata_ShareRW` | The data of the games for the shared mode. |
+| 0x6788bb | `iPod_Control/games_RO/` | The path of the games. |
+| 0x6788d2 | `Manifest.plist` | The manifest of a game. |
+| 0x678ddd | `Manifest.plist.p7b` | The signature of the manifest. |
+| 0x678df0 | `.sinf` | The FairPlay file of the program. |
+| 0x69f6fc | `IC-Info.sidd` | The data of the key file. |
+| 0x69f70c | `IC-Info.sidb` | The key file. |
+
+The keys of the manifest of a game are at 0x678d49. The keys are `GUID`, `BuildID`, `PlatformID`, `PlatformVersion`, `ExecutablePath`, `LaunchingArtwork`, `DRM`, `DRMLevel`, `BuildIdentifier`, `Files`, `LocalizedNames` and `Platforms`.
+
+The string `SerialNumber` is at 0x176b24. The string `GamesPlatformID` is at 0x177100. The string `GamesPlatformVersion` is at 0x177110. The function `FUN_00175c74` at 0x175c74 gives these two values to the computer.
+
+The word `Games` is in the JavaScript of the user interface at 0x4b145c, 0x4b38f2, 0x4b3b44 and 0x4b4308. The word `Resume Game` is at 0x4b14d8.
+
+The file `iPod_Control\Device\SysInfo` is at 0xa275c. It holds the identity of the iPod. The keys of the purchases are in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The same keys are in the file `SC Info.sidb` of the computer with iTunes. That file is encrypted with a key that comes from the hardware of the computer. The atom `user` of the file `sinf` of a game holds the number of the account. It is (account 1) in all 7 games of the owner. Refer to [re/games.md](../re/games.md).
+
+The name of the folder of the games is in the osos in small letters: `games_RO`, `gamedata_RW`, `gamestats_WO` and `gamedata_ShareRW`. The program of iTunes for macOS 11.4 uses the same folders with a capital letter: `Games_RO`, `GameData_RW` and `GameStats_WO`. The file system of the iPod is FAT and it keeps the case of the names.
+
+The app cannot make the file `IC-Info.sidb`. The key of a game depends on the number of the account and on the number of the iPod. The research measured the 116 files `sinf` of the owner. The files give the numbers of 12 accounts. The account (account 1) has 31 games. The account (account 2) has 11 games. The accounts (account 3), (account 4) and (account 5) have 3, 2 and 2 games. The other 7 accounts have 1 game each. The atom `priv` of the file `sinf` holds 440 bytes of data. Each file has its own data. The data is the copy of the first part of the file `sinf`, encrypted with a key that comes from the device. The app can read the number of the account. The app cannot change it, because the file `sinf` has a signature. The app cannot know the number of the iPod for an iPod that never had the key. The app can only copy the file `IC-Info.sidb` from an iPod that has the key. Refer to [re/games.md](../re/games.md).
+
+The manifest of a game has an array `Files`. The array has 2,528 entries in the 56 games of the owner. Each entry has a `Path`, a `Size` and a `Digest`. The `Digest` has 40 hexadecimal characters. The digest is not the SHA-1 of the file. The osos has the constants of SHA-1 at 0xa7448 and the constants of MD5 at 0xedc18. The algorithm of the digest is not known yet. The `PlatformID` is 1 in all 56 games. It is 2 in 49 games, 3 in 49 games and 4 in 11 games.
+
+The function `FUN_000a7410` at 0xa7410 makes the state of SHA-1. The function copies 4 words from 0xa7448. The words are 0x67452301, 0xefcdab89, 0x98badcfe and 0x10325476. The function `FUN_000ed2f4` at 0xed2f4 uses the table of MD5 at 0xedc18. The osos has no AES for the program of a game. The osos has the S-box of AES at 0x78bfc and the inverse S-box at 0x78cfc. These are for the SSL library of the system. The program of a game is not decrypted by the osos.
+
+The file `Manifest.plist.p7b` of a game is a detached CMS signature of the file `Manifest.plist`. The file is 3,548 bytes in all 56 games. The signature uses RSA-1024 and SHA-1. The certificate of the signer is the certificate of the "Apple FairPlay Certificate Authority" (the issuer) with the subject `CN=FP.3333AF060622AF0001AF000001`. The content of the signature is absent. The signed attributes are empty. The signature covers the bytes of the file `Manifest.plist`. The research checked the 56 signatures with the tool `openssl dgst`. All 56 give `Verified OK`. A manifest that is changed gives `Verification Failure`. The app must not change the manifest of a game. Refer to [re/games-real-ipod.md](../re/games-real-ipod.md).
+
+The firmware finds a game by the name of its folder in the directory `games_RO`. The function `FUN_0024e240` at 0x24e240 calls `FUN_000deff4` at 0xdeff4 to build the path `iPod_Control/games_RO/<name>/Manifest.plist`. The function `FUN_000d9d30` at 0xd9d30 gives the name of the folder by the number. The number 0 gives `games_RO` at 0x2a9c3c. The function `FUN_0024dce8` at 0x24dce8 reads the directory. The function `FUN_0024d918` at 0x24d918 makes one item of the list of the games. The item has the name of the entry of the directory. The firmware does not compare the name of the folder with the GUID of the manifest. The 55 games of the owner have the same name for the two. The game `1B200` has the GUID `1b200` in the manifest and the name `1B200` for the folder.
+
+The function `FUN_0024df00` at 0x24df00 checks the files of a game. The function has 7 steps. The function counts the steps that passed. The counter is at the offset 0x244 of the object of the games. The counter starts at 7. The counter goes down by 1 for each step that passed. The counter keeps the value of the step that failed.
+
+| The step | The address of the call | The work | The counter when the step fails |
+|---|---|---|---|
+| 1 | 0x24df24 | The DRM library opens. The library reads the keys of the accounts. | 7 |
+| 2 | 0x24df44 | The library gives the key of the account of the game. | 6 |
+| 3 | 0x24df60 | The firmware reads the name of the folder of the game. | 5 |
+| 4 | 0x24df78 | The firmware makes the list of the platforms. | 4 |
+| 5 | 0x24df90 | The firmware reads the state of the iPod. | 3 |
+| 6 | 0x24dfbc | The firmware reads the files of the game. | 2 |
+| 7 | 0x24dfe4 | The firmware reads the last file of the game. | 1 |
+
+The step 2 is the step of the account. The step 2 is one call of 3 instructions. The call is at 0x24df44. The call is to `FUN_001c2ca4` at 0x1c2ca4. The compare of the result is at 0x24df48. The function `FUN_0024e074` at 0x24e074 uses the counter. It frees the resources of the steps that failed. The switch of the function is at 0x24e080. The call of `FUN_0024df00` is at 0x24e2ac. The bytes at 0x24e2ac are `13ffffeb`, which is the instruction `bl 0x24df00`. Refer to [re/games-drm.md](../re/games-drm.md).
+
+The check of the DRM of the game is a second function. The function is `FUN_00131874` at 0x131874. The function has 6 checks. Each check that fails goes to the address 0x131b84. The 6 addresses of the branch are the 6 sites of the patch of the community. The research measured all 6 sites in the osos. The sites are (address removed), (address removed), (address removed), (address removed), (address removed) and (address removed). The call of the function is at 0x24e3c0. The function `FUN_0024e37c` at 0x24e37c makes the call. The function also checks the platform of the game. The function `FUN_0014ec` at 0x1314ec reads the manifest of the game. The function `FUN_0015e8` at 0x1315e8 reads the file `sinf` of the game.
+
+The function `FUN_001c2ca4` at 0x1c2ca4 opens the DRM library with `FUN_001b0700` at 0x1b0700. The call is at 0x1c2cc0. The function asks the library for the number of the keys with `FUN_001b08ec` at 0x1b08ec. The call is at 0x1c2ce0. The function makes a table of 8 bytes for each account. The table holds the number of the account and the size of the key. The function reads the key of the next account with `FUN_001b069c` at 0x1b069c. The call is at 0x1c2d28. The function returns 0 when the library gives no key.
+
+The strings of the games are in the language blocks of the resources. The string -511 is "This game cannot be played." at 0x4b2b18. The string -512 is "Connect your iPod to iTunes and reinstall the game." at 0x4b2ae4. The string -508 is "This version of the game is no longer supported." at 0x4b2bbc. The string -509 is "Connect your iPod to iTunes and download the latest version." at 0x4b2b7c. The string -510 is "For additional information, please visit http://apple.com/support/ipod/" at 0x4b2b34. The string -513 is "This may be the result of a full iPod." at 0x4b2abc. The string -514 is "For more information, please visit http://apple.com/support/ipod/" at 0x4b2a78. The table of the ids of the English language is at 0x2aca34. The entry of the string -511 is at 0x2aca40.
+
+The function `FUN_0024df00` shows the View 0x66000006 when the counter is 7. The function shows the View 0x66000007 when the counter is any other value. The View 0x66000006 is at 0x4e5a18. The View 0x66000007 is at 0x4e5a74. The data of the ids is at 0x24e06c and at 0x24e070.
+
+The research of the file of the keys gave more. The file `IC-Info.sidb` has no reader in the osos. The names `IC-Info.sidb` at 0x69f70c and `IC-Info.sidd` at 0x69f6fc stand alone. 44 bytes of zeros come before `IC-Info.sidd` and 16 bytes of zeros come after `IC-Info.sidb`. The research found no reference to the names in the code, in the literal pools or in the data area. The DRM library of the system of the iPod opens the file. The firmware only asks the library for the key of a number of an account.
+
+The key store of the firmware has this path. The function `FUN_001b0758` at 0x1b0758 makes the object of the list of the keys. The class is `eAppBlockMgr` (the name is at 0x1b085c, the vtable is at 0x676a18). The function `FUN_001b0700` at 0x1b0700 opens the DRM library. It takes the provider of the application object at 0x1081da18 + 0x1c. The function `FUN_001b0870` at 0x1b0870 fills the list of the keys. The function `FUN_001b08f0` at 0x1b08f0 searches the list of the keys. The function `FUN_001b069c` at 0x1b069c reads the key of the user ID. The function `FUN_001e797c` at 0x1e797c asks the DRM library for the keys of the iPod. It calls the method at the slot +0xa8 of the object of the application. The call is at 0x192eb8. The numbers 0x6055 and 0x6000 are the channel of the keys and the channel of the DRM library.
+
+The node of the list has this layout.
+
+| The offset | The content |
+|---|---|
+| +0x00 | The pointer to the next node. |
+| +0x04 | The pointer to the account. |
+| +0x08 | The pointer to the key. |
+| +0x0c | The byte that says that the key was used. |
+
+The method of the vtable at the slot +0x38 is `FUN_001b0ab4` at 0x1b0ab4. It asks the DRM library for the keys. It uses the message number 0xf00.
+
+The firmware has no reader for the file `sinf` of a game. The function `FUN_000e2d30` at 0xe2d30 is the only reader of a file `sinf`. The function reads the video DRM. The constants are `p608` at 0xe3014, `sinf` at 0xe301c, `fnis` at 0xe3020 and `cpsa` at 0xe3024. The function has no atom for the account, the vector or the data of the key. The research found the names `priv`, `righ`, `schi` and `sign` only in the data of the languages of the menus. The research found no `iviv` and no `key ` in the osos. The array `Files` of the manifest has the program, but it has no file `sinf`, no file `Manifest.plist.p7b` and no file `iTunesMetaData`. The names `.sinf` at 0x678df0 and `Manifest.plist.p7b` at 0x678ddd are in the table at 0x69cf30, which has no reference in the code. The DRM check does not need the file `sinf` of the game. The DRM library of the system gives the keys of the accounts. The library knows the accounts. Refer to [re/games-keys.md](../re/games-keys.md) and to [re/games-drm.md](../re/games-drm.md).
+
+The program of a game is encrypted. The research measured the entropy of the 56 programs of the owner. Every program has an entropy of 8.000. The research tried the zlib format at the first 64 offsets of each program. The research found no result. The research did not find the function that decrypts the program. The research did not find the code that reads the file `sinf` of a game. The check of the DRM and the decryption of the program are separate. A patch that removes the check does not decrypt the program.
+
+The four names of the folders of the games are in the data area. The function `FUN_000d9d30` at 0xd9d30 gives the name by the number. The function uses the table of the pointers at 0xd9d64. The names are `games_RO` at 0x2a9c3c, `gamedata_RW` at 0x2a9c48, `gamestats_WO` at 0x2a9c54 and `gamedata_ShareRW` at 0x2a9c64. The game runs in the task `eAppMotor` (the name is at 0x24e7fc). The function `FUN_0024e718` at 0x24e718 makes this task. The function `FUN_001d32e0` at 0x1d32e0 starts the game. It gives a message to the application object at the RAM address 0x1081da80.
+
+The program of iTunes for macOS 11.4 has the code that writes the file `IC-Info.sidb` to the iPod. The addresses are in the slice for x86_64 of the program.
+
+The research with a real iPod gave the size of the account and the size of the file. The function at 0x1006f5799 makes the account of the file of the keys. The function sets the size of the account to 0x14 at 0x1006f57b9. The function makes 20 bytes. The number of the account in the file `sinf` of a game has 4 bytes. The two numbers are not the same size. The function at 0x1006f6614 reads the file of the keys of the iPod. The function makes a buffer of 0x690 bytes at 0x1006f6681. The function copies 0x220 bytes into the buffer at 0x1006f66cd. The 0x220 bytes are 544 bytes. The research does not know the layout of the bytes. The real iPod of the owner has no file `IC-Info.sidb`.
+
+The names of the files of the keys are next to each other in the program.
+
+| Address in the memory of the process | The name |
+|---|---|
+| 0x10135c3c3 | `IC-Info.sidb` |
+| 0x10135c3d0 | `IC-Info.sidd` |
+| 0x10135c3dd | `iEKInfo` |
+| 0x10135c3e5 | `iSCInfo2` |
+| 0x10135c3ee | `iSCInfo` |
+
+| Address in the memory of the process | The work |
+|---|---|
+| 0x1006f588f | Makes the paths of the file of the keys and the file of the certificates of the iPod. It copies the names `IC-Info.sidb` and `IC-Info.sidd`. |
+| 0x1006f5c28 | Makes the path of one file of the keys. |
+| 0x1006f5ca9 | Makes the path of one file of the keys. |
+| 0x1006f5d08 | Makes the path of the file. |
+| 0x1006f6614 | Reads the file of the keys of the iPod. It uses the names `IC-Info.sidb` and `iEKInfo`. |
+| 0x1006f67e8 | Reads the file of the keys and the file of the certificates of the iPod. It uses the names `IC-Info.sidb` and `iEKInfo`. |
+| 0x100a05005 | Writes the file of the keys to the iPod. |
+| 0x100267f00 | Makes the path of the file `SC Info.sidb` of the computer. |
+| 0x10059d70a | Reads the files `IC-Info.sidl` and `IC-Info.sidr` of the iPod. |
+| 0x1005b1425 | Writes the files `IC-Info.sidl` and `IC-Info.sidr` of the iPod. |
+| 0x1005d454e | Makes the path of a folder of the games. The code `ltrc` selects `Games_RO`, `GameData_RW` or `GameStats_WO`. |
+| 0x1005d4f7d | Makes the path of a folder of the games. |
+| 0x1005a7985 | The list of the games of the library. The name is `iTunesGameIDs`. |
+| 0x1005b033f | The list of the games of the library. The name is `iTunesGameIDs`. |
+
 ## Vtables and classes
 
 | Address | Content |
@@ -689,6 +858,7 @@ The physical address is 0x10000000 + the CPU address.
 | 0x1081ee48 | Audio route state. |
 | 0x108710dc | Device information object: +0x92 region code, +0x94 flags (bit 0 = EU volume limit). |
 | 0x1083de9c | SpiderMonkey opcode table. |
+| 0x108711d4 | The object of the games. The function 0x24d88c makes it. |
 | 0x10882c3c | The display server. |
 | 0x1081e0d4 | The layer index of the display (0). |
 | 0x1081ec54 | Byte: the damage callback binds the layer if it is not 0. |
