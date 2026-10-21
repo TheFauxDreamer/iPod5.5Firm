@@ -200,7 +200,7 @@ The app keeps the backups in `~/Library/Application Support/iPodFirm/Backups/`. 
 
 ## Uninstall
 
-To remove iPodFirm from the Mac, refer to [docs/uninstall.md](docs/uninstall.md). The guide names every file and folder that the app makes. It gives the command that removes each one. The guide has four levels: the app, the data of the app, the tools of the research and the sources.
+The guide that removes iPodFirm by hand is not in this repository. The guide names the files and the folders of one Mac, and the sizes of that Mac. The guide is a local document. The owner keeps it at `~/Documents/iPodFirm-local/uninstall.md`.
 
 CAUTION: The removal of the data of the app removes the backups of the iPod. Make a copy of `~/Library/Application Support/iPodFirm/Backups` before you remove the data.
 

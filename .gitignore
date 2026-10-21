@@ -11,6 +11,11 @@ backups/
 *.midi
 work/
 
+# The guide that removes iPodFirm by hand is a local document. It names the files
+# and the folders of one Mac. The rule comes after the rule "!docs/*.md" so that
+# the guide stays out of the repository.
+docs/uninstall.md
+
 # Python
 __pycache__/
 *.pyc
