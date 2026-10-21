@@ -772,6 +772,10 @@ The emulator found these element IDs (view + 0x1c):
 | 0x600060b7 | Sound Check |
 | 0x600060e0 | Dark Mode (added by iPodFirm) |
 | 0x600060e4 | Something Comforting (added by the `something-comforting` patch). Not a 32-bit word in osos 1.3. |
+| 0x600060e8 | USB-C Audio (added by the `usb-audio-out` patch) |
+| 0x600060ec | Date & Time > Daylight Saving (Menu 24604). `up-next` 0.4 used this key by mistake. |
+| 0x60007e05, 0x60007e09 | Settings > Main Menu rows of `album-artists` and `usb-audio-out` |
+| 0x60007e0f | Hold Select (added by the `up-next` patch, since version 0.5) |
 
 ## Open questions
 

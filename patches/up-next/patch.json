@@ -5,7 +5,7 @@
   "symbol": "text.line.first.and.arrowtriangle.forward",
   "category": "playback",
   "version_letter": "n",
-  "version": "0.4",
+  "version": "0.5",
   "size": 1807,
   "description": "Hold Select on a song, an album or an artist while music plays. Settings > Hold Select selects what the hold does: Play Next, Play Last, On-The-Go or Cover Flow.",
   "details": [
@@ -85,7 +85,7 @@
   ],
   "settings_items": [
     {
-      "key": "0x600060ec",
+      "key": "0x60007e0f",
       "label_id": "0x7e0b",
       "after_key": "0x60006088"
     }

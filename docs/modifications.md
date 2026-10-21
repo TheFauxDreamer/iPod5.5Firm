@@ -868,7 +868,7 @@ Real iPod (owner, 16 October 2026), version 1.2: after Settings > Main Menu > Al
 
 ## up-next
 
-**User interface.** Patches pane > Playback > Up Next, letter `n`, version 0.4. The option "Hold Select" gives the value that the iPod uses before the first change in Settings: Cover Flow (default), Play Next, Play Last or On-The-Go. Without the Cover Flow patch, the value Cover Flow acts as Play Next. On the iPod: Settings > Hold Select, after Clicker. Each push of Select moves to the next value. The research is in [../re/play-next.md](../re/play-next.md).
+**User interface.** Patches pane > Playback > Up Next, letter `n`, version 0.5. The option "Hold Select" gives the value that the iPod uses before the first change in Settings: Cover Flow (default), Play Next, Play Last or On-The-Go. Without the Cover Flow patch, the value Cover Flow acts as Play Next. On the iPod: Settings > Hold Select, after Clicker. Each push of Select moves to the next value. The research is in [../re/play-next.md](../re/play-next.md).
 
 **Effect.** Hold Select on a song, an album or an artist while music plays:
 
@@ -889,10 +889,10 @@ When no music plays, the hold adds the songs to On-The-Go. With Shuffle on, the 
 |---|---|---|---|
 | `bl` | 0x1eb5b4 | 0xebfb097f | `hook_add`: the call of "Add to On-The-Go" (0xadbb8) in its script function 0x1eb5a4. r0 is the browser, r1 the row (−1 for all rows). |
 | `b` | 0x21f254 | 0xe92d40f8 | `hook_lookup` (`chain`: `lookup_next`, `chain_default`: `lookup_original`): the strings 0x7e0b "Hold Select", 0x7e0c "Play Next", 0x7e0d "Play Last", 0x7e0e "Cover Flow" |
-| `word` | 0x66c94c | 0x00190b00 | `hook_settings_get` (`chain`: `get_next`): the value text of the key 0x60ec |
+| `word` | 0x66c94c | 0x00190b00 | `hook_settings_get` (`chain`: `get_next`): the value text of the key 0x7e0f |
 | `word` | 0x66c950 | 0x001919d8 | `hook_settings_set` (`chain`: `set_next`): the next value |
 
-The Settings item has the key 0x600060ec and the label 0x7e0b (`settings_items`, after Clicker). The value On-The-Go uses the firmware string 0x63cc.
+The Settings item has the key 0x60007e0f and the label 0x7e0b (`settings_items`, after Clicker). The value On-The-Go uses the firmware string 0x63cc.
 
 **Runtime logic of a hold.**
 

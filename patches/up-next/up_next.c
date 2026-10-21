@@ -67,7 +67,8 @@ void lookup_continue(void);                                               /* 0x2
 #define NOTIFY_BOOL 0x426f6f6cu                       /* 'Bool': the notice after a change */
 #define MODE_DATA   0x64617461u                       /* 'data' */
 #define TYPE_ITUN   0x6974756eu                       /* 'itun': the file type of OTGPlaylistInfo */
-#define KEY         0x60ecu                           /* the item (patch.json: 0x600060ec) */
+#define KEY         0x7e0fu                           /* the item (patch.json: 0x60007e0f). Not 0x60ec:
+                                                         that is the key of Date & Time > Daylight Saving */
 #define LABEL_ID    0x7e0b                            /* "Hold Select" */
 #define NEXT_ID     0x7e0c                            /* "Play Next" */
 #define LAST_ID     0x7e0d                            /* "Play Last" */

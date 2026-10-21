@@ -303,7 +303,7 @@ The install examination links a patch one time to find undefined symbols. It giv
 
 The patcher finds the menu through the resource table entry in the current image. Thus it also finds the menu that the Dark Mode build moved. It writes the new menu after the end of the image, aligned to 16 bytes, and changes the table entry. The patcher stops with an error if the menu already has the key, or if the menu has no template item. Two patches with the same key are a conflict.
 
-The settings object calls the "get" method (vtable 0x66c94c) for the value text and the "set" method (vtable 0x66c950) when the owner selects the item. A patch hooks both with `chain`. Use a key that is not in the firmware: 0x600060e0 is Dark Mode, and 0x600060e4 is `something-comforting`.
+The settings object calls the "get" method (vtable 0x66c94c) for the value text and the "set" method (vtable 0x66c950) when the owner selects the item. A patch hooks both with `chain`. Use a key that is not in the firmware: 0x600060e0 is Dark Mode, and 0x600060e4 is `something-comforting`. The low 16 bits of a firmware key are a string ID of the firmware, and the Menu resources use many of them (for example 0x600060ec is Daylight Saving in Menu 24604). Make sure that no Menu resource has the key. A key in the string range of the patch (0x60007exx) cannot collide with the firmware. Do not use a label ID of the patch as the key (refer to [Menu items](#menu-items)).
 
 ### Menu items
 

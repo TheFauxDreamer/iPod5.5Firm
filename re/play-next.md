@@ -127,6 +127,12 @@ Other observations of the owner: the row blinks after a hold, as for On-The-Go. 
 
 Test 2 is the first test of the shuffle-off path (0xd6614 order, `move_after`). Tests 2 and 3 also show that the player takes the next song from the changed list at the natural end of a song, not only after Next.
 
+## Version 0.5: the settings key (21 October 2026)
+
+Version 0.4 used the settings key 0x600060ec. A scan of the 40 Menu resources showed that the firmware uses this key for Date & Time > Daylight Saving Time (Menu 24604). Thus the hooks of the patch answered for that row too: the row showed the Hold Select value, and a push changed Hold Select. The owner's tests did not use that row.
+
+Version 0.5 uses the key 0x60007e0f, in the string range of the patch. Emulator test: Hold Select changes Play Next → Play Last, and Date & Time > Daylight Saving Time shows "Off", and a push changes it to "On". Hold Select keeps its value.
+
 ## The pop-up menu (research, 21 October 2026)
 
 A pop-up menu (Play Next, Play Last, Add to On-The-Go) needs a new screen. The firmware has 40 Menu resources, for example 24441 ("Cancel", "Confirm"). No ARM code refers to a Menu ID directly: the script (`TCmd` 9088) opens the menus through View resources. Native code asks for a screen with 0x1d2ee8 (event type 8 with an ID, through 0x13d6d4). The patcher can add items to a Menu, but it cannot add a Menu or a View. Thus the patch uses the Settings item "Hold Select" for now. The pop-up menu is a later step.
