@@ -57,6 +57,50 @@ The text fields (title, artist, album, composer, genre) are pool indexes at + 0x
 
 The patcher can add items to an existing menu, but it cannot add a new Menu resource. A Song Info list needs a new Menu resource, or a change to the patcher.
 
+## The screen (research, 21 October 2026)
+
+### The menu items of Settings
+
+In each item of a Menu resource, the word at + 0x0c is an action of the script, not a resource ID. Most values are between 0x3eae and 0x4de2. They do not occur in the script bytes as 16-bit constants. The word at + 0x10 is the Menu of a choice list.
+
+| Settings item | + 0x0c (action) | + 0x10 | + 0x1c (key) |
+|---|---|---|---|
+| About | 0x3ede | 0 | 0x00085ecc |
+| Main Menu | 0x3ee6 | 0 | 0x60006018 (0x6018 = 24600) |
+| Shuffle, Repeat, Sound Check, Clicker | 0x4382 | 0 | 0x6000 + an ID |
+| Backlight Timer | 0x4392 | 0xff76 (Menu −138) | 0x60006031 |
+| Audiobooks | 0x4396 | 0xff6e (Menu −146) | 0x60006044 |
+| Reset All Settings | 0x43c6 | 0xff63 (Menu −157) | 0x600060b1 |
+| Date & Time | 0x4356 | 0 | 0x600060ad |
+| Legal | 0x3ed6 | 0 | 0x00085ecc |
+
+Each of the 40 Menu resources has a View resource with the same ID.
+
+### Test: a copy of the Main Menu item
+
+A test patch (no code) added a copy of the Main Menu item to Settings, with the key 0x60006022 (Menu 24610) and the label −133. Result in the emulator: the new row opened Settings > Main Menu (title "Main Menu", the rows Music, Playlists, …), not Menu 24610. Thus the action 0x3ee6 always opens Menu 24600. The key does not select the menu.
+
+The row had no ">". The patcher (`insert_settings_item`) writes the label as a 32-bit word at + 0x18, so it also clears the position byte (+ 0x1a) and the byte + 0x1b (0x03 in the Main Menu item).
+
+### The lookups at the open of the screen
+
+`IPODFW_REGS_AT=0x21f254` during an open of Settings > Main Menu: approximately 1100 lookups, no lookup of a Menu, View or Type resource. The firmware makes the screens at the start. At each open, it looks up the title (`Str` −7, "Main Menu"), the label of each visible row (−160 "Music" … −168 "Genres") and the value texts ("On", "Off"). The values come from the "get" method of the settings object (0x66c94c), with the key of each row (0x6000 + the label of the main menu item).
+
+### A possible design
+
+The Song Info row in Settings is a copy of the Main Menu item. When the owner selects it, the patch sets a flag. While the flag is set:
+
+- the lookup hook gives "Song Info" for `Str` −7, and the field names (Bit Rate, Sample Rate, …) for the row labels −160 … −168 and the other labels of Menu 24600;
+- the "get" hook gives the values of the current song for the keys of Menu 24600;
+- the "set" hook ignores a push on a row;
+- the rows after the last field are hidden.
+
+A selection of the real Main Menu item clears the flag. Open points:
+
+- How to hide rows of Menu 24600 (item byte + 4, bit 0; 0x19ed58 operates on a screen and a menu).
+- The rows that other patches add to Menu 24600 (`album-artists`, `usb-audio-out`): their hooks answer before the Song Info hook if they come later in the build.
+- The script function of the action 0x3ede (About) is a second possibility. The About screen shows label and value rows.
+
 ## Open questions
 
 - Which Menu resource can open a list with values, as Settings > Main Menu (Menu 24600) does?
