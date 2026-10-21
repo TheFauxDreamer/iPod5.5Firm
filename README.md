@@ -197,6 +197,12 @@ After that, you can restore a backup in iPodFirm.
 
 The app keeps the backups in `~/Library/Application Support/iPodFirm/Backups/`. For more details, refer to [docs/safety.md](docs/safety.md).
 
+## Uninstall
+
+To remove iPodFirm from the Mac, refer to [docs/uninstall.md](docs/uninstall.md). The guide names every file and folder that the app makes. It gives the command that removes each one. The guide has four levels: the app, the data of the app, the tools of the research and the sources.
+
+CAUTION: The removal of the data of the app removes the backups of the iPod. Make a copy of `~/Library/Application Support/iPodFirm/Backups` before you remove the data.
+
 ## Other iPod models
 
 The author has only an iPod 5.5G. Thus the author does not add support for other models or for other firmware versions.
