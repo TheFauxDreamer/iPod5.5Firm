@@ -651,6 +651,8 @@ The word `Games` is in the JavaScript of the user interface at 0x4b145c, 0x4b38f
 
 The file `iPod_Control\Device\SysInfo` is at 0xa275c. It holds the identity of the iPod. The keys of the purchases are in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The same keys are in the file `SC Info.sidb` of the computer with iTunes. That file is encrypted with a key that comes from the hardware of the computer. The atom `user` of the file `sinf` of a game holds the number of the account. It is (account 1) in all 7 games of the owner. Refer to [re/games.md](../re/games.md).
 
+The name of the folder of the games is in the osos in small letters: `games_RO`, `gamedata_RW`, `gamestats_WO` and `gamedata_ShareRW`. The program of iTunes for macOS 11.4 uses the same folders with a capital letter: `Games_RO`, `GameData_RW` and `GameStats_WO`. The file system of the iPod is FAT and it keeps the case of the names.
+
 ## Vtables and classes
 
 | Address | Content |

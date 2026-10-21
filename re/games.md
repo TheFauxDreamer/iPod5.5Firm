@@ -335,11 +335,14 @@ The result of the test is this.
   screen of the games.
 
 The cause of the empty list is not known yet. The two possible causes are the
-name of the folder and the key of the DRM. The name of the folder in the
-firmware is `games_RO` in small letters. The project
-[ipodclickwheelgamespreservationproject](https://github.com/Olsro/ipodclickwheelgamespreservationproject)
-uses the name `Games_RO`. The test used the name `Games_RO`. The test with the
-name `games_RO` gave the same result. The list was empty in both tests.
+name of the folder and the key of the DRM. The research of iTunes for macOS
+gives a third cause. The program of iTunes uses the name `Games_RO` with a
+capital letter. The firmware uses the name `games_RO` with small letters. The
+file system of the iPod is FAT. It keeps the case of the names.
+
+The test used the name `Games_RO`. The test with the name `games_RO` gave the
+same result. The list was empty in both tests. The cause of the empty list is
+therefore not known for certain.
 
 The machine of the owner has no file `IC-Info.sidb`. The key of the DRM is
 therefore not present in the test.
@@ -459,27 +462,192 @@ can read it, because the iPod has the key. The app can copy the file from one
 iPod to another iPod. The key of the file is then the key of the first iPod,
 and the games do not run on the second iPod.
 
+## The names of the folders: the cause of the empty list
+
+The research of iTunes for macOS gives the answer to the empty list in the
+emulator. The names of the folders are in the program of iTunes. The program
+uses names with capital letters. The firmware uses names with small letters.
+
+| Name | iTunes 11.4 for macOS | Firmware 1.3 |
+|---|---|---|
+| The game files | `Games_RO` | `games_RO` |
+| The data of the games | `GameData_RW` | `gamedata_RW` |
+| The scores of the games | `GameStats_WO` | `gamestats_WO` |
+
+The file system of the iPod is FAT. FAT keeps the case of the names. The
+firmware asks for the folder `games_RO`. The test put the folder `Games_RO` on
+the volume. The firmware did not find the folder. The test with the name
+`games_RO` gave the same empty list, because the test of the names was not
+complete at that time.
+
+CAUTION: The test with the name `games_RO` gave the same result. The cause of
+the empty list is therefore not known for certain. The next test must check
+both names in one run and must read the state of the object of the games at
+0x108711d4 again.
+
+## The research of iTunes for macOS
+
+The owner has installed iTunes 11.4 for macOS with Retroactive. The program is
+in `/Applications/iTunes.app`. The program is a Mach-O file with two slices:
+i386 and x86_64. The slice for x86_64 is 28,227,312 bytes.
+
+The program has the library `CoreFP.framework`. The library is a Mach-O file
+with two slices. It is 27,883,520 bytes. The names of its functions are
+obfuscated. It has only 6 exported names. The names have no meaning. The
+library `CoreFP.icxs` is 5,219,472 bytes.
+
+The program of iTunes has the strings of the games and of the keys. The
+research gives the address of each string in the slice for x86_64. The address
+of the string is the address in the file. The file starts at the address
+0x100000000 in the memory of the process.
+
+| Address in the file | String | Use |
+|---|---|---|
+| 0x1355d0e | `Games_RO` | The folder of the game files. |
+| 0x1355d17 | `GameData_RW` | The folder of the data of the games. |
+| 0x1355d23 | `GameStats_WO` | The folder of the scores of the games. |
+| 0x135c37d | `%@.ipg` | The name of a file of a game. |
+| 0x135c3c3 | `IC-Info.sidb` | The file of the keys on the iPod. |
+| 0x135c3d0 | `IC-Info.sidd` | The file of the certificates on the iPod. |
+| 0x13471a9 | `iPod Games` | The name of the store of the games. |
+| 0x1347e8e | `IC-Info.sidl` | The file of the list of the purchases. |
+| 0x1347efa | `IC-Info.sidr` | The file of the response of the restore. |
+| 0x13688cb | `IC-Info.sidv` | The file of the version of the keys. |
+| 0x1342e98 | `SC Info` | The folder of the keys on the computer. |
+| 0x1342ea5 | `SC Info` | The folder of the keys on the computer. |
+
+The program has more strings for the games.
+
+| Address in the file | String | Use |
+|---|---|---|
+| 0x13446ce | `itunes-games` | The name of a preference. |
+| 0x13471b4 | `ContentsGameDB.xml` | The list of the games of the store. |
+| 0x1347c8b | `Games Platform ID` | The name of a key of the device information. |
+| 0x1347c9d | `Games Platform Version` | The name of a key of the device information. |
+| 0x1347fcc | `iTunesGameIDs` | The list of the games of the library. |
+| 0x13482d2 | `iPodGameIDs` | The list of the games of the iPod. |
+| 0x1355a8e | `supportsGames` | The name of a key of the device information. |
+| 0x1355c50 | `totalGames` | The number of the games. |
+| 0x1355c5b | `totalGameBytes` | The size of the games. |
+
+The program has the names of the DRM.
+
+| Name | Use |
+|---|---|
+| `DRMUserID` | The number of the account of the key. |
+| `DRMKeyID` | The number of the key. |
+| `DRMFamilyID` | The number of the family of the key. |
+| `DRMUserName` | The name of the account. |
+| `DRMDownloaderUserID` | The number of the account of the download. |
+| `DRMVersions` | The versions of the DRM. |
+| `FairPlayGUID` | The number of the FairPlay key. |
+| `FairPlayContext` | The context of the FairPlay key. |
+| `FairPlayCertificate` | The certificate of the FairPlay key. |
+| `FairPlayDeviceType` | The type of the device of the key. |
+| `drm-user-id` | The name of a key of the device information. |
+| `drm-key-id-1`, `drm-key-id-2` | The names of the keys of the device information. |
+| `drm-platform` | The name of a key of the device information. |
+| `drm-versions` | The name of a key of the device information. |
+
+The class `IPodGamesPrefsHandler` holds the preferences of the games. The
+library `iTunesLibrary.framework` has the strings `fairplay:sData` and
+`fairplay:sinf`. The library `AirTrafficHost.framework` has the certificate
+`Apple FairPlay AAA Certification Authority`.
+
+### The code of the games
+
+The program has a function that builds the path of a folder. The function has
+a switch on a code of four letters. The code tells the kind of the folder. The
+function calls another function with the code and the name of the folder.
+
+| Address in the memory of the process | Code | The name of the folder |
+|---|---|---|
+| 0x1005d4b8a | `ltrc` | `Games_RO` |
+| 0x1005d4bf5 | `ltrc` | `GameData_RW` |
+| 0x1005d4c2d | `ltrc` | `GameStats_WO` |
+| 0x1005d551b | `ltrc` | `Games_RO` |
+| 0x1005d5567 | `ltrc` | `GameStats_WO` |
+
+The other codes of the switch are `dmag`, `emag`, `smag`, `mcil`, `ncil`,
+`muti` and `nuti`. The code `ltrc` is the code of the files of the library.
+The function at 0x1005d454e and the function at 0x1005d5134 build the path.
+
+### The code of the key file
+
+The program has the names of the key file of the iPod. The code uses them in
+five places.
+
+| Address in the memory of the process | The name |
+|---|---|
+| 0x1006f5af8 | `IC-Info.sidb` |
+| 0x1006f6694 | `IC-Info.sidb` |
+| 0x1006f6873 | `IC-Info.sidb` |
+| 0x1006f69c8 | `IC-Info.sidb` |
+| 0x100a05256 | `IC-Info.sidb` |
+| 0x1006f5b40 | `IC-Info.sidd` |
+| 0x1006f69fa | `IC-Info.sidd` |
+
+The function at 0x1006f5d08 builds the path of the file. The function at
+0x100ec0a00 writes the file. The function at 0x100268098 makes the path of the
+folder `SC Info` on the computer. The function at 0x10059dfdb and the function
+at 0x1005b1600 use the name `IC-Info.sidl`. The function at 0x10059e3e6 and
+the function at 0x1005b15c7 use the name `IC-Info.sidr`.
+
+### The result of the research of iTunes for macOS
+
+The program of iTunes for macOS has the code that writes the file
+`IC-Info.sidb` to the iPod. The program reads the keys from the file
+`SC Info.sidb` of the computer. The program can also get the keys from the
+server of Apple.
+
+The program is for macOS. The app of the owner is for macOS. The app can use
+the same library. The app can call the same functions of the library
+`CoreFP.framework`. The app does not need to know the format of the key file.
+The app does not need to know the algorithm of the key.
+
+> The app must not ship the library of Apple. The app must not copy the
+> program of Apple. The app must ask the user for the path of iTunes, or the
+> app must find the path of iTunes itself, and it must load the library from
+> that path at the time of the run.
+
+The library `CoreFP.framework` has 6 exported names. The names are obfuscated.
+The names are these.
+
+| Name | The address in the slice for x86_64 |
+|---|---|
+| `_WIn9UJ86JKdV4dM` | 0xb509e0 |
+| `_X46O5IeS` | 0x70c6f0 |
+| `_YlCJ3lg` | 0x9ba620 |
+| `_dku592fbFAj` | 0xaea8f0 |
+| `_fdjkDSAFjklaf2s` | 0xcc0010 |
+| `_lxpgvVMLd0S7uRl` | 0x5ad400 |
+
 ## The open questions
 
 - The cause of the empty list in the emulator. The object of the games at
   0x108711d4 is empty. The function `FUN_0024d88c` at 0x24d88c did not make
-  the object.
+  the object. The test must check both names of the folder in one run.
 - The bit of the games in the main menu mask. The function `FUN_00105a04` at
   0x105a04 gives the bit of a menu item.
 - The check of the digest of the executable. The function `FUN_0024df00` at
   0x24df00 checks it. The app must know if the check uses the digest of the
   manifest or the signature of the file.
 - The list of the folders that the firmware makes on the iPod. The names are
-  `gamedata_RW`, `gamestats_WO` and `gamedata_ShareRW`.
+  `gamedata_RW`, `gamestats_WO` and `gamedata_ShareRW` in the firmware, and
+  `GameData_RW` and `GameStats_WO` in iTunes.
 - The state 5 and 6 of the class. The firmware runs a game in these states.
-- The function that reads the file `IC-Info.sidb`. The names are at 0x69f6fc
-  and 0x69f70c. The code that uses them is not found yet.
+- The function that reads the file `IC-Info.sidb` in the firmware. The names
+  are at 0x69f6fc and 0x69f70c. The code that uses them is not found yet.
 - The way that the key is bound to the serial number. The string
   `SerialNumber` is at 0x176b24. The code that uses it for the key is not
   found yet.
-- The code of `iPodService.exe` and `CoreFP.dll` in iTunes 12.10.11.2. The
-  files are in the cabinet of the MSI. The next step is to extract them and to
-  find the function that writes the file `IC-Info.sidb` to the iPod.
+- The six functions of the library `CoreFP.framework`. The names are
+  obfuscated. The app must know which function makes a key and which function
+  reads a key.
+- The code of `iPodService.exe` and `CoreFP.dll` in iTunes 12.10.11.2 for
+  Windows. The files are in the cabinet of the MSI. The next step is to
+  extract them and to find the function that writes the file `IC-Info.sidb` to
+  the iPod.
 
 ## The sources of the research
 
