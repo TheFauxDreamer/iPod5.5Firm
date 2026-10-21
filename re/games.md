@@ -44,8 +44,8 @@ The owner has two folders with game files.
 
 | Folder | Content | Size |
 |---|---|---|
-| `iPod Videos (5G and 5.5G only)` | 7 games. The `PlatformID` is 1. These games run on the iPod Video. | 218 MB |
-| `All iPods` | 44 games. The `PlatformID` is 123 or 1234. These games run on other iPods. | 2.9 GB |
+| `iPod Videos (5G and 5.5G only)` | 7 games. The `PlatformID` is 1. These games run on the iPod Video. | 226,585,496 bytes |
+| `All iPods` | 49 games. The `PlatformID` is 123 or 1234. These games run on other iPods. | 3,053,965,978 bytes |
 
 The `PlatformID` and the `PlatformVersion` in the manifest select the iPod. The
 iPod Video accepts the games with the `PlatformID` 1 only. The games with the
@@ -55,13 +55,13 @@ The games of the owner for the iPod Video are these.
 
 | Folder | Name | Size | Executable |
 |---|---|---|---|
-| 11002 | iQuiz | 31 MB | `Executables/TWA_1_1_2902110.bin` |
-| 12345 | Vortex | 30 MB | `Executables/vortex_1_1_2563290.bin` |
-| 12346 | Vortex Demo | 30 MB | `Executables/vortexTrial_1_1_2759749.bin` |
-| 14005 | Ms. PAC-MAN Demo | 6.7 MB | `Executables/mspacman_demo_1_1_2906666.bin` |
-| 1B200 | LOST | 43 MB | `Executables/Lost_1_1_2917525.bin` |
-| 1C300 | musika | 19 MB | `Executables/molly_1_1_3028618.bin` |
-| 50514 | Royal Solitaire | 57 MB | `Executables/Solitaire_1_1_2703086.bin` |
+| 11002 | iQuiz | 32,137,927 bytes | `Executables/TWA_1_1_2902110.bin` |
+| 12345 | Vortex | 31,454,730 bytes | `Executables/vortex_1_1_2563290.bin` |
+| 12346 | Vortex Demo | 31,542,553 bytes | `Executables/vortexTrial_1_1_2759749.bin` |
+| 14005 | Ms. PAC-MAN Demo | 6,901,567 bytes | `Executables/mspacman_demo_1_1_2906666.bin` |
+| 1B200 | LOST | 44,679,334 bytes | `Executables/Lost_1_1_2917525.bin` |
+| 1C300 | musika | 19,912,859 bytes | `Executables/molly_1_1_3028618.bin` |
+| 50514 | Royal Solitaire | 59,948,330 bytes | `Executables/Solitaire_1_1_2703086.bin` |
 
 The folder name of a game is the GUID of the game. The GUID is the same as the
 name of the folder.
@@ -133,17 +133,21 @@ entropy. It is not ARM code. The file `Manifest.plist` and the file
 
 Each game has a file with the name of the program and the suffix `.sinf`. The
 file holds the FairPlay atoms. The file of the game `1C300` has these atoms.
+The research measured the file of the game `11002`. The table gives the size
+of each atom. The size includes the 8 bytes of the header of the atom.
 
 | Atom | Size | Content |
 |---|---|---|
 | `sinf` | 1032 | The whole file. |
-| `frma` | 12 | The name of the program. |
-| `schm` | 20 | The scheme `itun`. |
+| `frma` | 12 | The name of the program. It is `game` in 73 of the 116 files. It is 4 zero bytes in the other 43 files. |
+| `schm` | 20 | The scheme `itun`. All 116 files of the owner have this scheme. |
 | `schi` | 856 | The child atoms. |
-| `user` | 0x0c | The user ID. It is (account 1) in all 7 games. |
-| `key ` | 12 | The size of the key. |
-| `iviv` | 24 | The initialisation vector. It is the same in all 7 games. |
-| `name` | 264 | The name of the game. |
+| `user` | 12 | The user ID. It is (account 1) in all 7 games of the iPod Video. |
+| `key ` | 12 | The size of the key. It is 4 in all the files. |
+| `iviv` | 24 | The initialisation vector. It is the same in all 7 games of the iPod Video. |
+| `righ` | 80 | The rights of the game. It holds the fields `veID`, `plat`, `aver`, `tran` and `medi`. |
+| `name` | 264 | The name of the game. It is `Name A` in the game `11002`. |
+| `priv` | 448 | The data of the key. It is 440 bytes of data. |
 
 The user ID is the same in all 7 games of the owner. The initialisation vector
 is the same in all 7 games. The key is not in the `sinf` file. The key is in
@@ -422,7 +426,9 @@ The research gives two parts.
    | `user` | 12 | The number of the account: (account 1). |
    | `key ` | 12 | The size of the key. |
    | `iviv` | 24 | The vector of AES. It is the same in all 7 games. |
+   | `righ` | 80 | The rights of the game. |
    | `name` | 264 | The name of the game. |
+   | `priv` | 448 | The data of the key. |
 
    The project
    [vnc0/fairplay-scinfo](https://github.com/vnc0/fairplay-scinfo) describes
@@ -696,6 +702,103 @@ The method `isVPPLicensed` tells if the purchase has a key.
 > need the library. The app can copy the file of the keys from one iPod to
 > another iPod. The library of the system has the 8 names, so the app can
 > find the library at the time of the run, but the app does not need it.
+
+### Can the app make the key file?
+
+The answer is no. The app cannot make the key file. The key is not a file that
+the app can write. The key is a value that only the device can give.
+
+The research gives the reason in three parts.
+
+#### The key depends on the number of the account
+
+The atom `user` of the file `sinf` holds the number of the account. The
+research measured the 116 files of the owner. The files give the numbers of 12
+accounts.
+
+| The number of the account | The number of the games |
+|---|---|
+| (account 1) | 31 |
+| (account 2) | 11 |
+| (account 3) | 3 |
+| (account 4) | 2 |
+| (account 5) | 2 |
+| (account 6), (account 7), (account 8), (account 9), (account 10), (account 11), (account 12) | 1 each |
+
+The games of one account have the same number. The games of different
+accounts have different numbers. The number is the number of the account of the
+purchase. The number is in the file `sinf` of the game. It is not a secret.
+
+#### The key depends on the number of the iPod
+
+The file `sinf` has an atom `priv`. The atom holds 440 bytes of data. The
+research measured the data of all 116 files. Each file has its own data. There
+are 116 different data blocks. The project
+[FairFree](https://github.com/roothide/FairFree) says that the data of the
+atom `priv` is the copy of the first part of the file `sinf`, and that the copy
+is encrypted with a key that comes from the device.
+
+The firmware of the iPod reads the file `sinf` of the game. The function
+`FUN_000e2d30` at 0xe2d30 reads the atoms of the file. The constant at
+0xe301c is `sinf`. The constant at 0xe3024 is `cpsa`, the atom `asdt`. The
+function `FUN_00084f18` at 0x84f18 reads the atom `asdt`. The atom `asdt`
+holds the dates of the account of the key.
+
+The firmware has the function `FUN_001e797c` at 0x1e797c that reads the key.
+It calls the method +0xa8 of the object of 0x193090 with the values 0x6055 and
+0x6000. The object of 0x193090 is the manager of the device. The firmware
+takes the number of the device from the manager of the device. The string
+`SerialNumber` is at 0x176b24. The function `FUN_00175c74` at 0x175c74 gives
+the number of the device to the computer.
+
+The function `FUN_001c2ca4` at 0x1c2ca4 reads the key of the game. It calls
+`FUN_001b0700` at 0x1c2cc0. The function `FUN_001b0700` at 0x1b0700 opens the
+DRM library. The function `FUN_001b069c` at 0x1b069c reads the key of the user
+ID. The function `FUN_001b08f0` at 0x1b08f0 searches the list of the keys. The
+list of the keys is in the file `IC-Info.sidb` of the iPod.
+
+The key of the game therefore depends on two things.
+
+1. The number of the account. This number is in the file `sinf` of the game.
+   The app can read it. The app cannot change it, because the file `sinf` has a
+   signature.
+2. The number of the iPod. The key of the game is bound to the number of the
+   iPod. The app cannot know this number for an iPod that never had the key.
+
+#### The file of the keys is unique to the iPod
+
+The key file of the iPod holds the key of each account that made a purchase.
+The key of an account in the file is the key of that account for that iPod. The
+project [ipodclickwheelgamespreservationproject](https://github.com/Olsro/ipodclickwheelgamespreservationproject)
+says the same. It says that the file `IC-Info.sidb` is unique to the iPod and
+to its installation. It says that a copy of the file does not work on another
+iPod. It says that the DRM is tied to the number of the iPod.
+
+The research of the program of iTunes for macOS gives the same result. The
+function at 0x1006f588f makes the path of the file `IC-Info.sidb` and the path
+of the file `IC-Info.sidd`. The function at 0x100a05005 writes the file of the
+keys to the iPod. The function reads the keys from the store of the computer.
+The store of the computer has the keys of the accounts. The program does not
+make a key. The program copies a key that the server of Apple gave to the
+account.
+
+> The app cannot make the key file for an iPod that never had the key. The
+> app can only copy the file of the keys from an iPod that has the key. The
+> app can then copy the game files. The games run on the iPod of the key.
+
+#### What the app can do
+
+The app can do three things. The app cannot do a fourth thing.
+
+1. The app can read the number of the account of each game. The app can show
+   this number to the user. The app can group the games of one account.
+2. The app can copy the game files to the folder `games_RO` of the iPod. The
+   app must use the names with small letters. The program of iTunes uses the
+   names with a capital letter. The firmware uses the names with small letters.
+3. The app can copy the file `IC-Info.sidb` from another iPod to the iPod. The
+   file works only on the iPod of the file.
+4. The app cannot make the file `IC-Info.sidb` for an iPod that never had the
+   key.
 
 ### The result of the research of iTunes for macOS
 

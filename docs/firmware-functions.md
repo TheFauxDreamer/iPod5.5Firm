@@ -653,6 +653,8 @@ The file `iPod_Control\Device\SysInfo` is at 0xa275c. It holds the identity of t
 
 The name of the folder of the games is in the osos in small letters: `games_RO`, `gamedata_RW`, `gamestats_WO` and `gamedata_ShareRW`. The program of iTunes for macOS 11.4 uses the same folders with a capital letter: `Games_RO`, `GameData_RW` and `GameStats_WO`. The file system of the iPod is FAT and it keeps the case of the names.
 
+The app cannot make the file `IC-Info.sidb`. The key of a game depends on the number of the account and on the number of the iPod. The research measured the 116 files `sinf` of the owner. The files give the numbers of 12 accounts. The account (account 1) has 31 games. The account (account 2) has 11 games. The accounts (account 3), (account 4) and (account 5) have 3, 2 and 2 games. The other 7 accounts have 1 game each. The atom `priv` of the file `sinf` holds 440 bytes of data. Each file has its own data. The data is the copy of the first part of the file `sinf`, encrypted with a key that comes from the device. The app can read the number of the account. The app cannot change it, because the file `sinf` has a signature. The app cannot know the number of the iPod for an iPod that never had the key. The app can only copy the file `IC-Info.sidb` from an iPod that has the key. Refer to [re/games.md](../re/games.md).
+
 The program of iTunes for macOS 11.4 has the code that writes the file `IC-Info.sidb` to the iPod. The addresses are in the slice for x86_64 of the program.
 
 | Address in the memory of the process | The work |
