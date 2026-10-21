@@ -5,11 +5,11 @@
   "symbol": "slider.vertical.3",
   "category": "test",
   "version_letter": "e",
-  "version": "0.1",
-  "size": 228,
+  "version": "0.2",
+  "size": 509,
   "description": "A test patch. It sets the hardware EQ of the WM8758 audio chip to a fixed setting, so that you can hear if the hardware EQ operates. Select the setting in the option below.",
   "details": [
-    "The firmware never uses the EQ of the audio chip. The patch writes it after each start of the audio chip.",
+    "The firmware never uses the EQ of the audio chip. The patch writes it after each start of the audio chip, and again after each register write of the firmware (for example at a change of the volume).",
     "Use a clear setting (Bass +12 dB or Bass −12 dB) with headphones, and compare with the setting Flat.",
     "The EQ of the iPod (Settings > EQ) stays as before. Set it to Off for the test."
   ],
@@ -24,24 +24,35 @@
   ],
   "load_address": "extended",
   "symbols": {
-    "codec_write": "0x2840d8",
+    "write_continue": "0x2840dc",
     "codec_type": "0x2653a4",
     "state_continue": "0x265e58"
   },
   "hooks": [
-    { "kind": "b", "at": "0x265e54", "expect": "0xe92d4070", "to": "hook_state" }
+    { "kind": "b", "at": "0x265e54", "expect": "0xe92d4070", "to": "hook_state" },
+    { "kind": "b", "at": "0x2840d8", "expect": "0xe92d4010", "to": "hook_write" }
   ],
   "options": [
     {
       "id": "eq",
       "title": "Test Setting",
       "symbol": "eq_test",
-      "default": 1,
+      "default": 3,
       "choices": [
         { "value": 1, "title": "Bass +12 dB", "description": "A strong bass boost (low shelf at 105 Hz)." },
         { "value": 3, "title": "Bass −12 dB", "description": "A strong bass cut (low shelf at 105 Hz). The easiest difference to hear." },
         { "value": 2, "title": "Treble +12 dB", "description": "A strong treble boost (high shelf at 6.9 kHz)." },
         { "value": 0, "title": "Flat", "description": "All bands at 0 dB. Use it to compare." }
+      ]
+    },
+    {
+      "id": "path",
+      "title": "EQ Path",
+      "symbol": "eq_path",
+      "default": 1,
+      "choices": [
+        { "value": 1, "title": "DAC (bit 8 = 1)", "description": "The EQ is in the playback path, if the datasheet is correct. Test this first." },
+        { "value": 0, "title": "ADC (bit 8 = 0)", "description": "The other value of the bit. Test this if DAC gives no change." }
       ]
     }
   ],
@@ -52,6 +63,7 @@
       "Flash the firmware.",
       "On the iPod, set Settings > EQ to Off.",
       "Play a song with a lot of bass through headphones.",
+      "Change the volume by one step. The patch then writes the EQ again.",
       "Flash again with the setting Flat and compare the sound."
     ]
   }
