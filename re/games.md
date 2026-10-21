@@ -838,8 +838,9 @@ knowledge of the format of the key file.
   are at 0x69f6fc and 0x69f70c. The DRM library of the system of the iPod
   reads the file. The research found no code in the osos that opens the file.
 - The function that decrypts the program of a game. The research of the check
-  of the DRM is in [games-drm.md](games-drm.md). The research did not find the
-  function that decrypts the program.
+  of the DRM is in [games-drm.md](games-drm.md). The osos has no cipher for
+  the program of a game. The decryption is in the DRM library of the system.
+  The library is outside the osos. The research must use the emulator.
 - The way that the key is bound to the serial number. The string
   `SerialNumber` is at 0x176b24. The code that uses it for the key is not
   found yet.
