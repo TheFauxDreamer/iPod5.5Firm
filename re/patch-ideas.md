@@ -19,7 +19,7 @@ The table "Collisions with the existing patches" shows where an idea can interfe
 | # | Idea | Source | Value | Work | First research step |
 |---|---|---|---|---|---|
 | 1 | Play Next and Play Last | osos-lab `play_next.c` | High | Medium to high | Done: refer to [play-next.md](play-next.md). Play Last can use the add method of the play list. Play Next must also move the songs. |
-| 2 | Song Info | osos-lab `song_info.c` | High | Medium | Done: refer to [song-info.md](song-info.md). The track object has most fields. A new Menu resource is necessary. |
+| 2 | Song Info | osos-lab `song_info.c` | High | Medium | Paused (21 October 2026): refer to [song-info.md](song-info.md). The track object has most fields. A patch cannot point a menu item at a new screen; a possible design uses the Main Menu screen with other texts. |
 | 3 | USB-C charge icon | slushiimusic | Low for our mod | Low to medium | Probably not necessary. Refer to the item below. |
 | 4 | Patch list in Settings > About | osos-lab `cfw_info` | Medium | Low | Find the About screen and how it gets its rows. |
 | 5 | Custom EQ | osos-lab `custom_eq.c` | High | High | Done: refer to [custom-eq.md](custom-eq.md). A software EQ with a chain of up to 5 fixed filters. The filter table is not found. |
