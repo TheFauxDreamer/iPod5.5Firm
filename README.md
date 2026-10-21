@@ -204,6 +204,10 @@ The guide that removes iPodFirm by hand is not in this repository. The guide nam
 
 CAUTION: The removal of the data of the app removes the backups of the iPod. Make a copy of `~/Library/Application Support/iPodFirm/Backups` before you remove the data.
 
+## The iPod games
+
+The research of the games is in [re/games.md](re/games.md) and in the notes beside it. The note [re/games-vm.md](re/games-vm.md) gives the virtual machine of the community that installs the games on an iPod. The note [re/games-drm.md](re/games-drm.md) gives the check of the DRM in the firmware.
+
 ## Other iPod models
 
 The author has only an iPod 5.5G. Thus the author does not add support for other models or for other firmware versions.
