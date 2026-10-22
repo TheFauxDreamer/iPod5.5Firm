@@ -420,6 +420,12 @@ Refer to [re/custom-eq.md](../re/custom-eq.md). The EQ is a software EQ. A prese
 | 0x10191c | (player, 0, values): with the EQ on (player + 0x235), calls 0xf4dc0 and 0xe6838; with the EQ off, 0xec450. | Static, Emulator |
 | 0x1446e8 | Sends command 0x1f with the first 5 values (each 0 … 0x60) to the audio engine (message queue 2). The selection of Bass Booster in the emulator wrote nothing to the codec. | Static, Emulator |
 | 0x14493c | Sends command 0x1a: the EQ on or off. | Static, Emulator |
+| 0x265e54 | (mode): sets the state of the codec (mode 1, 2 or 3). Calls the routine of the codec type: 0x28386c (type 1), 0x283c30 (type 2) or 0x2839b8 (type 3, WM8758: R52–R55, R49, R1–R3). It runs at the start, at playback and after a wake. | Static, Emulator |
+| 0x2653a4 | Returns the codec type (1, 2 or 3). The emulator uses type 3. | Static, Emulator |
+| 0x2840d8 | (bytes): writes one codec register: I²C address 0x1a, 2 bytes ((register << 1) \| bit 8, bits 0–7). Takes the codec mutex. | Static, Emulator |
+| 0x282f58 | (7-bit address, count, bytes): the low I²C write (I²C controller 0x7000c000). | Static, Emulator |
+
+The codec functions above come from the hardware EQ test (refer to [re/custom-eq.md](../re/custom-eq.md#the-test-patch-hw-eq-test-shelved-22-october-2026)). The test patch is on the branch `hw-eq`.
 | 0x20fcf8 | The task of message queue 2. Commands 0x1a and 0x1f go through the ring queue 0x2354cc to 0x249ab8, which writes the command to state + 0x12f8 and the data to state + 0x12fc. | Static |
 
 ### The browser and the menus
