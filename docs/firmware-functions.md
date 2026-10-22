@@ -812,6 +812,75 @@ disk with an ATA bus. The facts are Static.
 | 0x177058 | The name "CorruptDataPartition". |
 | 0x177070 | The name "CorruptFirmwarePartition". |
 
+### The file systems
+
+Refer to [re/firmware-filesystems.md](../re/firmware-filesystems.md). The
+firmware has the code of the FAT and the code of the HFS+. The facts are
+Static.
+
+| Address | Function |
+|---|---|
+| 0xc22b4 | Reads the table of the partitions of the disk. It reads 4 partitions. It gives the type of the file system of each partition. |
+| 0x93c4 | Reads the header of the volume of the HFS+. It looks for the 2 signatures. |
+| 0x95a0 | Reads the header of the volume of the HFS+. |
+| 0x96c0 | The signature "Standard_Eta" of the volume of the HFS+. |
+| 0x96d0 | The signature "STANDARD" of the volume of the HFS. |
+| 0x9da4 | Changes the byte order of a 32 bit number. |
+| 0x9dd8 | Changes the byte order of a 32 bit number. |
+| 0x9e0c | Changes the byte order of a 32 bit number. |
+| 0x9e34 | Reads the record of the tree of the catalog. |
+| 0x9e9c | Reads the record of the tree of the catalog. |
+| 0x9f1c | Reads the record of the tree of the catalog. |
+| 0x9f70 | Reads the record of the tree of the catalog. |
+| 0x9ff4 | Reads the record of the tree of the catalog. |
+| 0xa08c | Reads the record of the tree of the catalog. |
+| 0xa130 | Reads the record of the tree of the catalog. |
+| 0xa1ec | Moves the pointer of the record by a number of bytes. |
+| 0xa204 | Moves the pointer of the record by a number of words. |
+| 0xa21c | Moves the pointer of the record by a number of 16 bit values. |
+| 0xa23c | Moves the pointer of the record by a number of 32 bit values. |
+| 0xa260 | Moves the pointer of the record by a number of values. |
+| 0xa288 | Moves the pointer of the record by a number of values. |
+| 0xa6e4 | Changes the 4 words of 4 bytes with a table of 256 bytes. |
+| 0xa720 | Changes the 4 words of 4 bytes with a table of 256 bytes. |
+| 0xa75c | Changes the order of the bytes of a value. |
+| 0xa7c0 | Changes the order of the bytes of a value. |
+| 0xa824 | Changes the value with a table. |
+| 0xa988 | Changes the value with a table. |
+| 0xab18 | Changes the 4 words of 4 bytes with a key of 16 bytes. |
+| 0xab58 | Changes the 4 words of 4 bytes with a key of 16 bytes. |
+| 0xac40 | Changes the 4 words of 4 bytes with a key of 16 bytes. |
+| 0xad24 | Changes the 16 bytes of a key with a key. |
+| 0xade0 | Changes the 16 bytes of a key with a key. |
+| 0xaedc | Makes the object of the node of the tree. |
+| 0xaf8c | Reads the record of a file of the catalog. |
+| 0xb104 | Reads the record of a file of the catalog. |
+| 0xb27c | Reads the record of a folder of the catalog. |
+| 0xb54c | Reads the record of a folder of the catalog. |
+| 0xb800 | Reads the node of the tree of the catalog. The 2 kinds of the node are 0x44332211 and 0x11223344. |
+| 0xb8c8 | Reads the kind of the node of the tree of the catalog. |
+| 0xb9a0 | Reads the name of a record of the catalog. |
+| 0xbaf0 | Reads the data of a record of the catalog. |
+| 0xbf00 | The first kind of the node of the tree. The value is 0x44332211. |
+| 0xbf04 | The second kind of the node of the tree. The value is 0x11223344. |
+| 0xbf18 | Reads the header of the volume of the HFS+. |
+| 0xc034 | Reads the header of the volume of the HFS+. The object of the volume has 0x250 bytes. |
+| 0xc140 | Reads the node of the tree of the volume. |
+| 0xc264 | Reads the node of the tree of the volume. |
+| 0xc300 | Looks for a name in the catalog. |
+| 0xc408 | Looks for a name in the catalog. |
+| 0xc510 | Looks for a name in the catalog. |
+| 0xc628 | Looks for a name in the catalog. |
+| 0xc744 | Looks for a name in the catalog. |
+| 0xc868 | Looks for a name in the catalog. |
+| 0x7100 | Copies the clusters of the FAT. |
+| 0x7278 | Changes the bytes of a value with the cipher of the FAT. |
+| 0x7c14 | Copies the clusters of the FAT. |
+| 0x7d84 | Reads a record of the directory of the FAT. |
+| 0x7f3c | Reads a record of the directory of the FAT. |
+| 0x8140 | Reads the file of the FAT. The function has 24 arguments. |
+| 0x8a48 | Reads the file of the FAT. The function has 24 arguments. |
+
 ### The JavaScript engine
 
 | Address | Function | Evidence |

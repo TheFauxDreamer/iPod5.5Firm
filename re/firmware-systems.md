@@ -233,11 +233,19 @@ The note [firmware-storage.md](firmware-storage.md) gives the full research of
 the system of the storage. The note gives the 7 tasks, the bus of the disk, the
 4 file systems and the partitions.
 
+The note [firmware-filesystems.md](firmware-filesystems.md) gives the code of
+the file systems. The note gives the code of the FAT at 0x7100 to 0x8a48, the
+code of the HFS+ at 0x9264 to 0xd28c, the table of the partitions at 0xc22b4
+and the 2 signatures of the volume of the HFS+.
+
 **The state of the research: full.** All 7 named parts have a note. The note
 [firmware-storage.md](firmware-storage.md) has 13 functions. The note gives the
-limits of the research. The research did not decode the 4 file systems. The
-dispatcher of the file systems is at 0x34dec and has 72,000 characters of code.
-The research did not trace the function that reads the table of the partitions.
+limits of the research. The note
+[firmware-filesystems.md](firmware-filesystems.md) has 62 functions. The
+research did not decode the cipher of the constants of the FAT. The research
+did not decode the cipher of the constants of the dispatcher of the file
+systems. The dispatcher is at 0x34dec and has 72,000 characters of code. The
+research did not trace the function that reads the table of the partitions.
 
 ## The user interface
 
