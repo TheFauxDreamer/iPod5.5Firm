@@ -51,6 +51,7 @@ A typical sequence:
 | [DecompileWithStrings.java](../re/ghidra-scripts/DecompileWithStrings.java) | `re/ghidra-scripts/` | Writes the C code of every function. The C code has the name of every string that the function uses. |
 | [make-string-map.py](../re/make-string-map.py) | `re/` | Makes the map of the strings from a file of decompiled C code and from the image. The map has the name and the group of each function. |
 | [make-function-index.py](../re/make-function-index.py) | `re/` | Makes the table of the functions from a file of decompiled C code. The table has the address, the name, the number of lines, the number of bytes and the number of calls of each function. |
+| [make-systems-state.py](../re/make-systems-state.py) | `re/` | Makes the table of the state of the research of each system. The table has the number of the parts, the number of the parts that a note names, the note that gives the full research of the system and the other notes. |
 | [CallerTree.java](../re/ghidra-scripts/CallerTree.java) | `re/ghidra-scripts/` | Writes the caller tree of functions to a given depth. |
 | [SetArmOptions.java](../re/ghidra-scripts/SetArmOptions.java) | `re/ghidra-scripts/` | Pre-script. Turns on "ARM Aggressive Instruction Finder" for the first analysis. |
 | `FindXrefs.java`, `FindConstant.java`, `FindBytes.java`, `ListVtable.java`, `MakeSignature.java` | `re/ghidra-scripts/` | Search scripts. Refer to [ghidra-guide.md](ghidra-guide.md#2-the-scripts). |

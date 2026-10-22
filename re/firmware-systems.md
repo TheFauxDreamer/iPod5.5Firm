@@ -29,17 +29,22 @@ hardware.
 ## The systems
 
 The firmware has 7 systems. The table gives the number of the named parts of
-each system.
+each system. The table also gives the state of the research of each system.
 
-| The system | The named parts | The task table | The class tables |
-|---|---|---|---|
-| USB and the computer | 17 | 11 | most of the drivers of the USB |
-| Power and the hardware | 9 | 8 | the power controller, the clock |
-| The music and the media | 7 | 0 | the video processor, the caches |
-| Storage and the file system | 7 | 1 | the file systems, the disk |
-| The kernel of the system | 4 | 0 | the base class of the tasks |
-| The camera and the USB | 3 | 0 | the drivers of the camera |
-| The user interface | 2 | 0 | the views, the lists, the menus |
+| The system | The named parts | The task table | The class tables | The state of the research |
+|---|---|---|---|---|
+| USB and the computer | 17 | 11 | most of the drivers of the USB | **Partial.** 4 of 17 parts. The note [usb-host.md](usb-host.md) has the host side. The note [usb-audio.md](usb-audio.md) has the audio. The device side has no note. |
+| Power and the hardware | 9 | 9 | the power controller, the clock | **Partial.** 0 of 9 parts have a note of their own. The note [sleep.md](sleep.md) has the sleep. The note [backlight-timer.md](backlight-timer.md) has the backlight. The note [piezo.md](piezo.md) has the piezo. |
+| The music and the media | 7 | 0 | the video processor, the caches | **Partial.** 2 of 7 parts. The note [cover-flow.md](cover-flow.md) has the covers. The note [firmware-camera.md](firmware-camera.md) has the copy of the photos. The video processor has no note. |
+| Storage and the file system | 7 | 1 | the file systems, the disk | **Partial.** 1 of 7 parts. The note [play-latency.md](play-latency.md) has the delay of the play. The file systems have no note. |
+| The kernel of the system | 4 | 0 | the base class of the tasks | **Full.** 4 of 4 parts. The note [firmware-task-system.md](firmware-task-system.md). |
+| The camera and the USB | 3 | 0 | the drivers of the camera | **Full.** 3 of 3 parts. The note [firmware-camera.md](firmware-camera.md). |
+| The user interface | 2 | 0 | the views, the lists, the menus | **Partial.** 1 of 2 parts. The note [cover-flow.md](cover-flow.md) has the Cover Flow. The note [list-rendering.md](list-rendering.md) has the list. The 158 `Type` resources have no note. |
+
+The script [make-systems-state.py](make-systems-state.py) makes the table of
+the state. The script reads the table of the systems and the notes. The script
+writes the file `systems-state.tsv` in the folder of the artifacts. The script
+has the list of the notes that give the full research of a system.
 
 The note [firmware-task-system.md](firmware-task-system.md) gives the full
 research of the kernel of the system. The name is `Task`. The name is the
@@ -89,6 +94,10 @@ the audio over the USB.
 The note [usb-host.md](usb-host.md) gives the full research of the host side of
 the stack. The note has 258 functions. The device side has no note.
 
+**The state of the research: partial.** 4 of the 17 named parts have a note.
+The parts are `USBAudioTask`, `USBDeviceTask`, `USBStatusTask` and
+`USBTaskTimeTask`. The other 13 parts have no note.
+
 ## Power and the hardware
 
 The system of the power, of the clock and of the hardware of the iPod. The
@@ -120,6 +129,10 @@ The note [sleep.md](sleep.md) has 32 functions of the sleep. The note
 [backlight-timer.md](backlight-timer.md) has 8 functions of the backlight. The
 note [piezo.md](piezo.md) has 8 functions of the piezo.
 
+**The state of the research: partial.** No named part of this system has a note
+of its own. The notes of the sleep, the backlight and the piezo have the
+functions of 3 of the 9 parts. The other 6 parts have no note.
+
 ## The music and the media
 
 The system of the music, of the video and of the photos. The table of the tasks
@@ -140,6 +153,10 @@ The name `Channel PhotoBrowse` at 0x10212098 and the name
 `Channel PhotoImporting` at 0x102120ac are the channels of the photos. The
 note [album-art-v2.md](album-art-v2.md) has 22 functions of the covers. The
 note [shuffle.md](shuffle.md) has 69 functions of the shuffle.
+
+**The state of the research: partial.** 2 of the 7 named parts have a note.
+The parts are `ArtworkLoadTask` and `PhotoCopyTask`. The other 5 parts have no
+note. The video processor of Broadcom has no note.
 
 ## Storage and the file system
 
@@ -168,6 +185,10 @@ The firmware names the file systems in the strings of the image. The name
 The note [play-latency.md](play-latency.md) has 34 functions of the delay of
 the play after the idle time. The delay comes from the flash storage.
 
+**The state of the research: partial.** 1 of the 7 named parts has a note. The
+part is `ATAWorkLoopTask`. The other 6 parts have no note. The file systems
+`FAT12`, `FAT16`, `FAT32` and `APPLE_HFS` have no note.
+
 ## The user interface
 
 The system of the screen and of the input. The table of the tasks has no task
@@ -186,6 +207,10 @@ modules are in the strings of the image: `OpenGLES` at 0x1007947c,
 
 The note [cover-flow.md](cover-flow.md) has 51 functions of the Cover Flow.
 The note [list-rendering.md](list-rendering.md) has 24 functions of the list.
+
+**The state of the research: partial.** 1 of the 2 named parts has a note. The
+part is `WindowManager`. The part `SearchHelperThread` has no note. The 158
+`Type` resources have no note. The methods of the classes have no note.
 
 ## The camera and the USB
 
@@ -213,6 +238,12 @@ The note gives the table of the methods, the 4 methods of the class of the
 object of a camera, the request of the camera and the path of the import of the
 pictures.
 
+**The state of the research: full.** All 3 named parts have a note. The note
+[firmware-camera.md](firmware-camera.md) has 46 functions. The note gives the
+limits of the research. The research did not find the order of the slots of
+the table of the methods. The research did not find the path from the screen
+of the import to the task of the camera.
+
 ## The kernel of the system
 
 The system of the tasks. The table of the tasks has no task of this system.
@@ -227,6 +258,12 @@ The system of the tasks. The table of the tasks has no task of this system.
 The note [firmware-task-system.md](firmware-task-system.md) gives the research
 of this system. The note gives the class of the tasks, the object of a task,
 the 9 classes of the priority, the queue and the scheduler.
+
+**The state of the research: full.** All 4 named parts have a note. The note
+[firmware-task-system.md](firmware-task-system.md) has 16 functions. The note
+gives the limits of the research. The research did not find the code that
+compares the numbers of the priority. The note does not say which class of the
+priority runs first.
 
 ## The DRM and the games
 
@@ -274,6 +311,7 @@ slots, the address of the constructor and the addresses of the methods.
 | The script | The use |
 |---|---|
 | [make-systems-map.py](make-systems-map.py) | Makes the list of the systems, the groups and the table of the tasks. |
+| [make-systems-state.py](make-systems-state.py) | Makes the table of the state of the research of each system. |
 | [make-class-map.py](make-class-map.py) | Makes the list of the tables of the classes and their methods. |
 | [make-string-map.py](make-string-map.py) | Makes the map of the strings, the names of the functions and the groups. |
 
@@ -284,14 +322,23 @@ The folder is not in the repository. The folder holds the image of the firmware.
 |---|---|
 | `systems.tsv` | Each system with its group, its method and its functions. |
 | `system-groups.tsv` | The number of the systems of each group. |
+| `systems-state.tsv` | The state of the research of each system. |
 | `task-table.tsv` | The table of the tasks of the firmware. |
 | `class-tables.tsv` | Each table of a class with its methods. |
 | `class-names.tsv` | The names of the tasks and the classes of the image. |
 
 ## The next steps
 
+The systems that have no full research come first. The order of the systems is
+the order of the table of the systems.
+
 | The step | The work |
 |---|---|
-| 1 | Join each table of a class to the name of its class. The name is in the function that makes the object. The script must follow the callers of the constructor. |
-| 2 | Read the modules of the engine of the screen. The names of the modules are in the strings. The script must find the table of the modules. |
-| 3 | Name the 14,029 functions without a name. The callers and the callees give the name. The order of the calls gives the work. |
+| 1 | The system "USB and the computer". 13 of the 17 named parts have no note. The device side of the USB stack has no note. |
+| 2 | The system "Power and the hardware". 6 of the 9 named parts have no note. The power controller and the clock have no note. |
+| 3 | The system "The music and the media". 5 of the 7 named parts have no note. The video processor of Broadcom has no note. |
+| 4 | The system "Storage and the file system". 6 of the 7 named parts have no note. The file systems have no note. |
+| 5 | The system "The user interface". The 158 `Type` resources have no note. The methods of the classes have no note. |
+| 6 | Join each table of a class to the name of its class. The name is in the function that makes the object. The script must follow the callers of the constructor. |
+| 7 | Read the modules of the engine of the screen. The names of the modules are in the strings. The script must find the table of the modules. |
+| 8 | Name the 14,029 functions without a name. The callers and the callees give the name. The order of the calls gives the work. |

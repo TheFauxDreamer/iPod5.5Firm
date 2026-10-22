@@ -137,6 +137,25 @@ number of the functions and the number of the lines for each note.
 | [piezo.md](piezo.md) | 8 | 264 | 0.0% |
 | [ipod-classic-6g.md](ipod-classic-6g.md) | 3 | 198 | 0.0% |
 
+### The state of each system
+
+The note [firmware-systems.md](firmware-systems.md) lists the 7 systems of the
+firmware. The table gives the state of the research of each system. The script
+[make-systems-state.py](make-systems-state.py) makes the table.
+
+| The system | The named parts | The parts with a note | The state | The note |
+|---|---|---|---|---|
+| USB and the computer | 17 | 4 | Partial | [usb-host.md](usb-host.md) has the host side. [usb-audio.md](usb-audio.md) has the audio. |
+| Power and the hardware | 9 | 0 | Partial | [sleep.md](sleep.md), [backlight-timer.md](backlight-timer.md) and [piezo.md](piezo.md) have some functions. |
+| The music and the media | 7 | 2 | Partial | [cover-flow.md](cover-flow.md) has the covers. [firmware-camera.md](firmware-camera.md) has the copy of the photos. |
+| Storage and the file system | 7 | 1 | Partial | [play-latency.md](play-latency.md) has the delay of the play. |
+| The kernel of the system | 4 | 4 | **Full** | [firmware-task-system.md](firmware-task-system.md) |
+| The camera and the USB | 3 | 3 | **Full** | [firmware-camera.md](firmware-camera.md) |
+| The user interface | 2 | 1 | Partial | [cover-flow.md](cover-flow.md) has the Cover Flow. [list-rendering.md](list-rendering.md) has the list. |
+
+2 of the 7 systems have a full research. The 5 other systems have no note for
+the whole system.
+
 ### The parts of the firmware without research
 
 The research did not document these parts of the firmware. Each part of the
@@ -277,6 +296,7 @@ firmware.
 | [make-string-map.py](make-string-map.py) | Makes the map of the strings, the names of the functions and the groups. |
 | [make-firmware-inventory.py](make-firmware-inventory.py) | Makes the inventory of the parts of the firmware and the table of the state of the research. |
 | [make-systems-map.py](make-systems-map.py) | Makes the list of the systems, the groups and the table of the tasks of the firmware. |
+| [make-systems-state.py](make-systems-state.py) | Makes the table of the state of the research of each system. |
 | [make-class-map.py](make-class-map.py) | Makes the list of the tables of the classes and their methods. |
 | [ghidra-scripts/DecompileAll.java](ghidra-scripts/DecompileAll.java) | Writes the C code of every function. |
 | [ghidra-scripts/DecompileWithStrings.java](ghidra-scripts/DecompileWithStrings.java) | Writes the C code of every function with the name of every string. |
@@ -298,12 +318,21 @@ The folder is not in the repository. The folder holds the image of the firmware.
 | `firmware-parts.tsv` | Each part of the table of the resources and the notes that name it. |
 | `firmware-types.tsv` | The number of the parts of each type and the number with a note. |
 | `firmware-code-coverage.tsv` | The number of the functions and the lines of each note. |
+| `systems-state.tsv` | The state of the research of each system. |
 
 ## The next steps
 
+The systems that have no full research come first. The note
+[firmware-systems.md](firmware-systems.md) gives the state of each system.
+
 | The step | The work |
 |---|---|
-| 1 | Make the inventory of the classes. The 158 `Type` resources give the class of each view. The table of the methods of each class gives the behaviour. |
-| 2 | Read the strings of the other languages. The image has 25 blocks of the resources. The map of the strings has only the main block. |
-| 3 | Name the functions of the user interface. The name must come from the class and from the method of the object. The strings give only a hint. |
-| 4 | Make the map of the code that the notes do not name. The table of the functions has the number of the calls. The order of the calls gives the structure. |
+| 1 | The system "USB and the computer". 13 of the 17 named parts have no note. The device side of the USB stack has no note. |
+| 2 | The system "Power and the hardware". 6 of the 9 named parts have no note. The power controller and the clock have no note. |
+| 3 | The system "The music and the media". 5 of the 7 named parts have no note. The video processor of Broadcom has no note. |
+| 4 | The system "Storage and the file system". 6 of the 7 named parts have no note. The file systems have no note. |
+| 5 | The system "The user interface". The 158 `Type` resources have no note. The methods of the classes have no note. |
+| 6 | Make the inventory of the classes. The 158 `Type` resources give the class of each view. The table of the methods of each class gives the behaviour. |
+| 7 | Read the strings of the other languages. The image has 25 blocks of the resources. The map of the strings has only the main block. |
+| 8 | Name the functions of the user interface. The name must come from the class and from the method of the object. The strings give only a hint. |
+| 9 | Make the map of the code that the notes do not name. The table of the functions has the number of the calls. The order of the calls gives the structure. |
