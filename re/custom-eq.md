@@ -114,6 +114,29 @@ The WM8758 codec has a 5-band EQ (registers 0x12–0x16: gain −12 to +12 dB, a
 | Hardware EQ of the WM8758 | No CPU load. Free frequency and gain for 5 bands. No need for the filter table. The firmware does not write these registers. | Only the headphone and line output, not USB-C audio. A test on the real iPod is necessary for the register values and for the effect on the sound. |
 | The software EQ of Apple | Also for USB-C audio (probably). | Needs the filter table and the reader of the EQ state, which are not found. |
 
+### The test patch hw-eq-test (shelved, 22 October 2026)
+
+The test patch `hw-eq-test` is on the branch `hw-eq` (worktree `../iPod5.5Firm-hw-eq`). It is not on `main`. The owner shelved the work on 22 October 2026. The patch is documented in `docs/modifications.md` on that branch.
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x265e54 | (mode): sets the state of the codec. Calls 0x28386c (type 1), 0x283c30 (type 2) or 0x2839b8 (type 3, the WM8758). Runs at the start, at playback and after a wake. | Static, Emulator |
+| 0x2653a4 | The codec type from the hardware ID (0x265164, bits 16–31): 0xb gives 3; 5, 6, 8, 9 give 2; 0xc gives 2 or 1. | Static |
+| 0x2840d8 | (bytes): writes one codec register through I²C address 0x1a. 2 bytes: (register << 1) \| bit 8, then bits 0–7. Takes the codec mutex. | Static, Emulator |
+| 0x282f58 | (7-bit address, count, bytes): the low I²C write. | Static, Emulator |
+
+| Version | Method | Emulator | Real iPod |
+|---|---|---|---|
+| 0.1 | Writes R18–R22 after 0x265e54 (only codec type 3). R18 bit 8 = 1. | The 5 writes after the start; the hardware ID is 0x000b0010, type 3. | The backup before the next flash showed the hook and the option value 1 (Bass +12 dB). No change of the bass was heard. |
+| 0.2 | Also writes R18–R22 after each codec write of the firmware. An option for R18 bit 8 (DAC or ADC). | The EQ writes follow each codec write; the iPod starts normally. | DAC and ADC: no change heard, also after a change of the volume. |
+| 0.3 | A diagnostic line in `iPod_Control/iTunes/iPodFirmEQLog`: hardware ID, codec type, hook calls, EQ writes. | `hwid=000b0010 type=3 state=1 write=8 eq=9 test=3 path=1` | Not tested (shelved). |
+
+Open questions for a later restart:
+
+- Is the codec type of the owner's iPod 3? Version 0.3 answers this.
+- If the type is 3 and the writes occur: does a later step of the firmware (for example the IRAM code or the second core) set up the codec again, or does the WM8758 of the iPod need another register to switch on the EQ?
+- Rockbox uses the hardware EQ of the WM8758 on the iPod Video for its bass and treble controls. Its `wm8758.c` can show the correct register values.
+
 ## Consequences for a patch
 
 - A custom EQ can be a new preset with up to 5 filter numbers. But only the 54 known filters (and possibly 55–96) exist. This gives no free choice of frequency and gain.
