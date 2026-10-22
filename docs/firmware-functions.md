@@ -661,6 +661,47 @@ Static.
 | 0x197e70 | The state of the import of the pictures. It gives 1 for the states 1 to 5 and for the state 7. |
 | 0x211ddc | The name of each channel of the application. The channels of the pictures are 0x0d, 0x0e, 0x10, 0x17, 0x18 and 0x1b. |
 
+### The USB device
+
+Refer to [re/firmware-usb.md](../re/firmware-usb.md). The iPod Video is a USB
+device. The firmware has the stack of the device of the Mac OS 9 USB family of
+Apple. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x15fe28 | The table of the registers of the controller. The address of each register and the mask of each register. |
+| 0x15fd30 | Fills the 34 words of the registers of the object of the controller. |
+| 0x15fe6c | Writes one register. It does nothing if the value is the same. |
+| 0x221278 | Makes the object of the controller. The interrupt object is at +0x104. |
+| 0x24d628 | Makes the object of the interface of the USB. It makes 4 objects of interfaces. |
+| 0x24d1f0 | Writes the number of the vendor of the device. The number is at +8 of the object. |
+| 0x24d1c0 | Writes the number of the product of the device. The number is at +0xa of the object. |
+| 0x24d1a4 | Writes the version of the device. The version is at +0xc of the object. |
+| 0xd85d8 | Gives the identity of the iPod to the computer. The number of the vendor is 0x05ac. The number of the product tells the model. |
+| 0xd86b4 | The numbers of the product: 0x1202, 0x1203, 0x1204, 0x1205, 0x1206, 0x1207, 0x1209, 0x120a. |
+| 0xcd06c | Makes the descriptor of the device. The descriptor has 18 bytes. |
+| 0xe5f84 | Makes the descriptor of a configuration. |
+| 0xc0bb4 | Answers the requests of the computer. The type of the request is the byte at +0 of the message. |
+| 0xe34f8 | The state machine of the device. The states are 1 to 4. |
+| 0x170fec | Makes the object of the task `USBDeviceTask`. The name is at 0x17107c. The size of the stack is 0x20, the priority is 0x1000. |
+| 0x170f2c | The method of the task `USBDeviceTask`. The loop calls the start, the session and the stop of the device. |
+| 0x18472c | Makes the object of the task `USB MSC`. The name is at 0x184824. The size of the stack is 0x11. |
+| 0xb95a4 | The task of the mode manager of the USB. The modes are the idle, the device and the host. |
+| 0x184aec | Makes the object of the mode manager. |
+| 0x184860 | Starts a mode. The function starts the mode only from the mode 0. |
+| 0x18482c | Stops a mode. The function starts the mode 0 again. |
+| 0x284338 | The method of the task `AccessoryDetectTask`. |
+| 0x284eb0 | The method of the task `HPhoneDetTask`. It reads the state of the headphones. |
+| 0x284f90 | The method of the task `OptoTask`. It reads the sensor of the click wheel. |
+| 0x28558c | The method of the task `SerialOptoTask`. It reads the sensor of the serial port. |
+| 0x28564c | The method of the task `TopPlugTask`. It reads the accessory of the plug. |
+| 0xfebf8 | The method of the task `RsistrAccsryMgr`. It reads the resistance of the accessory of the click wheel. |
+| 0x266034 | The state of the accessory of the resistor. It gives 0, 1, 3 or 100. |
+| 0x1fb50c | Sends the command of the lingo 6 of iAP. The command 3 tells the accessory to change to the host mode. |
+| 0x1242b8 | Makes an iAP message and puts it into the queue of the accessory. |
+| 0x1d62d4 | Makes the thread of the incoming data of iAP. The name is at 0x1d6410. |
+| 0x1d73e4 | Makes the thread of the outgoing data of iAP. The name is at 0x1d7520. |
+
 ### The JavaScript engine
 
 | Address | Function | Evidence |
@@ -974,6 +1015,15 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | 0xC30001E0–0xC30001FF | ATA taskfile | |
 | 0xC30003F8 | ATA control | |
 | 0x7000C000–0x7000C0FF | I²C controller | |
+| 0xC5000140 | `USBCMD` | The command of the USB controller. The mask is 0x00FF8B7F. |
+| 0xC5000144 | `USBSTS` | The state of the USB controller. |
+| 0xC5000148 | `USBINTR` | The interrupts of the USB controller. The mask is 0x000001FF. |
+| 0xC5000154 | The control of the frame list | The base of the list of the frames. |
+| 0xC5000184 | `PORTSC` | The state of the port. The mask is 0x217FF1C4. |
+| 0xC50001A4 | `OTGSC` | The state of the OTG. The mask is 0x7F00003B. |
+| 0xC50001A8 | `USBMODE` | The mode of the controller. The mask is 7. The value 3 is the host mode. |
+| 0xC50001AC–0xC50001C8 | The control of the host | The registers of the host mode. |
+| 0x70000028 | The chip of the USB controller | The function 0x15fd30 puts this address in the word 0 of the object. |
 
 ## Resource IDs
 

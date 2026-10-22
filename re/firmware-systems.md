@@ -33,7 +33,7 @@ each system. The table also gives the state of the research of each system.
 
 | The system | The named parts | The task table | The class tables | The state of the research |
 |---|---|---|---|---|
-| USB and the computer | 17 | 11 | most of the drivers of the USB | **Partial.** 4 of 17 parts. The note [usb-host.md](usb-host.md) has the host side. The note [usb-audio.md](usb-audio.md) has the audio. The device side has no note. |
+| USB and the computer | 17 | 11 | most of the drivers of the USB | **Full.** 17 of 17 parts. The note [firmware-usb.md](firmware-usb.md). The note [usb-host.md](usb-host.md) has the host side. The note [usb-audio.md](usb-audio.md) has the audio. |
 | Power and the hardware | 9 | 9 | the power controller, the clock | **Partial.** 0 of 9 parts have a note of their own. The note [sleep.md](sleep.md) has the sleep. The note [backlight-timer.md](backlight-timer.md) has the backlight. The note [piezo.md](piezo.md) has the piezo. |
 | The music and the media | 7 | 0 | the video processor, the caches | **Partial.** 2 of 7 parts. The note [cover-flow.md](cover-flow.md) has the covers. The note [firmware-camera.md](firmware-camera.md) has the copy of the photos. The video processor has no note. |
 | Storage and the file system | 7 | 1 | the file systems, the disk | **Partial.** 1 of 7 parts. The note [play-latency.md](play-latency.md) has the delay of the play. The file systems have no note. |
@@ -54,6 +54,10 @@ kernel of Azure RTOS of Microsoft.
 The note [firmware-camera.md](firmware-camera.md) gives the full research of
 the system of the camera. The iPod Video has no camera. The firmware has the
 code of the camera of the iPod Photo.
+
+The note [firmware-usb.md](firmware-usb.md) gives the full research of the
+system of the USB. The note gives the mode manager, the stack of the device,
+the identity of the iPod and the protocol of the accessory.
 
 ## USB and the computer
 
@@ -92,11 +96,20 @@ output over the USB. The note [usb-audio.md](usb-audio.md) has 23 functions of
 the audio over the USB.
 
 The note [usb-host.md](usb-host.md) gives the full research of the host side of
-the stack. The note has 258 functions. The device side has no note.
+the stack. The note has 258 functions.
 
-**The state of the research: partial.** 4 of the 17 named parts have a note.
-The parts are `USBAudioTask`, `USBDeviceTask`, `USBStatusTask` and
-`USBTaskTimeTask`. The other 13 parts have no note.
+The note [firmware-usb.md](firmware-usb.md) gives the full research of the
+device side of the stack. The note gives the 11 tasks, the mode manager, the
+object of the controller with its 34 registers, the identity of the iPod with
+the number of the vendor 0x05ac, the 4 interfaces and the 2 threads of the
+protocol of the accessory.
+
+**The state of the research: full.** All 17 named parts have a note. The note
+[firmware-usb.md](firmware-usb.md) has 68 functions. The note gives the limits
+of the research. The research did not find the number of the product of the
+iPod Video. The research did not find the size of the stack and the priority
+of the 2 tasks of the host start. The research did not make a table of all the
+accessories.
 
 ## Power and the hardware
 
@@ -334,11 +347,10 @@ the order of the table of the systems.
 
 | The step | The work |
 |---|---|
-| 1 | The system "USB and the computer". 13 of the 17 named parts have no note. The device side of the USB stack has no note. |
-| 2 | The system "Power and the hardware". 6 of the 9 named parts have no note. The power controller and the clock have no note. |
-| 3 | The system "The music and the media". 5 of the 7 named parts have no note. The video processor of Broadcom has no note. |
-| 4 | The system "Storage and the file system". 6 of the 7 named parts have no note. The file systems have no note. |
-| 5 | The system "The user interface". The 158 `Type` resources have no note. The methods of the classes have no note. |
-| 6 | Join each table of a class to the name of its class. The name is in the function that makes the object. The script must follow the callers of the constructor. |
-| 7 | Read the modules of the engine of the screen. The names of the modules are in the strings. The script must find the table of the modules. |
-| 8 | Name the 14,029 functions without a name. The callers and the callees give the name. The order of the calls gives the work. |
+| 1 | The system "Power and the hardware". 6 of the 9 named parts have no note. The power controller and the clock have no note. |
+| 2 | The system "The music and the media". 5 of the 7 named parts have no note. The video processor of Broadcom has no note. |
+| 3 | The system "Storage and the file system". 6 of the 7 named parts have no note. The file systems have no note. |
+| 4 | The system "The user interface". The 158 `Type` resources have no note. The methods of the classes have no note. |
+| 5 | Join each table of a class to the name of its class. The name is in the function that makes the object. The script must follow the callers of the constructor. |
+| 6 | Read the modules of the engine of the screen. The names of the modules are in the strings. The script must find the table of the modules. |
+| 7 | Name the 14,029 functions without a name. The callers and the callees give the name. The order of the calls gives the work. |

@@ -212,13 +212,15 @@ The research of the games is in [re/games.md](re/games.md) and in the notes besi
 
 The note [re/retailos-decompile.md](re/retailos-decompile.md) gives the decompilation of the whole image `osos` of RetailOS 1.3. The research gives 14,411 functions. The research also gives the map of the strings. The map names 380 functions and puts each function into a group. The C code, the index of the functions and the map of the strings are in `~/Library/Application Support/iPodFirm/re/retailos-1.3-decompiled/`. The script [re/decompile-all.sh](re/decompile-all.sh) does the work again. The script [re/decompile-with-strings.sh](re/decompile-with-strings.sh) does the work with the map of the strings.
 
-The note [re/firmware-coverage.md](re/firmware-coverage.md) gives the index of all the research of the firmware. The note lists every part of the firmware and gives the state of the research for each part. The note also gives the limits of the names. The firmware is not fully reverse engineered. The research covers 5.7% of the functions of the code and 10.9% of the lines.
+The note [re/firmware-coverage.md](re/firmware-coverage.md) gives the index of all the research of the firmware. The note lists every part of the firmware and gives the state of the research for each part. The note also gives the limits of the names. The firmware is not fully reverse engineered. The research covers 6.0% of the functions of the code and 11.1% of the lines.
 
 The note [re/firmware-systems.md](re/firmware-systems.md) gives the systems and the sub-systems of the firmware. The note has the table of the 21 tasks of the firmware, the 49 names of the classes and the 222 tables of the classes.
 
 The note [re/firmware-task-system.md](re/firmware-task-system.md) gives the kernel of the firmware. The kernel is ThreadX, the real-time kernel of Azure RTOS of Microsoft. The note gives the base class of the tasks, the object of a task, the 9 classes of the priority and the scheduler.
 
 The note [re/firmware-camera.md](re/firmware-camera.md) gives the camera of the iPod Video. The iPod Video has no camera. The firmware has the code of the camera of the iPod Photo. The note gives the class drivers of the USB host stack, the task of the camera and the path of the import of the pictures.
+
+The note [re/firmware-usb.md](re/firmware-usb.md) gives the USB of the iPod Video. The note gives the 11 tasks, the mode manager, the stack of the device, the identity of the iPod and the protocol of the accessory.
 
 ## Other iPod models
 
