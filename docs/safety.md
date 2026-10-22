@@ -153,6 +153,7 @@ A test in the emulator is strong evidence, but not proof:
 | Restore of a backup | No (no USB) | Not recorded. Tested on a disk image (`IPODFW_DISK_TEST=1`). |
 | Rescue restore | No | Not recorded |
 | Dark theme and moved rsrc | Yes | Yes (2 October 2026) |
+| The patches on the iPod: the read, the iPodFirm list and the mirror of the switches | A firmware with the list starts (22 October 2026) | Yes (22 October 2026): the owner flashed, connected the iPod again, and the switches agreed with the iPod. A changed switch showed in the banner |
 | `album-art` | Versions 2.2–2.4: yes (9 and 10 October 2026) | Version 1.0: yes. Version 2.1: installed, the scroll is slow (9 October 2026). Version 2.2: measured (9 October 2026). Version 2.3, file mode: the scroll is much better (10 October 2026). Version 2.4, file mode with `cover-flow` 0.6.1: yes (10 October 2026); artwork mode with the file present: yes (10 October 2026); artwork mode without the file: yes, most rows are grey until a stop (10 October 2026). Version 2.5: the covers did not load (10 October 2026). Version 2.6: yes (14 October 2026) |
 | `backlight-60s` | Menu only | No |
 | `sleep-now` | Up to the hardware sleep | No |

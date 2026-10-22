@@ -402,7 +402,7 @@ Without a list, `Patcher.detect` finds a patch from its changed words:
 
 The tests `FirmwareManifestTests` check the list, the check of the changed words and the mirror rule. With all patches that are not `internal` or `test`, no patch is absent.
 
-Emulator test (22 October 2026): a firmware with `shuffle-fixes`, `shuffle-album-mix`, `album-artists` and a list at 0x739250 (osos end 0x739800) started normally. Music showed Album Artists. A test on the real iPod is not done.
+Emulator test (22 October 2026): a firmware with `shuffle-fixes`, `shuffle-album-mix`, `album-artists` and a list at 0x739250 (osos end 0x739800) started normally. Music showed Album Artists. Real iPod (22 October 2026): the owner flashed a firmware with the list. The iPod operated normally, and the app read the list and the patches correctly.
 
 ### The extended area
 
