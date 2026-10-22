@@ -1,6 +1,6 @@
 # Apple firmware and device dumps are copyrighted / personal: never commit them.
 *.ipsw
-Firmware-*
+/Firmware-*
 # The pattern above also matches docs/firmware-format.md. Keep the documents.
 !docs/*.md
 *.bin
