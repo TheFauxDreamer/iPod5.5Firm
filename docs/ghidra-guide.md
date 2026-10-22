@@ -128,7 +128,7 @@ The 3 scripts `DecompileAll.java`, `DefineStringPointers.java` and `DecompileWit
 
 ### The scripts for the systems
 
-The script [re/make-systems-map.py](../re/make-systems-map.py) reads the table of the tasks of the firmware. The table is at 0x1025d63c. The table has 21 tasks. The script also reads the names of the classes from the strings of the image. The script [re/make-class-map.py](../re/make-class-map.py) reads the tables of the classes. Refer to the note [../re/firmware-systems.md](../re/firmware-systems.md).
+The script [re/make-systems-map.py](../re/make-systems-map.py) reads the table of the tasks of the firmware. The table is at 0x1025d63c. The table has 21 tasks. The script also reads the names of the classes from the strings of the image. The script [re/make-class-map.py](../re/make-class-map.py) reads the tables of the classes. The script [re/make-task-map.py](../re/make-task-map.py) finds each call of the function that makes a task. Refer to the note [../re/firmware-systems.md](../re/firmware-systems.md) and the note [../re/firmware-task-system.md](../re/firmware-task-system.md).
 
 ### Pattern format
 

@@ -37,9 +37,15 @@ each system.
 | Power and the hardware | 9 | 8 | the power controller, the clock |
 | The music and the media | 7 | 0 | the video processor, the caches |
 | Storage and the file system | 7 | 1 | the file systems, the disk |
-| The user interface | 5 | 0 | the views, the lists, the menus |
+| The kernel of the system | 4 | 0 | the base class of the tasks |
 | The camera and the USB | 3 | 0 | the drivers of the camera |
-| Other | 1 | 0 | the base class `Task` |
+| The user interface | 2 | 0 | the views, the lists, the menus |
+
+The last system is the kernel of the system. The name is `Task`. The name is
+the name of the base class of the tasks. The kernel is ThreadX, the real-time
+kernel of Azure RTOS of Microsoft. The note
+[firmware-task-system.md](firmware-task-system.md) gives the full research of
+this system.
 
 ## USB and the computer
 
@@ -166,10 +172,7 @@ of this system.
 
 | The name | The work |
 |---|---|
-| `EventManager` | The events of the system. |
-| `TimerEventManager` | The events of the clock. |
 | `SearchHelperThread` | The help of the search. |
-| `TimeManager` | The clock of the user interface. |
 | `WindowManager` | The windows of the screen. |
 
 The class `ePresentationEngine` at 0x101fc224 is the class of the engine of
@@ -193,6 +196,21 @@ of this system.
 | `PTPCameraDriver` | The driver of the camera of the protocol of the pictures. |
 
 The camera has no note.
+
+## The kernel of the system
+
+The system of the tasks. The table of the tasks has no task of this system.
+
+| The name | The work |
+|---|---|
+| `EventManager` | The events of the system. |
+| `TimerEventManager` | The events of the clock. |
+| `Task` | The base class of the tasks. The kernel is ThreadX. |
+| `TimeManager` | The clock of the system. |
+
+The note [firmware-task-system.md](firmware-task-system.md) gives the research
+of this system. The note gives the class of the tasks, the object of a task,
+the 9 classes of the priority, the queue and the scheduler.
 
 ## The DRM and the games
 

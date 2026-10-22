@@ -216,6 +216,8 @@ The note [re/firmware-coverage.md](re/firmware-coverage.md) gives the index of a
 
 The note [re/firmware-systems.md](re/firmware-systems.md) gives the systems and the sub-systems of the firmware. The note has the table of the 21 tasks of the firmware, the 49 names of the classes and the 222 tables of the classes.
 
+The note [re/firmware-task-system.md](re/firmware-task-system.md) gives the kernel of the firmware. The kernel is ThreadX, the real-time kernel of Azure RTOS of Microsoft. The note gives the base class of the tasks, the object of a task, the 9 classes of the priority and the scheduler.
+
 ## Other iPod models
 
 The author has only an iPod 5.5G. Thus the author does not add support for other models or for other firmware versions.

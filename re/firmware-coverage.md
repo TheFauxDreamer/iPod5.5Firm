@@ -18,6 +18,7 @@ The note has 5 parts.
 | [The state of the code](#the-state-of-the-code) | The 14,411 functions of the image `osos`. |
 | [The notes](#the-notes) | The 30 notes of the research and what each note covers. The note of the systems is at [firmware-systems.md](firmware-systems.md). |
 | [The systems](firmware-systems.md) | The systems and the sub-systems of the firmware. The 7 systems, the 21 tasks of the firmware and the 222 tables of the classes. |
+| [The task system](firmware-task-system.md) | The kernel of the firmware. The base class of the tasks, the object of a task, the 9 classes of the priority and the scheduler. |
 | [The warnings](#the-warnings) | The limits of the research. The names are not real names. |
 
 ## The images
@@ -152,7 +153,8 @@ list is a large area of work.
 ## The notes
 
 The research has 30 notes. Each note is in the folder `re`. This note and the
-note [firmware-systems.md](firmware-systems.md) are the other 2 files of the
+note [firmware-systems.md](firmware-systems.md) and the note
+[firmware-task-system.md](firmware-task-system.md) are the other 3 files of the
 folder. The table gives what each note covers.
 
 | The note | The part of the firmware | The state |

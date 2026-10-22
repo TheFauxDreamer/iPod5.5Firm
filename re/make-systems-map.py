@@ -83,8 +83,8 @@ GROUP_RULES = [
         "Piezo", "Motor", "Hold", "CNA", "LowBatt",
     )),
     ("The user interface", (
-        "Window", "Menu", "View", "Label", "Dialog", "Event", "Timer",
-        "Search", "Scroll", "Select", "Button", "Wheel", "Screen", "Time",
+        "Window", "Menu", "View", "Label", "Dialog", "Button", "Wheel",
+        "Screen", "Search", "Scroll", "Select",
     )),
     ("The music and the media", (
         "Audio", "MP3", "Video", "Photo", "Album", "Artwork", "Track",
@@ -93,6 +93,9 @@ GROUP_RULES = [
     )),
     ("The camera and the USB", (
         "Camera", "ICAType4", "PTP",
+    )),
+    ("The kernel of the system", (
+        "Task", "Thread", "Timer", "Event", "Time",
     )),
     ("The games and the network", (
         "Game", "Net", "TCP", "HTTP", "Socket", "DNS", "DRM", "FairPlay",
