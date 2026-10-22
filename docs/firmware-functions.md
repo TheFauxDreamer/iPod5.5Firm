@@ -629,6 +629,37 @@ Refer to [re/usb-host.md](../re/usb-host.md) and [USB-AUDIO-OUT.md](../USB-AUDIO
 | 0xe7a50 | hubAddDeviceHandler: a state machine (+0x18) for a new device on a hub port. The completion callback drives it. |
 | 0xe7980 | Root port status (port, &{wPortStatus, wPortChange}). Called at 0xd28f0 (root hub GET_STATUS) and 0x10e75c (status-change poll 0x10e6e0). |
 
+### The camera
+
+Refer to [re/firmware-camera.md](../re/firmware-camera.md). The iPod Video has
+no camera. The firmware has the code of the camera of the iPod Photo. The code
+came with the USB host stack of the Camera Connector of 2005. The facts are
+Static.
+
+| Address | Function |
+|---|---|
+| 0x6c8898 | The record of the driver of the camera of the type 4. The tag "usbd" at +0, the vendor 0x04A9 at +8, the name at +0x14. |
+| 0x6c88f0 | The record of the driver of the camera of the protocol of the pictures. The class 6, the subclass 1 and the protocol 1 at +0x10. |
+| 0x6c88d8 | The table of the methods of the driver of the camera of the type 4. The version 0x1100. The 5 methods: 0x113a78, 0x118514, 0x1190a4, 0x110868, 0x10d86c. |
+| 0x6c8930 | The table of the methods of the driver of the camera of the protocol of the pictures. The 5 methods: 0x110620, 0x1174d8, 0x118b50, 0x10d580, 0x105c1c. |
+| 0x113a78 | The type 4 driver accepts the device. It calls 0x11281c with the vendor and the product. |
+| 0x11281c | The check of the product. It accepts the vendor 0x04A9 and 40 numbers of the product. It refuses 0x3042, 0x304a, 0x3053 and 0x3054. |
+| 0x113aa4 | Makes the object of the device of the type 4. The 4 methods of the class are at 0xe74c0, 0xec968, 0x10fa48 and 0x10e2d0. |
+| 0x118b50 | The pictures driver accepts an interface. The class at +5 must be 6, the subclass at +6 must be 1 and the protocol at +7 must be 1. It makes the object with 0x110780. |
+| 0x10d86c | The type 4 driver starts the device. It does nothing if the operation is not 0x0b. It sends the notification 0x12 with the code 3. |
+| 0x105c1c | The pictures driver starts the device. It sends the notification 0x12 with the code 3 and the code 2. |
+| 0x0e74c0 | The method of the class that starts the session of the camera. The states are 8, 0x0b and 0x0e. |
+| 0x0de9d8 | The method of the task `ICAPTPCameraIOTask`. It makes the task at the run time. The name is at 0x0deb4c. The priority is 0xc0 and the size of the stack is 0xc0. |
+| 0x10a744 | Makes the buffer of the pictures. The buffer has 64000 bytes. |
+| 0x100978 | Makes one request to the camera and reads the answer. It sends the data in parts of 0x1000 bytes. |
+| 0xdd0dc | The task sends a request and waits for the answer. |
+| 0xd5f64 | The task reads the answer of the stack. |
+| 0xe0b2c | Reads the information of one object of the camera. The record has 0xa4 bytes. |
+| 0x199f70 | The method of the task `PhotoCopyTask`. The name is at 0x199ff8. The size of the stack is 8. |
+| 0x16c588 | The name of the device of the capture. The string "Image Capture device" is at 0x16c5f8. |
+| 0x197e70 | The state of the import of the pictures. It gives 1 for the states 1 to 5 and for the state 7. |
+| 0x211ddc | The name of each channel of the application. The channels of the pictures are 0x0d, 0x0e, 0x10, 0x17, 0x18 and 0x1b. |
+
 ### The JavaScript engine
 
 | Address | Function | Evidence |

@@ -41,11 +41,14 @@ each system.
 | The camera and the USB | 3 | 0 | the drivers of the camera |
 | The user interface | 2 | 0 | the views, the lists, the menus |
 
-The last system is the kernel of the system. The name is `Task`. The name is
-the name of the base class of the tasks. The kernel is ThreadX, the real-time
-kernel of Azure RTOS of Microsoft. The note
-[firmware-task-system.md](firmware-task-system.md) gives the full research of
-this system.
+The note [firmware-task-system.md](firmware-task-system.md) gives the full
+research of the kernel of the system. The name is `Task`. The name is the
+name of the base class of the tasks. The kernel is ThreadX, the real-time
+kernel of Azure RTOS of Microsoft.
+
+The note [firmware-camera.md](firmware-camera.md) gives the full research of
+the system of the camera. The iPod Video has no camera. The firmware has the
+code of the camera of the iPod Photo.
 
 ## USB and the computer
 
@@ -187,7 +190,8 @@ The note [list-rendering.md](list-rendering.md) has 24 functions of the list.
 ## The camera and the USB
 
 The system of the camera of the iPod Video. The table of the tasks has no task
-of this system.
+of this system. The note [firmware-camera.md](firmware-camera.md) gives the full
+research of this system.
 
 | The name | The work |
 |---|---|
@@ -195,7 +199,19 @@ of this system.
 | `ICAType4CameraDriver` | The driver of the camera of the type 4. |
 | `PTPCameraDriver` | The driver of the camera of the protocol of the pictures. |
 
-The camera has no note.
+The iPod Video has no camera. The firmware has the code of the camera of the
+iPod Photo. The code came with the USB host stack of the Camera Connector of
+2005.
+
+The class drivers of the USB host stack have a record and a table of 5 methods
+each. The table of the driver of the camera of the type 4 is at 0x6c88d8. The
+table of the driver of the camera of the pictures is at 0x6c8930. The task of
+the camera is `ICAPTPCameraIOTask`. The task is made at the run time when the
+host stack starts. The task is not in the table of the tasks of the start.
+
+The note gives the table of the methods, the 4 methods of the class of the
+object of a camera, the request of the camera and the path of the import of the
+pictures.
 
 ## The kernel of the system
 

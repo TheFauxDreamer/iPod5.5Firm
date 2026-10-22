@@ -4,8 +4,8 @@ This note is the map of the reverse engineering of the firmware of the iPod
 Video. The note gives the list of every part of the firmware. The note gives
 the state of the research for each part.
 
-> The firmware is **not** fully reverse engineered. The research covers 5.3% of
-> the functions of the code and 10.2% of the lines. The research names 2.6% of
+> The firmware is **not** fully reverse engineered. The research covers 5.7% of
+> the functions of the code and 10.9% of the lines. The research names 2.6% of
 > the parts of the user interface. The rest of the firmware is known to exist
 > and is mapped, but its behaviour is not documented.
 
@@ -16,9 +16,10 @@ The note has 5 parts.
 | [The images](#the-images) | The 4 images of the partition of the iPod. |
 | [The parts of the user interface](#the-parts-of-the-user-interface) | The 2,214 parts of the table of the resources. |
 | [The state of the code](#the-state-of-the-code) | The 14,411 functions of the image `osos`. |
-| [The notes](#the-notes) | The 30 notes of the research and what each note covers. The note of the systems is at [firmware-systems.md](firmware-systems.md). |
+| [The notes](#the-notes) | The 31 notes of the research and what each note covers. The note of the systems is at [firmware-systems.md](firmware-systems.md). |
 | [The systems](firmware-systems.md) | The systems and the sub-systems of the firmware. The 7 systems, the 21 tasks of the firmware and the 222 tables of the classes. |
 | [The task system](firmware-task-system.md) | The kernel of the firmware. The base class of the tasks, the object of a task, the 9 classes of the priority and the scheduler. |
+| [The camera and the USB](firmware-camera.md) | The camera of the iPod Video. The class drivers of the USB host stack, the task of the camera and the path of the import of the pictures. |
 | [The warnings](#the-warnings) | The limits of the research. The names are not real names. |
 
 ## The images
@@ -90,14 +91,14 @@ of every part.
 ## The state of the code
 
 The image `osos` has 14,411 functions. The research decompiled all of them.
-The research read the code of 760 of them.
+The research read the code of 818 of them.
 
 | The measure | The value |
 |---|---|
 | The functions in the image | 14,411 |
-| The functions with a note | 760 (5.3%) |
+| The functions with a note | 818 (5.7%) |
 | The lines of the C code | 551,459 |
-| The lines with a note | 56,411 (10.2%) |
+| The lines with a note | 59,803 (10.9%) |
 | The functions with a name from their strings | 380 (2.6%) |
 | The functions with a string | 382 (2.7%) |
 
@@ -109,7 +110,7 @@ number of the functions and the number of the lines for each note.
 
 | The note | The functions | The lines | The share of the code |
 |---|---|---|---|
-| [firmware-functions.md](../docs/firmware-functions.md) | 521 | 27,301 | 5.0% |
+| [firmware-functions.md](../docs/firmware-functions.md) | 537 | 28,332 | 5.1% |
 | [usb-host.md](usb-host.md) | 258 | 12,095 | 2.2% |
 | [../docs/modifications.md](../docs/modifications.md) | 168 | 8,926 | 1.6% |
 | [shuffle.md](shuffle.md) | 69 | 5,855 | 1.1% |
@@ -117,6 +118,7 @@ number of the functions and the number of the lines for each note.
 | [custom-eq.md](custom-eq.md) | 39 | 4,334 | 0.8% |
 | [cover-flow.md](cover-flow.md) | 51 | 3,672 | 0.7% |
 | [games.md](games.md) | 52 | 2,792 | 0.5% |
+| [firmware-camera.md](firmware-camera.md) | 46 | 2,737 | 0.5% |
 | [list-rendering.md](list-rendering.md) | 24 | 2,239 | 0.4% |
 | [play-next.md](play-next.md) | 41 | 1,909 | 0.3% |
 | [games-drm.md](games-drm.md) | 34 | 1,487 | 0.3% |
@@ -152,10 +154,11 @@ list is a large area of work.
 
 ## The notes
 
-The research has 30 notes. Each note is in the folder `re`. This note and the
+The research has 31 notes. Each note is in the folder `re`. This note and the
 note [firmware-systems.md](firmware-systems.md) and the note
-[firmware-task-system.md](firmware-task-system.md) are the other 3 files of the
-folder. The table gives what each note covers.
+[firmware-task-system.md](firmware-task-system.md) and the note
+[firmware-camera.md](firmware-camera.md) are the other 4 files of the folder.
+The table gives what each note covers.
 
 | The note | The part of the firmware | The state |
 |---|---|---|
@@ -167,6 +170,7 @@ folder. The table gives what each note covers.
 | [games-real-ipod.md](games-real-ipod.md) | The games on a real iPod. The manifest, the folder, the file of the keys. | Complete. |
 | [games-vm.md](games-vm.md) | The virtual machine of the community that installs the games. | Complete. |
 | [usb-host.md](usb-host.md) | The USB host stack. The driver list, the descriptors, the transfers. | 258 functions. The most complete note. |
+| [firmware-camera.md](firmware-camera.md) | The camera of the iPod Video. The class drivers of the USB host stack, the task of the camera and the path of the import of the pictures. | 46 functions. |
 | [usb-audio.md](usb-audio.md) | The USB audio in the firmware. | 23 functions. |
 | [usb-adapter.md](usb-adapter.md) | The plan for the USB-C adapter. | A plan, not a research. |
 | [shuffle.md](shuffle.md) | The shuffle of the music. The 3 modes, the model. | 69 functions. |
