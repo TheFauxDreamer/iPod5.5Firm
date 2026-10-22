@@ -738,6 +738,29 @@ classes that read the resources. The facts are Static.
 | 0x10d278 | Reads the element of the tag `mTtD`. The tag is at 0x10d2b0. |
 | 0x16c328 | The method of the class of the control. The type is at +4 of the object. |
 
+### The modules of the screen
+
+Refer to [re/firmware-modules.md](../re/firmware-modules.md). The table of the
+modules is in the resource section of the image. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x79474 | The record of the module `OpenGLES`. The module has 179 methods. |
+| 0x79784 | The record of the module `Filesytem`. The module has 4 methods. |
+| 0x797d8 | The record of the module `Audio`. The module has 61 methods. |
+| 0x79910 | The record of the module `Metadata`. The module has 152 methods. |
+| 0x79bb4 | The record of the module `AsyncFileIO`. The module has 17 methods. |
+| 0x79c3c | The record of the module `InputEvents`. The module has 2 methods. |
+| 0x79c88 | The record of the module `Settings`. The module has 3 methods. |
+| 0x7947c | The name "OpenGLES". |
+| 0x7978c | The name "Filesytem". |
+| 0x797dc | The name "Audio". |
+| 0x79918 | The name "Metadata". |
+| 0x79bb8 | The name "AsyncFileIO". |
+| 0x79c40 | The name "InputEvents". |
+| 0x79c8c | The name "Settings". |
+| 0x13061973 | The magic of a record of the table of the modules. |
+
 ### The power and the hardware
 
 Refer to [re/firmware-power.md](../re/firmware-power.md). The power comes from

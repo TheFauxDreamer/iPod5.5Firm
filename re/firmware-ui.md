@@ -63,6 +63,10 @@ The names of the modules of the screen are in the strings of the image.
 `OpenGLES` is at 0x7947c, `Filesytem` at 0x7978c, `Metadata` at 0x79918,
 `InputEvents` at 0x79c44, `Settings` at 0x79c90 and `AsyncFileIO` at 0x79bbc.
 
+The note [firmware-modules.md](firmware-modules.md) gives the full research of
+the table of the modules. The note gives the 7 modules, the 418 methods and
+the layout of each record of the table.
+
 The function 0x1fc128 makes the object of the engine of the screen. The
 function calls the function 0x22463c with the name "ImagePresentationEngine" at
 0x1fc220. The function 0x28c788 makes the thread of the engine.
@@ -123,6 +127,34 @@ screen of its own.
 > classes of the screens are not in the strings of the image. The constructor of
 > the class of the table 0x66a904 is at 0x16c61c. The constructor of the class
 > of the table 0x66a938 is at 0x16cb88.
+
+### The names of the classes are not in the image
+
+The research looked for the names of the 222 classes of the firmware. The
+research did not find them. The search used the following 4 methods.
+
+1. The research looked for the name in the strings of the image. The search
+   looked for the names that the community of the iPod uses. The names
+   `AlbumListView`, `MusicListView`, `MenuView`, `ListView`, `SettingsView`,
+   `CoverFlowView`, `NowPlayingView`, `VideoView`, `PhotoView` and 18 other
+   names are not in the image. The research looked for the names that end with
+   `View`, `Screen`, `List`, `Menu`, `Panel`, `Dialog`, `Player` and
+   `Browser`. The image has no such name.
+2. The research looked for the name in the constructor of the class. The
+   constructor of the class of the table 0x66a904 is the function 0x16c61c. The
+   constructor puts the address of the table in the word 0 of the object. The
+   constructor has no string.
+3. The research looked for the name in the function that registers the class.
+   The function 0x21a168 registers a class. The function takes the type of the
+   screen and the class of the type. The function has no string.
+4. The research looked for the name in the table of the classes. The research
+   looked for a table of a name and the address of a class. The image has no
+   such table.
+
+> The names of the 222 classes of the firmware are not in the image. The
+> research did not find the name of any class of a screen. The names of the
+> classes of the tasks and of the managers are in the image. The note
+> [firmware-task-system.md](firmware-task-system.md) has the 21 tasks.
 
 ## The elements of a screen
 

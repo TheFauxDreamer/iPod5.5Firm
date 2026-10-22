@@ -263,6 +263,11 @@ modules are in the strings of the image: `OpenGLES` at 0x1007947c,
 `Filesytem` at 0x1007978c, `Metadata` at 0x10079918, `InputEvents` at
 0x10079c44, `Settings` at 0x10079c90 and `AsyncFileIO` at 0x10079bbc.
 
+The note [firmware-modules.md](firmware-modules.md) gives the table of the
+modules of the screen. The note gives the 7 modules, the 418 methods and the
+layout of each record of the table. The table is in the resource section of
+the image.
+
 The note [cover-flow.md](cover-flow.md) has 51 functions of the Cover Flow.
 The note [list-rendering.md](list-rendering.md) has 24 functions of the list.
 

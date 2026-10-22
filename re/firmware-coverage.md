@@ -4,8 +4,8 @@ This note is the map of the reverse engineering of the firmware of the iPod
 Video. The note gives the list of every part of the firmware. The note gives
 the state of the research for each part.
 
-> The firmware is **not** fully reverse engineered. The research covers 6.8% of
-> the functions of the code and 12.3% of the lines. The research names 2.6% of
+> The firmware is **not** fully reverse engineered. The research covers 6.9% of
+> the functions of the code and 12.4% of the lines. The research names 2.6% of
 > the parts of the user interface. The rest of the firmware is known to exist
 > and is mapped, but its behaviour is not documented.
 
@@ -16,7 +16,7 @@ The note has 5 parts.
 | [The images](#the-images) | The 4 images of the partition of the iPod. |
 | [The parts of the user interface](#the-parts-of-the-user-interface) | The 2,214 parts of the table of the resources. |
 | [The state of the code](#the-state-of-the-code) | The 14,411 functions of the image `osos`. |
-| [The notes](#the-notes) | The 37 notes of the research and what each note covers. The note of the systems is at [firmware-systems.md](firmware-systems.md). |
+| [The notes](#the-notes) | The 38 notes of the research and what each note covers. The note of the systems is at [firmware-systems.md](firmware-systems.md). |
 | [The systems](firmware-systems.md) | The systems and the sub-systems of the firmware. The 7 systems, the 21 tasks of the firmware and the 222 tables of the classes. |
 | [The task system](firmware-task-system.md) | The kernel of the firmware. The base class of the tasks, the object of a task, the 9 classes of the priority and the scheduler. |
 | [The camera and the USB](firmware-camera.md) | The camera of the iPod Video. The class drivers of the USB host stack, the task of the camera and the path of the import of the pictures. |
@@ -26,6 +26,7 @@ The note has 5 parts.
 | [The music and the media](firmware-media.md) | The music and the video of the iPod Video. The 7 tasks, the caches, the video processor of Broadcom and the MP4 parser. |
 | [The storage and the file system](firmware-storage.md) | The storage of the iPod Video. The 7 tasks, the bus of the disk, the file systems and the partitions. |
 | [The file systems](firmware-filesystems.md) | The 4 file systems of the firmware. The FAT, the HFS+, the table of the partitions and the dispatcher. |
+| [The modules of the screen](firmware-modules.md) | The table of the modules of the screen. The 7 modules, the 418 methods and the layout of each record. |
 | [The warnings](#the-warnings) | The limits of the research. The names are not real names. |
 
 ## The images
@@ -97,14 +98,14 @@ of every part.
 ## The state of the code
 
 The image `osos` has 14,411 functions. The research decompiled all of them.
-The research read the code of 977 of them.
+The research read the code of 996 of them.
 
 | The measure | The value |
 |---|---|
 | The functions in the image | 14,411 |
-| The functions with a note | 977 (6.8%) |
+| The functions with a note | 996 (6.9%) |
 | The lines of the C code | 551,459 |
-| The lines with a note | 67,676 (12.3%) |
+| The lines with a note | 68,649 (12.4%) |
 | The functions with a name from their strings | 380 (2.6%) |
 | The functions with a string | 382 (2.7%) |
 
@@ -160,7 +161,7 @@ firmware. The table gives the state of the research of each system. The script
 | Storage and the file system | 7 | 7 | **Full** | [firmware-storage.md](firmware-storage.md) has the 7 tasks, the bus of the disk, the file systems and the partitions. |
 | The kernel of the system | 4 | 4 | **Full** | [firmware-task-system.md](firmware-task-system.md) |
 | The camera and the USB | 3 | 3 | **Full** | [firmware-camera.md](firmware-camera.md) |
-| The user interface | 2 | 2 | **Full** | [firmware-ui.md](firmware-ui.md) has the resources of the screens and the classes of the screens. |
+| The user interface | 2 | 2 | **Full** | [firmware-ui.md](firmware-ui.md) has the resources of the screens and the classes of the screens. [firmware-modules.md](firmware-modules.md) has the table of the modules. |
 
 All 7 systems have a full research. Each system has a note that gives the
 classes, the tasks and the resources of the system.
@@ -176,12 +177,13 @@ list is a large area of work.
 | The cipher of the file systems | The `firmware-filesystems.md` note gives the code of the FAT and the code of the HFS+. The code has a cipher for the constants. The research did not decode the cipher. The research did not name the fields of the boot sector of the FAT. |
 | The power of the system | The `firmware-power.md` note gives the tasks and the registers. The research did not find the register that gives the state of the battery. |
 | The equalizer of the audio | The `custom-eq.md` note has 39 functions. The rest has no note. |
-| The names of the classes of the screens | The `firmware-ui.md` note gives the 19 tables of the classes. The names of the classes are not in the image. |
+| The names of the classes of the screens | The `firmware-ui.md` note gives the 19 tables of the classes. The research did not find the names. The names are not in the image. The research looked for the names in 4 ways. |
+| The names of the methods of the modules | The `firmware-modules.md` note gives the 418 methods of the 7 modules. The names of the methods are not in the image. |
 | The library of C and the drivers of the hardware | The 14,029 functions without a string. Most of them are here. |
 
 ## The notes
 
-The research has 37 notes. Each note is in the folder `re`. This note and the
+The research has 38 notes. Each note is in the folder `re`. This note and the
 note [firmware-systems.md](firmware-systems.md) and the note
 [firmware-task-system.md](firmware-task-system.md) and the note
 [firmware-camera.md](firmware-camera.md) and the note
@@ -189,7 +191,8 @@ note [firmware-systems.md](firmware-systems.md) and the note
 and the note [firmware-power.md](firmware-power.md) and the note
 [firmware-media.md](firmware-media.md) and the note
 [firmware-storage.md](firmware-storage.md) and the note
-[firmware-filesystems.md](firmware-filesystems.md) are the other 10 files of the
+[firmware-filesystems.md](firmware-filesystems.md) and the note
+[firmware-modules.md](firmware-modules.md) are the other 11 files of the
 folder. The table gives what each note covers.
 
 | The note | The part of the firmware | The state |
@@ -209,6 +212,7 @@ folder. The table gives what each note covers.
 | [firmware-media.md](firmware-media.md) | The music and the video of the iPod Video. The 7 tasks, the caches, the video processor of Broadcom and the MP4 parser. | 17 functions. |
 | [firmware-storage.md](firmware-storage.md) | The storage of the iPod Video. The 7 tasks, the bus of the disk, the file systems and the partitions. | 13 functions. |
 | [firmware-filesystems.md](firmware-filesystems.md) | The 4 file systems of the firmware. The FAT, the HFS+, the table of the partitions and the dispatcher. | 62 functions. |
+| [firmware-modules.md](firmware-modules.md) | The table of the modules of the screen. The 7 modules, the 418 methods and the layout of each record. | 14 functions. |
 | [usb-audio.md](usb-audio.md) | The USB audio in the firmware. | 23 functions. |
 | [usb-adapter.md](usb-adapter.md) | The plan for the USB-C adapter. | A plan, not a research. |
 | [shuffle.md](shuffle.md) | The shuffle of the music. The 3 modes, the model. | 69 functions. |
