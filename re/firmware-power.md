@@ -191,6 +191,56 @@ if the word at 0x1c7f98 is 0x3230.
 
 The timer of the microseconds is at 0x60005010. The function 0xded04 reads it.
 
+### The state of the battery
+
+The state of the battery comes from the converter of the analog to the digital.
+The value is a number of 32 bits. The 16 high bits are the number of the
+channel. The 16 low bits are the measurement of the channel.
+
+The function 0x265164 reads the value. The function returns the word at +0x28
+of the object at the image 0x65190. The word at +0x28 is 0x7fffffff when the
+value is not yet there. The function then reads the word at +0x84 of the object
+of the driver of the converter.
+
+The function 0x265a74 says that the battery is low. The function gives 1 when
+the 16 high bits of the value are 10, 11 or 12. The function gives 0 for the
+other numbers. The task `LowBattDebounceTask` has the method 0x284a18. The
+method calls the function 0x265a74. The method then calls the function
+0x22ec90 and the function 0x163ffc.
+
+The function 0x265820 gives the state of the charger. The function gives 1 when
+the 16 high bits of the value are 5, 6, 8 or 9. The function 0x2657fc gives
+the state of the power. The function gives 1 when the 16 high bits of the value
+are 10, 11 or 12.
+
+The function 0x264fa4 gives the state of the power. The function has a switch
+with the cases 4 to 0xc. The function reads the value with the function
+0x265164. The function reads the pins of the charger with the function
+0x282b70. The function puts the state in the byte at +6 of the object at the
+image 0x65160. The states are the numbers 8, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
+0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16 and 0x17. The function 0x264fa4
+sets the states 0xb, 0xc, 0xd, 0xe, 0xf, 0x10, 0x11, 0x12, 0x13, 0x14 and
+0x15.
+
+The function 0x265abc gives the state of the audio. The function has a switch
+with the cases 4, 5, 6, 7, 8, 9, 0xa, 0xb and 0xc. The function gives 0 when
+the 16 high bits of the value are not in this list.
+
+The function 0x2823bc starts the driver of the general purpose input and
+output. The function reads the value with the function 0x265164. The function
+uses the 16 high bits of the value to select the state of the pins. The
+function has a switch with the cases 4, 5, 6, 9, 10, 0xb and 0xc.
+
+The function 0x175818 reads the state of the battery. The function reads the
+word at +0x84 of the object of the driver. The function has a switch with the
+cases 4 to 0xc. The function puts the state of the battery in the word at
++0x1bc of the object and the state of the charger in the word at +0x1be.
+
+> The research did not find the register of the converter. The research found
+> the chain of the functions. The research did not find the function that
+> writes the word at +0x84 of the object of the driver. The research did not
+> find the interrupt of the converter.
+
 ### The pulse width modulator
 
 The pulse width modulator is at 0x7000A000. The function 0xc719c writes the

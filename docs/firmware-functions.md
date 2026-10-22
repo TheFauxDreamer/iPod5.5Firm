@@ -818,6 +818,14 @@ the power chip of the PP5020 of Apple. The facts are Static.
 | 0x1b73c8 | Makes the object of the power management unit. The object has the address 0x70000034 at +8. |
 | 0x1b741c | The word with the address 0x70000020. The function 0x1b73c8 sets the bit 0x40000000. |
 | 0x1c7f58 | Makes the object of the clock of the system. The object has the address 0x70000020 at +0xc. |
+| 0x265164 | Reads the value of the converter of the analog to the digital. The 16 high bits are the channel. The 16 low bits are the measurement. |
+| 0x2657fc | Gives the state of the power. The function gives 1 when the channel is 10, 11 or 12. |
+| 0x265820 | Gives the state of the charger. The function gives 1 when the channel is 5, 6, 8 or 9. |
+| 0x265a74 | Gives the state of the battery. The function gives 1 when the channel is 10, 11 or 12. |
+| 0x264fa4 | Gives the state of the power. The function has a switch with the cases 4 to 0xc. |
+| 0x265abc | Gives the state of the audio. The function has a switch with the cases 4 to 0xc. |
+| 0x175818 | Reads the state of the battery and the state of the charger. The states are at +0x1bc and at +0x1be. |
+| 0x2823bc | Starts the driver of the general purpose input and output. |
 | 0x1fcf50 | The table of the clock. The table has 11 registers from 0x60004000 to 0x60004030. |
 | 0x1fca88 | Copies the table of the clock into the registers. |
 | 0x28578c | The string "watchdog: Could not allocate timer!". |
