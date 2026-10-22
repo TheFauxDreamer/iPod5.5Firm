@@ -376,7 +376,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `album-artists` | `extended` | After all other data (3688 bytes), then three menus: Music (11 items, 444 bytes), the main menu (32 items, 1284 bytes) and Settings > Main Menu (29 items, 1164 bytes). Alone: code 0x736800–0x737668, menus at 0x737800, 0x738000 and 0x738800, osos end 0x739000 | Extended patch. The side table and the list come from the allocators. |
 | `instant-save` | `extended` | After all other data (36 bytes). Alone: 0x736800–0x736824, osos end 0x737000 | Extended patch. |
 | `shuffle-fixes` | `extended` | After all other data (64 bytes). Alone: 0x736800–0x736840, osos end 0x737000 | Extended patch. It also changes 4 words in Apple's code (`bytes`). |
-| `shuffle-album-mix` | `extended` | After all other data (334 bytes). After `shuffle-fixes`: 0x736840–0x73698e, osos end 0x737000 | Extended patch. It needs `shuffle-fixes`. It also changes 1 word (`bytes`). |
+| `shuffle-album-mix` | `extended` | After all other data (1615 bytes), then two menus: the main menu (32 items, 1284 bytes) and Settings > Main Menu (29 items, 1164 bytes). After `shuffle-fixes`: code 0x736840–0x736e8f, menus at 0x736e90 and 0x7373a0, osos end 0x738000 | Extended patch. It needs `shuffle-fixes`. It also changes 1 word (`bytes`). |
 | `cover-flow` | `extended` | After all other data (11092 bytes; approximately 600 KB for the screen copy, the covers and the read buffer come from the allocator while Cover Flow shows) | Extended patch. |
 | `up-next` | `extended` | After all other data (1807 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736f0f, menu at 0x736f10, osos end 0x737800 | Extended patch. |
 

@@ -59,7 +59,7 @@ The language key is the value of the iPod setting. A patch uses it to select the
 |---|---|---|
 | `dark-mode` | Dark Mode | The name of an item in Settings. The value is On or Off. |
 | `album-artists` | Album Artists | An item in the Music menu and in the main menu. Also the title of the screen. Also a row in Settings > Main Menu. |
-| `shuffle-album-mix` | Album Mix | A value of Settings > Shuffle, after Off, Songs and Albums. The songs of each album stay together, and the albums play in a random sequence. |
+| `shuffle-album-mix` | Album Mix | A value of Settings > Shuffle, after Off, Songs and Albums. The albums play in a random sequence, and the songs in each album also play in a random sequence. The main menu item "Shuffle: Album Mix" also shows it. The other texts of that item ("Shuffle", Off, Songs, Albums) are Apple strings, and the iPod shows them in its language. |
 | `something-comforting` | Something Comforting | The name of an item in Settings. This is the name of a song by Porter Robinson. Do not translate it. |
 | `something-comforting` | Play | The value of the item "Something Comforting". A selection of the item plays a part of the song. |
 | `usb-audio-out` | USB-C Audio | The name of an item in Settings. Also a row in Settings > Main Menu. The item sends the music to USB-C headphones. |

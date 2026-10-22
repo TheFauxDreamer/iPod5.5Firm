@@ -5,20 +5,23 @@
   "symbol": "shuffle",
   "category": "playback",
   "version_letter": "x",
-  "version": "1.1",
-  "size": 334,
-  "description": "Settings > Shuffle gets a 4th value, Album Mix. Like Albums, Album Mix plays the albums in a random order. It also shuffles the songs in each album. Apple put this mode in the firmware, but no menu item switched it on.",
+  "version": "1.2",
+  "size": 1615,
+  "description": "Settings > Shuffle gets a 4th value, Album Mix. Like Albums, Album Mix plays the albums in a random order. It also shuffles the songs in each album. Apple put this mode in the firmware, but no menu item switched it on. The main menu can also show a Shuffle item with the 4 values.",
   "needs": ["shuffle-fixes"],
   "details": [
-    "Resored the abandoned Apple feature: Album Mix Shuffle, and fixes bugs in the unfinished code.",
+    "Restored the abandoned Apple feature Album Mix Shuffle, and fixes bugs in the unfinished code.",
     "Settings > Shuffle: Off, Songs, Albums, Album Mix.",
     "The iPod keeps the setting after a sleep, as the other values.",
-    "A change between Albums and Album Mix shuffles the play list again."
+    "A change between Albums and Album Mix shuffles the play list again.",
+    "Settings > Main Menu has a Shuffle row. Set it to On to show the item \"Shuffle: Off\" after Shuffle Songs in the main menu.",
+    "Select the main menu item to go to the next value: Off, Songs, Albums, Album Mix. The item does not start the music. Shuffle Songs does not change."
   ],
   "notes": [
     "This patch needs Shuffle Fixes. Without it, Album Mix repeats some songs and does not play other songs.",
     "The text \"Album Mix\" is in English for all languages.",
-    "Accessories see Album Mix as Albums."
+    "Accessories see Album Mix as Albums.",
+    "Install Instant Save to keep the Settings > Main Menu row after a restart with Menu+Select."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
@@ -30,17 +33,34 @@
     "set_shuffle": "0xb3a04",
     "mark_changed": "0xa983c",
     "refresh_shuffle": "0x11147c",
-    "lookup_continue": "0x21f258"
+    "lookup_continue": "0x21f258",
+    "str_lookup": "0x21f418",
+    "str_table": "0x21f3b8",
+    "settings_object": "0x193090",
+    "main_menu_visible": "0x193470",
+    "set_main_menu_visible": "0x19351c",
+    "menu_item_at": "0x2183ec",
+    "list_select": "0x239f7c",
+    "menu_bit_continue": "0x105a08",
+    "visible_continue": "0x19ed5c"
   },
   "hooks": [
     { "kind": "bl", "at": "0x1929a0", "expect": "0xebfc3102", "to": "hook_get_mode" },
     { "kind": "bl", "at": "0x193b9c", "expect": "0xebfc2c83", "to": "hook_get_mode" },
     { "kind": "bl", "at": "0x191eb0", "expect": "0xebfc86d3", "to": "hook_set_mode" },
     { "kind": "b", "at": "0x21f254", "expect": "0xe92d40f8", "to": "hook_lookup", "chain": "lookup_next", "chain_default": "lookup_original" },
-    { "kind": "word", "at": "0x66c94c", "expect": "0x00190b00", "to": "hook_settings_get", "chain": "get_next" }
+    { "kind": "word", "at": "0x66c94c", "expect": "0x00190b00", "to": "hook_settings_get", "chain": "get_next" },
+    { "kind": "word", "at": "0x66c950", "expect": "0x001919d8", "to": "hook_settings_set", "chain": "set_next" },
+    { "kind": "word", "at": "0x6776f8", "expect": "0x0023ca4c", "to": "hook_activate", "chain": "activate_next" },
+    { "kind": "b", "at": "0x105a04", "expect": "0xe2400b17", "to": "hook_menu_bit", "chain": "menu_bit_next", "chain_default": "menu_bit_original" },
+    { "kind": "b", "at": "0x19ed58", "expect": "0xe92d401c", "to": "hook_set_visible", "chain": "visible_next", "chain_default": "visible_original" }
   ],
   "bytes": [
     { "at": "0x191e9c", "expect": "020050e3", "value": "030050e3" }
+  ],
+  "menu_items": [
+    { "menu_id": 24094, "label_id": "0x7e11", "template_label": "0x5f9e", "after_label": "0x5f9e" },
+    { "menu_id": 24600, "label_id": "0x7e12", "template_label": "0xff49", "after_label": "0xff49", "key": "0x60007e13" }
   ],
   "ui": {
     "steps_title": "Test Album Mix",
@@ -49,7 +69,8 @@
       "On the iPod, open Settings.",
       "Select Shuffle three times. The value is Album Mix.",
       "Select Shuffle Songs in the main menu.",
-      "Make sure that the albums and the songs in each album play in a random order."
+      "Make sure that the albums and the songs in each album play in a random order.",
+      "To show Shuffle in the main menu, open Settings > Main Menu and set Shuffle to On."
     ]
   }
 }

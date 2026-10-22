@@ -442,6 +442,39 @@ In Album Mix, Shuffle Songs gave "1 of 60", Test Song 43, state 0x6c572db3. `shu
 
 A first version gave the text with the string 0x605b. Then the Repeat row also showed "Album Mix": 0x605b is the key of the Repeat item (0x602f + 0x2c), and the menu shows a string with the key of a row if the string exists. Version 1.0 thus hooks the "get" method and uses the string 0x7e10.
 
+### The main menu item (version 1.2)
+
+The owner asked for the 4 Shuffle values in the main menu (22 October 2026). Shuffle Songs stays. A second item "Shuffle: <value>" goes after it. The method is the method of the main menu item of `usb-audio-out` 1.3.
+
+| Result | Evidence |
+|---|---|
+| Menu 24094 (main menu): Shuffle Songs is item 27, label 0x5f9e. It is an action item: +0x04 = 0x20, +0x0c = its script 0x3f8a. | Static (the menu data) |
+| Menu 24600 (Settings > Main Menu): the Shuffle Songs row is item 24, label 0xff49, key 0x60005f9e. | Static (the menu data) |
+| Menu 24598 (Settings): the Shuffle item has the label −135 (0xff79) and the key 0x60006057. The string 0x6057 does not exist: a lookup gave an empty text. Use −135 for "Shuffle". | Static, Emulator |
+| `settings_object()` (0x193090) is the Settings controller. Its byte +0x1c is the cached mode of the Shuffle item, and +0x98 is the main browser (the `app` of 0x9edb0 and 0xb3a04). | Static, Emulator |
+
+The hooks of version 1.2:
+
+| At | Hook | Function |
+|---|---|---|
+| 0x6776f8 (`chain`) | `hook_activate` | Select on the item 0x7e11: the next mode (after Album Mix: Off) with `hook_set_mode`. Also writes the mode to `controller + 0x1c`. Then draws the row again with 0x239f7c. |
+| 0x105a04 (`chain`) | `hook_menu_bit` | The item 0x7e11 has the bit 0x20000000 of the main menu mask. |
+| 0x19ed58 (`chain`) | `hook_set_visible` | When the UI script sets Artists, the patch shows or hides the item from its bit. |
+| 0x66c94c (`chain`) | `hook_settings_get` | The row 0x7e13 shows On or Off. Other questions use the key of Shuffle Songs. |
+| 0x66c950 (`chain`) | `hook_settings_set` | Select on the row 0x7e13 toggles the bit and sends 'Bool'. |
+| 0x21f254 (`chain`) | `hook_lookup` | 0x7e11: "Shuffle: " and the value text 0x6058 + mode ("Album Mix" for mode 3). 0x7e12: the string −135. |
+
+Emulator test, 22 October 2026, fixed seed, 60 tracks. Run 1 with `shuffle-fixes`, `shuffle-album-mix`, `album-artists` and `usb-audio-out`; run 2 with only the two shuffle patches:
+
+1. The main menu did not show the item at the start (default Off).
+2. Settings > Main Menu had the row after Shuffle Songs, with the value Off. Select changed it to On.
+3. The main menu then showed "Shuffle: Off" after Shuffle Songs. The highlight stopped on it.
+4. Four Select pushes gave "Shuffle: Songs", "Shuffle: Albums", "Shuffle: Album Mix" and "Shuffle: Off".
+5. With Album Mix in the main menu, Settings > Shuffle showed Album Mix. One Select there gave Off, and the main menu item then showed "Shuffle: Off".
+6. Shuffle Songs started the music with the shuffle icon ("2 of 60"; the first song fails because the emulator has no audio).
+
+In run 1, the row had no name, because the patch used the string 0x6057. Run 2 used −135 and showed "Shuffle".
+
 ## How to copy the algorithm exactly
 
 1. Use a 32-bit state and the Schrage form above. Use signed division that truncates toward zero.

@@ -18,7 +18,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
 | [volume-unlimit](#volume-unlimit) | Data patch | Patches | 2 bytes | No |
 | [shuffle-fixes](#shuffle-fixes) | Code patch (extended) | Patches | 2 `bl` and 4 instruction words | No |
-| [shuffle-album-mix](#shuffle-album-mix) | Code patch (extended) | Patches | 3 `bl`, 1 `b` and 1 vtable word (both with `chain`), 1 instruction word | Partly: the order of one album |
+| [shuffle-album-mix](#shuffle-album-mix) | Code patch (extended) | Patches | 3 `bl`, 3 `b` and 3 vtable words (all 6 with `chain`), 1 instruction word, 2 menus | Version 1.1: partly, the order of one album. Version 1.2: no |
 | [something-comforting](#something-comforting) | Code patch (example) | Patches | 1 `b` and 2 vtable words (all with `chain`), a Settings menu | No |
 | [album-artists](#album-artists) | Code patch | Patches | 6 `b`, 4 `bl` and 3 vtable words (4 with `chain`), 3 menus | Version 1.1: yes. Version 1.2: no |
 | [instant-save](#instant-save) | Code patch | Patches | 1 `b` | No |
@@ -704,13 +704,15 @@ The card game deck shuffle `0x12d494` also uses `0xaf4b4` and `0x55c`. It cuts i
 
 **Effect.** Settings > Shuffle has a 4th value: Off → Songs → Albums → Album Mix → Off. Album Mix plays the albums in a random order, as Albums. It also shuffles the songs in each album. The iPod saves the value with the other settings. Accessories see Album Mix as Albums.
 
+Version 1.2 adds a main menu item "Shuffle: <value>" after Shuffle Songs. Select goes to the next value, as in Settings > Shuffle. The item does not start the music. Shuffle Songs does not change. Settings > Main Menu has a Shuffle row after Shuffle Songs that shows or hides the item. The default is Off. To keep the row after a restart with Menu+Select, install [instant-save](#instant-save).
+
 **Research.** Refer to [re/shuffle.md](../re/shuffle.md#the-patch-shuffle-album-mix).
 
 - Album Mix is the hidden mode `+0x93` of the shuffle. No menu item of the firmware sets it.
 - The value text of the Shuffle item is the string `0x6058 + mode`. The string 0x605b exists in no language, but it is the key of the Repeat item. Thus the patch uses the string 0x7e10.
 - The Settings controller keeps the mode at `controller + 0x1c`. It loads the mode from 0x9edb0.
 
-**Change.** C file `shuffle_album_mix.c`, 334 bytes after osos (`load_address` "extended").
+**Change.** C file `shuffle_album_mix.c`, 1615 bytes after osos (`load_address` "extended"). After the code, the patcher writes two menus: the main menu and Settings > Main Menu.
 
 | Kind | At | Expect | To |
 |---|---|---|---|
@@ -718,7 +720,11 @@ The card game deck shuffle `0x12d494` also uses `0xaf4b4` and `0x55c`. It cuts i
 | `bl` | 0x193b9c | `0xebfc2c83` (`bl 0x9edb0`) | `hook_get_mode` |
 | `bl` | 0x191eb0 | `0xebfc86d3` (`bl 0xb3a04`) | `hook_set_mode`: writes `+0x93`, marks the change, then calls the setter with mode 2 for Album Mix |
 | `word` (`chain`) | 0x66c94c | `0x00190b00` (get method) | `hook_settings_get`: for the Shuffle item in mode 3, the text ID 0x7e10 |
-| `b` (`chain`) | 0x21f254 | `0xe92d40f8` | `hook_lookup`: the string 0x7e10 is "Album Mix" |
+| `b` (`chain`) | 0x21f254 | `0xe92d40f8` | `hook_lookup`: the string 0x7e10 is "Album Mix". The string 0x7e11 is "Shuffle: " and the value. The string 0x7e12 is "Shuffle" |
+| `word` (`chain`) | 0x66c950 | `0x001919d8` (set method) | `hook_settings_set`: the Settings > Main Menu row 0x7e13 toggles the bit of the item |
+| `word` (`chain`) | 0x6776f8 | `0x0023ca4c` (activate method) | `hook_activate`: Select on the item 0x7e11 sets the next value |
+| `b` (`chain`) | 0x105a04 | `0xe2400b17` | `hook_menu_bit`: the item 0x7e11 has the bit 0x20000000 |
+| `b` (`chain`) | 0x19ed58 | `0xe92d401c` | `hook_set_visible`: the item follows its bit when the UI script sets Artists |
 
 The `bytes` key changes 0x191e9c from `cmp r0, #2` to `cmp r0, #3`, so that Select wraps after Album Mix.
 
@@ -726,7 +732,20 @@ Before a flash or a restore of a firmware without this patch, the app switches o
 
 The setter 0xb3a04 does nothing for a change between Albums and Album Mix, because `+0x20` and `+0x92` do not change. For this change the hook calls 0xa983c (the settings are saved at the next sleep) and the refresh 0x11147c.
 
-**Test status.** Emulator (20 October 2026, with `shuffle-fixes` and the fixed seed, 60 tracks): Select on Shuffle gives Off → Songs → Albums → Album Mix → Off, and the bytes `+0x20`, `+0x92` and `+0x93` agree with each value. In Album Mix, Shuffle Songs played Test Song 43 first, as the model. The Repeat row stays correct. With all 13 patches that are not `internal` or `test` (20 October 2026): the firmware starts, Music has Album Artists, Settings shows Album Mix, Repeat Off, USB-C Audio Off and Something Comforting Play, and Album Mix gives the same order as the model. Real iPod (20 October 2026): the owner played one album with Album Mix on. The songs of the album played in a random order. With Repeat All, the album plays with no end, and the songs stay shuffled. Not tested yet: a list with many albums, and if each pass has a new order.
+**Main menu item (version 1.2).** The method of [usb-audio-out](#usb-audio-out), with these values:
+
+| Menu | Template | New label | Key | Place |
+|---|---|---|---|---|
+| 24094 (main menu) | Shuffle Songs (0x5f9e) | 0x7e11 | – | After Shuffle Songs |
+| 24600 (Settings > Main Menu) | Shuffle Songs row (0xff49) | 0x7e12 | 0x60007e13 | After the Shuffle Songs row |
+
+1. The main menu mask bit is 0x20000000. The firmware does not use it, and it is outside the merge mask 0x1fffffff (0xaf838).
+2. `hook_activate` reads the mode with `hook_get_mode`, adds 1 (after Album Mix: Off) and calls `hook_set_mode`. It also writes the mode to the Settings controller (`settings_object() + 0x1c`). Then Settings > Shuffle shows the same value. It calls 0x239f7c(list, row, 0) to draw the row again, and does not call the action of Shuffle Songs.
+3. The main browser (the `app` of 0xb3a04) is `settings_object() + 0x98`.
+4. The text of the item is the string −135 ("Shuffle"), ": " and the value text 0x6058 + mode in the language of the iPod. "Album Mix" is in English.
+5. For other questions about the row 0x7e13, the get hook asks the firmware with the key of Shuffle Songs (0x5f9e).
+
+**Test status.** Emulator (20 October 2026, with `shuffle-fixes` and the fixed seed, 60 tracks): Select on Shuffle gives Off → Songs → Albums → Album Mix → Off, and the bytes `+0x20`, `+0x92` and `+0x93` agree with each value. In Album Mix, Shuffle Songs played Test Song 43 first, as the model. The Repeat row stays correct. With all 13 patches that are not `internal` or `test` (20 October 2026): the firmware starts, Music has Album Artists, Settings shows Album Mix, Repeat Off, USB-C Audio Off and Something Comforting Play, and Album Mix gives the same order as the model. Real iPod (20 October 2026): the owner played one album with Album Mix on. The songs of the album played in a random order. With Repeat All, the album plays with no end, and the songs stay shuffled. Not tested yet: a list with many albums, and if each pass has a new order. Version 1.2, emulator (22 October 2026, with `shuffle-fixes`, 60 tracks; again with `album-artists` and `usb-audio-out`): the item is hidden by default. Settings > Main Menu > Shuffle = On shows "Shuffle: Off" after Shuffle Songs. Select gives Songs → Albums → Album Mix → Off. Settings > Shuffle then shows the same value. Select on Settings > Shuffle changes the main menu item too. Shuffle Songs still starts the music with shuffle on. Version 1.2 is not tested on the real iPod.
 
 ## something-comforting
 

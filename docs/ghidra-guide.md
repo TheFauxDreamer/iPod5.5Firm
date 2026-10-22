@@ -538,9 +538,9 @@ The signatures of the methods for the vtable hooks. They start at the function e
 | 0x244924 | 0x677a14 | `album-art` | `30402de9 01e0a0e1 0040a0e1 c81094e5 0250a0e1 0820f1e5 c00090e5 24d04de2 2020cde5 0120d1e5 20c08de2 2120cde5 0220d1e5` |
 | 0x1d83fc | 0x69fd2c | `sleep-now` | `10402de9 0040a0e1 180090e5 ??????eb 000050e3 18009415 ??????1b ??????eb 480084e2 ??????eb 480084e2 7d1fa0e3 ??????eb` |
 | 0x190b00 | 0x66c94c | `dark-mode`, `something-comforting`, `album-artists`, `shuffle-album-mix`, `up-next` | `ff4f2de9 0050a0e1 0100a0e3 83df4de2 04028de5 ????9fe5 0080a0e3 000090e5 0160a0e1 010010e3 0340a0e1 ??????1a ????9fe5` |
-| 0x1919d8 | 0x66c950 | `dark-mode`, `something-comforting`, `album-artists`, `up-next` | `f84f2de9 ????9fe5 0040a0e1 71c046e2 ????9fe5 0c0052e1 010086e2 01a0a0e3 0290a0e1 0080a0e3 0350a0e1 907046e2 ??????0a` |
+| 0x1919d8 | 0x66c950 | `dark-mode`, `something-comforting`, `album-artists`, `shuffle-album-mix`, `up-next` | `f84f2de9 ????9fe5 0040a0e1 71c046e2 ????9fe5 0c0052e1 010086e2 01a0a0e3 0290a0e1 0080a0e3 0350a0e1 907046e2 ??????0a` |
 | 0x19351c | (`b` at the entry) | `instant-save` | `f0412de9 0040a0e1 980090e5 0270a0e1 0160a0e1 ??????eb 0050a0e1 0600a0e1 ??????eb 000057e3 0010c501 00108511 980094e5` |
-| 0x23ca4c | 0x6776f8 | `album-artists` | `????9fe5 ??????ea 43756e4d 70402de9 0040a0e1 440190e5 0150a0e1 000050e3 7080bd08 ??????eb 000050e3 0510a011 0400a011` |
+| 0x23ca4c | 0x6776f8 | `album-artists`, `usb-audio-out`, `shuffle-album-mix` | `????9fe5 ??????ea 43756e4d 70402de9 0040a0e1 440190e5 0150a0e1 000050e3 7080bd08 ??????eb 000050e3 0510a011 0400a011` |
 | 0x23b704 | 0x6772c0 | `cover-flow` | `70402de9 0040a0e1 200090e5 0160a0e1 061b00e2 040096e5 020b51e3 0050a0e3 ??????1a 040050e3 05005013 ??????0a 090050e3` |
 | 0x1d81cc | 0x6701f0 | `cover-flow` | `f0412de9 0040a0e1 040091e5 0150a0e1 030050e3 18009405 ??????0b 040095e5 040050e3 ??????1a 0500a0e1 ??????eb 000050e3` |
 | 0x17ef98 | 0x17ef8c | `cover-flow` | `70402de9 0c0091e5 0140a0e1 041091e5 010050e1 080094c5 001094c5 010050c1 7080bdd8 000052e3 7080bd18 ????9fe5 ????9fe5` |

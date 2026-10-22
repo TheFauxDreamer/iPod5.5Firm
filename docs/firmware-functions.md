@@ -235,7 +235,7 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 
 | Address | Function | Evidence |
 |---|---|---|
-| 0x190b00 | "Get" method of the settings object (vtable slot 0x66c94c). Operations are four-character codes: `prID`, `Str `, `Ui32`. The value text of the Shuffle item (key 0x6057) is the string `0x6058 + mode` (Off, Songs, Albums). The string 0x605b exists in no language. | Static, Patch |
+| 0x190b00 | "Get" method of the settings object (vtable slot 0x66c94c). Operations are four-character codes: `prID`, `Str `, `Ui32`. The value text of the Shuffle item (key 0x6057) is the string `0x6058 + mode` (Off, Songs, Albums). The string 0x605b exists in no language. The label of the item is the string −135 (0xff79), "Shuffle". 0x6057 is only the key. | Static, Patch |
 | 0x1919d8 | "Set" method of the settings object (vtable slot 0x66c950). Shuffle item (key 0x6057): Select adds 1 to the cached mode at `controller + 0x1c` and wraps after 2 (`cmp r0, #2` at 0x191e9c). Then it calls 0xb3a04 at 0x191eb0. | Static, Patch |
 | 0xb2e74, 0x9b240 | Setter and getter of the backlight setting (settings +0xaf8). | Static |
 | 0x193b90 | Copies a setting and posts event 0x60000006 when it changes. | Static |
@@ -463,7 +463,7 @@ Refer to [re/album-artist.md](../re/album-artist.md#album-artists-menu-item-15-o
 | 0x1e7b98 | (JS browser): resets the native browser (+0x1c) at the start of a browse. | Static, Emulator |
 | 0x1e7628 | (JS browser, mode): calls 0xb4038(browser, mode). Artists uses mode 1. | Static, Emulator |
 | 0x1e7b98 | (detail) The Artists item of the Music menu runs it one time, the Artists item of the main menu two times. Composers, Genres and Playlists do not run it when they open. | Emulator, Patch |
-| 0x105a04 | (label): the bit of a main-menu item in the main menu mask (a `switch` on the labels 0x5f7c–0x5f9f). Unused bits: 0x4000, 0x20000000, 0x40000000, 0x80000000. `album-artists` uses 0x40000000 and `usb-audio-out` uses 0x80000000 (a `b` hook with `chain` on the first instruction, `sub r0, r0, #0x5c00`). | Static, Patch |
+| 0x105a04 | (label): the bit of a main-menu item in the main menu mask (a `switch` on the labels 0x5f7c–0x5f9f). Unused bits: 0x4000, 0x20000000, 0x40000000, 0x80000000. `shuffle-album-mix` uses 0x20000000, `album-artists` uses 0x40000000 and `usb-audio-out` uses 0x80000000 (a `b` hook with `chain` on the first instruction, `sub r0, r0, #0x5c00`). Only 0x4000 stays free, and it is inside the merge mask 0x1fffffff. | Static, Patch |
 | 0x193470 | (settings, label): 1 if the main-menu item is on (mask AND bit). | Static, Patch |
 | 0x19351c | (settings, label, on): writes the bit into the mask and sets the byte "changed" (+0xb74). It does not write the settings file. The `instant-save` patch hooks its first instruction. | Static, Emulator, Patch |
 | 0x09d880 | (settings): the main menu mask, (main browser + 0xca0) + 0xb34. Emulator default: 0x0e180201. | Static, Emulator |
@@ -939,6 +939,8 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | Str 0x7e06, 0x7e07, 0x7e08 | "USB-C Audio", "On (44.1 kHz)" and "On (48 kHz)" (added by the `usb-audio-out` patch). |
 | Str 0x7e03, 0x7e04 | "Album Artists", and the indented row text in Settings > Main Menu (added by the `album-artists` patch). |
 | Str 0x7e0a | The main menu item of `usb-audio-out`: "USB-C Audio: Off", "On", "44.1 kHz" or "48 kHz". Settings > Main Menu row key 0x60007e09. |
+| Str 0x7e10 | "Album Mix", the 4th value of Settings > Shuffle (added by the `shuffle-album-mix` patch). |
+| Str 0x7e11, 0x7e12 | The main menu item of `shuffle-album-mix` (version 1.2): "Shuffle: " and the value. The text of its Settings > Main Menu row: "Shuffle" (string −135). Row key 0x60007e13. |
 
 ## Element IDs
 
@@ -968,7 +970,7 @@ The emulator found these element IDs (view + 0x1c):
 | 0x600060e4 | Something Comforting (added by the `something-comforting` patch). Not a 32-bit word in osos 1.3. |
 | 0x600060e8 | USB-C Audio (added by the `usb-audio-out` patch) |
 | 0x600060ec | Date & Time > Daylight Saving (Menu 24604). `up-next` 0.4 used this key by mistake. |
-| 0x60007e05, 0x60007e09 | Settings > Main Menu rows of `album-artists` and `usb-audio-out` |
+| 0x60007e05, 0x60007e09, 0x60007e13 | Settings > Main Menu rows of `album-artists`, `usb-audio-out` and `shuffle-album-mix` |
 | 0x60007e0f | Hold Select (added by the `up-next` patch, since version 0.5) |
 
 ## Open questions
