@@ -472,6 +472,24 @@ Refer to [re/album-artist.md](../re/album-artist.md#album-artists-menu-item-15-o
 | 0x24bc38 | (label, menu, visible): calls 0x19ed58 on the menu screen. Search (0x130b70) and Contacts (0x1b9ed0) use it at the start. | Static, Emulator |
 | 0x253fe4 | (item): 1 if the item is visible (item byte +4, bit 0 = 0). | Static |
 
+### The video processor
+
+Refer to [re/video-player.md](../re/video-player.md). The ARM code sends text commands to the BCM2722 (VideoCore). The test patch `video-log` (only on the branch `video-log`) hooks 0xe9358 and 0x2872c0. "Patch" in the evidence column means that patch, on a real iPod.
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x287664 | Sends a command and reads the reply (reply, size, format, ...). Variadic. Result: 0, or -1 if the channel is not open. | Patch |
+| 0xe9358 | Formats and sends one command (format, pointer to the arguments). Takes the lock 0x123000. Result: 0, or -1 if the channel is not open. | Patch |
+| 0x2872c0 | Reads the reply (buffer, size). Releases the lock through 0x287140. Result: 0 if the reply has more than one byte. | Patch |
+| 0x287110 | Sends a command and reads the reply, with no check of the send. Used for `load_application` and `end_application`. | Static |
+| 0x2874f0 | Sends a command with no reply. | Static |
+| 0x7b114 | `vsnprintf` (buffer, size, format, pointer to the arguments). | Patch |
+| 0x7b240 | `snprintf` (buffer, size, format, ...). | Patch |
+| 0x1f9404 | Sends `mp_get_status` and decodes `state`, `substate`, `paused`, `duration` and `elapsed`. | Static |
+| 0x1f9754 | Sends `mp_get_stats video` or `mp_get_stats audio` (0x400-byte reply) and reads the counts of lost frames. | Static |
+| 0x1fa394 | Sends `mp_selectplay passthru:%s %d` (player vtable slot +0x34 of the table at 0x671dc0). | Static |
+| 0x1f8e84 | Sends `mp_play` (slot +0x40). | Static |
+
 ### USB audio
 
 Refer to [re/usb-audio.md](../re/usb-audio.md). No patch uses these functions yet.
