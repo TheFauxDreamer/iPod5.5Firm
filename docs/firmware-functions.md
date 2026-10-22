@@ -761,6 +761,42 @@ modules is in the resource section of the image. The facts are Static.
 | 0x79c8c | The name "Settings". |
 | 0x13061973 | The magic of a record of the table of the modules. |
 
+### The library of C
+
+Refer to [re/firmware-library.md](../re/firmware-library.md). The library is
+the code of the compiler of Apple. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x7ca44 | `memcmp`. It compares 2 blocks of bytes. |
+| 0x7cae0 | `memcpy`. It copies a block of bytes. |
+| 0x7cad0 | `memset`. It fills a block with 1 byte. |
+| 0x7cc48 | `memmove`. It copies a block of bytes. |
+| 0x7ccd0 | `memset`. It fills a block with 0. |
+| 0x7cd28 | `strncpy`. It fills the rest of the block with 0. |
+| 0x7cd6c | `strcpy`. It copies a string. |
+| 0x7cdd4 | `strncmp`. It compares 2 strings. |
+| 0x7ce4c | `strncpy`. It copies a string of a number of bytes. |
+| 0x7ceb8 | `strlen`. It returns the length of a string. |
+| 0x7cfdc | `strcmp`. It compares 2 strings. |
+| 0x7d018 | `__di3di3`. It divides 2 numbers of 64 bits. |
+| 0x7d024 | `__udivsi3`. It divides 2 numbers of 32 bits. |
+| 0x7d1c4 | `__aeabi_fmul`. It multiplies 2 numbers of 32 bits with a fraction. |
+| 0x7d1f0 | `__floatundisf`. It changes a number of 32 bits into a number with a fraction. |
+| 0x7d284 | `__aeabi_ldivmod`. It divides 2 numbers of 64 bits. |
+| 0x7d394 | `__floatdidf`. It changes a number of 64 bits into a number of 32 bits with a fraction. |
+| 0x7d4f4 | `__floatdisf`. It changes a number of 32 bits with a fraction into a number of 64 bits. |
+| 0x7d578 | `__floatdisf`. It changes a number of 32 bits with a fraction into a number of 64 bits. |
+| 0x7d5c8 | `__aeabi_fadd`. It adds 2 numbers of 32 bits with a fraction. |
+| 0x7d69c | `__aeabi_fmul`. It multiplies 2 numbers of 32 bits with a fraction. |
+| 0x7d774 | `__aeabi_fcmp`. It compares 2 numbers of 32 bits with a fraction. |
+| 0x7d7b4 | `__aeabi_fdiv`. It divides 2 numbers of 32 bits with a fraction. |
+| 0x82694 | `__umodsi3`. It gives the rest of the division of 2 numbers of 32 bits. |
+| 0x7a794 | `malloc`. It asks for a block of a number of bytes. |
+| 0x7a7b0 | `free`. It gives a block back. |
+| 0x7a6b0 | `realloc`. It changes the size of a block. |
+| 0x7a6fc | `calloc`. It asks for a block and fills it with 0. |
+
 ### The power and the hardware
 
 Refer to [re/firmware-power.md](../re/firmware-power.md). The power comes from
