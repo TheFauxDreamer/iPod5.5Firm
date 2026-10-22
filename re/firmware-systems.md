@@ -34,9 +34,9 @@ each system. The table also gives the state of the research of each system.
 | The system | The named parts | The task table | The class tables | The state of the research |
 |---|---|---|---|---|
 | USB and the computer | 17 | 11 | most of the drivers of the USB | **Full.** 17 of 17 parts. The note [firmware-usb.md](firmware-usb.md). The note [usb-host.md](usb-host.md) has the host side. The note [usb-audio.md](usb-audio.md) has the audio. |
-| Power and the hardware | 9 | 9 | the power controller, the clock | **Partial.** 0 of 9 parts have a note of their own. The note [sleep.md](sleep.md) has the sleep. The note [backlight-timer.md](backlight-timer.md) has the backlight. The note [piezo.md](piezo.md) has the piezo. |
-| The music and the media | 7 | 0 | the video processor, the caches | **Partial.** 2 of 7 parts. The note [cover-flow.md](cover-flow.md) has the covers. The note [firmware-camera.md](firmware-camera.md) has the copy of the photos. The video processor has no note. |
-| Storage and the file system | 7 | 1 | the file systems, the disk | **Partial.** 1 of 7 parts. The note [play-latency.md](play-latency.md) has the delay of the play. The file systems have no note. |
+| Power and the hardware | 9 | 9 | the power controller, the clock | **Full.** 9 of 9 parts. The note [firmware-power.md](firmware-power.md). |
+| The music and the media | 7 | 0 | the video processor, the caches | **Full.** 7 of 7 parts. The note [firmware-media.md](firmware-media.md). |
+| Storage and the file system | 7 | 1 | the file systems, the disk | **Full.** 7 of 7 parts. The note [firmware-storage.md](firmware-storage.md). |
 | The kernel of the system | 4 | 0 | the base class of the tasks | **Full.** 4 of 4 parts. The note [firmware-task-system.md](firmware-task-system.md). |
 | The camera and the USB | 3 | 0 | the drivers of the camera | **Full.** 3 of 3 parts. The note [firmware-camera.md](firmware-camera.md). |
 | The user interface | 2 | 0 | the views, the lists, the menus | **Full.** 2 of 2 parts. The note [firmware-ui.md](firmware-ui.md). |
@@ -63,6 +63,20 @@ The note [firmware-ui.md](firmware-ui.md) gives the full research of the system
 of the user interface. The note gives the resources of the screens, the 19
 classes of the screens, the elements of a screen and the registry of the
 modules.
+
+The note [firmware-power.md](firmware-power.md) gives the full research of the
+system of the power. The note gives the 8 tasks, the registers of the power
+chip and the manager of the power.
+
+The note [firmware-media.md](firmware-media.md) gives the full research of the
+system of the music and the media. The note gives the 7 tasks, the video
+processor of Broadcom and the MP4 parser.
+
+The note [firmware-storage.md](firmware-storage.md) gives the full research of
+the system of the storage. The note gives the 7 tasks, the bus of the disk, the
+file systems and the partitions.
+
+All 7 systems have a full research.
 
 ## USB and the computer
 
@@ -147,9 +161,15 @@ The note [sleep.md](sleep.md) has 32 functions of the sleep. The note
 [backlight-timer.md](backlight-timer.md) has 8 functions of the backlight. The
 note [piezo.md](piezo.md) has 8 functions of the piezo.
 
-**The state of the research: partial.** No named part of this system has a note
-of its own. The notes of the sleep, the backlight and the piezo have the
-functions of 3 of the 9 parts. The other 6 parts have no note.
+The note [firmware-power.md](firmware-power.md) gives the full research of the
+system of the power. The note gives the 8 tasks, the registers of the power
+chip, the clock and the manager of the power.
+
+**The state of the research: full.** All 9 named parts have a note. The note
+[firmware-power.md](firmware-power.md) has 30 functions. The note gives the
+limits of the research. The research did not find the register that gives the
+state of the battery. The research did not trace the task of the network of the
+modem.
 
 ## The music and the media
 
@@ -172,9 +192,15 @@ The name `Channel PhotoBrowse` at 0x10212098 and the name
 note [album-art-v2.md](album-art-v2.md) has 22 functions of the covers. The
 note [shuffle.md](shuffle.md) has 69 functions of the shuffle.
 
-**The state of the research: partial.** 2 of the 7 named parts have a note.
-The parts are `ArtworkLoadTask` and `PhotoCopyTask`. The other 5 parts have no
-note. The video processor of Broadcom has no note.
+The note [firmware-media.md](firmware-media.md) gives the full research of the
+system of the music and the media. The note gives the 7 tasks, the caches, the
+video processor of Broadcom and the MP4 parser.
+
+**The state of the research: full.** All 7 named parts have a note. The note
+[firmware-media.md](firmware-media.md) has 17 functions. The note gives the
+limits of the research. The programs of the video processor are in the image
+`rsrc`. The research did not analyse the programs. The research did not trace
+the work of the tasks of the caches.
 
 ## Storage and the file system
 
@@ -203,9 +229,15 @@ The firmware names the file systems in the strings of the image. The name
 The note [play-latency.md](play-latency.md) has 34 functions of the delay of
 the play after the idle time. The delay comes from the flash storage.
 
-**The state of the research: partial.** 1 of the 7 named parts has a note. The
-part is `ATAWorkLoopTask`. The other 6 parts have no note. The file systems
-`FAT12`, `FAT16`, `FAT32` and `APPLE_HFS` have no note.
+The note [firmware-storage.md](firmware-storage.md) gives the full research of
+the system of the storage. The note gives the 7 tasks, the bus of the disk, the
+4 file systems and the partitions.
+
+**The state of the research: full.** All 7 named parts have a note. The note
+[firmware-storage.md](firmware-storage.md) has 13 functions. The note gives the
+limits of the research. The research did not decode the 4 file systems. The
+dispatcher of the file systems is at 0x34dec and has 72,000 characters of code.
+The research did not trace the function that reads the table of the partitions.
 
 ## The user interface
 
@@ -356,13 +388,12 @@ The folder is not in the repository. The folder holds the image of the firmware.
 ## The next steps
 
 The systems that have no full research come first. The order of the systems is
-the order of the table of the systems.
+the order of the table of the systems. All 7 systems have a full research. The
+next steps are the work that the notes give as a limit.
 
 | The step | The work |
 |---|---|
-| 1 | The system "Power and the hardware". 6 of the 9 named parts have no note. The power controller and the clock have no note. |
-| 2 | The system "The music and the media". 5 of the 7 named parts have no note. The video processor of Broadcom has no note. |
-| 3 | The system "Storage and the file system". 6 of the 7 named parts have no note. The file systems have no note. |
-| 4 | Join each table of a class to the name of its class. The name is in the function that makes the object. The script must follow the callers of the constructor. |
-| 5 | Read the modules of the engine of the screen. The names of the modules are in the strings. The script must find the table of the modules. |
-| 6 | Name the 14,029 functions without a name. The callers and the callees give the name. The order of the calls gives the work. |
+| 1 | Read the 4 file systems. The dispatcher is at 0x34dec. The research did not decode the file systems. |
+| 2 | Join each table of a class to the name of its class. The name is in the function that makes the object. The script must follow the callers of the constructor. |
+| 3 | Read the modules of the engine of the screen. The names of the modules are in the strings. The script must find the table of the modules. |
+| 4 | Name the 14,029 functions without a name. The callers and the callees give the name. The order of the calls gives the work. |

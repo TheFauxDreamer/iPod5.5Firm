@@ -37,6 +37,9 @@ FULL_RESEARCH = {
     "The camera and the USB": "firmware-camera.md",
     "USB and the computer": "firmware-usb.md",
     "The user interface": "firmware-ui.md",
+    "Power and the hardware": "firmware-power.md",
+    "The music and the media": "firmware-media.md",
+    "Storage and the file system": "firmware-storage.md",
 }
 
 # The notes of the research. The script does not use these notes for the

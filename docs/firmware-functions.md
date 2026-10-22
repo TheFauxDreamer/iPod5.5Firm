@@ -738,6 +738,80 @@ classes that read the resources. The facts are Static.
 | 0x10d278 | Reads the element of the tag `mTtD`. The tag is at 0x10d2b0. |
 | 0x16c328 | The method of the class of the control. The type is at +4 of the object. |
 
+### The power and the hardware
+
+Refer to [re/firmware-power.md](../re/firmware-power.md). The power comes from
+the power chip of the PP5020 of Apple. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x284374 | The method of the task `AlarmTask`. The events are 0x89, 0x8a, 0x8b and 0x94. |
+| 0x28453c | The method of the task `BacklightTask`. The events are 0xa6 to 0xa9. |
+| 0x284a54 | The method of the task `CNATask`. The iPod Video has no modem. |
+| 0x284f30 | The method of the task `HoldSwitchTask`. It reads the switch with 0x2651dc. |
+| 0x284a18 | The method of the task `LowBattDebounceTask`. |
+| 0x284ff4 | The method of the task `PCFPowerMgr`. It calls the kernel with the number 0x18 at the end. |
+| 0x285460 | The method of the task `RTCTimerMgr`. The records of the timers have 0x14 bytes. |
+| 0x2856f0 | The method of the task `WatchdogTask`. It calls the software interrupt 0x123456 if the memory for the table is not there. |
+| 0x148108 | Makes the object of the manager of the power. The name is at 0x14815c. |
+| 0x281b4c | Fills the table of the pins of the general purpose input and output. The table is at 0x281f00. |
+| 0x281f00 | The table of the pins. The 5 registers are 0x6000D000, 0x6000D080, 0x6000D0EC, 0x6000D100 and 0x6000D154. |
+| 0x1b73c8 | Makes the object of the power management unit. The object has the address 0x70000034 at +8. |
+| 0x1b741c | The word with the address 0x70000020. The function 0x1b73c8 sets the bit 0x40000000. |
+| 0x1c7f58 | Makes the object of the clock of the system. The object has the address 0x70000020 at +0xc. |
+| 0x1fcf50 | The table of the clock. The table has 11 registers from 0x60004000 to 0x60004030. |
+| 0x1fca88 | Copies the table of the clock into the registers. |
+| 0x28578c | The string "watchdog: Could not allocate timer!". |
+| 0x2857bc | The string "watchdog: No registered handlers for ". |
+
+### The music and the media
+
+Refer to [re/firmware-media.md](../re/firmware-media.md). The video is decoded by
+the video processor of Broadcom. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x205cfc | Makes the task `ArtworkLoadTask`. The stack is 0x20, the priority 0x8000. The name is at 0x2aa7fc. |
+| 0x16b0b0 | Makes the task `MP3ExampleTask`. The stack is 0x10, the priority is the value at 0x16b0fc << 4. The name is at 0x16b104. |
+| 0x199f70 | Makes the task `PhotoCopyTask`. The stack is 8. The name is at 0x199ff8. |
+| 0x158124 | Makes the thread `TcMemManagerThread`. The name is at 0x158260. |
+| 0x9483c | Makes the task `TrackCacheReadTask`. The stack is 8, the priority 0x2000. The name is at 0x94974. |
+| 0x165164 | Makes the task `VCUpdateTask`. The stack is 0x20, the priority 0x800. The name is at 0x16522c. |
+| 0x1419f4 | Makes the task `VideoDaisyTask`. The stack is 0x20, the priority 0x1000. The name is at 0x500c98. The method is at 0x14165c. |
+| 0x1ddc50 | Makes the 2 tasks of the copy of the stream. The names are at 0x1ddc88 and 0x1ddc8c. |
+| 0x20be1c | Makes the task `StreamCacheReadTask`. The stack is 8, the priority 0x4000. The name is at 0x20be64. |
+| 0x1f9754 | Reads the statistics of the video processor. The value 0 is the audio and the value 1 is the video. |
+| 0x1f996c | The name "mp_get_stats video". |
+| 0x1f9980 | The name "mp_get_stats audio". |
+| 0x1f9994 | The names of the statistics of the video processor. There are 22 names. |
+| 0x287664 | Sends a command to the video processor. |
+| 0x287250 | Reads a value of the statistics. |
+| 0x1ca110 | The names of the boxes of the MP4 for the video. |
+| 0x1ca758 | The names of the boxes of the MP4 for the audio. |
+
+### The storage and the file system
+
+Refer to [re/firmware-storage.md](../re/firmware-storage.md). The iPod has a
+disk with an ATA bus. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x186b34 | Makes the 2 tasks of the bus of the disk. The stack is 0xc0, the priority 0x800. The names are at 0x186bbc and 0x186bd0. |
+| 0x17775c | Makes the task `DiskReaderTask`. The stack is 8, the priority 0x800. The name is at 0x1777b4. |
+| 0x284b0c | The method of the task `DiskMgrTask`. The table of the states of the partitions has 0x2d entries. |
+| 0x34dec | The dispatcher of the file systems. It takes 6 arguments. It uses the 3 names of the table at 0xc26d8. |
+| 0xc26d8 | The names of the file systems FAT12, FAT16 and FAT32. Each name has 8 bytes. |
+| 0x176c14 | The name HFSPLUS in the table of the DRM. |
+| 0x212b68 | The name "Disk Activity". |
+| 0x213dcc | The name "Disk Spinup". |
+| 0x213dd8 | The name "Disk Spindown". |
+| 0x213de8 | The name "Disk Obtain Access". |
+| 0x213dfc | The name "Disk Release Access". |
+| 0x177038 | The name "ForcedDiskMode". |
+| 0x17704c | The name "BangFolder". |
+| 0x177058 | The name "CorruptDataPartition". |
+| 0x177070 | The name "CorruptFirmwarePartition". |
+
 ### The JavaScript engine
 
 | Address | Function | Evidence |
