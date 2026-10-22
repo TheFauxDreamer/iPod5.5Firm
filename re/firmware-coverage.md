@@ -5,7 +5,7 @@ Video. The note gives the list of every part of the firmware. The note gives
 the state of the research for each part.
 
 > The firmware is **not** fully reverse engineered. The research covers 7.3% of
-> the functions of the code and 13.4% of the lines. The research names 2.6% of
+> the functions of the code and 13.3% of the lines. The research names 2.6% of
 > the parts of the user interface. The rest of the firmware is known to exist
 > and is mapped, but its behaviour is not documented.
 
@@ -106,7 +106,7 @@ The research read the code of 1,054 of them.
 | The functions in the image | 14,411 |
 | The functions with a note | 1,054 (7.3%) |
 | The lines of the C code | 551,459 |
-| The lines with a note | 73,594 (13.4%) |
+| The lines with a note | 73,594 (13.3%) |
 | The functions with a name from their strings | 380 (2.6%) |
 | The functions with a string | 382 (2.7%) |
 

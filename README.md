@@ -212,7 +212,7 @@ The research of the games is in [re/games.md](re/games.md) and in the notes besi
 
 The note [re/retailos-decompile.md](re/retailos-decompile.md) gives the decompilation of the whole image `osos` of RetailOS 1.3. The research gives 14,411 functions. The research also gives the map of the strings. The map names 380 functions and puts each function into a group. The C code, the index of the functions and the map of the strings are in `~/Library/Application Support/iPodFirm/re/retailos-1.3-decompiled/`. The script [re/decompile-all.sh](re/decompile-all.sh) does the work again. The script [re/decompile-with-strings.sh](re/decompile-with-strings.sh) does the work with the map of the strings.
 
-The note [re/firmware-coverage.md](re/firmware-coverage.md) gives the index of all the research of the firmware. The note lists every part of the firmware and gives the state of the research for each part. The note also gives the limits of the names. The firmware is not fully reverse engineered. The research covers 7.3% of the functions of the code and 13.4% of the lines.
+The note [re/firmware-coverage.md](re/firmware-coverage.md) gives the index of all the research of the firmware. The note lists every part of the firmware and gives the state of the research for each part. The note also gives the limits of the names. The firmware is not fully reverse engineered. The research covers 7.3% of the functions of the code and 13.3% of the lines.
 
 The note [re/firmware-systems.md](re/firmware-systems.md) gives the systems and the sub-systems of the firmware. The note has the table of the 21 tasks of the firmware, the 49 names of the classes and the 222 tables of the classes.
 
