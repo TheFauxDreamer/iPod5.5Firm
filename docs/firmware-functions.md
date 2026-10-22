@@ -702,6 +702,42 @@ Apple. The facts are Static.
 | 0x1d62d4 | Makes the thread of the incoming data of iAP. The name is at 0x1d6410. |
 | 0x1d73e4 | Makes the thread of the outgoing data of iAP. The name is at 0x1d7520. |
 
+### The user interface
+
+Refer to [re/firmware-ui.md](../re/firmware-ui.md). The screens of the iPod are
+not in the code. They are in the resources of the image. The code holds the
+classes that read the resources. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x331da0 | The main block of the resources. The 8 sections. |
+| 0x336188 | The table of the `Type` section. 158 entries. |
+| 0x3368f0 | The table of the `View` section. 619 entries. |
+| 0x333128 | The table of the `Menu` section. 40 entries. |
+| 0x333308 | The table of the `Str ` section. 991 entries. |
+| 0x331e2c | The table of the `BMap` section. 403 entries. |
+| 0x653048 | The base of the offset of the table of a class in a `Type` resource. |
+| 0x66a904 | The table of the class of the screens. 11 slots. 39 types use it. |
+| 0x66a938 | The table of the class of the screens. 8 slots. 57 types use it. |
+| 0x66a920 | The table of the class of the screens. 4 slots. 16 types use it. |
+| 0x668250 | The table of the class of the empty element. 8 slots. |
+| 0x168938 | Reads the `Type` section and registers the class of the screen. |
+| 0x16914c | Makes the object of a screen of a class. |
+| 0x21a168 | Registers a class. It looks up the class of a type. |
+| 0x21f3dc | Looks up a name in the registry of the modules. |
+| 0x21f254 | Looks up a name in the list of the children of an object. |
+| 0x1fc128 | Makes the object of the engine of the screen. The name is at 0x1fc220. |
+| 0x170bc8 | Makes the task `WindowManager`. The name is at 0x170c5c. |
+| 0x155e7c | Makes the task `SearchHelperThread`. The name is at 0x155ed0. |
+| 0x141060 | Makes the object of the empty element. |
+| 0x141184 | Reads the element of the tag `enoN`. The tag is at 0x1411fc. |
+| 0xab7f0 | Reads the element of the tag `paMB`. The tag is at 0xab8a4. |
+| 0xa6bd0 | Reads the element of the tag ` rtS`. The tag is at 0xa6d28. |
+| 0x12f150 | Reads the element of the tag `warD`. The tag is at 0x12f1a0. |
+| 0x16c080 | Reads the element of the tag `ltnC`. The tag is at 0x16c0e8. |
+| 0x10d278 | Reads the element of the tag `mTtD`. The tag is at 0x10d2b0. |
+| 0x16c328 | The method of the class of the control. The type is at +4 of the object. |
+
 ### The JavaScript engine
 
 | Address | Function | Evidence |

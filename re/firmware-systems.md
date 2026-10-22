@@ -39,7 +39,7 @@ each system. The table also gives the state of the research of each system.
 | Storage and the file system | 7 | 1 | the file systems, the disk | **Partial.** 1 of 7 parts. The note [play-latency.md](play-latency.md) has the delay of the play. The file systems have no note. |
 | The kernel of the system | 4 | 0 | the base class of the tasks | **Full.** 4 of 4 parts. The note [firmware-task-system.md](firmware-task-system.md). |
 | The camera and the USB | 3 | 0 | the drivers of the camera | **Full.** 3 of 3 parts. The note [firmware-camera.md](firmware-camera.md). |
-| The user interface | 2 | 0 | the views, the lists, the menus | **Partial.** 1 of 2 parts. The note [cover-flow.md](cover-flow.md) has the Cover Flow. The note [list-rendering.md](list-rendering.md) has the list. The 158 `Type` resources have no note. |
+| The user interface | 2 | 0 | the views, the lists, the menus | **Full.** 2 of 2 parts. The note [firmware-ui.md](firmware-ui.md). |
 
 The script [make-systems-state.py](make-systems-state.py) makes the table of
 the state. The script reads the table of the systems and the notes. The script
@@ -58,6 +58,11 @@ code of the camera of the iPod Photo.
 The note [firmware-usb.md](firmware-usb.md) gives the full research of the
 system of the USB. The note gives the mode manager, the stack of the device,
 the identity of the iPod and the protocol of the accessory.
+
+The note [firmware-ui.md](firmware-ui.md) gives the full research of the system
+of the user interface. The note gives the resources of the screens, the 19
+classes of the screens, the elements of a screen and the registry of the
+modules.
 
 ## USB and the computer
 
@@ -221,9 +226,17 @@ modules are in the strings of the image: `OpenGLES` at 0x1007947c,
 The note [cover-flow.md](cover-flow.md) has 51 functions of the Cover Flow.
 The note [list-rendering.md](list-rendering.md) has 24 functions of the list.
 
-**The state of the research: partial.** 1 of the 2 named parts has a note. The
-part is `WindowManager`. The part `SearchHelperThread` has no note. The 158
-`Type` resources have no note. The methods of the classes have no note.
+The note [firmware-ui.md](firmware-ui.md) gives the full research of the system
+of the user interface. The note gives the 25 blocks of the resources, the 8
+sections of the main block, the 158 types of the screens with their 19 tables of
+the classes, the 7 kinds of the elements of a screen and the registry of the
+modules.
+
+**The state of the research: full.** All 2 named parts have a note. The note
+[firmware-ui.md](firmware-ui.md) has 30 functions. The note gives the limits of
+the research. The names of the 19 classes of the screens are not in the image.
+The research did not decode the layout of the elements of a screen. The research
+did not find the table of the modules of the screen.
 
 ## The camera and the USB
 
@@ -350,7 +363,6 @@ the order of the table of the systems.
 | 1 | The system "Power and the hardware". 6 of the 9 named parts have no note. The power controller and the clock have no note. |
 | 2 | The system "The music and the media". 5 of the 7 named parts have no note. The video processor of Broadcom has no note. |
 | 3 | The system "Storage and the file system". 6 of the 7 named parts have no note. The file systems have no note. |
-| 4 | The system "The user interface". The 158 `Type` resources have no note. The methods of the classes have no note. |
-| 5 | Join each table of a class to the name of its class. The name is in the function that makes the object. The script must follow the callers of the constructor. |
-| 6 | Read the modules of the engine of the screen. The names of the modules are in the strings. The script must find the table of the modules. |
-| 7 | Name the 14,029 functions without a name. The callers and the callees give the name. The order of the calls gives the work. |
+| 4 | Join each table of a class to the name of its class. The name is in the function that makes the object. The script must follow the callers of the constructor. |
+| 5 | Read the modules of the engine of the screen. The names of the modules are in the strings. The script must find the table of the modules. |
+| 6 | Name the 14,029 functions without a name. The callers and the callees give the name. The order of the calls gives the work. |

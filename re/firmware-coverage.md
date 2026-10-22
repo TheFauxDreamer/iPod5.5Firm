@@ -4,8 +4,8 @@ This note is the map of the reverse engineering of the firmware of the iPod
 Video. The note gives the list of every part of the firmware. The note gives
 the state of the research for each part.
 
-> The firmware is **not** fully reverse engineered. The research covers 6.0% of
-> the functions of the code and 11.1% of the lines. The research names 2.6% of
+> The firmware is **not** fully reverse engineered. The research covers 6.1% of
+> the functions of the code and 11.2% of the lines. The research names 2.6% of
 > the parts of the user interface. The rest of the firmware is known to exist
 > and is mapped, but its behaviour is not documented.
 
@@ -16,11 +16,12 @@ The note has 5 parts.
 | [The images](#the-images) | The 4 images of the partition of the iPod. |
 | [The parts of the user interface](#the-parts-of-the-user-interface) | The 2,214 parts of the table of the resources. |
 | [The state of the code](#the-state-of-the-code) | The 14,411 functions of the image `osos`. |
-| [The notes](#the-notes) | The 32 notes of the research and what each note covers. The note of the systems is at [firmware-systems.md](firmware-systems.md). |
+| [The notes](#the-notes) | The 33 notes of the research and what each note covers. The note of the systems is at [firmware-systems.md](firmware-systems.md). |
 | [The systems](firmware-systems.md) | The systems and the sub-systems of the firmware. The 7 systems, the 21 tasks of the firmware and the 222 tables of the classes. |
 | [The task system](firmware-task-system.md) | The kernel of the firmware. The base class of the tasks, the object of a task, the 9 classes of the priority and the scheduler. |
 | [The camera and the USB](firmware-camera.md) | The camera of the iPod Video. The class drivers of the USB host stack, the task of the camera and the path of the import of the pictures. |
 | [The USB and the computer](firmware-usb.md) | The USB of the iPod Video. The mode manager, the stack of the device, the identity of the iPod and the protocol of the accessory. |
+| [The user interface](firmware-ui.md) | The user interface of the iPod Video. The resources of the screens, the 19 classes of the screens, the elements of a screen and the registry of the modules. |
 | [The warnings](#the-warnings) | The limits of the research. The names are not real names. |
 
 ## The images
@@ -92,14 +93,14 @@ of every part.
 ## The state of the code
 
 The image `osos` has 14,411 functions. The research decompiled all of them.
-The research read the code of 858 of them.
+The research read the code of 879 of them.
 
 | The measure | The value |
 |---|---|
 | The functions in the image | 14,411 |
-| The functions with a note | 858 (6.0%) |
+| The functions with a note | 879 (6.1%) |
 | The lines of the C code | 551,459 |
-| The lines with a note | 61,273 (11.1%) |
+| The lines with a note | 61,824 (11.2%) |
 | The functions with a name from their strings | 380 (2.6%) |
 | The functions with a string | 382 (2.7%) |
 
@@ -111,7 +112,7 @@ number of the functions and the number of the lines for each note.
 
 | The note | The functions | The lines | The share of the code |
 |---|---|---|---|
-| [firmware-functions.md](../docs/firmware-functions.md) | 537 | 28,332 | 5.1% |
+| [firmware-functions.md](../docs/firmware-functions.md) | 554 | 29,299 | 5.3% |
 | [usb-host.md](usb-host.md) | 258 | 12,095 | 2.2% |
 | [../docs/modifications.md](../docs/modifications.md) | 168 | 8,926 | 1.6% |
 | [shuffle.md](shuffle.md) | 69 | 5,855 | 1.1% |
@@ -153,9 +154,9 @@ firmware. The table gives the state of the research of each system. The script
 | Storage and the file system | 7 | 1 | Partial | [play-latency.md](play-latency.md) has the delay of the play. |
 | The kernel of the system | 4 | 4 | **Full** | [firmware-task-system.md](firmware-task-system.md) |
 | The camera and the USB | 3 | 3 | **Full** | [firmware-camera.md](firmware-camera.md) |
-| The user interface | 2 | 1 | Partial | [cover-flow.md](cover-flow.md) has the Cover Flow. [list-rendering.md](list-rendering.md) has the list. |
+| The user interface | 2 | 2 | **Full** | [firmware-ui.md](firmware-ui.md) has the resources of the screens and the classes of the screens. |
 
-3 of the 7 systems have a full research. The 4 other systems have no note for
+4 of the 7 systems have a full research. The 3 other systems have no note for
 the whole system.
 
 ### The parts of the firmware without research
@@ -169,17 +170,17 @@ list is a large area of work.
 | The file system | The `HFS` and the `FAT` have no note. The notes use them. |
 | The power and the sleep of the system | The `sleep.md` note has 32 functions. The rest has no note. |
 | The equalizer of the audio | The `custom-eq.md` note has 39 functions. The rest has no note. |
-| The class system of the user interface | The 158 `Type` resources have no note. The methods of the classes have no note. |
+| The names of the classes of the screens | The `firmware-ui.md` note gives the 19 tables of the classes. The names of the classes are not in the image. |
 | The library of C and the drivers of the hardware | The 14,029 functions without a string. Most of them are here. |
 
 ## The notes
 
-The research has 32 notes. Each note is in the folder `re`. This note and the
+The research has 33 notes. Each note is in the folder `re`. This note and the
 note [firmware-systems.md](firmware-systems.md) and the note
 [firmware-task-system.md](firmware-task-system.md) and the note
 [firmware-camera.md](firmware-camera.md) and the note
-[firmware-usb.md](firmware-usb.md) are the other 5 files of the folder.
-The table gives what each note covers.
+[firmware-usb.md](firmware-usb.md) and the note [firmware-ui.md](firmware-ui.md)
+are the other 6 files of the folder. The table gives what each note covers.
 
 | The note | The part of the firmware | The state |
 |---|---|---|
@@ -193,6 +194,7 @@ The table gives what each note covers.
 | [usb-host.md](usb-host.md) | The USB host stack. The driver list, the descriptors, the transfers. | 258 functions. The most complete note. |
 | [firmware-camera.md](firmware-camera.md) | The camera of the iPod Video. The class drivers of the USB host stack, the task of the camera and the path of the import of the pictures. | 46 functions. |
 | [firmware-usb.md](firmware-usb.md) | The USB of the iPod Video. The 11 tasks, the mode manager, the stack of the device, the identity of the iPod and the protocol of the accessory. | 68 functions. |
+| [firmware-ui.md](firmware-ui.md) | The user interface of the iPod Video. The resources of the screens, the 19 classes of the screens, the elements of a screen and the registry of the modules. | 30 functions. |
 | [usb-audio.md](usb-audio.md) | The USB audio in the firmware. | 23 functions. |
 | [usb-adapter.md](usb-adapter.md) | The plan for the USB-C adapter. | A plan, not a research. |
 | [shuffle.md](shuffle.md) | The shuffle of the music. The 3 modes, the model. | 69 functions. |
@@ -333,8 +335,7 @@ The systems that have no full research come first. The note
 | 1 | The system "Power and the hardware". 6 of the 9 named parts have no note. The power controller and the clock have no note. |
 | 2 | The system "The music and the media". 5 of the 7 named parts have no note. The video processor of Broadcom has no note. |
 | 3 | The system "Storage and the file system". 6 of the 7 named parts have no note. The file systems have no note. |
-| 4 | The system "The user interface". The 158 `Type` resources have no note. The methods of the classes have no note. |
-| 5 | Make the inventory of the classes. The 158 `Type` resources give the class of each view. The table of the methods of each class gives the behaviour. |
-| 6 | Read the strings of the other languages. The image has 25 blocks of the resources. The map of the strings has only the main block. |
-| 7 | Name the functions of the user interface. The name must come from the class and from the method of the object. The strings give only a hint. |
-| 8 | Make the map of the code that the notes do not name. The table of the functions has the number of the calls. The order of the calls gives the structure. |
+| 4 | Make the inventory of the classes. The 158 `Type` resources give the class of each view. The table of the methods of each class gives the behaviour. |
+| 5 | Read the strings of the other languages. The image has 25 blocks of the resources. The map of the strings has only the main block. |
+| 6 | Name the functions of the user interface. The name must come from the class and from the method of the object. The strings give only a hint. |
+| 7 | Make the map of the code that the notes do not name. The table of the functions has the number of the calls. The order of the calls gives the structure. |

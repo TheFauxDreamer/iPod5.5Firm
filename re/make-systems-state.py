@@ -36,6 +36,7 @@ FULL_RESEARCH = {
     "The kernel of the system": "firmware-task-system.md",
     "The camera and the USB": "firmware-camera.md",
     "USB and the computer": "firmware-usb.md",
+    "The user interface": "firmware-ui.md",
 }
 
 # The notes of the research. The script does not use these notes for the
