@@ -17,6 +17,7 @@ The note has 5 parts.
 | [The parts of the user interface](#the-parts-of-the-user-interface) | The 2,214 parts of the table of the resources. |
 | [The state of the code](#the-state-of-the-code) | The 14,411 functions of the image `osos`. |
 | [The notes](#the-notes) | The 30 notes of the research and what each note covers. |
+| [The systems](firmware-systems.md) | The systems and the sub-systems of the firmware. The 7 systems, the 21 tasks of the firmware and the 222 tables of the classes. |
 | [The warnings](#the-warnings) | The limits of the research. The names are not real names. |
 
 ## The images
@@ -268,6 +269,8 @@ firmware.
 | [make-function-index.py](make-function-index.py) | Makes the table of the functions from the C code. |
 | [make-string-map.py](make-string-map.py) | Makes the map of the strings, the names of the functions and the groups. |
 | [make-firmware-inventory.py](make-firmware-inventory.py) | Makes the inventory of the parts of the firmware and the table of the state of the research. |
+| [make-systems-map.py](make-systems-map.py) | Makes the list of the systems, the groups and the table of the tasks of the firmware. |
+| [make-class-map.py](make-class-map.py) | Makes the list of the tables of the classes and their methods. |
 | [ghidra-scripts/DecompileAll.java](ghidra-scripts/DecompileAll.java) | Writes the C code of every function. |
 | [ghidra-scripts/DecompileWithStrings.java](ghidra-scripts/DecompileWithStrings.java) | Writes the C code of every function with the name of every string. |
 | [ghidra-scripts/DefineStringPointers.java](ghidra-scripts/DefineStringPointers.java) | Gives the type of a pointer to the words that hold the address of a string. |

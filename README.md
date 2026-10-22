@@ -214,6 +214,8 @@ The note [re/retailos-decompile.md](re/retailos-decompile.md) gives the decompil
 
 The note [re/firmware-coverage.md](re/firmware-coverage.md) gives the index of all the research of the firmware. The note lists every part of the firmware and gives the state of the research for each part. The note also gives the limits of the names. The firmware is not fully reverse engineered. The research covers 5.3% of the functions of the code and 10.2% of the lines.
 
+The note [re/firmware-systems.md](re/firmware-systems.md) gives the systems and the sub-systems of the firmware. The note has the table of the 21 tasks of the firmware, the 49 names of the classes and the 222 tables of the classes.
+
 ## Other iPod models
 
 The author has only an iPod 5.5G. Thus the author does not add support for other models or for other firmware versions.

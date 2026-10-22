@@ -126,6 +126,10 @@ The 3 scripts `DecompileAll.java`, `DefineStringPointers.java` and `DecompileWit
 
 > The script `DefineStringPointers.java` gives the type of a pointer to every word of the image that holds the address of a string. The decompiler follows a pointer. The decompiler then names every string that a function uses. The name of the string has the text of the string and the address of the string. Without the script, the decompiler names only 794 strings of the 11,232 strings of the image.
 
+### The scripts for the systems
+
+The script [re/make-systems-map.py](../re/make-systems-map.py) reads the table of the tasks of the firmware. The table is at 0x1025d63c. The table has 21 tasks. The script also reads the names of the classes from the strings of the image. The script [re/make-class-map.py](../re/make-class-map.py) reads the tables of the classes. Refer to the note [../re/firmware-systems.md](../re/firmware-systems.md).
+
 ### Pattern format
 
 - Bytes in memory order, in hexadecimal: `18 10 94 e5`. Spaces are optional.
