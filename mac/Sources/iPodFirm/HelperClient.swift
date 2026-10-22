@@ -85,6 +85,12 @@ enum HelperClient {
         })
     }
 
+    static func readOSOS(disk: String, dir: URL) async throws -> HelperResult {
+        try HelperJSON.decode(HelperResult.self, try await call(timeout: 120) { p, reply in
+            p.readOSOS(disk: disk, dir: dir.path, reply: reply)
+        })
+    }
+
     static func flash(disk: String, image: URL, backupDir: URL, reason: String, dryRun: Bool) async throws -> HelperResult {
         try HelperJSON.decode(HelperResult.self, try await call { p, reply in
             p.flash(disk: disk, image: image.path, backupDir: backupDir.path, reason: reason, dryRun: dryRun, reply: reply)

@@ -384,13 +384,33 @@ The variables of a patch are in its area. The firmware loads osos into RAM, so t
 
 Each `patch.json` records the size of its code in `size`. The Patches pane shows it in the list and in the detail ("Size on iPod"). A patch with `size` 0 that changes bytes (`bytes`) shows the count of the changed bytes in place of "0 KB", for example "2 bytes" for `volume-unlimit` (`PatchSpec.changedBytes`, `shortSizeText`, the test `testChangedBytesText`). Some owners thought that a patch with "0 KB" did nothing. The install and **Export Patch…** link the code and write the measured size into `patch.json` if the value is missing or wrong. A user patch that an earlier version of iPodFirm installed can have no size. At each start, the app measures each user patch with no `size` and writes the value into its `patch.json` (`PatchLibrary.recordMissingSizes`). The `version` does not change. If the link fails, for example because the Mac has no clang, the patch keeps no size and the pane shows "–".
 
+### The iPodFirm list
+
+Each build of the app writes a list into osos (`FirmwareManifest` in [FirmwareManifest.swift](../mac/Sources/IPodFWKit/FirmwareManifest.swift)). No iPod code reads it. The app reads it from the iPod to show which patches are on the iPod (refer to [app-and-device.md](app-and-device.md#the-patches-on-the-ipod)).
+
+- Format: the text `iPodFirmManifest1` and a zero byte, a 32-bit little-endian length, then JSON with the keys `app`, `patches` (`name`, `version`, `options`), `appearance` and `theme`.
+- Place: after the last extended patch and its menus, on a 16-byte step, before the rounding to 0x800 bytes (`Patcher.apply` with `list`). Thus the list never covers the zero variables of a patch.
+- The build writes the list only if the image goes past 0x736800 (an extended patch, a theme or Dark Mode). Else the list would make the build move rsrc. A build without the list operates as before.
+- Size: approximately 110 bytes, plus 45 bytes for each patch. 155 bytes for 1 patch, 560 bytes for 10 patches. The list can make the osos 2 KB larger if it crosses a 0x800 step. The space bar shows it as "iPodFirm list" (`SpaceUse.Part.Kind.list`).
+- The Python patcher does not write the list.
+
+Without a list, `Patcher.detect` finds a patch from its changed words:
+
+- Each `bytes` entry has its `value`, and each hook without `chain` is not `expect`: installed.
+- A patch with only `chain` hooks and no `bytes` (for example `something-comforting`): "not known" if all its hook places are changed, else absent. Other patches share these places.
+- A patch with no hooks and no `bytes`: not known.
+
+The tests `FirmwareManifestTests` check the list, the check of the changed words and the mirror rule. With all patches that are not `internal` or `test`, no patch is absent.
+
+Emulator test (22 October 2026): a firmware with `shuffle-fixes`, `shuffle-album-mix`, `album-artists` and a list at 0x739250 (osos end 0x739800) started normally. Music showed Album Artists. A test on the real iPod is not done.
+
 ### The extended area
 
 A patch that is too large for the area before 0x736800 uses `"load_address": "extended"`. The build then puts the patch after all the data that is already in the image: the end of osos, at least 0x736800, aligned to 16 bytes (`Patcher.extendedBase`, Python `extended_base`). Thus the patch goes after a theme, the Dark Mode switch table, the Settings menu, the dark-mode code and the extended patches before it. The limit is 0x7F8000 (`ThemeImport.ososLimit`), because the reset code of RetailOS stops if the image end is after 8 MB (0x800004). The 32 KB below 8 MB stay empty as a margin. Before 9 October 2026 the limit was 0x7F0000. The app setting "Layout" can select 0x7FC000 (a margin of 16 KB, more space for patches) or the old limit 0x7F0000 (a test); the Python patcher uses 0x7F8000. The osos image gets larger than 0x736800, thus the build moves rsrc (`FirmwarePartition.makeRoom`), as for a theme.
 
 The address of an extended patch changes with the theme and the other patches. Thus an extended patch must not use a fixed address of its own code or data in another patch.
 
-The Patches pane shows the use of this area while you switch patches on and off. `Patcher.spaceUse` copies the layout of the build: each extended patch starts at `extendedBase` of the image before it, each menu that a patch changes (`settings_items`, `menu_items`) goes after it, and only the end is rounded to 0x800 bytes. The test `testSpaceUse` makes sure that the result is the size of a real build, also for patches with menus.
+The Patches pane shows the use of this area while you switch patches on and off. `Patcher.spaceUse` copies the layout of the build: each extended patch starts at `extendedBase` of the image before it, each menu that a patch changes (`settings_items`, `menu_items`) goes after it, the iPodFirm list goes after the last patch, and only the end is rounded to 0x800 bytes. The test `testSpaceUse` makes sure that the result is the size of a real build, also for patches with menus.
 
 The bar shows the parts of the used space (`SpaceUse.parts`): the theme and the Dark Mode items, then each switched-on patch in build order (its code, the alignment to 16 bytes and the menus that it changes), then the rounding of the end to 2 KB. Each patch has a color of a fixed palette in build order (`SpaceBar`, `SpaceLegend` in [PatchesView.swift](../mac/Sources/iPodFirm/PatchesView.swift)). A legend below the bar gives the name and the size of each part, and a pointer on a part shows the same text. A patch that adds nothing after the image (for example `volume-unlimit`) has no part. The sum of the parts is the used space (`testSpaceUse`).
 

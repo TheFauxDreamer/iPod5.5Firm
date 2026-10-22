@@ -5,6 +5,7 @@ import IPodFWKit
 //   --daemon : launchd daemon (SMAppService) serving XPC to the signed app; Touch ID is checked in the app
 //   CLI      : run via "do shell script ... with administrator privileges" (password fallback)
 //   ipodfw-helper backup --disk diskN --backup-dir DIR [--owner UID]
+//   ipodfw-helper read   --disk diskN --backup-dir DIR [--owner UID]   (read only: DIR/ipod-osos.bin)
 //   ipodfw-helper flash  --disk diskN --image FILE --backup-dir DIR --reason TEXT [--dry-run] [--owner UID]
 //   ipodfw-helper rescue --disk diskN --image FILE --backup-dir DIR [--dry-run] [--owner UID]
 // Prints one HelperResult JSON object on stdout.
@@ -19,7 +20,7 @@ func emit(_ r: HelperResult) -> Never {
 if CommandLine.arguments.contains("--daemon") { runDaemon() }
 
 var args = Array(CommandLine.arguments.dropFirst())
-guard let command = args.first else { emit(HelperResult(ok: false, message: "usage: ipodfw-helper backup|flash|rescue ...")) }
+guard let command = args.first else { emit(HelperResult(ok: false, message: "usage: ipodfw-helper backup|read|flash|rescue ...")) }
 args.removeFirst()
 var opts: [String: String] = [:]
 var flags: Set<String> = []
@@ -42,6 +43,8 @@ do {
     switch command {
     case "backup":
         emit(try Operations.backup(ipod, to: backupDir, owner: owner))
+    case "read":
+        emit(try Operations.readOSOS(ipod, to: backupDir, owner: owner))
     case "flash":
         guard let image = opts["image"] else { throw FirmwareError("--image is required.") }
         emit(try Operations.flash(ipod, image: URL(fileURLWithPath: image), backupDir: backupDir,

@@ -24,8 +24,8 @@ The app needs macOS 14 or later and an Apple silicon Mac (`--arch arm64`).
 | Firmware | The images, the checksums and the model of the open file. | [OverviewView.swift](../mac/Sources/iPodFirm/OverviewView.swift) |
 | Pictures | Show, export and replace pictures. Show the dark theme pictures. | [PicturesView.swift](../mac/Sources/iPodFirm/PicturesView.swift) |
 | Text | Change the strings of each language. | [StringsView.swift](../mac/Sources/iPodFirm/StringsView.swift) |
-| Patches | A list at the left: iPod Appearance, Software Version and the patches (grouped by `category`: Display, Power and Storage, Sound, Playback, Fun, Tests, and Community for each installed patch and for a patch with no known `category`). Below the list: **+** (install a patch), **−** (remove a user patch) and **⋯** (New Patch…, Install Patch…, Edit Patch…, Export Patch…, Remove Patch…, Show Patches Folder). New Patch… and Edit Patch… open `PatchEditorSheet` ([PatchEditor.swift](../mac/Sources/iPodFirm/PatchEditor.swift)). The sheet writes the text of `patch.json`. Refer to [patch-system.md](patch-system.md#make-and-share-a-patch). The context menu of a user patch also has Edit Patch…. The detail of a user patch has a Code section with the C code, the firmware functions, the hooks, the byte changes, Check Code and Save ([PatchCodeView.swift](../mac/Sources/iPodFirm/PatchCodeView.swift); refer to [patch-system.md](patch-system.md#the-code-section)). The list accepts a dropped `.ipodpatch` file or patch folder. Below the buttons, a bar shows the space after Apple's image (0x736800 to 0x7F8000) that the theme, the Dark Mode items and the extended patches use. The app measures it again 0.3 s after each change of a patch switch or of the appearance (`AppModel.refreshSpaceUse`: a build of the appearance, plus the code size of each switched-on patch, `Patcher.codeSize` and `Patcher.spaceUse`). If the firmware is too large, the bar is red and the text gives the excess. Each patch row has an SF Symbol, the title, the summary, the letter, the version, the size on the iPod and a switch. A switch also turns on the patches that the patch needs (`needs` in `patch.json`), and turns off the patches that need a patch that the owner turns off (`AppModel.setPatch`). The detail at the right shows the selected row: the caution, the sections "What It Does", "You Need" and "Good to Know", the compatibility, the conflicts, the version, the size on the iPod (`size` in `patch.json`; the install, the export and the app start record the measured size), the source and the controls from the `ui` object of `patch.json`. | [PatchesView.swift](../mac/Sources/iPodFirm/PatchesView.swift) |
-| iPod | Find the iPod, back up, flash, restore, eject and the recovery steps. A row shows the permission status and opens the Settings window. | [IPodView.swift](../mac/Sources/iPodFirm/IPodView.swift) |
+| Patches | A list at the left: iPod Appearance, Software Version and the patches (grouped by `category`: Display, Power and Storage, Sound, Playback, Fun, Tests, and Community for each installed patch and for a patch with no known `category`). Below the list: **+** (install a patch), **−** (remove a user patch) and **⋯** (New Patch…, Install Patch…, Edit Patch…, Export Patch…, Remove Patch…, Show Patches Folder). New Patch… and Edit Patch… open `PatchEditorSheet` ([PatchEditor.swift](../mac/Sources/iPodFirm/PatchEditor.swift)). The sheet writes the text of `patch.json`. Refer to [patch-system.md](patch-system.md#make-and-share-a-patch). The context menu of a user patch also has Edit Patch…. The detail of a user patch has a Code section with the C code, the firmware functions, the hooks, the byte changes, Check Code and Save ([PatchCodeView.swift](../mac/Sources/iPodFirm/PatchCodeView.swift); refer to [patch-system.md](patch-system.md#the-code-section)). The list accepts a dropped `.ipodpatch` file or patch folder. Below the buttons, a bar shows the space after Apple's image (0x736800 to 0x7F8000) that the theme, the Dark Mode items and the extended patches use. The app measures it again 0.3 s after each change of a patch switch or of the appearance (`AppModel.refreshSpaceUse`: a build of the appearance, plus the code size of each switched-on patch, `Patcher.codeSize` and `Patcher.spaceUse`). If the firmware is too large, the bar is red and the text gives the excess. Each patch row has an SF Symbol, the title, the summary, the letter, the version, the size on the iPod and a switch. A switch also turns on the patches that the patch needs (`needs` in `patch.json`), and turns off the patches that need a patch that the owner turns off (`AppModel.setPatch`). The detail at the right shows the selected row: the caution, the sections "What It Does", "You Need" and "Good to Know", the compatibility, the conflicts, the version, the size on the iPod (`size` in `patch.json`; the install, the export and the app start record the measured size), the source and the controls from the `ui` object of `patch.json`. When an iPod is connected, a banner at the top of the list compares the switches with the patches on the iPod (refer to [The patches on the iPod](#the-patches-on-the-ipod)). | [PatchesView.swift](../mac/Sources/iPodFirm/PatchesView.swift) |
+| iPod | Find the iPod, back up, flash, restore, eject and the recovery steps. A row shows the permission status and opens the Settings window. The section "Patches on This iPod" shows the patches, the versions and the appearance on the iPod, and has a Read iPod button. | [IPodView.swift](../mac/Sources/iPodFirm/IPodView.swift) |
 | Emulator | Install the emulator, start the firmware, show the screen and send button pushes. | [EmulatorView.swift](../mac/Sources/iPodFirm/EmulatorView.swift) |
 
 [AppModel.swift](../mac/Sources/iPodFirm/AppModel.swift) holds the state and the actions of all panes.
@@ -176,11 +176,14 @@ The helper commands are:
 
 ```sh
 ipodfw-helper backup --disk diskN --backup-dir DIR [--owner UID]
+ipodfw-helper read   --disk diskN --backup-dir DIR [--owner UID]
 ipodfw-helper flash  --disk diskN --image FILE --backup-dir DIR --reason TEXT [--dry-run] [--owner UID]
 ipodfw-helper rescue --disk diskN --image FILE --backup-dir DIR [--dry-run] [--owner UID]
 ```
 
 The helper refuses to run if it is not root.
+
+`read` writes nothing to the iPod. It reads the firmware partition, checks the model and writes only the osos image to `DIR/ipod-osos.bin` (`Operations.readOSOS`). The daemon has the same function as the XPC method `readOSOS` (protocol version 3, `helperReadVersion`). The daemon accepts only a folder in `~/Library/Application Support/iPodFirm/`.
 
 ### Full Disk Access
 
@@ -197,6 +200,23 @@ macOS blocks raw disk access without Full Disk Access. The app tests the permiss
 7. The helper runs again without `--dry-run`. It saves a backup, unmounts the disk, writes the changed blocks, reads them again and compares them.
 
 [safety.md](safety.md) gives each check.
+
+## The patches on the iPod
+
+The patch switches are settings of the app. The owner can change a switch and not flash. Thus the app compares the switches with the firmware on the iPod.
+
+1. A build writes the iPodFirm list into osos (`FirmwareManifest`, refer to [patch-system.md](patch-system.md#the-ipodfirm-list)). The list has the patches, their versions and options, the appearance and the theme.
+2. When an iPod connects (`NSWorkspace.didMountNotification` and `didUnmountNotification`, then `refreshIPods`), the app reads the osos of the new iPod with the helper command `read` (`AppModel.readIPodPatches`). It reads automatically only with the Touch ID daemon, version 3 or later. In password mode, the owner clicks Read iPod, so that no password prompt opens when an iPod connects.
+3. `Patcher.detect` gives the state of each patch: installed (with the version from the list), absent, or not known. Without a list, the result comes from the changed words, and the versions are not known.
+4. After a flash or a restore, the app uses the image that it wrote (`recordWrittenImage`). It does not read the iPod again.
+
+The mirror rule: if the owner did not change a switch, an option or the appearance after the last flash, restore or read (`switchesChangedSinceSync`), a new state sets the switches to the iPod (`AppModel.matchIPod`). Else the switches stay. A patch with the state "not known" keeps its switch. A patch on the iPod that the app does not have stays off.
+
+The Patches pane shows the result:
+
+- A banner at the top of the list: "The switches agree with the iPod", or the count of patches to add, to remove and to update, with the buttons Match iPod and Flash…. If no state is known, the banner has a Read iPod button.
+- A mark in each row: On iPod (green), Not flashed, Will be removed, iPod has *version* (orange), or Not known.
+- In the detail: "On the iPod" with the version, "No" or "Not known".
 
 ## External programs
 
@@ -262,6 +282,7 @@ All paths are in `~/Library/Application Support/iPodFirm/`.
 | `Themes/*.ipodtheme` | The imported themes (JSON). |
 | `Patches/<name>/` | The patches that the owner installed or made with New Patch…. At the start, the app writes the measured `size` into a `patch.json` that has no size. |
 | `Staging/flash.bin` | The partition that the helper writes. |
+| `Staging/ipod-osos.bin` | The osos of the iPod that the helper command `read` writes. The app deletes it after the read. |
 | `Staging/patch-<UUID>/` | A `.ipodpatch` file during the install or the export, or a copy of the code during Check Code. The app deletes it after use. |
 | `Emulator/` | The emulator work folder: the custom `.ipsw` and the music libraries. |
 | `EmulatorProfile/` | The private emulator profile (`IPOD_EMULATOR_DATA`): the drive and `settings.txt`. |
@@ -290,6 +311,7 @@ The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not ch
 | `UserDefaults` key | Content |
 |---|---|
 | `enabledPatches` | The names of the switched-on patches. |
+| `switchesChangedSinceSync` | True if the owner changed a switch, an option or the appearance after the last flash, restore or read of the iPod. Then a read does not change the switches. |
 | `showTestPatches` | Settings > Patches > Enable Test Patches: true shows the test patches (category `test`). |
 | `patchOptions` | The selected choice of each patch option: patch name → option `id` → value (refer to [patch-system.md](patch-system.md#options)). |
 | `appearance` | `light`, `dark` or `switch`. |

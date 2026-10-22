@@ -125,6 +125,26 @@ public enum Operations {
         return HelperResult(ok: true, message: "Backed up \(bytes.count / 1_048_576) MB firmware partition.", backup: info)
     }
 
+    /// The name of the file that `readOSOS` writes.
+    public static let readFileName = "ipod-osos.bin"
+
+    /// Read the osos image of the iPod and write it to `dir/readFileName`. Nothing is written to the iPod.
+    /// The app reads the iPodFirm list and the patches from the file. The message is the path of the file.
+    public static func readOSOS(_ ipod: IPodDisk, to dir: URL, owner: uid_t?) throws -> HelperResult {
+        let (bytes, _) = try readCurrent(ipod)
+        try checkModel(onIPod: bytes)
+        let osos: [UInt8]
+        do { osos = try FirmwarePartition(data: bytes).image("osos") } catch {
+            throw FirmwareError("The firmware on the iPod is damaged (\(error.localizedDescription)).",
+                                code: HelperResult.firmwareUnreadable)
+        }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent(readFileName)
+        try Data(osos).write(to: url, options: .atomic)
+        if let owner { chown(url.path, owner, gid_t(UInt32.max)) }
+        return HelperResult(ok: true, message: url.path)
+    }
+
     /// Flash `imageURL` onto the iPod. Always backs up the current partition first (unless dryRun).
     public static func flash(_ ipod: IPodDisk, image imageURL: URL, backupDir: URL, reason: String,
                              dryRun: Bool, owner: uid_t?) throws -> HelperResult {

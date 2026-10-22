@@ -7,11 +7,15 @@ public let helperMachService = "com.thefauxdreamer.ipodfirm.helper"
 public let helperPlistName = "com.thefauxdreamer.ipodfirm.helper.plist"
 public let appBundleIdentifier = "com.thefauxdreamer.ipodfirm"
 /// Bump when the XPC protocol changes.
-public let helperProtocolVersion = 2
+public let helperProtocolVersion = 3
+/// The first protocol version with `readOSOS`.
+public let helperReadVersion = 3
 
 @objc public protocol HelperXPCProtocol {
     func status(reply: @escaping (Data) -> Void)
     func backup(disk: String, backupDir: String, reply: @escaping (Data) -> Void)
+    /// Read only: writes the osos image of the iPod into `dir` (Operations.readOSOS).
+    func readOSOS(disk: String, dir: String, reply: @escaping (Data) -> Void)
     func flash(disk: String, image: String, backupDir: String, reason: String, dryRun: Bool, reply: @escaping (Data) -> Void)
     func rescueRestore(disk: String, image: String, backupDir: String, dryRun: Bool, reply: @escaping (Data) -> Void)
 }

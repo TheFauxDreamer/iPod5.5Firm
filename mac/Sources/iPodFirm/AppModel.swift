@@ -54,19 +54,33 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var enabledPatches: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "enabledPatches") ?? []) {
-        didSet { UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches") }
+        didSet { UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches"); switchesChanged(oldValue != enabledPatches) }
     }
     /// The selected choice of each patch option: patch name -> option id -> value (see PatchSpec.Option).
     @Published var patchOptions: [String: [String: Int]] =
         (UserDefaults.standard.dictionary(forKey: "patchOptions") as? [String: [String: Int]]) ?? [:] {
-        didSet { UserDefaults.standard.set(patchOptions, forKey: "patchOptions") }
+        didSet { UserDefaults.standard.set(patchOptions, forKey: "patchOptions"); switchesChanged(oldValue != patchOptions) }
     }
     @Published var appearance: Appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .light {
-        didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
+        didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance"); switchesChanged(oldValue != appearance) }
     }
+    /// True if the owner changed a patch switch, an option or the appearance after the last flash, restore
+    /// or read of the iPod. Then a new read of the iPod does not change the switches (`applyIPodState`).
+    @Published var switchesChangedSinceSync = UserDefaults.standard.bool(forKey: "switchesChangedSinceSync") {
+        didSet { UserDefaults.standard.set(switchesChangedSinceSync, forKey: "switchesChangedSinceSync") }
+    }
+    /// True while the app sets the switches from the iPod: this is not a change by the owner.
+    var mirroring = false
+    private func switchesChanged(_ changed: Bool) {
+        if changed && !mirroring && !switchesChangedSinceSync { switchesChangedSinceSync = true }
+    }
+    /// The patches on the connected iPod (nil: not read).
+    @Published var ipodState: IPodPatchState?
+    /// The result of the last read of the iPod, for the Patches pane and the iPod pane.
+    @Published var ipodReadStatus: String?
     @Published var themes: [ThemeFile] = AppModel.loadThemes()
     @Published var selectedThemeName: String? = UserDefaults.standard.string(forKey: "darkTheme") {
-        didSet { UserDefaults.standard.set(selectedThemeName, forKey: "darkTheme") }
+        didSet { UserDefaults.standard.set(selectedThemeName, forKey: "darkTheme"); switchesChanged(oldValue != selectedThemeName) }
     }
     @Published var customVersionOn = UserDefaults.standard.bool(forKey: "customVersionOn") {
         didSet { UserDefaults.standard.set(customVersionOn, forKey: "customVersionOn") }
@@ -346,7 +360,7 @@ final class AppModel: ObservableObject {
             return
         }
         do {
-            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion)).write(to: url, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion, list: activeList)).write(to: url, options: .atomic)
             isDirty = false
         } catch { fail("Cannot save", error) }
     }
@@ -748,6 +762,7 @@ final class AppModel: ObservableObject {
     func refreshSpaceUse() async {
         guard let editor else { spaceUse = nil; return }
         let patches = activePatches, appearance = activeAppearance, known = codeSizes
+        let listSize = (try? activeList.encoded().count) ?? 0
         let result = try? await Task.detached(priority: .utility) { () -> ([String: Int], Patcher.SpaceUse) in
             let osos = try Self.outputOSOS(editor, [], appearance: appearance, version: nil)
             var sizes = known, list = [(patch: PatchInfo, size: Int)]()
@@ -757,7 +772,7 @@ final class AppModel: ObservableObject {
                 sizes[key] = size
                 list.append((p, size))
             }
-            return (sizes, Patcher.spaceUse(osos: osos, patches: list))
+            return (sizes, Patcher.spaceUse(osos: osos, patches: list, listSize: listSize))
         }.value
         guard !Task.isCancelled else { return }
         if let result {
@@ -794,8 +809,9 @@ final class AppModel: ObservableObject {
 
     /// The osos with the appearance (Dark, or Switch on iPod) and the switched-on patches applied.
     /// The edits stay as they are: the theme does not change a byte that the owner changed.
+    /// `list` is the iPodFirm list (`FirmwareManifest`): the build writes it after the patches.
     nonisolated static func outputOSOS(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?,
-                                       version: FirmwareVersion?) throws -> [UInt8] {
+                                       version: FirmwareVersion?, list: FirmwareManifest? = nil) throws -> [UInt8] {
         var osos = editor.osos
         switch appearance {
         case .dark(let theme):
@@ -806,7 +822,9 @@ final class AppModel: ObservableObject {
         case nil:
             break
         }
-        if !patches.isEmpty { osos = try Patcher.apply(patches, to: osos, originalSHA256: editor.originalOSOSHash) }
+        if !patches.isEmpty || list != nil {
+            osos = try Patcher.apply(patches, to: osos, originalSHA256: editor.originalOSOSHash, list: try list?.encoded())
+        }
         if let version { try FirmwareVersion.apply(version, to: &osos) }
         return osos
     }
@@ -814,9 +832,9 @@ final class AppModel: ObservableObject {
     /// The firmware partition to save or flash: the edits plus the theme and the switched-on patches.
     /// A larger osos moves rsrc (see FirmwarePartition.makeRoom).
     nonisolated static func outputPartition(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?,
-                                            version: FirmwareVersion?) throws -> [UInt8] {
+                                            version: FirmwareVersion?, list: FirmwareManifest? = nil) throws -> [UInt8] {
         let fw = try FirmwarePartition(data: editor.partition.data)
-        let osos = try outputOSOS(editor, patches, appearance: appearance, version: version)
+        let osos = try outputOSOS(editor, patches, appearance: appearance, version: version, list: list)
         try fw.makeRoom(ososLength: osos.count)
         try fw.replaceImage("osos", with: osos)
         return fw.data
@@ -983,6 +1001,13 @@ final class AppModel: ObservableObject {
             unsupportedIPods.formIntersection(ipods)
         } catch { fail("Cannot list disks", error) }
         refreshBackups()
+        // A different iPod (or none): the old state is not valid. Read the new iPod.
+        guard busy == nil else { return }
+        guard let ipod = currentIPod, !currentIPodIsUnsupported else { ipodState = nil; ipodReadStatus = nil; return }
+        if ipodState?.ipodKey != IPodPatchState.key(ipod) {
+            ipodState = nil
+            await readIPodPatches(automatic: true)
+        }
     }
 
     func ejectIPod() async {
@@ -1000,8 +1025,8 @@ final class AppModel: ObservableObject {
 
     func backupURL(_ b: BackupInfo) -> URL { Self.backupDir.appendingPathComponent(b.file) }
 
-    private func helperArgs(_ cmd: String, _ ipod: IPodDisk) -> [String] {
-        [cmd, "--disk", ipod.disk, "--backup-dir", Self.backupDir.path, "--owner", String(getuid())]
+    func helperArgs(_ cmd: String, dir: URL? = nil, _ ipod: IPodDisk) -> [String] {
+        [cmd, "--disk", ipod.disk, "--backup-dir", (dir ?? Self.backupDir).path, "--owner", String(getuid())]
     }
 
     func backupNow() async {
@@ -1071,6 +1096,7 @@ final class AppModel: ObservableObject {
             let r = try await runFlash(plan.ipod, image: plan.image, reason: plan.reason, dryRun: false)
             guard r.ok else { throw FirmwareError(r.message, code: r.code) }
             if plan.reason == "flash" { isDirty = false }
+            recordWrittenImage(plan.image, ipod: plan.ipod)
             alert = AlertInfo(title: plan.reason == "flash" ? "Flashed" : "Restored",
                               message: "\(r.message)\nBackup taken first: \(r.backup?.file ?? "-")\(mixNote.map { "\n\n" + $0 } ?? "")\n\nEject the iPod. If the iPod does not start, reset it (hold Menu and Select). Then hold Select and Play for disk mode, and restore a backup in iPodFirm.")
         } catch { fail("Flash failed", error) }
@@ -1081,7 +1107,7 @@ final class AppModel: ObservableObject {
         let staging = Self.supportDir.appendingPathComponent("Staging/flash.bin")
         do {
             try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion)).write(to: staging, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion, list: activeList)).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
         } catch { fail("Cannot flash", error) }
     }
@@ -1104,12 +1130,12 @@ final class AppModel: ObservableObject {
         let s = NSSavePanel()
         s.nameFieldStringValue = "custom-iPod_25.1.3.ipsw"
         guard s.runModal() == .OK, let out = s.url else { return }
-        let patches = activePatches, appearance = activeAppearance, version = activeVersion
+        let patches = activePatches, appearance = activeAppearance, version = activeVersion, list = activeList
         Task {
             do {
                 let original = try await ensureAppleIPSW()
                 try await work("Writing .ipsw…") {
-                    let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version)
+                    let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version, list: list)
                     try IPSW.repack(original: original, firmware: IPSW.firmware(original: original, withOSOS: osos), to: out)
                 }
                 NSWorkspace.shared.activateFileViewerSelecting([out])
@@ -1120,13 +1146,13 @@ final class AppModel: ObservableObject {
     /// Build the emulator drive from the current edits and boot it in the in-app preview.
     func runInEmulator(_ emu: EmulatorManager, _ session: EmulatorSession) {
         guard let editor else { return }
-        let patches = activePatches, appearance = activeAppearance, version = activeVersion
+        let patches = activePatches, appearance = activeAppearance, version = activeVersion, list = activeList
         let library = EmulatorManager.Library.current
         session.start { [weak self] in
             guard let self else { return }
             let original = try await self.ensureAppleIPSW()
             let (fw, ososLength) = try await Task.detached { () -> ([UInt8], Int) in
-                let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version)
+                let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version, list: list)
                 return (try IPSW.firmware(original: original, withOSOS: osos), osos.count)
             }.value
             try await emu.prepare(firmware: fw, ososLength: ososLength, originalIPSW: original, library: library)

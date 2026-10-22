@@ -1908,3 +1908,72 @@ final class PatchLibraryTests: XCTestCase {
         XCTAssertThrowsError(try library.saveCode(builtIn, PatchCode(patch: builtIn)))
     }
 }
+
+/// The iPodFirm list in the firmware, and the check of the patches in an image.
+final class FirmwareManifestTests: XCTestCase {
+    static let list = FirmwareManifest(app: "0.1 (1)", patches: [.init(name: "shuffle-fixes", version: "2.1"),
+                                                                 .init(name: "usb-audio-out", version: "1.9", options: ["rate": 48000])],
+                                       appearance: "dark", theme: "Dark Gray")
+
+    func testRoundTrip() throws {
+        let bytes = try Self.list.encoded()
+        XCTAssertEqual(Array(bytes.prefix(FirmwareManifest.magic.count)), FirmwareManifest.magic)
+        var osos = [UInt8](repeating: 0, count: Patcher.maxOSOSSize + 0x130)
+        osos += bytes
+        osos += [UInt8](repeating: 0, count: 0x800 - osos.count % 0x800)
+        XCTAssertEqual(FirmwareManifest.read(osos: osos), Self.list)
+        // no list: an image that ends before the extended area, and an image with only zeros after it
+        XCTAssertNil(FirmwareManifest.read(osos: [UInt8](repeating: 0, count: 0x736000)))
+        XCTAssertNil(FirmwareManifest.read(osos: [UInt8](repeating: 0, count: Patcher.maxOSOSSize + 0x1000)))
+    }
+
+    func testMirroredSwitches() {
+        let d: [String: PatchDetection] = ["a": .installed(version: "1.0"), "b": .absent, "c": .unknown, "x": .installed(version: nil)]
+        let out = PatchDetection.mirroredSwitches(current: ["b", "c"], detections: d, known: ["a", "b", "c"])
+        XCTAssertEqual(out, ["a", "c"])                         // "x" is not known: it stays off
+    }
+
+    /// A build without the list: the check finds the patches from their changed words. A build with the
+    /// list: the list gives the names and the versions. The space measurement counts the list.
+    func testDetect() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        let all = Patcher.list(in: PatchAndArtTests.repo.appendingPathComponent("patches"))
+        let set = all.filter { ["shuffle-fixes", "shuffle-album-mix", "something-comforting"].contains($0.spec.name) }
+        XCTAssertEqual(set.count, 3)
+
+        let stock = Patcher.detect(osos: osos, patches: all)
+        XCTAssertTrue(stock.values.allSatisfy { $0 != .installed(version: nil) })
+
+        let plain = try Patcher.apply(set, to: osos)
+        XCTAssertNil(FirmwareManifest.read(osos: plain))
+        let found = Patcher.detect(osos: plain, patches: all)
+        XCTAssertEqual(found["shuffle-fixes"], .installed(version: nil))
+        XCTAssertEqual(found["shuffle-album-mix"], .installed(version: nil))
+        XCTAssertEqual(found["something-comforting"], .unknown)          // only shared (chain) hooks
+        XCTAssertEqual(found["sleep-now"], .absent)
+
+        let list = FirmwareManifest(app: "test", patches: set.map { .init(name: $0.spec.name, version: $0.spec.version) })
+        let bytes = try list.encoded()
+        let built = try Patcher.apply(set, to: osos, list: bytes)
+        XCTAssertEqual(FirmwareManifest.read(osos: built), list)
+        let withList = Patcher.detect(osos: built, patches: all)
+        XCTAssertEqual(withList["something-comforting"], .installed(version: set.first { $0.spec.name == "something-comforting" }!.spec.version))
+        XCTAssertEqual(withList["sleep-now"], .absent)
+        // the patches are at the same places: the list goes after them
+        XCTAssertEqual(Array(built.prefix(plain.count - 0x800)), Array(plain.prefix(plain.count - 0x800)))
+        let sizes = try set.map { (patch: $0, size: try Patcher.codeSize($0)) }
+        XCTAssertEqual(Patcher.spaceUse(osos: osos, patches: sizes, listSize: bytes.count).end, built.count)
+
+        // all patches that are not internal or test: no patch is absent
+        let every = all.filter { $0.spec.internal != true && !$0.spec.isTest }
+        let everyFound = Patcher.detect(osos: try Patcher.apply(every, to: osos), patches: every)
+        for p in every { XCTAssertNotEqual(everyFound[p.spec.name], .absent, p.spec.name) }
+
+        // a build that ends before the extended area gets no list (the list would move rsrc)
+        let fixed = all.filter { $0.spec.name == "sleep-now" }
+        let small = try Patcher.apply(fixed, to: osos, list: bytes)
+        XCTAssertEqual(small, try Patcher.apply(fixed, to: osos))
+        XCTAssertEqual(Patcher.detect(osos: small, patches: all)["sleep-now"], .installed(version: nil))
+    }
+}

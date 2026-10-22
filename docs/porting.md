@@ -37,6 +37,7 @@ Thus, about 8,500 lines of the app are in Swift. The UI and the helper (about 3,
 | `MusicImport.swift` | `libimport.py`, `mp4tags.py` |
 | `Device.swift`, `Operations.swift` | `device.py`, `cli.py` (`devices`, `backup`, `flash`, `restore`) |
 | `FirmwareVersion.swift` | None |
+| `FirmwareManifest.swift` (the iPodFirm list and `Patcher.detect`) | None. The Python patcher does not write the list. |
 | `PatchLibrary.swift` (install and export of a `.ipodpatch` file) | None |
 | `USBProbeLog.swift` | None |
 | `HelperXPC.swift` | None. The Python tool runs with `sudo`. |

@@ -63,6 +63,18 @@ You can also try the changed firmware in the **Emulator** pane before you flash 
 
 The **Patches** pane shows the patches. Select a patch to see what it does, what it needs and its size on the iPod.
 
+When an iPod is connected, the app reads the patches on the iPod. A line at the top of the list tells you if the switches agree with the iPod. Each row also has a mark:
+
+- **On iPod**: the iPod has the patch.
+- **Not flashed**: the switch is on, but the iPod does not have the patch.
+- **Will be removed**: the switch is off, but the iPod has the patch.
+- **iPod has 1.1**: the iPod has an older version.
+- **Not known**: the app cannot see the patch. The firmware on the iPod is older than this feature.
+
+If you did not change a switch after the last flash, the switches go to the patches on the iPod. If you changed a switch, the switches stay. Click **Match iPod** to set the switches to the iPod. Click **Flash…** to put the switches on the iPod. With the Touch ID helper, the app reads the iPod automatically. Without it, click **Read iPod**. A read writes nothing to the iPod.
+
+Each build adds a small iPodFirm list of the patches to the firmware (approximately 110 bytes, plus 45 bytes for each patch). The iPod does not use the list. The list is only for the app. A build with no extended patch and no theme does not get the list.
+
 Each patch has a letter. If you switch on "Add a letter for each switched-on patch" in **Software Version**, the About screen of the iPod shows the letters, for example "1.3abkw". Give this version when you report a problem.
 
 ### Appearance and version

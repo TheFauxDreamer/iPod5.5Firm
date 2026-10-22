@@ -40,6 +40,10 @@ final class HelperService: NSObject, HelperXPCProtocol {
         respond(reply) { try Operations.backup(ipod(disk), to: checkedBackupDir(backupDir), owner: uid) }
     }
 
+    func readOSOS(disk: String, dir: String, reply: @escaping (Data) -> Void) {
+        respond(reply) { try Operations.readOSOS(ipod(disk), to: checkedBackupDir(dir), owner: uid) }
+    }
+
     func flash(disk: String, image: String, backupDir: String, reason: String, dryRun: Bool, reply: @escaping (Data) -> Void) {
         respond(reply) {
             try Operations.flash(ipod(disk), image: URL(fileURLWithPath: image), backupDir: checkedBackupDir(backupDir),

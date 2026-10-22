@@ -74,6 +74,8 @@ struct SpaceUseRow: View {
             switch part.kind {
             case .appearance:
                 return SpacePart(name: "Theme and Dark Mode", bytes: part.bytes, color: .indigo)
+            case .list:
+                return SpacePart(name: "iPodFirm list", bytes: part.bytes, color: .gray)
             case .padding:
                 return SpacePart(name: "Rounding to 2 KB", bytes: part.bytes, color: .gray.opacity(0.5))
             case .patch(let name):
@@ -166,6 +168,7 @@ struct PatchList: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            IPodSyncBanner()
             List(selection: $model.patchSelection) {
                 Section("Firmware Options") {
                     OptionRow(title: "iPod Appearance", subtitle: appearanceSummary, symbol: "circle.lefthalf.filled", tint: .indigo)
@@ -302,6 +305,7 @@ struct PatchListRow: View {
                 if let summary = patch.spec.summary {
                     Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }
+                if let mark = model.ipodMark(patch) { IPodMarkLabel(mark: mark) }
             }
             Spacer(minLength: 4)
             if let problem = model.problem(patch) {
@@ -465,6 +469,12 @@ struct PatchDetail: View {
                 }
                 PatchSwitch(patch: patch, label: "Include in Firmware")
                     .help("iPodFirm includes the turned-on patches when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.")
+                if let state = model.ipodState {
+                    LabeledContent("On the iPod", value: ipodText(state))
+                    if let mark = model.ipodMark(patch), mark != .onIPod {
+                        IPodMarkLabel(mark: mark, long: true)
+                    }
+                }
             }
             PatchOptions(patch: patch)
             PatchAbout(spec: patch.spec)
@@ -492,6 +502,108 @@ struct PatchDetail: View {
         }
         .formStyle(.grouped)
         .task(id: "\(patch.spec.name) \(model.currentIPod?.disk ?? "")") { model.loadPatchToggles(patch) }
+    }
+
+    func ipodText(_ state: IPodPatchState) -> String {
+        switch state.detections[patch.spec.name] ?? .absent {
+        case .installed(let v): return v.map { "Version \($0)" } ?? "Yes (the version is not known)"
+        case .absent: return "No"
+        case .unknown: return "Not known"
+        }
+    }
+}
+
+/// The mark of a patch row: the switch compared with the patches on the iPod.
+struct IPodMarkLabel: View {
+    let mark: IPodMark
+    var long = false
+
+    var body: some View {
+        Label(long ? mark.help : mark.title, systemImage: symbol)
+            .font(long ? .callout : .caption)
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
+            .help(mark.help)
+    }
+
+    var symbol: String {
+        switch mark {
+        case .onIPod: "checkmark.circle.fill"
+        case .notFlashed: "arrow.up.circle.fill"
+        case .willBeRemoved: "minus.circle.fill"
+        case .update: "arrow.triangle.2.circlepath.circle.fill"
+        case .unknown: "questionmark.circle"
+        }
+    }
+
+    var color: Color {
+        switch mark {
+        case .onIPod: .green
+        case .notFlashed, .willBeRemoved, .update: .orange
+        case .unknown: .secondary
+        }
+    }
+}
+
+/// The top of the list of patches: do the switches agree with the iPod?
+struct IPodSyncBanner: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        if model.currentIPod != nil {
+            VStack(alignment: .leading, spacing: 6) {
+                if let state = model.ipodState {
+                    let diff = model.ipodDifferences
+                    if diff.isEmpty && !model.ipodAppearanceDiffers {
+                        Label("The switches agree with the iPod.", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else {
+                        Label(differenceText(diff), systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        HStack {
+                            Button("Match iPod") { model.matchIPod() }
+                                .help("Set the switches to the patches on the iPod.")
+                            Button("Flash…") { model.section = .ipod; Task { await model.flashEdited() } }
+                                .disabled(model.editor == nil)
+                                .help(model.editor == nil ? "Open a firmware first." : "Write the firmware with the current switches to the iPod.")
+                        }
+                        .controlSize(.small)
+                    }
+                    let unknown = state.unknownNames(known: Set(model.patches.map(\.spec.name)))
+                    if !unknown.isEmpty {
+                        Text("The iPod also has patches that iPodFirm does not have: \(unknown.joined(separator: ", ")).")
+                            .foregroundStyle(.secondary)
+                    }
+                    if state.list == nil {
+                        Text("The firmware on the iPod has no iPodFirm list. The versions are not known.")
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    if let status = model.ipodReadStatus { Text(status).foregroundStyle(.secondary) }
+                    Button("Read iPod") { Task { await model.readIPodPatches(automatic: false) } }
+                        .controlSize(.small)
+                        .disabled(model.busy != nil)
+                        .help("Read the firmware on the iPod to see its patches. iPodFirm writes nothing to the iPod.")
+                }
+            }
+            .font(.caption)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            Divider()
+        }
+    }
+
+    func differenceText(_ diff: [(PatchInfo, IPodMark)]) -> String {
+        let add = diff.filter { $0.1 == .notFlashed }.count
+        let remove = diff.filter { $0.1 == .willBeRemoved }.count
+        let update = diff.count - add - remove
+        var parts = [String]()
+        if add > 0 { parts.append("\(add) to add") }
+        if remove > 0 { parts.append("\(remove) to remove") }
+        if update > 0 { parts.append("\(update) to update") }
+        if model.ipodAppearanceDiffers { parts.append("a different appearance") }
+        return "The switches do not agree with the iPod: " + parts.joined(separator: ", ") + "."
     }
 }
 

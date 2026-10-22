@@ -348,6 +348,8 @@ public enum Patcher {
                 case appearance
                 /// The code, the data and the menus of one patch (its `name`).
                 case patch(String)
+                /// The iPodFirm list (`FirmwareManifest`).
+                case list
                 /// The rounding of the image end to 0x800 bytes.
                 case padding
             }
@@ -371,8 +373,9 @@ public enum Patcher {
     /// switched-on patches in build order with their code sizes. The layout is the same as the
     /// build (`apply` with several patches): an extended patch starts at `extendedBase` (16-byte
     /// steps), each menu that a patch changes ("settings_items", "menu_items") goes after it, and
-    /// only the end of the image is rounded to 0x800 bytes.
-    public static func spaceUse(osos: [UInt8], patches: [(patch: PatchInfo, size: Int)]) -> SpaceUse {
+    /// only the end of the image is rounded to 0x800 bytes. `listSize` is the size of the iPodFirm list
+    /// (`FirmwareManifest.encoded`). The list goes after the patches only if the image goes past `maxOSOSSize`.
+    public static func spaceUse(osos: [UInt8], patches: [(patch: PatchInfo, size: Int)], listSize: Int = 0) -> SpaceUse {
         var count = osos.count
         var items = [Int16: Int]()                         // the item count of each changed menu
         func itemCount(_ id: Int16) -> Int {
@@ -402,6 +405,11 @@ public enum Patcher {
             var ids = [Int]()
             for m in p.spec.menu_items ?? [] where !ids.contains(m.menu_id) { ids.append(m.menu_id) }
             for id in ids { addMenu(Int16(id), (p.spec.menu_items ?? []).filter { $0.menu_id == id }.count) }
+        }
+        if listSize > 0, count > maxOSOSSize {
+            let before = count
+            count = (count + 15) & ~15 + listSize
+            parts.append(.init(kind: .list, bytes: count - before))
         }
         let end = (count + 0x7FF) / 0x800 * 0x800
         let padding = end - max(count, maxOSOSSize)
@@ -496,13 +504,23 @@ public enum Patcher {
         }
     }
 
-    public static func apply(_ patches: [PatchInfo], to osos: [UInt8], originalSHA256: String? = nil) throws -> [UInt8] {
+    /// `list` is the iPodFirm list (`FirmwareManifest.encoded`). It goes after the last patch, before the
+    /// rounding, but only if the image goes past `maxOSOSSize`. Else the list would move rsrc.
+    public static func apply(_ patches: [PatchInfo], to osos: [UInt8], originalSHA256: String? = nil,
+                             list: [UInt8]? = nil) throws -> [UInt8] {
         if let (p, missing) = missingNeeds(patches).first {
             throw PatchError("The patch \"\(p.spec.displayTitle)\" needs the patch \"\(missing[0])\". Turn it on too.")
         }
         let original = originalSHA256 ?? sha256(osos)
         var out = osos
         for p in patches { out = try apply(p, to: out, originalSHA256: original, pad: false) }
+        if let list, !list.isEmpty, out.count > maxOSOSSize {
+            let at = Int(extendedBase(out))
+            guard at + list.count <= ThemeImport.ososLimit else {
+                throw PatchError("No space for the iPodFirm list (\(list.count) bytes). Switch off a patch.")
+            }
+            out += [UInt8](repeating: 0, count: at - out.count) + list
+        }
         return padded(out)
     }
 

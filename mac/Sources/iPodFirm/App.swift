@@ -204,6 +204,17 @@ struct ContentView: View {
         .sheet(isPresented: $model.showFullDiskAccessHelp) { FullDiskAccessSheet() }
         .sheet(isPresented: $model.showFinderRestoreHelp) { FinderRestoreSheet() }
         .task { await model.refreshIPods() }
+        .task {
+            // A connected or disconnected iPod: find the iPods again, and read the patches on a new iPod.
+            for await _ in NSWorkspace.shared.notificationCenter.notifications(named: NSWorkspace.didMountNotification) {
+                await model.refreshIPods()
+            }
+        }
+        .task {
+            for await _ in NSWorkspace.shared.notificationCenter.notifications(named: NSWorkspace.didUnmountNotification) {
+                await model.refreshIPods()
+            }
+        }
         .task { await model.recordMissingPatchSizes() }
     }
 

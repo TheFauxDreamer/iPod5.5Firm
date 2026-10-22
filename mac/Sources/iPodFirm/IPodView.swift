@@ -42,6 +42,12 @@ struct IPodView: View {
                 }
             } header: { Text("Connected iPod") }
 
+            if model.currentIPod != nil && !model.currentIPodIsUnsupported {
+                Section {
+                    IPodPatchesSection()
+                } header: { Text("Patches on This iPod") }
+            }
+
             Section {
                 if model.backups.isEmpty {
                     Text("There are no backups. iPodFirm makes a backup before each flash. You can also click Back Up Now.")
@@ -87,6 +93,53 @@ struct IPodView: View {
         }
         .formStyle(.grouped)
         .onAppear { model.refreshBackups(); model.recheckFullDiskAccess() }
+        .onChange(of: model.selectedIPod) { Task { await model.refreshIPods() } }
+    }
+}
+
+/// The patches on the connected iPod: from the iPodFirm list in its firmware, or from the changed words.
+struct IPodPatchesSection: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        if let state = model.ipodState {
+            let rows = model.detectablePatches.compactMap { p -> (String, String)? in
+                switch state.detections[p.spec.name] ?? .absent {
+                case .installed(let v): return (p.spec.displayTitle, v.map { "Version \($0)" } ?? "Installed")
+                case .unknown: return (p.spec.displayTitle, "Not known")
+                case .absent: return nil
+                }
+            }
+            if rows.isEmpty {
+                Text("The iPod has no iPodFirm patches.").foregroundStyle(.secondary)
+            }
+            ForEach(rows, id: \.0) { LabeledContent($0.0, value: $0.1) }
+            ForEach(state.unknownNames(known: Set(model.patches.map(\.spec.name))), id: \.self) { name in
+                LabeledContent(name, value: "Not in iPodFirm")
+            }
+            if let list = state.list {
+                LabeledContent("Appearance", value: list.appearance.map { a in
+                    (AppModel.Appearance(rawValue: a)?.title ?? a) + (list.theme.map { ": \($0)" } ?? "")
+                } ?? "Not known")
+                LabeledContent("Made with", value: "iPodFirm \(list.app)")
+            } else {
+                Text("The firmware on the iPod has no iPodFirm list. iPodFirm found the patches from their changes in the firmware. The versions are not known. A flash with this version of iPodFirm adds the list.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        } else if let status = model.ipodReadStatus {
+            Text(status).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        } else {
+            Text("iPodFirm did not read the patches on this iPod.").foregroundStyle(.secondary)
+        }
+        HStack {
+            if let state = model.ipodState {
+                Text("Read \(state.date.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Read iPod") { Task { await model.readIPodPatches(automatic: false) } }
+                .disabled(model.busy != nil)
+                .help("Read the firmware on the iPod to see its patches. iPodFirm writes nothing to the iPod.")
+        }
     }
 }
 
