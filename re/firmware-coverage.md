@@ -4,8 +4,8 @@ This note is the map of the reverse engineering of the firmware of the iPod
 Video. The note gives the list of every part of the firmware. The note gives
 the state of the research for each part.
 
-> The firmware is **not** fully reverse engineered. The research covers 7.1% of
-> the functions of the code and 12.8% of the lines. The research names 2.6% of
+> The firmware is **not** fully reverse engineered. The research covers 7.3% of
+> the functions of the code and 13.3% of the lines. The research names 2.6% of
 > the parts of the user interface. The rest of the firmware is known to exist
 > and is mapped, but its behaviour is not documented.
 
@@ -99,14 +99,14 @@ of every part.
 ## The state of the code
 
 The image `osos` has 14,411 functions. The research decompiled all of them.
-The research read the code of 1,025 of them.
+The research read the code of 1,047 of them.
 
 | The measure | The value |
 |---|---|
 | The functions in the image | 14,411 |
-| The functions with a note | 1,025 (7.1%) |
+| The functions with a note | 1,047 (7.3%) |
 | The lines of the C code | 551,459 |
-| The lines with a note | 70,634 (12.8%) |
+| The lines with a note | 73,079 (13.3%) |
 | The functions with a name from their strings | 380 (2.6%) |
 | The functions with a string | 382 (2.7%) |
 
@@ -124,7 +124,7 @@ number of the functions and the number of the lines for each note.
 | [../docs/modifications.md](../docs/modifications.md) | 168 | 8,926 | 1.6% |
 | [shuffle.md](shuffle.md) | 69 | 5,855 | 1.1% |
 | [album-artist.md](album-artist.md) | 57 | 4,964 | 0.9% |
-| [custom-eq.md](custom-eq.md) | 39 | 4,334 | 0.8% |
+| [custom-eq.md](custom-eq.md) | 61 | 5,683 | 1.0% |
 | [cover-flow.md](cover-flow.md) | 51 | 3,672 | 0.7% |
 | [firmware-storage.md](firmware-storage.md) | 13 | 4,025 | 0.7% |
 | [games.md](games.md) | 52 | 2,792 | 0.5% |
@@ -177,7 +177,7 @@ list is a large area of work.
 | The video processor of Broadcom | The programs are in the image `rsrc`. The `firmware-media.md` note gives the protocol of the statistics of the processor. The research did not analyse the programs. |
 | The cipher of the file systems | The `firmware-filesystems.md` note gives the code of the FAT and the code of the HFS+. The code has a cipher for the constants. The research did not decode the cipher. The research did not name the fields of the boot sector of the FAT. |
 | The power of the system | The `firmware-power.md` note gives the tasks and the registers. The research did not find the register that gives the state of the battery. |
-| The equalizer of the audio | The `custom-eq.md` note has 39 functions. The rest has no note. |
+| The equalizer of the audio | The `custom-eq.md` note has 61 functions. The note gives the 3 tables of the coefficients of the filters. The research did not find the table for the filters 1 to 31. |
 | The names of the classes of the screens | The `firmware-ui.md` note gives the 19 tables of the classes. The research did not find the names. The names are not in the image. The research looked for the names in 4 ways. |
 | The names of the methods of the modules | The `firmware-modules.md` note gives the 418 methods of the 7 modules. The names of the methods are not in the image. |
 | The library of C and the drivers of the hardware | The `firmware-library.md` note names 39 functions of the library of C. The library has about 300 functions. The drivers of the hardware have no name in the image. |
@@ -223,7 +223,7 @@ folder. The table gives what each note covers.
 | [album-art-v2.md](album-art-v2.md) | The picture of the album, the version 2 of the file. | 22 functions. |
 | [list-rendering.md](list-rendering.md) | The picture of the album in the list of the albums. | 24 functions. |
 | [cover-flow.md](cover-flow.md) | The Cover Flow. | 51 functions. |
-| [custom-eq.md](custom-eq.md) | The equalizer of the firmware 1.3. | 39 functions. |
+| [custom-eq.md](custom-eq.md) | The equalizer of the firmware 1.3. The 3 tables of the coefficients of the filters. | 61 functions. |
 | [play-next.md](play-next.md) | The Play Next and the Play Last. | 41 functions. |
 | [play-latency.md](play-latency.md) | The delay of the play after the idle time. | 34 functions. |
 | [song-info.md](song-info.md) | The data of the song in the interface. | 8 functions. |

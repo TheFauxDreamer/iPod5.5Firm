@@ -245,13 +245,53 @@ The function 0x8a48 is called by the dispatcher 0x34dec. The function 0x7d84
 is called by the function 0x49730. The function 0x7f3c is called by the
 function 0x73ce0.
 
+### The cipher of the FAT
+
+The code of the FAT has a cipher for the constants. The function 0x7278 is the
+cipher. The function takes 3 arguments. The first argument is the value to
+decode. The second argument is the key. The third argument is the table of 256
+bytes.
+
+The table of the cipher is in the RAM. The address of the table is at the image
+0x76018. The address is 0x1084880c. The table has 0x1600 bytes. The table is
+made at the run time. The function 0x73ce0 makes the table.
+
+The function 0x73ce0 is 1,561 lines of code. The function has a switch with 65
+cases. The cases are the numbers 0xb to 0x4b. The function uses the cases as
+the states of a machine. The function uses the constants at the image 0x74be0
+to 0x74c54.
+
+The function 0x7f3c and the function 0x8a48 use the cipher. The function 0x7f3c
+calls the cipher with the table of the address at the image 0x76018. The
+function 0x8a48 calls the cipher with the table of the address at the image
+0x76018.
+
+> The research did not decode the cipher of the FAT. The research did not
+> trace the 65 states of the machine of the function 0x73ce0. The research did
+> not name the fields of the boot sector of the FAT.
+
+### The cipher of the dispatcher
+
+The function 0x34dec is the dispatcher of the file systems. The function has
+72,000 characters of code. The function has a cipher for the constants.
+
+The function 0x1c600 has the same cipher. The function 0x1c600 has the table
+of the cipher at the image 0x1df98. The table is in the RAM. The table has
+0x1600 bytes.
+
+The function 0x34dec and the function 0x1c600 use the switch with the cases
+0xb to 0x4b. The cases are the states of the machine of the obfuscation.
+
+> The research did not decode the cipher of the dispatcher. The research did
+> not trace the 65 states of the machine.
+
 ## The limits of the research
 
 | The limit | The result |
 |---|---|
-| The cipher of the FAT | The code of the FAT has a cipher for the constants. The research did not decode the cipher. The research did not name the fields of the boot sector of the FAT. |
-| The cipher of the dispatcher | The function 0x34dec has 72,000 characters of code. The function has a cipher for the constants. The research did not decode the cipher. |
+| The cipher of the FAT | The code of the FAT has a cipher for the constants. The cipher is the function 0x7278. The table of the cipher is in the RAM. The function 0x73ce0 makes the table. The research did not decode the cipher. The research did not name the fields of the boot sector of the FAT. |
+| The cipher of the dispatcher | The function 0x34dec has 72,000 characters of code. The function has a cipher for the constants. The function 0x1c600 has the same cipher. The research did not decode the cipher. |
 | The tree of the catalog | The research found the 2 kinds of the node and the 6 functions of the offset. The research did not name the fields of the node of the tree. |
 | The header of the volume | The research found the 2 signatures and the offsets of the 5 files. The research did not name all the fields of the header. |
-| The partitions | The function 0xc22b4 reads the 4 partitions. The research did not trace the reading of the table of the partitions of the disk. |
+| The partitions | The function 0xc22b4 reads the 4 partitions. The research did not trace the function that reads the table of the partitions of the disk. |
 | The 4 file systems | The research found the code of the FAT and the code of the HFS+. The research found no separate code for the file system FAT12, FAT16 or FAT32. The 3 names select the mode of the same code. |

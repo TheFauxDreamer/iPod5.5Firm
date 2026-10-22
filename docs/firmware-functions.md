@@ -848,6 +848,26 @@ the video processor of Broadcom. The facts are Static.
 | 0x1ca110 | The names of the boxes of the MP4 for the video. |
 | 0x1ca758 | The names of the boxes of the MP4 for the audio. |
 
+### The equalizer of the audio
+
+Refer to [re/custom-eq.md](../re/custom-eq.md). The equalizer is a software
+equalizer. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x14cfcc | The dispatcher of the filter. The function has 3 stages. |
+| 0x14cfb8 | Says that the number of the filter is in the range 0x20 to 0x7f. |
+| 0x14cfbc | Says that the number of the filter is less than 0x60. |
+| 0x14cfa4 | Says that the number of the stage is 0x10 or 0x18. |
+| 0x14e430 | Reads the coefficient of the stage 1. |
+| 0x14e184 | Reads the coefficient of the stage 2. |
+| 0x14e7a8 | Reads the coefficient of the stage 3. |
+| 0x14d438 | Applies the filter. |
+| 0x14e65c | The table of the coefficients of the stage 1. The table has 32 entries. |
+| 0x14e3b0 | The table of the coefficients of the stage 2. The table has 32 entries. |
+| 0x14e948 | The table of the coefficients of the stage 3. The table has 32 entries. |
+| 0x26a9e8 | Selects the object of a command of the audio engine. The case 0x1f is the command of the equalizer. |
+
 ### The storage and the file system
 
 Refer to [re/firmware-storage.md](../re/firmware-storage.md). The iPod has a

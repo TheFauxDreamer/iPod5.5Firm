@@ -112,7 +112,125 @@ The WM8758 codec has a 5-band EQ (registers 0x12–0x16: gain −12 to +12 dB, a
 | Method | Advantages | Disadvantages |
 |---|---|---|
 | Hardware EQ of the WM8758 | No CPU load. Free frequency and gain for 5 bands. No need for the filter table. The firmware does not write these registers. | Only the headphone and line output, not USB-C audio. A test on the real iPod is necessary for the register values and for the effect on the sound. |
-| The software EQ of Apple | Also for USB-C audio (probably). | Needs the filter table and the reader of the EQ state, which are not found. |
+| The software EQ of Apple | Also for USB-C audio (probably). | Needs the filter table. The research found the 3 tables for the filters 32 to 63. The research did not find the table for the filters 1 to 31. |
+
+## The filter table (research round 4, 22 October 2026)
+
+The research found the filter table. The table is in the region of the code of
+the audio engine. The region is 0x14c054 to 0x14e984.
+
+### The 3 stages of the filter
+
+The function 0x14cfcc is the dispatcher of the filter. The function has 3
+stages. The stage is at the offset +0x75 of the object. The function has 2
+more bytes at the offsets +0x76 and +0x77. The function uses the bytes to know
+the state of each stage.
+
+The function 0x14cfb8 says that the number of the filter is in the range 0x20
+to 0x7f. The function is `return param_1 - 0x20U < 0x60;`. The function
+0x14cfbc says that the number is less than 0x60. The function
+0x14cfa4 says that the number of the stage is 0x10 or 0x18.
+
+The 5 small functions 0x14d5a4, 0x14d5b8, 0x14dab8, 0x14df80 and 0x14df94
+each say that the number of the stage is one of 2 numbers. The pairs are
+(0x11, 0x19), (0x12, 0x1a), (0x13, 0x1b), (0x14, 0x1c) and (0x17, 0x1f). The
+function 0x14e984 says that the number of the stage is not one of 8 pairs.
+
+### The 3 tables of the coefficients
+
+The 3 stages have each a table of 32 coefficients. The table has 4 bytes for
+each coefficient. The value is a number with a fraction. The number has 16 bits
+for the whole part and 16 bits for the fraction.
+
+| The stage | The table | The function that reads the table | The range |
+|---|---|---|---|
+| 1 | 0x14e65c | 0x14e430 | 0x20 to 0x3f |
+| 2 | 0x14e3b0 | 0x14e184 | 0x20 to 0x3f |
+| 3 | 0x14e948 | 0x14e7a8 | 0x20 to 0x3f |
+
+The function 0x14e430 and the function 0x14e184 have a switch with the cases
+0x20 to 0x3f. Each case gives the address of the coefficient. The function
+0x14e7a8 has the cases 0x2e, 0x2f and 0x30 to 0x3f. The cases 0x2e and 0x2f
+have no coefficient. The function gives 0 and 2 or 6 for the 2 cases.
+
+The function 0x14e7a8 reads the coefficient with the function 0x223148. The
+function 0x223148 reads 2 bytes. The function 0x14d438 applies the filter with
+the function 0x223884 and the function 0x14c374.
+
+### The values of the table of the stage 2
+
+The table of the stage 2 is at 0x14e3b0.
+
+| The filter | The address | The value |
+|---|---|---|
+| 0x20 | 0x14e3b0 | 0x000081c3 |
+| 0x21 | 0x14e3b4 | 0x000089c3 |
+| 0x22 | 0x14e3b8 | 0x000093c3 |
+| 0x23 | 0x14e3bc | 0x00009ac3 |
+| 0x24 | 0x14e3c0 | 0x00009cc3 |
+| 0x25 | 0x14e3c4 | 0x0000bcc3 |
+| 0x26 | 0x14e3c8 | 0x009880e2 |
+| 0x27 | 0x14e3cc | 0x0000a1c2 |
+| 0x28 | 0x14e3d0 | 0x0000002a |
+| 0x29 | 0x14e3d4 | 0x00000027 |
+| 0x2a | 0x14e3d8 | 0x009480e2 |
+| 0x2b | 0x14e3dc | 0x0000a9c2 |
+| 0x2c | 0x14e3e0 | 0x00a084e2 |
+| 0x2d | 0x14e3e4 | 0x00a280e2 |
+| 0x2e | 0x14e3e8 | 0x009c80e2 |
+| 0x2f | 0x14e3ec | 0x009d80e2 |
+
+> The research did not find the meaning of the 2 parts of the value. The
+> research did not check the values of the tables of the stages 1 and 3. The
+> research did not find the frequency and the gain of each filter.
+
+### The number of the filter
+
+The function 0x1446e8 keeps the first 5 bytes of the message and limits each
+byte to the range 0 to 0x60. The number 0x60 is 96. The function 0x14cfb8
+says that the number of the filter is in the range 0x20 to 0x7f. The 3 tables
+have only the numbers 0x20 to 0x3f. The numbers 0x40 to 0x7f have no
+coefficient in the 3 tables of the research.
+
+> The research did not find the filter numbers 55 to 96. The tables of the
+> research have the numbers 32 to 63. The note of the earlier research has the
+> numbers 1 to 54 for the presets of Apple. The presets use the numbers 1 to
+> 54. The research did not find the table for the numbers 1 to 31.
+
+### The functions of the audio engine
+
+| The function | The work |
+|---|---|
+| 0x14cfcc | The dispatcher of the filter. The function has 3 stages. |
+| 0x14cfb8 | Says that the number of the filter is in the range 0x20 to 0x7f. |
+| 0x14cfbc | Says that the number of the filter is less than 0x60. |
+| 0x14cfa4 | Says that the number of the stage is 0x10 or 0x18. |
+| 0x14e430 | Reads the coefficient of the stage 1. |
+| 0x14e184 | Reads the coefficient of the stage 2. |
+| 0x14e7a8 | Reads the coefficient of the stage 3. |
+| 0x14d438 | Applies the filter. |
+| 0x14d668 | Puts the filter in the state. |
+| 0x14d9b8 | Puts the filter in the state. |
+| 0x14dbe0 | Puts the filter in the state. |
+| 0x14dd30 | Reads the state of the filter. |
+| 0x14d5a4 | Says that the number of the stage is 0x14 or 0x1c. |
+| 0x14d5b8 | Says that the number of the stage is 0x17 or 0x1f. |
+| 0x14df80 | Says that the number of the stage is 0x12 or 0x1a. |
+| 0x14df94 | Says that the number of the stage is 0x13 or 0x1b. |
+| 0x14dab8 | Says that the number of the stage is 0x11 or 0x19. |
+| 0x14e984 | Says that the number of the stage is not a number of the table. The function has 8 pairs of numbers. |
+| 0x223148 | Reads 2 bytes. The function reads a coefficient. |
+| 0x223884 | Puts a value in a list. |
+| 0x14c374 | Puts a filter in the state of the audio engine. |
+| 0x26a9e8 | Selects the object of a command of the audio engine. The case 0x1f is the command of the equalizer. |
+
+## The limits of the research
+
+| The limit | The result |
+|---|---|
+| The filter table | The research found the 3 tables of the coefficients of the filters 0x20 to 0x3f. The research did not find the table for the filters 1 to 31. The research did not find the meaning of the 2 parts of the value. |
+| The meaning of the number | The research did not find the frequency and the gain of each filter. The value has 16 bits for the whole part and 16 bits for the fraction. |
+| The receiver | The research did not find the function that reads the message with the command 0x1f. The research found the tables and the dispatcher of the filter. The tables are in the region 0x14c054 to 0x14e984. |
 
 ## Consequences for a patch
 
