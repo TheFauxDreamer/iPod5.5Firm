@@ -6,6 +6,9 @@
 *.bin
 *.img
 backups/
+# A copy of the folder iPod_Control holds the music, the games and the identity of an
+# iPod. The files are copyrighted or personal.
+iPod_Control/
 # Music files (for example the MIDI file for re/midi-to-tones.py) are copyrighted.
 *.mid
 *.midi
