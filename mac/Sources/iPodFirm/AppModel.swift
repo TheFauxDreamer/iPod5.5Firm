@@ -82,6 +82,14 @@ final class AppModel: ObservableObject {
     @Published var selectedGameFolders: Set<String> = []
     /// The state of the last copy of the games.
     @Published var gameInstallStatus = ""
+    /// The GUID of each game in the folder games_RO of the connected iPod.
+    @Published var ipodGames: [String] = []
+    /// The GUID of each game that the owner selected for the removal.
+    @Published var selectedIPodGames: Set<String> = []
+    /// True when the confirmation sheet of the removal is open.
+    @Published var showRemoveGamesSheet = false
+    /// The state of the last removal of the games.
+    @Published var gameRemoveStatus = ""
     /// True if the owner changed a patch switch, an option or the appearance after the last flash, restore
     /// or read of the iPod. Then a new read of the iPod does not change the switches (`applyIPodState`).
     @Published var switchesChangedSinceSync = UserDefaults.standard.bool(forKey: "switchesChangedSinceSync") {
@@ -421,9 +429,27 @@ final class AppModel: ObservableObject {
 
     static func loadThemes() -> [ThemeFile] {
         let files = (try? FileManager.default.contentsOfDirectory(at: themesDir, includingPropertiesForKeys: nil)) ?? []
-        return files.filter { $0.pathExtension == "ipodtheme" }
+        var out = files.filter { $0.pathExtension == "ipodtheme" }
             .compactMap { url in (try? ImportedTheme.load(url)).map { ThemeFile(name: $0.name, url: url, theme: $0) } }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        // The themes that come with the app (Contents/Resources/Themes). The app
+        // copies a built-in theme into the folder of the owner at the first start,
+        // so the owner can change it like an imported theme.
+        let bundled = Bundle.main.resourceURL.map { $0.appendingPathComponent("Themes") }
+        let builtIn = (try? FileManager.default.contentsOfDirectory(at: bundled!, includingPropertiesForKeys: nil)) ?? []
+        for url in builtIn.filter({ $0.pathExtension == "ipodtheme" }) {
+            guard let theme = try? ImportedTheme.load(url) else { continue }
+            if out.contains(where: { $0.name == theme.name }) { continue }
+            let dest = themesDir.appendingPathComponent(url.lastPathComponent)
+            if !FileManager.default.fileExists(atPath: dest.path) {
+                try? FileManager.default.copyItem(at: url, to: dest)
+                if let copied = try? ImportedTheme.load(dest) {
+                    out.append(ThemeFile(name: copied.name, url: dest, theme: copied))
+                }
+            } else if let copied = try? ImportedTheme.load(dest) {
+                out.append(ThemeFile(name: copied.name, url: dest, theme: copied))
+            }
+        }
+        return out.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     var selectedTheme: ThemeFile? { themes.first { $0.name == selectedThemeName } ?? themes.first }
@@ -988,6 +1014,48 @@ final class AppModel: ObservableObject {
     /// Select all the games, or no game.
     func selectAllGames(_ all: Bool) {
         selectedGameFolders = all ? Set(gamesLibrary.map { $0.folder }) : []
+    }
+
+    /// Read the games in the folder games_RO of the connected iPod.
+    /// The pane of the games shows the list for the removal.
+    func readIPodGames() async {
+        guard currentIPod != nil else {
+            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The pane of the games reads the games of the iPod.")
+            return
+        }
+        guard let volume = ipodVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            return
+        }
+        let root = volume.appendingPathComponent("iPod_Control").path
+        let games = (GameKeys.gamesDirectory(at: root)).map { GameRemover.removableFolders($0) } ?? []
+        ipodGames = games
+        selectedIPodGames = selectedIPodGames.intersection(Set(games))
+        gameRemoveStatus = games.isEmpty ? "The folder games_RO of the iPod holds no game." : ""
+    }
+
+    /// Remove the selected games from the connected iPod. The owner confirms
+    /// the removal first. The removal deletes the folder of the game only.
+    func removeGames(_ guids: Set<String>) async {
+        guard currentIPod != nil else {
+            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The pane of the games removes the games from the iPod.")
+            return
+        }
+        guard let volume = ipodVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            return
+        }
+        let root = volume.appendingPathComponent("iPod_Control").path
+        do {
+            let report = try await work("Removing \(guids.count) game(s) from the iPod…") {
+                try GameRemover.remove(root, Array(guids))
+            }
+            gameRemoveStatus = "Removed \(report.removed.count) game(s)."
+            for guid in report.removed { gameRemoveStatus += "  \(guid)" }
+            await readIPodGames()
+        } catch {
+            gameRemoveStatus = "The games could not be removed: \(error.localizedDescription)"
+        }
     }
 
     /// The mounted volume of the connected iPod. The volume must have the folder iPod_Control.

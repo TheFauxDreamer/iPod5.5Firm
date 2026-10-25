@@ -560,3 +560,65 @@ public enum GameInstaller {
         return out.sorted()
     }
 }
+
+/// The removal of the games from an iPod. The removal deletes the folder of the
+/// game only. The folders `gamedata_RW` and `gamestats_WO` hold the saves and
+/// the scores of the games. The removal does not touch them.
+public enum GameRemover {
+    /// The result of the removal of the games from an iPod.
+    public struct Report {
+        public var removed: [String] = []     // the GUID of each game
+        public var refused: [String] = []     // the GUID of each game that the removal refused
+        public init() {}
+    }
+
+    public enum RemoveError: Error, CustomStringConvertible {
+        case noGamesFolder(String)
+        case notAGuid(String)
+
+        public var description: String {
+            switch self {
+            case .noGamesFolder(let path): return "The folder \(path) has no folder of the games."
+            case .notAGuid(let name): return "\(name) is not the GUID of a game."
+            }
+        }
+    }
+
+    /// The GUID of each game folder in the folder of the games.
+    ///
+    /// The function gives only folders with a name of hexadecimal characters.
+    /// The folders `gamedata_RW` and `gamestats_WO` of the iPod are not game
+    /// folders: their names hold letters that are not hexadecimal.
+    public static func removableFolders(_ gamesDir: String) -> [String] {
+        let fm = FileManager.default
+        guard let names = try? fm.contentsOfDirectory(atPath: gamesDir) else { return [] }
+        return names.filter { name in
+            name.allSatisfy { $0.isHexDigit } && !name.isEmpty
+                && (try? fm.attributesOfItem(atPath: gamesDir + "/" + name))?[.type] as? String == FileAttributeType.typeDirectory.rawValue
+        }.sorted()
+    }
+
+    /// Remove games from the folder iPod_Control of an iPod.
+    ///
+    /// The function removes the folder `games_RO/<GUID>` of each selected game.
+    /// The GUID must hold hexadecimal characters only. The function refuses every
+    /// other name: it never removes a file outside the folder of a game.
+    public static func remove(_ targetRoot: String, _ guids: [String]) throws -> Report {
+        guard let gamesDir = GameKeys.gamesDirectory(at: targetRoot) else {
+            throw RemoveError.noGamesFolder(targetRoot)
+        }
+        var report = Report()
+        let fm = FileManager.default
+        for guid in guids {
+            guard !guid.isEmpty, guid.allSatisfy({ $0.isHexDigit }) else {
+                throw RemoveError.notAGuid(guid)
+            }
+            let folder = gamesDir + "/" + guid
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: folder, isDirectory: &isDir), isDir.boolValue else { continue }
+            try fm.removeItem(atPath: folder)
+            report.removed.append(guid)
+        }
+        return report
+    }
+}

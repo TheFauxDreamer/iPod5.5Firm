@@ -315,3 +315,59 @@ def test_install_never_removes_a_file(tmp_path):
     keep.write_bytes(b"keep")
     games.install_game(game, target)
     assert keep.read_bytes() == b"keep"
+
+
+def test_remove_games_removes_only_the_game_folders(tmp_path):
+    source = make_game(tmp_path / "source" / "11002")
+    make_game(tmp_path / "source" / "1B200")
+    target = tmp_path / "target"
+    games.install_library(games.load_library(tmp_path / "source"), target)
+    # the saves and the scores of the games, and a file next to the games
+    (target / "gamedata_RW" / "11002").mkdir(parents=True)
+    (target / "gamedata_RW" / "11002" / "save.bin").write_bytes(b"data")
+    (target / "gamestats_WO" / "11002").mkdir(parents=True)
+    (target / "games_RO" / "extra.txt").write_bytes(b"a file")
+
+    report = games.remove_games(target, ["11002"])
+
+    assert report.removed == ["11002"]
+    assert not (target / "games_RO" / "11002").exists()
+    assert (target / "games_RO" / "1B200").exists()
+    # the saves, the scores and the other files stay
+    assert (target / "gamedata_RW" / "11002" / "save.bin").read_bytes() == b"data"
+    assert (target / "gamestats_WO" / "11002").is_dir()
+    assert (target / "games_RO" / "extra.txt").read_bytes() == b"a file"
+
+
+def test_remove_games_refuses_a_name_that_is_not_a_guid(tmp_path):
+    source = make_game(tmp_path / "source" / "11002")
+    target = tmp_path / "target"
+    games.install_game(games.load_game(source), target)
+    (target / "iTunes").mkdir()          # the folder of the keys, outside the games
+
+    report = games.remove_games(target, ["../iTunes"])
+
+    assert report.removed == []
+    assert report.missing == ["../iTunes"]
+    assert report.warnings
+    assert (target / "iTunes").is_dir()  # nothing outside the games was touched
+
+
+def test_removable_folders_lists_only_guid_folders(tmp_path):
+    source = make_game(tmp_path / "source" / "11002")
+    target = tmp_path / "target"
+    games.install_game(games.load_game(source), target)
+    (target / "games_RO" / "gamedata_RW").mkdir()
+
+    assert games.removable_folders(target / "games_RO") == ["11002"]
+
+
+def test_remove_games_reports_a_missing_game(tmp_path):
+    target = tmp_path / "target"
+    (target / "games_RO").mkdir(parents=True)
+
+    report = games.remove_games(target, ["50514"])
+
+    assert report.removed == []
+    assert report.missing == ["50514"]
+    assert report.warnings == []

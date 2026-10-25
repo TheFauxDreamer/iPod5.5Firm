@@ -243,3 +243,50 @@ def test_real_theme_import():
     with pytest.raises(themeimport.ThemeError):
         themeimport.make_theme(base_fw, base_fw, target_fw, "same")
     assert checksum(out.image("osos")) == out.entry("osos").chksum
+
+
+def _mini_theme() -> themeimport.Theme:
+    """A theme with two changes: one inside osos, one after its end."""
+    th = themeimport.Theme("Mini", "", "abc")
+    th.changes = [themeimport.Change("View 1", 4, b"OLD!", b"NEW!"),
+                  themeimport.Change("BMap 2", 0x100, b"", b"PICTURE")]
+    return th
+
+
+def test_stripped_theme_holds_no_old_bytes():
+    th = _mini_theme()
+    stripped = themeimport.Theme.from_json(th.to_json(stripped=True))
+    assert all(c.old == b"" and len(c.old_sha256) == 64 for c in stripped.changes if c.old_sha256)
+    assert all(c.old == b"" for c in stripped.changes)
+    # the change after the end of osos has no old bytes in either format
+    assert [c.new for c in stripped.changes] == [c.new for c in th.changes]
+    # the file has no base64 old data
+    assert '"old"' not in th.to_json(stripped=True)
+
+
+def test_stripped_theme_applies_like_the_original():
+    th = _mini_theme()
+    stripped = themeimport.Theme.from_json(th.to_json(stripped=True))
+    a, b = bytearray(b"xxOLD!yy"), bytearray(b"xxOLD!yy")
+    d1, c1 = themeimport.apply_theme(th, a, "abc")
+    d2, c2 = themeimport.apply_theme(stripped, b, "abc")
+    assert (d1, c1) == (d2, c2)
+    assert bytes(a) == bytes(b)
+
+
+def test_stripped_theme_keeps_an_edit_of_the_owner():
+    th = _mini_theme()
+    stripped = themeimport.Theme.from_json(th.to_json(stripped=True))
+    edited = bytearray(b"xxEDIT yy")     # an edit by the owner at the same place
+    done1, conflicts1 = themeimport.apply_theme(th, bytearray(edited), "abc")
+    done2, conflicts2 = themeimport.apply_theme(stripped, edited, "abc")
+    # both formats count the same: the change after the end applies, the edit stays
+    assert (done1, conflicts1) == (done2, conflicts2)
+    assert bytes(edited[:6]) == b"xxEDIT"
+
+
+def test_stripped_theme_refuses_the_wrong_firmware():
+    th = _mini_theme()
+    stripped = themeimport.Theme.from_json(th.to_json(stripped=True))
+    with pytest.raises(themeimport.ThemeError, match="different firmware"):
+        themeimport.apply_theme(stripped, bytearray(b"xxOLD!yy"), "other")

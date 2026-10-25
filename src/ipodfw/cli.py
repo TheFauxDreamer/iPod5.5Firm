@@ -102,6 +102,13 @@ def cmd_import_theme(args) -> None:
         print(f"  not imported: {r}: {why}")
 
 
+def cmd_strip_theme(args) -> None:
+    from . import themeimport
+    th = themeimport.Theme.from_json(Path(args.theme).read_text())
+    Path(args.output).write_text(th.to_json(stripped=True))
+    print(f"Wrote {args.output} in format 2 ({len(th.changes)} changes, no bytes of the Apple firmware)")
+
+
 def cmd_apply_theme(args) -> None:
     from . import themeimport
     fw = load(args.firmware)
@@ -210,6 +217,32 @@ def cmd_install_games(args) -> None:
         print(f"    skipped: {warning}")
     if report.key_file_copied:
         print(f"    copied the file {games.KEY_FILE_NAME}")
+
+
+def cmd_remove_games(args) -> None:
+    from . import games
+    target = Path(args.target)
+    # The target can be the folder iPod_Control of an iPod, or a copy of it.
+    games_dir = games.games_directory(target)
+    if games_dir is None:
+        sys.exit(f"The folder {target} has no folder of the games.")
+    on_ipod = games.removable_folders(games_dir)
+    if args.game:
+        wanted = [g for g in args.game if g in on_ipod]
+        missing = [g for g in args.game if g not in on_ipod]
+        if missing:
+            sys.exit("The iPod has no game with the GUID " + ", ".join(missing) + ".")
+    else:
+        wanted = on_ipod
+    if not wanted:
+        sys.exit("The folder has no game.")
+    print(f"Removing {len(wanted)} game(s) from {games_dir}.")
+    report = games.remove_games(target, wanted)
+    print(f"Removed {len(report.removed)} game(s).")
+    for guid in report.removed:
+        print(f"    {guid}")
+    for guid, why in zip(report.missing, report.warnings):
+        print(f"    refused: {guid}: {why}")
 
 
 def cmd_backup(args) -> None:
@@ -332,6 +365,11 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--name", help="name of the theme")
     s.set_defaults(func=cmd_import_theme)
 
+    s = sub.add_parser("strip-theme", help="write a theme in format 2: hashes in place of the Apple bytes")
+    s.add_argument("theme", help="the theme file to read (JSON)")
+    s.add_argument("-o", "--output", required=True, help="theme file to write (JSON)")
+    s.set_defaults(func=cmd_strip_theme)
+
     s = sub.add_parser("apply-theme", help="apply an iPodFirm theme to a firmware image")
     s.add_argument("firmware")
     s.add_argument("theme")
@@ -357,6 +395,13 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--all", action="store_true", help="copy all the games (the default)")
     s.add_argument("--key-file", help="the file IC-Info.sidb to copy to the target iPod")
     s.set_defaults(func=cmd_install_games)
+
+    s = sub.add_parser("remove-games", help="remove games from the iPod_Control folder of an iPod")
+    s.add_argument("target", help="the folder iPod_Control of the iPod, or a copy of it")
+    s.add_argument("--game", action="append", default=[], metavar="GUID",
+                   help="remove only this game; use the option more than once for more games")
+    s.add_argument("--all", action="store_true", help="remove all the games")
+    s.set_defaults(func=cmd_remove_games)
 
     s = sub.add_parser("backup", help="dump the iPod's whole firmware partition (sudo)")
     s.add_argument("-o", "--output", default="backups/firmware-backup.bin")

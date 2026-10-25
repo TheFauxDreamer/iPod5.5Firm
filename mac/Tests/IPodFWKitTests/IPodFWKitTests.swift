@@ -2361,3 +2361,115 @@ final class GameInstallerTests: XCTestCase {
     }
 }
 
+
+// The tests of the removal of the games from an iPod. The removal deletes the
+// folder of the game only.
+final class GameRemoverTests: XCTestCase {
+    static func makeInstalledLibrary(_ target: URL, _ guids: [String]) throws {
+        for guid in guids {
+            let dir = target.appendingPathComponent("games_RO/\(guid)")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try "code".write(to: dir.appendingPathComponent("Manifest.plist"), atomically: true, encoding: .utf8)
+        }
+        let data = target.appendingPathComponent("gamedata_RW/11002")
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        try "save".write(to: data.appendingPathComponent("save.bin"), atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(at: target.appendingPathComponent("gamestats_WO/11002"), withIntermediateDirectories: true)
+        try "x".write(to: target.appendingPathComponent("games_RO/extra.txt"), atomically: true, encoding: .utf8)
+    }
+
+    func testRemovesOnlyTheGameFolders() throws {
+        let target = FileManager.default.temporaryDirectory
+            .appendingPathComponent("iPodFirm-remove-games-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        try Self.makeInstalledLibrary(target, ["11002", "1B200"])
+
+        let report = try GameRemover.remove(target.path, ["11002"])
+
+        XCTAssertEqual(report.removed, ["11002"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: target.appendingPathComponent("games_RO/11002").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: target.appendingPathComponent("games_RO/1B200").path))
+        // the saves, the scores and the other files stay
+        XCTAssertTrue(FileManager.default.fileExists(atPath: target.appendingPathComponent("gamedata_RW/11002/save.bin").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: target.appendingPathComponent("gamestats_WO/11002").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: target.appendingPathComponent("games_RO/extra.txt").path))
+        try? FileManager.default.removeItem(at: target)
+    }
+
+    func testRefusesANameThatIsNotAGuid() throws {
+        let target = FileManager.default.temporaryDirectory
+            .appendingPathComponent("iPodFirm-remove-games-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: target.appendingPathComponent("iTunes"), withIntermediateDirectories: true)
+        try Self.makeInstalledLibrary(target, ["11002"])
+
+        XCTAssertThrowsError(try GameRemover.remove(target.path, ["../iTunes"])) { e in
+            XCTAssertTrue((e as? GameRemover.RemoveError)?.description.contains("GUID") ?? false)
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: target.appendingPathComponent("iTunes").path))
+        try? FileManager.default.removeItem(at: target)
+    }
+
+    func testRemovableFoldersListsOnlyGuidFolders() throws {
+        let target = FileManager.default.temporaryDirectory
+            .appendingPathComponent("iPodFirm-remove-games-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        try Self.makeInstalledLibrary(target, ["11002"])
+        try FileManager.default.createDirectory(at: target.appendingPathComponent("games_RO/gamedata_RW"), withIntermediateDirectories: true)
+
+        let dir = try GameKeys.gamesDirectory(at: target.path)
+        XCTAssertEqual(GameRemover.removableFolders(dir!), ["11002"])
+        try? FileManager.default.removeItem(at: target)
+    }
+}
+
+// The tests of the theme format 2: the file holds the hash of the old bytes in
+// place of the old bytes, so the app can ship a theme with no byte of the Apple
+// firmware.
+final class StrippedThemeTests: XCTestCase {
+    /// A small theme with one change inside osos.
+    static func miniTheme() -> ImportedTheme {
+        var t = ImportedTheme(name: "Mini", source_sha256: "", osos_sha256: "abc")
+        t.format = ThemeImport.formatStripped
+        t.changes = [ThemeChange(resource: "View 1", offset: 4,
+                                 old: Data(), new: Data([0x4E, 0x45, 0x57, 0x21]),
+                                 oldSHA256: ThemeImport.sha256([0x4F, 0x4C, 0x44, 0x21]))]
+        return t
+    }
+
+    /// The theme as decoded JSON, the way the app reads a file in format 2.
+    func loadMini() throws -> ImportedTheme {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        let data = try enc.encode(Self.miniTheme())
+        return try JSONDecoder().decode(ImportedTheme.self, from: data)
+    }
+
+    func testTheFileHoldsNoOldBytes() throws {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        let text = try String(data: enc.encode(Self.miniTheme()), encoding: .utf8)!
+        XCTAssertFalse(text.contains("\"old\""))
+        XCTAssertTrue(text.contains("old_sha256"))
+    }
+
+    func testStrippedThemeAppliesLikeTheOriginal() throws {
+        let stripped = try loadMini()
+        var a: [UInt8] = [0x78, 0x78, 0x78, 0x78, 0x4F, 0x4C, 0x44, 0x21]
+        var b = a
+        let r = try stripped.apply(to: &a, originalSHA256: "abc")
+        // the original had the same new bytes: apply them by hand to b
+        b.replaceSubrange(4..<8, with: [0x4E, 0x45, 0x57, 0x21])
+        XCTAssertEqual(r.applied, 1)
+        XCTAssertEqual(r.conflicts, 0)
+        XCTAssertEqual(a, b)
+    }
+
+    func testStrippedThemeKeepsAnEditOfTheOwner() throws {
+        let stripped = try loadMini()
+        var edited: [UInt8] = [0x78, 0x78, 0x78, 0x78, 0x45, 0x44, 0x49, 0x54]   // an edit at the same bytes
+        let r = try stripped.apply(to: &edited, originalSHA256: "abc")
+        XCTAssertEqual(Array(edited[4..<8]), [0x45, 0x44, 0x49, 0x54])            // the edit stays
+        XCTAssertEqual(r.conflicts, 1)
+    }
+}

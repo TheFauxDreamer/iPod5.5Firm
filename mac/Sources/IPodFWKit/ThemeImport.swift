@@ -37,6 +37,44 @@ public struct ThemeChange: Codable, Equatable {
     public var offset: Int          // in the target osos
     public var old: Data
     public var new: Data
+    /// Format 2: the hash of the old bytes, in place of the old bytes. The theme
+    /// then holds no byte of the Apple firmware.
+    public var oldSHA256: String?
+
+    enum CodingKeys: String, CodingKey { case resource, offset, old, new, old_sha256 }
+
+    public init(resource: String, offset: Int, old: Data, new: Data, oldSHA256: String? = nil) {
+        self.resource = resource
+        self.offset = offset
+        self.old = old
+        self.new = new
+        self.oldSHA256 = oldSHA256
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        resource = try c.decode(String.self, forKey: .resource)
+        offset = try c.decode(Int.self, forKey: .offset)
+        old = try c.decodeIfPresent(Data.self, forKey: .old) ?? Data()
+        new = try c.decode(Data.self, forKey: .new)
+        oldSHA256 = try c.decodeIfPresent(String.self, forKey: .old_sha256)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(resource, forKey: .resource)
+        try c.encode(offset, forKey: .offset)
+        try c.encode(new, forKey: .new)
+        if let h = oldSHA256, !h.isEmpty, old.isEmpty { try c.encode(h, forKey: .old_sha256) }
+        else { try c.encode(old, forKey: .old) }
+    }
+}
+
+extension ThemeChange {
+    /// True when the change holds the hash of the old bytes in place of the old
+    /// bytes (format 2). The change has no old bytes when its data sits after the
+    /// end of osos.
+    var isStripped: Bool { old.isEmpty && !(oldSHA256 ?? "").isEmpty }
 }
 
 public struct ThemeSkip: Codable, Equatable {
@@ -79,7 +117,9 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
 
     public static func load(_ url: URL) throws -> ImportedTheme {
         let t = try JSONDecoder().decode(ImportedTheme.self, from: Data(contentsOf: url))
-        guard t.format == ThemeImport.format else { throw ThemeError("This theme file has an unknown format.") }
+        guard t.format == ThemeImport.format || t.format == ThemeImport.formatStripped else {
+            throw ThemeError("This theme file has an unknown format.")
+        }
         return t
     }
 
@@ -89,11 +129,32 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
         try enc.encode(self).write(to: url, options: .atomic)
     }
 
+    /// Write the theme in format 2: each change holds the hash of the old bytes in
+    /// place of the old bytes. The file holds no byte of the Apple firmware.
+    public func writeStripped(to url: URL) throws {
+        var out = self
+        out.format = ThemeImport.formatStripped
+        out.changes = changes.map { c in
+            ThemeChange(resource: c.resource, offset: c.offset, old: Data(), new: c.new,
+                        oldSHA256: c.old.isEmpty ? "" : (c.oldSHA256 ?? ThemeImport.sha256([UInt8](c.old))))
+        }
+        out.edits = edits.map { c in
+            ThemeChange(resource: c.resource, offset: c.offset, old: Data(), new: c.new,
+                        oldSHA256: c.old.isEmpty ? "" : (c.oldSHA256 ?? ThemeImport.sha256([UInt8](c.old))))
+        }
+        try out.write(to: url)
+    }
+
     /// Apply the theme to osos. Returns (changes applied, changes not applied because of other edits).
+    ///
+    /// A theme in format 2 holds no old bytes: the hash of the old bytes stands in
+    /// for them. The function takes the old bytes from the firmware again and
+    /// checks the hash, through `withOldBytes`.
     @discardableResult
     public func apply(to osos: inout [UInt8], originalSHA256: String) throws -> (applied: Int, conflicts: Int) {
         guard originalSHA256 == osos_sha256 else { throw ThemeError("The theme \"\(name)\" is for a different firmware.") }
-        let changes = effectiveChanges
+        let theme = withOldBytes(osos)
+        let changes = theme.effectiveChanges
         let end = changes.map { $0.offset + $0.new.count }.max() ?? 0
         if end > osos.count { osos += [UInt8](repeating: 0, count: (end + 0x7FF) / 0x800 * 0x800 - osos.count) }
         var done = 0, conflicts = 0
@@ -109,6 +170,44 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
             }
         }
         return (done, conflicts)
+    }
+
+    /// The same theme with the old bytes of every change.
+    ///
+    /// A theme in format 2 holds the hash of the old bytes in place of the old
+    /// bytes. This function takes the old bytes from the firmware and checks
+    /// the hash. A change whose bytes do not agree with the hash gets old bytes
+    /// that agree with the firmware: the change then counts as a conflict, the
+    /// same as in format 1. The function gives back the same value when the
+    /// theme already holds the old bytes.
+    public func withOldBytes(_ osos: [UInt8]) -> ImportedTheme {
+        guard changes.contains(where: { $0.old.isEmpty && !($0.oldSHA256 ?? "").isEmpty }) else { return self }
+        var out = self
+        out.changes = changes.map { c in
+            guard c.old.isEmpty, let h = c.oldSHA256, !h.isEmpty else { return c }
+            // The old bytes come from the firmware again. A read past the end of
+            // osos gives zeros: apply extends osos with zeros before it compares,
+            // so the bytes there are zeros.
+            let hi = c.offset + c.new.count
+            var old = osos[c.offset..<min(hi, osos.count)].map { $0 }
+            let zeroFrom = max(c.offset, osos.count)
+            if hi > zeroFrom { old += [UInt8](repeating: 0, count: hi - zeroFrom) }
+            if !c.new.isEmpty && ThemeImport.sha256(old) != h {
+                // The bytes at the offset are not the old bytes of the change: an
+                // edit by the owner sits there, or the change is already applied.
+                // The old bytes are not in the file. Set the old bytes to the new
+                // bytes with one bit turned over. The sentinel makes the apply step
+                // take the same branch as in format 1: done when the firmware
+                // already holds the new bytes, a conflict in every other case. The
+                // step never writes the change, so the owner's edit stays.
+                var sent = [UInt8](c.new)
+                sent[0] ^= 0x80
+                old = sent
+            }
+            return ThemeChange(resource: c.resource, offset: c.offset,
+                               old: Data(old), new: c.new, oldSHA256: h)
+        }
+        return out
     }
 
     /// Replace the pixels of a theme picture. `light` is the osos without the theme. `new` is the
@@ -166,6 +265,10 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
 
 public enum ThemeImport {
     public static let format = 1
+    /// Format 2 stores, for each change, the SHA-256 of the old bytes in place of
+    /// the old bytes. A theme in format 2 holds no byte of the Apple firmware, so
+    /// the app can ship it. Both formats apply the same.
+    public static let formatStripped = 2
     /// Join two changed runs if fewer bytes than this separate them.
     static let runGap = 16
     /// The IDs of a type move by a small amount between versions.

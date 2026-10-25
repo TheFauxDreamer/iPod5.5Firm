@@ -17,6 +17,8 @@ The research is in [../../re/games-keyfile.md](../../re/games-keyfile.md).
 from __future__ import annotations
 
 import plistlib
+import re
+import shutil
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -443,6 +445,11 @@ def load_library(games_dir: str | Path) -> list[Game]:
 # The app copies the file. The app never changes the bytes of the file.
 KEY_FILE_NAME = "IC-Info.sidb"
 
+# The pattern of the folder of one game: hexadecimal characters only. The GUID
+# of a game of Apple has 5 characters, for example `11002`. A longer name of
+# hexadecimal characters is also a game folder, as iTunes can make one.
+GAME_FOLDER_RE = re.compile(r"^[0-9A-Fa-f]+$")
+
 
 class InstallError(Exception):
     """The app cannot install the games."""
@@ -547,4 +554,64 @@ def install_library(games: list[Game], target_root: str | Path,
         report.installed.extend(one.installed)
         report.bytes_copied += one.bytes_copied
         report.key_file_copied = report.key_file_copied or one.key_file_copied
+    return report
+
+
+class RemoveError(Exception):
+    """The app cannot remove the games."""
+
+
+@dataclass
+class RemoveReport:
+    """The result of the removal of the games from an iPod."""
+
+    removed: list[str] = field(default_factory=list)    # the GUID of each game
+    missing: list[str] = field(default_factory=list)   # the GUID of each game that was not there
+    warnings: list[str] = field(default_factory=list)  # the reason of each refused removal
+
+
+def removable_folders(games_dir: str | Path) -> list[str]:
+    """The GUID of each game folder in the folder of the games.
+
+    The function gives only folders with a name of hexadecimal characters.
+    The folders `gamedata_RW` and `gamestats_WO` of the iPod are not game
+    folders: their names hold letters that are not hexadecimal.
+    """
+    base = Path(games_dir)
+    if not base.is_dir():
+        return []
+    return sorted(p.name for p in base.iterdir() if p.is_dir() and GAME_FOLDER_RE.match(p.name))
+
+
+def remove_games(target_root: str | Path, guids: list[str]) -> RemoveReport:
+    """Remove games from the folder iPod_Control of an iPod.
+
+    The function removes the folder `games_RO/<GUID>` of each selected game.
+    The GUID must hold hexadecimal characters only. The function refuses every
+    other name: it never removes a file outside the folder of a game. The
+    folders `gamedata_RW` and `gamestats_WO` hold the saves and the scores of
+    the games. The function does not touch them.
+    """
+    base = Path(target_root)
+    games_dir = games_directory(base)
+    if games_dir is None:
+        raise RemoveError(f"The folder {base} has no folder of the games.")
+    report = RemoveReport()
+    for guid in guids:
+        if not GAME_FOLDER_RE.match(guid):
+            report.missing.append(guid)
+            report.warnings.append(f"{guid} is not the GUID of a game; refused")
+            continue
+        folder = games_dir / guid
+        if not folder.is_dir():
+            report.missing.append(guid)
+            continue
+        # The folder is inside the folder of the games and its name is a GUID.
+        # A link cannot escape: the removal checks that the path has no "..".
+        if ".." in folder.resolve().parts or games_dir.resolve() not in folder.resolve().parents:
+            report.missing.append(guid)
+            report.warnings.append(f"{guid} does not resolve inside the folder of the games; refused")
+            continue
+        shutil.rmtree(folder)
+        report.removed.append(guid)
     return report

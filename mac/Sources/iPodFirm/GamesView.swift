@@ -13,6 +13,12 @@ struct GamesView: View {
     var body: some View {
         Form {
             Section {
+                Label("The app does not come with the game files and does not download them. The games come from the iPod that bought them: use iTunes or the Finder on a Mac to put purchased games on the iPod. The app reads the keys and copies the game folders between the iPod and a folder on your Mac.",
+                      systemImage: "info.circle")
+                    .font(.callout).foregroundStyle(.secondary)
+            } header: { Text("About the Game Files") }
+
+            Section {
                 if model.currentIPod == nil {
                     Label("No iPod is connected. Connect the iPod. The pane reads the file of the keys of the iPod.",
                           systemImage: "cable.connector.slash").foregroundStyle(.secondary)
@@ -72,6 +78,9 @@ struct GamesView: View {
             }
 
             Section {
+                Label("The games are not in the app. The games are not in the firmware of the iPod. You must get the game files from another place: for example a backup of the folder iPod_Control of an iPod that has the games, or a folder that you keep on your Mac. Each game is a folder with the GUID of the game, for example 11002.",
+                      systemImage: "gamecontroller")
+                    .font(.callout).foregroundStyle(.secondary)
                 HStack {
                     Button("Select Games Folder…") { model.chooseGamesFolder() }
                         .help("Choose the folder with the games, or the folder iPod_Control of an iPod")
@@ -107,11 +116,86 @@ struct GamesView: View {
                 if !model.gameInstallStatus.isEmpty {
                     Text(model.gameInstallStatus).foregroundStyle(.secondary)
                 }
-                Text("The app copies the selected games to the folder games_RO of the iPod. The app writes the name of the folder with small letters. The app never removes a file of the iPod. The app never changes the file Manifest.plist or the file Manifest.plist.p7b.")
+                Text("The app copies the selected games to the folder games_RO of the iPod. The app writes the name of the folder with small letters. The app never changes the file Manifest.plist or the file Manifest.plist.p7b.")
                     .font(.callout).foregroundStyle(.secondary)
             } header: { Text("Install Games") }
+
+            Section {
+                if model.currentIPod == nil {
+                    Label("No iPod is connected. Connect the iPod to remove games from it.",
+                          systemImage: "cable.connector.slash").foregroundStyle(.secondary)
+                } else {
+                    HStack {
+                        Button("Read the Games on the iPod") { Task { await model.readIPodGames() } }
+                            .help("Read the folder games_RO of the connected iPod and list its games")
+                        Spacer()
+                        if !model.ipodGames.isEmpty {
+                            Text("\(model.ipodGames.count) game(s)").foregroundStyle(.secondary)
+                        }
+                    }
+                    ForEach(model.ipodGames, id: \.self) { guid in
+                        HStack {
+                            Button {
+                                if model.selectedIPodGames.contains(guid) {
+                                    model.selectedIPodGames.remove(guid)
+                                } else {
+                                    model.selectedIPodGames.insert(guid)
+                                }
+                            } label: {
+                                Image(systemName: model.selectedIPodGames.contains(guid) ? "checkmark.square.fill" : "square")
+                                    .foregroundStyle(model.selectedIPodGames.contains(guid) ? Color.accentColor : Color.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Select this game for the removal")
+                            Text(guid)
+                            Spacer()
+                        }
+                    }
+                    HStack {
+                        Button("Remove Selected Games…") { model.showRemoveGamesSheet = true }
+                            .disabled(model.selectedIPodGames.isEmpty)
+                            .help("Remove the selected game folders from the folder games_RO of the connected iPod")
+                        Spacer()
+                    }
+                    if !model.gameRemoveStatus.isEmpty {
+                        Text(model.gameRemoveStatus).foregroundStyle(.secondary)
+                    }
+                    Text("The removal deletes the folder of the selected game in games_RO. The folders gamedata_RW and gamestats_WO hold the saves and the scores. The removal does not touch them. The removal cannot delete a folder outside the folder of a game.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            } header: { Text("Remove Games") }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $model.showRemoveGamesSheet) { RemoveGamesSheet() }
+    }
+}
+
+/// The confirmation of the removal of the games. The removal deletes files on
+/// the iPod, thus the owner must confirm each removal.
+struct RemoveGamesSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Remove \(model.selectedIPodGames.count) game(s) from the iPod?")
+                .font(.title3).bold()
+            Text("The removal deletes the folder of each selected game in the folder games_RO. The removal does not touch the saves and the scores of the games. The iPod does not show the games again after the removal.")
+                .font(.callout).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            HStack {
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Remove") {
+                    let wanted = model.selectedIPodGames
+                    dismiss()
+                    Task { await model.removeGames(wanted) }
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding()
+        .frame(minWidth: 380)
     }
 }
 

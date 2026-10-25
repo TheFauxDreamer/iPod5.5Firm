@@ -49,7 +49,7 @@ def switch_table(theme: Theme, osos: bytes) -> tuple[bytes, int]:
     changes left out because of an edit)."""
     runs, data, skipped = [], bytearray(), 0
     work = bytearray(osos)
-    for c in theme.effective_changes():
+    for c in theme.with_old_bytes(osos).effective_changes():
         if c.offset + len(c.old) > len(osos):
             continue
         cur = bytes(work[c.offset:c.offset + len(c.old)])
@@ -94,7 +94,7 @@ def build(fw: FirmwarePartition, osos: bytes, theme: Theme, patch_dir: str | Pat
     out = bytearray(osos)
     # 1. theme data outside osos: in both modes
     end = PATCH_AREA_END
-    for c in theme.effective_changes():
+    for c in theme.with_old_bytes(osos).effective_changes():
         if c.offset + len(c.old) > len(osos):
             if len(out) < c.offset + len(c.new):
                 out += bytes(c.offset + len(c.new) - len(out))

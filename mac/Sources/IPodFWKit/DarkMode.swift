@@ -42,7 +42,7 @@ public enum DarkMode {
     public static func switchTable(_ theme: ImportedTheme, osos: [UInt8]) -> (table: [UInt8], leftOut: Int) {
         var runs: [UInt8] = [], data: [UInt8] = [], count = 0, leftOut = 0
         var work = osos
-        for c in theme.effectiveChanges where c.offset + c.old.count <= osos.count {
+        for c in theme.withOldBytes(osos).effectiveChanges where c.offset + c.old.count <= osos.count {
             let cur = work[c.offset..<c.offset + c.old.count]
             guard cur.elementsEqual(c.old) else {
                 if !cur.elementsEqual(c.new) { leftOut += 1 }
@@ -91,7 +91,7 @@ public enum DarkMode {
 
     /// The end of the theme data after the end of osos, or `patchAreaEnd` if there is none.
     static func themeEnd(_ theme: ImportedTheme, osos: [UInt8]) -> Int {
-        theme.effectiveChanges.filter { $0.offset + $0.old.count > osos.count }.map { $0.offset + $0.new.count }
+        theme.withOldBytes(osos).effectiveChanges.filter { $0.offset + $0.old.count > osos.count }.map { $0.offset + $0.new.count }
             .reduce(patchAreaEnd, max)
     }
 
@@ -116,6 +116,7 @@ public enum DarkMode {
     public static func build(partition: FirmwarePartition, osos: [UInt8], theme: ImportedTheme, patch: PatchInfo,
                              originalSHA256: String) throws -> ([UInt8], Info) {
         guard originalSHA256 == theme.osos_sha256 else { throw ThemeError("The theme \"\(theme.name)\" is for a different firmware.") }
+        let theme = theme.withOldBytes(osos)
         var out = osos
         // 1. theme data outside osos: in both modes
         for c in theme.effectiveChanges where c.offset + c.old.count > osos.count {

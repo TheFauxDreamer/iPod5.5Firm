@@ -13,7 +13,7 @@ The Internet Archive has a collection of iPodWizard themes: [iPod Wizard Themes]
 - The theme is for Apple firmware 1.2.1. Its base is `1. iTunes Restore Firmware (recommend first step)/5.5 gen/iPod_25.1.2.1.ipsw` in the same collection.
 - The `rsrc` image is at a different position than in Apple's file (0x739800, not 0x72c800). To start the theme in the emulator, put its osos into Apple's 1.2.1 file.
 
-CAUTION: The theme files contain Apple code. Do not commit them.
+CAUTION: A theme file in format 1 contains Apple code. Do not commit it. A theme file in format 2 holds the SHA-256 of the old bytes in place of the old bytes, so it contains no Apple code. The command `ipodfw strip-theme` writes format 2 from format 1. The built-in themes of the app are in format 2.
 
 ## What the theme changes (compared with 1.2.1)
 

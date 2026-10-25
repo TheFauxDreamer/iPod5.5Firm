@@ -33,7 +33,10 @@ iTunes. This file is encrypted with a key that comes from the hardware of that
 computer. The app on macOS cannot read this file.
 
 The app must copy the game files and the key file to the iPod. The app must
-not make a key. The app must not copy the game files to the repository.
+not make a key. The app must not copy the game files to the repository. The
+app can remove a game: the removal deletes the folder of the game in
+`games_RO` only. The folders `gamedata_RW` and `gamestats_WO` hold the saves
+and the scores. The removal does not touch them.
 
 The program of iTunes for macOS has the code that writes the file
 `IC-Info.sidb` to the iPod. The function at 0x100a05005 writes the file. The

@@ -963,6 +963,8 @@ An earlier version read the ATA IDENTIFY data in the firmware (a hook at 0x142f9
    - Other types (for example `TCmd` and `Menu`): skipped.
 5. It writes the theme file `~/Library/Application Support/iPodFirm/Themes/<name>.ipodtheme` (JSON, format 1).
 
+**The two formats of a theme file.** A file in format 1 holds, for each change, the old bytes and the new bytes. The old bytes are bytes of the Apple firmware, so the repository cannot hold such a file. A file in format 2 holds the SHA-256 of the old bytes in place of the old bytes, so the file has no byte of the Apple firmware. The repository holds the built-in themes in format 2 ([themes/](../themes/)); the app ships them in `Contents/Resources/Themes`. The command `ipodfw strip-theme` writes format 2 from format 1. `withOldBytes` takes the old bytes from the firmware again and checks the hash, so both formats apply the same and both keep an edit of the owner.
+
 **Rules when the theme is applied.**
 
 - Each change is applied only if the bytes are the old bytes. If they are already the new bytes, the change counts as done. Other bytes are an edit of the owner, and the change is left out.

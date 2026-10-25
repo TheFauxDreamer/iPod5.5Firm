@@ -29,13 +29,17 @@ import base64
 import hashlib
 import json
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from . import pictures, resources
 from .partition import FirmwarePartition
 
 FORMAT = 1
+# Format 2 stores, for each change, the SHA-256 of the old bytes in place of
+# the old bytes. A theme in format 2 holds no byte of the Apple firmware, so
+# the app can ship it. Both formats apply the same.
+FORMAT_STRIPPED = 2
 RUN_GAP = 16              # join two changed runs if fewer bytes than this separate them
 ID_SHIFTS = range(-8, 9)  # the IDs of a type move by a small amount between versions
 # Element tag -> the resource type that the ID at +12 refers to
@@ -64,6 +68,7 @@ class Change:
     offset: int        # in the target osos
     old: bytes
     new: bytes
+    old_sha256: str = ""   # format 2: the hash of the old bytes, in place of the old bytes
 
 
 @dataclass
@@ -76,30 +81,42 @@ class Theme:
     imported: list[str] = field(default_factory=list)
     edits: list[Change] = field(default_factory=list)   # pictures that the owner replaced
 
-    def to_json(self) -> str:
+    def to_json(self, stripped: bool = False) -> str:
+        """The theme as JSON. `stripped` writes format 2: each change holds the hash of the
+        old bytes in place of the old bytes, and the file holds no byte of the Apple firmware."""
+        fmt = FORMAT_STRIPPED if stripped else FORMAT
+        def one(c: Change):
+            out = {"resource": c.resource, "offset": c.offset, "new": base64.b64encode(c.new).decode()}
+            if stripped and c.old:
+                out["old_sha256"] = c.old_sha256 or _sha256(c.old)
+            elif stripped:
+                out["old_sha256"] = ""            # the change has no old bytes (data after the end of osos)
+            else:
+                out["old"] = base64.b64encode(c.old).decode()
+            return out
         return json.dumps({
-            "format": FORMAT,
+            "format": fmt,
             "name": self.name,
             "source_sha256": self.source_sha256,
             "osos_sha256": self.osos_sha256,
             "imported": self.imported,
             "skipped": [{"resource": r, "reason": why} for r, why in self.skipped],
-            "changes": [{"resource": c.resource, "offset": c.offset,
-                         "old": base64.b64encode(c.old).decode(), "new": base64.b64encode(c.new).decode()}
-                        for c in self.changes],
-            "edits": [{"resource": c.resource, "offset": c.offset,
-                       "old": base64.b64encode(c.old).decode(), "new": base64.b64encode(c.new).decode()}
-                      for c in self.edits],
+            "changes": [one(c) for c in self.changes],
+            "edits": [one(c) for c in self.edits],
         }, indent=1) + "\n"
 
     @classmethod
     def from_json(cls, text: str) -> "Theme":
         d = json.loads(text)
-        if d.get("format") != FORMAT:
+        if d.get("format") not in (FORMAT, FORMAT_STRIPPED):
             raise ThemeError("This theme file has an unknown format.")
         def changes(items):
-            return [Change(c["resource"], c["offset"], base64.b64decode(c["old"]), base64.b64decode(c["new"]))
-                    for c in items]
+            out = []
+            for c in items:
+                old = base64.b64decode(c["old"]) if "old" in c else b""
+                out.append(Change(c["resource"], c["offset"], old, base64.b64decode(c["new"]),
+                                  c.get("old_sha256", "")))
+            return out
         return cls(d["name"], d["source_sha256"], d["osos_sha256"], changes(d["changes"]),
                    [(s["resource"], s["reason"]) for s in d["skipped"]], d["imported"], changes(d.get("edits", [])))
 
@@ -116,6 +133,41 @@ class Theme:
             if c.old != c.new:
                 out.append(c)
         return out + self.edits
+
+    def with_old_bytes(self, osos: bytes) -> "Theme":
+        """The same theme with the old bytes of every change.
+
+        A theme in format 2 holds the hash of the old bytes in place of the old
+        bytes. This function takes the old bytes from the firmware and checks
+        the hash. A change whose bytes do not agree with the hash becomes old
+        bytes that agree with the firmware: the change then counts as a
+        conflict, the same as in format 1. The function gives back the same
+        object when the theme already holds the old bytes.
+        """
+        if all(c.old for c in self.changes):
+            return self
+        out = replace(self)
+        out.changes = []
+        for c in self.changes:
+            if c.old or not c.old_sha256:
+                out.changes.append(c)
+                continue
+            # The old bytes come from the firmware again. A read past the end of
+            # osos gives zeros: apply_theme extends osos with zeros before it
+            # compares, so the bytes there are zeros.
+            hi = c.offset + len(c.new)
+            old = bytes(osos[c.offset:min(hi, len(osos))]) + bytes(max(0, hi - max(c.offset, len(osos))))
+            if _sha256(old) != c.old_sha256 and c.new:
+                # The bytes at the offset are not the old bytes of the change: an edit
+                # by the owner sits there, or the change is already applied. The old
+                # bytes are not in the file. Set the old bytes to the new bytes with
+                # one bit turned over. The sentinel makes the apply step take the
+                # same branch as in format 1: done when the firmware already holds
+                # the new bytes, a conflict in every other case. The step never
+                # writes the change, so the owner's edit stays.
+                old = bytes([c.new[0] ^ 0x80]) + c.new[1:]
+            out.changes.append(Change(c.resource, c.offset, old, c.new, c.old_sha256))
+        return out
 
 
 def _keep_highlight(c: Change) -> Change:
@@ -440,9 +492,15 @@ def make_theme(theme_fw: FirmwarePartition, base_fw: FirmwarePartition, target_f
 
 
 def apply_theme(theme: Theme, osos: bytearray, original_sha256: str) -> tuple[int, int]:
-    """Apply the theme to osos. Returns (changes applied, changes not applied because of other edits)."""
+    """Apply the theme to osos. Returns (changes applied, changes not applied because of other edits).
+
+    A theme in format 2 holds no old bytes: the hash of the old bytes stands in
+    for them. The function takes the old bytes from the firmware again and
+    checks the hash, through `with_old_bytes`.
+    """
     if original_sha256 != theme.osos_sha256:
         raise ThemeError(f"The theme \"{theme.name}\" is for a different firmware.")
+    theme = theme.with_old_bytes(osos)
     done = conflicts = 0
     changes = theme.effective_changes()
     end = max((c.offset + len(c.new) for c in changes), default=0)
