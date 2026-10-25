@@ -12,7 +12,7 @@ iPodFirm obeys these limits. The code enforces each limit. The "Where" column gi
 |---|---|---|
 | Never write the NOR flash. | The boot loader and disk mode are in the NOR flash. Disk mode is the recovery path. | No code can write it. |
 | Never change, move or write `aupd`. | `aupd` is the only image that writes the NOR flash. | `replaceImage` refuses `aupd`. `checkCompatible` refuses a different `aupd`. `planWrites` refuses a write that overlaps `aupd`. |
-| Never write `hibe`. | The iPod writes its RAM state there. An old copy is incorrect. | `preserveHibernation` copies the current `hibe` entry and data into the new image. |
+| Never write `hibe`. | The iPod writes its RAM state there. An old copy is incorrect. | `fitLayout` builds the layout from the iPod, and `preserveHibernation` copies the current `hibe` entry and data into the new image. The function `makeRoom` parks `rsrc` after the hibernation area, with or without the entry. |
 | Write only the firmware partition. | The music partition belongs to the owner. | The helper writes only inside the partition that `locatePartition` found. |
 | Support only the iPod Video (model code 0xB0). | The formats and the addresses are for this model. The iPod classic firmware is encrypted and signed. | `checkModel` (first the Samsung layout; also before a backup), `Backups.save`, `isVideo` checks. |
 | Apply a patch only to Apple osos 1.3. | The addresses are for this version. | `osos_sha256` in each `patch.json`, theme and version check. |
@@ -42,15 +42,15 @@ The helper does these checks in `Operations.flash` ([Operations.swift](../mac/So
 5. Read the model code. Stop if the iPod is not an iPod Video.
 6. Read the partition as a firmware partition. If this fails, stop with the code `firmware-unreadable`. The app then offers the rescue restore.
 7. Make sure that the new image is not larger than the partition.
-8. Put the new osos and rsrc into the layout of the iPod (`fitLayout`).
+8. Put the new osos and rsrc into the layout of the iPod (`fitLayout`). The hibernation area of the iPod stays, with its data. When the iPod lost the entry of `hibe`, the function adds the entry at the place of the area.
 9. Copy the `hibe` entry and data of the iPod into the new image (`preserveHibernation`).
 10. Make sure that the new image is for the iPod Video.
 11. Compare the new image with the iPod (`checkCompatible`):
     - The same image base and directory offset.
-    - The same count of images.
+    - The same count of images. The check allows one image more: the image `hibe`, when the iPod lost the entry and the flash brings it back at the place of the hibernation area, with the size of the area.
     - Each image has the same type and position. Only rsrc can move.
     - Each directory entry other than osos, rsrc and hibe is the same.
-    - rsrc does not overlap osos, aupd or hibe, and it ends inside the image.
+    - rsrc does not overlap osos, aupd or the hibernation area, and it ends inside the image.
     - The osos and rsrc checksums are correct.
     - aupd is the same, byte for byte.
 12. Make a list of the blocks that are different (`planWrites`). Stop if a block overlaps aupd.
@@ -169,6 +169,10 @@ A test in the emulator is strong evidence, but not proof:
 | `usb-host-probe` | Host start; version 1.2: the siTD link and removal (no USB in the emulator) | Yes, as a test: dock hub, storage and the USB-C EarPods enumerate (2026-10-08). The tone test: version 1.3 played the tone in the USB-C EarPods (2026-10-10). The music test: versions 1.5 and 1.6 played the music; the UI was very slow; a reconnection of the dock froze the iPod. Version 1.7 restarted the iPod after the tone; version 1.8 also restarted; version 1.9 played without a restart, the UI lags, a reconnection of the dock freezes the iPod; version 1.10: the Now Playing art is missing; version 1.11: the art still missing; version 1.12: the art is missing also when the probe is installed but not started; version 1.13 installed and not started: the art loads; started ("Start the Probe Without Music"): the art is missing; version 1.14: the art cache list stays empty in host mode; version 1.15: the request queues are empty, the art lookup finds no art; version 1.16: the ArtworkDB handle stays set, no database reload; version 1.17: the ArtworkDB and its lookup are correct in host mode; version 1.18 baseline without the host start: the art is also missing, thus the cause is not the host mode; version 1.19 (no call of 0x19ff0c after a log write), baseline: **the art loads**, thus 0x19ff0c was the cause; version 1.19 in host mode: **the art loads**; a connection to the Mac while host mode runs froze the iPod; version 1.20 with the music route: **the music plays through the USB-C EarPods and the art loads**; version 1.21: **the EarPods volume follows the click wheel**, no gaps; version 1.22: the buttons did not operate the iPod; version 1.23: **all EarPods buttons operate the iPod** (volume ±, play/pause); version 1.24: **no freeze** at a new connection of the dock or the Mac; version 1.25: **the headphones operate again after a reconnection**, two and three pushes operate; the playback stopped at the disconnection; version 1.26: **the song pauses at the disconnection**; "unsupported device" at the reconnection ended the playback; version 1.27: **all as expected** (no message at a reconnection, a pause and Play continue, good volume levels) |
 | Dark Mode switch | Yes | No |
 | Software version | Not recorded | No |
+| The keys of the games (`iEKInfo`) | Not applicable (the app only reads the file) | Yes (23 October 2026): the pane read 12 accounts and 198 keys from a Windows iPod, and matched the key of each game. The app does not write the file. The button **Choose a Folder…** reads the same files from a folder that the user chooses. Refer to [../re/games-keyfile.md](../re/games-keyfile.md). |
+| The detection of the iPod | Not applicable | Yes (23 October 2026): the app did not see the iPod. The cause was the command that reads the name of the iPod. The fix reads the name from the info of the disk. The test `DeviceFindTests` finds the iPod. |
+| The hibernation image (`hibe`) | Not applicable | Yes (24 October 2026): the research with all the backups proved that the flash of 23 October wrote the entry, and the iPod cleared the 36 first bytes of the entry at its next start. The restore with iTunes changed nothing. The new flash path parks `rsrc` after the hibernation area without the entry, and brings the entry back when the file has it. Tested on the broken partition of the iPod: the layout is correct, the area is not touched, and the write plan is 4.5 MB. The repair writes the entry only. **On the real iPod (25 October 2026): the owner flashed the patches with the test build 0.1.154 on the partition without the entry. The flash worked.** The next sleep of the iPod writes a new snapshot into the area. Refer to [../re/firmware-hibe.md](../re/firmware-hibe.md). |
+| The copy of the games (`games_RO`) | Not applicable (the emulator has no games) | Not recorded. The copy was tested on a copy of the folder `iPod_Control`: the 7 complete games were copied byte for byte, 226,577,300 bytes. The 2 games that are not complete were skipped. The copy to the real iPod is not done. |
 
 ## Known problems
 

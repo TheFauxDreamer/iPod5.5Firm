@@ -59,6 +59,16 @@ public final class FirmwareEditor {
         osos = work
     }
 
+    /// Take a new partition. The edits of the pictures and of the text stay.
+    ///
+    /// The function is for the repair of the partition, for example the restore of
+    /// the hibernation image. The function changes the partition, not the osos.
+    public func replacePartition(_ data: [UInt8]) throws {
+        let new = try FirmwarePartition(data: data)
+        partition.replace(with: new)
+        osos = try new.image("osos")
+    }
+
     // MARK: folder export / import (same layout as the Python `ipodfw unpack`)
 
     struct Manifest: Codable {

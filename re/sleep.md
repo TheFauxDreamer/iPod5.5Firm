@@ -15,6 +15,8 @@ Offsets are osos file offsets. The CPU address is the same.
 5. 0x1ee8d0 saves the settings and empties the memory cache manager (0x1ed828, 0x19ff0c: the users give back their memory; refer to usb-host.md). Then it calls the sleep method (vtable 0x670720, offset 0x70, 0x1dfdd4).
 6. 0x1dfdd4 calls the sleep function 0xb43dc. 0xb43dc turns the display off (0xb7c64(0)), sends keep-awake message type 4 (0x94e08) and enters power mode 2 or 3 (0x2823bc).
 
+The choice between the power mode 2 and the power mode 3 is the trigger of the hibernation. The note [firmware-hibernation.md](firmware-hibernation.md) gives the whole chain. The choice uses the setting `_hibe_sleep` in the file `iPod_Control/Device/`.
+
 Marker test in the emulator (stock firmware): the Sleep item ran 0x1d83fc, then the idle gate. The gate did not pass, and 0x1ee8d0 did not run.
 
 ## The gate 0x1d8670

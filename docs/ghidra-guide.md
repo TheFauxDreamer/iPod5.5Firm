@@ -114,6 +114,7 @@ The scripts are in [re/ghidra-scripts/](../re/ghidra-scripts/). The first argume
 | `ListVtable.java` | OUT ADDRESS [COUNT] | slot, offset, value, kind, function | Which methods does this class have? |
 | `MakeSignature.java` | OUT ADDRESS [BEFORE] [AFTER] | pattern, offset, matches, fixed | How do I find this code in another version? |
 | `DecompileAll.java` | OUT | C code of every function | What does the whole image do? |
+| `DumpCode.java` | OUT [--range] ADDRESS... | address, bytes, mnemonic, operands | What are the instructions at this place? |
 | `DefineStringPointers.java` | OUT | pointer address, string address, text | Which words hold the address of a string? |
 | `DecompileWithStrings.java` | OUT | C code of every function | Which string does each function use? |
 | `SetArmOptions.java` | — | — | Pre-script for the import. |

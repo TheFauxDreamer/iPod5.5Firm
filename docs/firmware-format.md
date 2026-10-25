@@ -50,10 +50,16 @@ The type names are byte-reversed:
 | `soso` | osos | RetailOS code and the UI resources, 7.2 MB. |
 | `crsr` | rsrc | A FAT16 file system at offset 0x600 with fonts (`/Resources/Fonts/*.ttf`) and the programs for the Broadcom BCM2722 video processor (`/Resources/VideoCore/`), 5.0 MB. |
 | `dpua` | aupd | The encrypted boot-flash updater, 1.0 MB. |
-| `ebih` | hibe | The hibernation image. Only an iPod partition has it. A firmware file does not. |
+| `ebih` | hibe | The hibernation image, 64 MB and 2 KB. Only an iPod partition has it. A firmware file does not. The image holds the space for a bigger `osos`: a larger `osos` moves `rsrc` after it. The iPod can lose the entry of the image and keep the image data at its fixed place. iPodFirm finds the data by the header of the snapshot and treats it as the hibernation area. Refer to [../re/firmware-hibe.md](../re/firmware-hibe.md). |
 | `kbso` | osbk | A backup of osos. Firmware 1.3 does not have it. |
 
 On firmware 1.3 the osos entry has devOffset 0x4800 and length 0x736000. rsrc starts 0x736800 bytes after osos. Thus the gap after osos is 2 KB.
+
+## The hibernation area
+
+The hibernation area is the space of the image hibe, with or without the entry in the directory. The iPod writes a snapshot of its memory into the area when it hibernates. The area starts at the end of the image aupd with a gap of 0x1000 bytes: 0x00d43800 in the partition. The area holds a header of 0x800 bytes and the memory of the iPod. The header gives the version 1, the page size 0x20000 and the number of the pages. The area is 0x800 bytes plus one megabyte for each page: 0x4000800 bytes on the iPod Video.
+
+The function `hibeArea` in [Partition.swift](../mac/Sources/IPodFWKit/Partition.swift) finds the area: the entry of hibe when the directory has it, or the header of the snapshot at the fixed place. A larger `osos` moves `rsrc` after the area (`makeRoom`). The data of the area never changes: it is the memory of the iPod. The function `addHibeEntry` writes the 40-byte entry back into the directory when the iPod lost it. Refer to [../re/firmware-hibe.md](../re/firmware-hibe.md).
 
 ## The image base
 

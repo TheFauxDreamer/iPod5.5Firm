@@ -43,24 +43,44 @@ func runTool(_ path: String, _ args: [String]) throws -> Data {
 }
 
 func diskutil(_ verb: String, _ args: String...) throws -> [String: Any] {
+    try diskutil(verb, args)
+}
+
+func diskutil(_ verb: String, _ args: [String]) throws -> [String: Any] {
     let data = try runTool("/usr/sbin/diskutil", [verb, "-plist"] + args)
     return (try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]) ?? [:]
 }
 
 public enum Device {
+    /// The same command as the function `diskutil` above. The test uses it to compare
+    /// the result of the detection with the result of the command.
+    public static func diskutilForTest(_ verb: String, _ args: String...) throws -> [String: Any] {
+        try diskutil(verb, args)
+    }
+
     public static func findIPods() throws -> [IPodDisk] {
         let listing = try diskutil("list", "external", "physical")
         var found: [IPodDisk] = []
-        for entry in listing["AllDisksAndPartitions"] as? [[String: Any]] ?? [] {
-            guard let disk = entry["DeviceIdentifier"] as? String else { continue }
+        // The entry of a whole disk in the list has no name on some iPods. The name is in
+        // the info of the disk. The Python version (device.py) reads the name in the same way.
+        for disk in listing["WholeDisks"] as? [String] ?? [] {
             let info = try diskutil("info", disk)
             let name = (info["MediaName"] as? String) ?? (info["IORegistryEntryName"] as? String) ?? ""
             guard name.lowercased().contains("ipod") else { continue }
-            let volume = (entry["Partitions"] as? [[String: Any]])?.compactMap { $0["VolumeName"] as? String }.first
+            let volume = volumeName(in: listing, for: disk)
             found.append(IPodDisk(disk: disk, mediaName: name, blockSize: info["DeviceBlockSize"] as? Int ?? 512,
                                   size: (info["Size"] as? NSNumber)?.int64Value ?? 0, volumeName: volume))
         }
         return found
+    }
+
+    /// The name of the volume of a whole disk. The list of the disks has the name of the
+    /// volume in the partitions of the disk.
+    private static func volumeName(in listing: [String: Any], for disk: String) -> String? {
+        let entries = listing["AllDisksAndPartitions"] as? [[String: Any]] ?? []
+        guard let entry = entries.first(where: { ($0["DeviceIdentifier"] as? String) == disk }) else { return nil }
+        let partitions = entry["Partitions"] as? [[String: Any]] ?? []
+        return partitions.compactMap { $0["VolumeName"] as? String }.first
     }
 
     public static func unmount(_ ipod: IPodDisk) throws {
@@ -230,16 +250,27 @@ public enum FirmwareFlasher {
     }
 
     /// new may differ from current only in the osos/rsrc length and checksum, and in the rsrc
-    /// position; aupd must be identical. rsrc can move (to make room for a larger osos), but it
-    /// must not overlap osos, aupd or hibe.
+    /// position; aupd must be identical. rsrc can move (to make room for a larger osos), but
+    /// it must not overlap osos, aupd or the hibernation area of the iPod. new may have one
+    /// image more than current: the image hibe. The iPod can lose the entry of the image
+    /// hibe (the research proved it: the entry was 36 bytes of zeros after the start that
+    /// followed the flash of 23 October 2026), and a flash may bring the entry back. The
+    /// extra image must be the image hibe at the place and with the size of the hibernation
+    /// area of the iPod, so that the write adds the entry only.
     public static func checkCompatible(current: FirmwarePartition, new: FirmwarePartition, label: String) throws {
         guard current.imageBase == new.imageBase, current.dirOffset == new.dirOffset else {
             throw FirmwareError("\(label): partition layout differs from the iPod's.")
         }
-        guard current.entries.count == new.entries.count else {
+        var cur = current.entries, nw = new.entries
+        if !current.has("hibe"), new.has("hibe"), nw.count == cur.count + 1,
+           let e = try? new.entry("hibe"), let area = current.hibeArea(),
+           Int(e.devOffset) == area.devOffset, Int(e.length) == area.length {
+            nw.removeAll { $0.name == "hibe" }
+        }
+        guard cur.count == nw.count else {
             throw FirmwareError("\(label): different number of firmware images than the iPod.")
         }
-        for (c, n) in zip(current.entries, new.entries) {
+        for (c, n) in zip(cur, nw) {
             guard c.type == n.type, c.devOffset == n.devOffset || c.name == "rsrc" else {
                 throw FirmwareError("\(label): image \(c.name) is at a different position than on the iPod.")
             }
@@ -250,8 +281,15 @@ public enum FirmwareFlasher {
         if new.has("rsrc") {
             let r = try new.imageRange("rsrc")
             guard r.upperBound <= new.data.count else { throw FirmwareError("\(label): rsrc runs past the end of the image.") }
-            for (fw, name) in [(new, "osos"), (new, "aupd"), (current, "hibe")] where fw.has(name) {
+            for (fw, name) in [(new, "osos"), (new, "aupd")] where fw.has(name) {
                 if try fw.imageRange(name).overlaps(r) { throw FirmwareError("\(label): rsrc overlaps \(name); refusing.") }
+            }
+            // rsrc must not overlap the hibernation area of the iPod, with or without the entry.
+            if let area = current.hibeArea() {
+                let a = current.imageBase + area.devOffset
+                if r.lowerBound < a + area.length && r.upperBound > a {
+                    throw FirmwareError("\(label): rsrc overlaps the hibernation area; refusing.")
+                }
             }
         }
         for name in ["osos", "rsrc"] where new.has(name) && !new.checksumOK(name) {
@@ -264,19 +302,43 @@ public enum FirmwareFlasher {
 
     /// Put the osos and rsrc of a firmware file into the iPod's own layout.
     ///
-    /// A firmware file that has a larger osos has rsrc and aupd moved forward (see makeRoom). On the
-    /// iPod, aupd must stay where it is. For such a file, the result is the iPod's partition with the
-    /// new osos and rsrc. A partition from an iPod (with hibe), or an image with aupd at the iPod's
-    /// position, does not change: a restore writes the layout of the backup.
+    /// A firmware file has no image hibe and no free space after the last image. An iPod
+    /// partition has the hibernation area: the area holds the space for a bigger osos, and
+    /// the image rsrc goes after the area. The area is the image hibe when the directory
+    /// has the entry. Without the entry, the area keeps its fixed place, and the function
+    /// finds it by the header of the snapshot.
+    ///
+    /// The function always gives the layout of the iPod. The image aupd stays where the
+    /// iPod has it. The image rsrc goes after the hibernation area of the iPod. The other
+    /// images of the file come unchanged.
+    ///
+    /// The hibernation area of the iPod stays, with its data. When the file has the image
+    /// hibe and the iPod does not, the iPod lost the entry: the function adds the entry of
+    /// the file to the result and keeps the data of the iPod. The data of the file is a
+    /// snapshot of another day, and the data of the iPod is the memory of the iPod now.
+    ///
+    /// The function must not return the file unchanged. A file with a hibernation area
+    /// holds a snapshot of another day, and a flash of the file would put that snapshot
+    /// over the snapshot of the iPod. Refer to re/firmware-hibe.md.
     public static func fitLayout(new newBytes: [UInt8], current: FirmwarePartition) throws -> [UInt8] {
         let new = try FirmwarePartition(data: newBytes)
-        guard !new.has("hibe"), current.has("aupd"), new.has("aupd"),
-              try new.entry("aupd").devOffset != current.entry("aupd").devOffset else { return newBytes }
+        guard current.has("aupd"), new.has("aupd") else { return newBytes }
         let out = try FirmwarePartition(data: current.data)
         let osos = try new.image("osos")
         try out.makeRoom(ososLength: osos.count)
         try out.replaceImage("osos", with: osos)
         if new.has("rsrc"), out.has("rsrc") { try out.replaceImage("rsrc", with: new.image("rsrc")) }
+        if new.has("hibe"), !out.has("hibe") {
+            // The file has the entry of the image hibe and the iPod does not. The iPod
+            // lost the entry. Add the entry at the place of the area of the iPod. The
+            // data of the area of the iPod stays.
+            let e = try new.entry("hibe")
+            guard let area = out.hibeArea(),
+                  Int(e.devOffset) == area.devOffset, Int(e.length) == area.length else {
+                throw FirmwareError("The file has the image hibe at a different place than the hibernation area of the iPod; the file does not fit this iPod.")
+            }
+            try out.addHibeEntry()
+        }
         return out.data
     }
 

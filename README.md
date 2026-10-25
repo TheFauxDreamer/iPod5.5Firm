@@ -206,7 +206,15 @@ CAUTION: The removal of the data of the app removes the backups of the iPod. Mak
 
 ## The iPod games
 
-The research of the games is in [re/games.md](re/games.md) and in the notes beside it. The note [re/games-vm.md](re/games-vm.md) gives the virtual machine of the community that installs the games on an iPod. The note [re/games-drm.md](re/games-drm.md) gives the check of the DRM in the firmware.
+The research of the games is in [re/games.md](re/games.md) and in the notes beside it. The note [re/games-vm.md](re/games-vm.md) gives the virtual machine of the community that installs the games on an iPod. The note [re/games-drm.md](re/games-drm.md) gives the check of the DRM in the firmware. The note [re/games-keyfile.md](re/games-keyfile.md) gives the format of the file `iEKInfo` of the keys and the result of the test of these keys against the program of a game.
+
+The app reads the file of the keys of the connected iPod. Open the **Games** pane. Click **Read the Keys**. The pane shows the accounts of the Apple ID, the number of their keys, and the games of the iPod with their account and their key.
+
+If the app does not see the iPod, or if you have a copy of the files of an iPod, click **Choose a Folder…**. Choose the folder `iPod_Control` of the iPod, or a copy of it. The app reads the same files from that folder. The app accepts the name `games_RO` and the name `Games_RO` for the folder of the games. Thus the app works with a Windows iPod and with a macOS iPod.
+
+To put the games on an iPod, open the section **Install Games** in the same pane. Click **Select Games Folder...** and choose the folder with the games. The pane shows each game with a switch. Click **Select All** or **Select None**, or click the switches of the games that you want. Then click **Install Games**. The app copies the selected games to the folder `games_RO` of the connected iPod. The app checks the size of each file of the manifest before the copy. The app skips a game that is not complete. The app never removes a file of the iPod.
+
+The app cannot make the file of the keys. The file comes from the server of Apple. The file works only on the iPod that made the purchases.
 
 ## The firmware
 
@@ -381,9 +389,12 @@ sudo .venv/bin/ipodfw restore backups/firmware-backup.bin --rescue --reference b
 | `repack FILE DIR -o OUT` | Puts the changes into a new file and calculates the checksum. |
 | `pack-ipsw IPSW FILE -o OUT` | Puts a changed firmware into a copy of an `.ipsw` file. |
 | `make-library -o DIR` | Makes a music library for tests in the emulator. |
+| `game-keys FOLDER [--games]` | Reads the file of the keys of the iPod in the folder `FOLDER`. The folder must have the shape of the folder `iPod_Control` of an iPod. It shows the accounts and the keys. `--games` also shows the key of each game. |
+| `install-games SOURCE TARGET [--game GUID] [--key-file FILE]` | Copies the games from the folder `SOURCE` to the folder `iPod_Control` of the iPod in the folder `TARGET`. It copies all the games. The option `--game` copies only this game; use the option more than once for more games. The option `--key-file` copies the file `IC-Info.sidb` to the target iPod. |
 | `import-theme THEME BASE TARGET -o OUT` | Makes an iPodFirm theme file from an iPodWizard theme. BASE is the Apple firmware of the theme. TARGET is the Apple firmware 1.3. |
 | `apply-theme FILE THEME -o OUT [--switch]` | Applies an iPodFirm theme file to a firmware image. It moves `rsrc` if necessary. `--switch` makes the light firmware with a "Dark Mode" item in Settings. |
 | `devices`, `backup`, `flash`, `restore` | Operate on the iPod. These commands need `sudo`. |
+| `hibe FILE [--repair] [--hibe-file FILE]` | Shows the state of the hibernation area of a firmware partition. The option `--repair` writes the entry of the image back into the directory. When the area has no valid header, the repair clears the data and writes the snapshot from a backup of the same iPod. |
 | `restore --rescue [--reference FILE]` | Restores a backup to an iPod that has damaged firmware. This command needs `sudo`. |
 
 ### Limits

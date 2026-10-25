@@ -1050,16 +1050,16 @@ The new Settings menu is a copy of the Apple menu with one more item after Click
 
 **Change.** `FirmwarePartition.makeRoom` in [Partition.swift](../mac/Sources/IPodFWKit/Partition.swift) does this:
 
-- **iPod partition** (it has hibe): copy rsrc to the first free space after the last image, aligned to 0x800. The space must be all zero. aupd and hibe do not move.
+- **iPod partition**: copy rsrc after the hibernation area, aligned to 0x800. The area is the image hibe when the directory has the entry. Without the entry, the function `hibeArea` finds the area by the header of the snapshot at its fixed place. The space must be all zero. aupd and the area do not move. The function refuses data after the last image that is not a hibernation area.
 - **Firmware file** (no hibe and no free space): move rsrc and all images after it forward by the same aligned value. The file becomes longer.
 
 Then the function writes the new devOffset into the rsrc directory entry. The content of rsrc does not change.
 
-**Flash.** A firmware file has aupd at a different position than the iPod. `FirmwareFlasher.fitLayout` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift) puts the new osos and rsrc into the layout of the iPod. On the iPod, aupd never moves.
+**Flash.** `FirmwareFlasher.fitLayout` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift) always builds the layout from the iPod: the images of the file go into the partition of the iPod, and rsrc parks after the hibernation area. The data of the area of the iPod never changes. When the file has the entry of hibe and the iPod lost it, the function adds the entry at the place of the area. Refer to [../re/firmware-hibe.md](../re/firmware-hibe.md).
 
 **Ghidra result.** RetailOS finds rsrc through the directory, by its type and ID. The code loads the tag `crsr` at 0xaf548 and 0x1afe44. Both call 0xfc3bc, which calls 0xc60ec. 0xc60ec reads the directory and selects the entry by type (+4) and ID (+8), not by its index. Rockbox `ipodpatcher` also moves rsrc.
 
-**Test status.** Tested on a real iPod 5.5G on 2 October 2026.
+**Test status.** Tested on a real iPod 5.5G on 2 October 2026. Tested again on 25 October 2026 on a partition that lost the entry of the image hibe: the function parked the image rsrc after the hibernation area, without the entry, and the flash worked. Refer to [../re/firmware-hibe.md](../re/firmware-hibe.md).
 
 ## row-marker (removed)
 

@@ -203,6 +203,9 @@ folder. The table gives what each note covers.
 | [games.md](games.md) | The games of the iPod. The formats, the files, the install. | Complete. |
 | [games-drm.md](games-drm.md) | The check of the DRM in the firmware. The 2 functions, the 6 sites of the patch of the community. | Complete. |
 | [games-keys.md](games-keys.md) | The file of the keys `IC-Info.sidb`. | Complete. |
+| [games-keyfile.md](games-keyfile.md) | The file of the keys `iEKInfo`. The format, the accounts, the keys. | Complete. |
+| [firmware-hibe.md](firmware-hibe.md) | The comparison of all the backups of an iPod. The flash of 23 October 2026, the entry of the image `hibe` that the iPod cleared by itself, the hibernation area at its fixed place, the repair that writes the entry only. | Complete. The code of the NOR flash is not read. |
+| [firmware-hibernation.md](firmware-hibernation.md) | The hibernation of the iPod. The format of the image `hibe`, the code that writes it, the trigger, the capability of the iPod. | The image, the code of the `osos` and the trigger are complete. The trigger is the setting `_hibe_sleep`. The bootloader needs the NOR flash. |
 | [games-plans.md](games-plans.md) | The 3 plans for the games. | Complete. |
 | [games-real-ipod.md](games-real-ipod.md) | The games on a real iPod. The manifest, the folder, the file of the keys. | Complete. |
 | [games-vm.md](games-vm.md) | The virtual machine of the community that installs the games. | Complete. |

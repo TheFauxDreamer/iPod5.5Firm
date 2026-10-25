@@ -55,6 +55,7 @@ A typical sequence:
 | [CallerTree.java](../re/ghidra-scripts/CallerTree.java) | `re/ghidra-scripts/` | Writes the caller tree of functions to a given depth. |
 | [SetArmOptions.java](../re/ghidra-scripts/SetArmOptions.java) | `re/ghidra-scripts/` | Pre-script. Turns on "ARM Aggressive Instruction Finder" for the first analysis. |
 | `FindXrefs.java`, `FindConstant.java`, `FindBytes.java`, `ListVtable.java`, `MakeSignature.java` | `re/ghidra-scripts/` | Search scripts. Refer to [ghidra-guide.md](ghidra-guide.md#2-the-scripts). |
+| [DumpCode.java](../re/ghidra-scripts/DumpCode.java) | `re/ghidra-scripts/` | Writes the instructions of the functions at the given addresses, one line per instruction. With `--range`, it writes the instructions of a range of addresses. Use it when the decompiler does not give the function. |
 | [find-pattern.py](../re/find-pattern.py) | `re/` | Finds a byte pattern in a raw file without Ghidra. |
 | Instrumented emulator | `~/Library/Application Support/iPodFirm/emulator-src/target/release/ipod-emulator` | The emulator with the iPodFirm instrumentation patch. Refer to [re/emulator.md](../re/emulator.md). |
 | `ipodfw.emucontrol` | [src/ipodfw/emucontrol.py](../src/ipodfw/emucontrol.py) | Python control of the emulator socket. |
@@ -802,6 +803,39 @@ the code of the compiler of Apple. The facts are Static.
 Refer to [re/firmware-power.md](../re/firmware-power.md). The power comes from
 the power chip of the PP5020 of Apple. The facts are Static.
 
+The hibernation of the iPod is in [re/firmware-hibernation.md](../re/firmware-hibernation.md).
+The image `hibe` of the firmware partition holds a snapshot of the SDRAM. The
+`osos` does not write the image and does not read it: the bootloader in the NOR
+flash does both. The `osos` has one function for the image, `FUN_10000388` at
+0x10000388. The function runs at the start of the `osos`. The function looks for
+the image `ebih` in the directory of the partition, with the names `!ATA` and
+`ebih` at the places 0x10000534 and 0x10000538 of the `osos`. The function
+calls three functions of the bootloader, which are at 0x40003260 (the lookup),
+0x40003400 (the read) and 0x40001a34 (the write). The address 0x40000000 is
+the IRAM: the bootloader copies itself there and runs there. The size of the
+RAM comes from the `sysinfo_t` of the bootloader, at the place 0xe0 of the
+structure. The function `FUN_10265598` at 0x10265598 gives the value. The
+function `FUN_10000388` shifts the value by 0x14 to get the number of the
+pages of the image. The iPod Video always tells the computer that it can
+hibernate: the function `FUN_000ecfcc` at 0x000ecfcc gives 1, and the function
+`FUN_10175c74` at 0x10175c74 writes the flag `CanHibernate` and the size of
+the RAM into the properties of the USB device.
+
+The trigger of the hibernation is the setting `_hibe_sleep` in the file
+`iPod_Control/Device/`. The `osos` reads the setting once at the start, in the
+function `FUN_101d42b8` at 0x101d42b8, and keeps the value in the byte at
+0x1081dfe7. The function `FUN_100b43dc` at 0x100b43dc reads the byte. The
+function enters the power mode 3 when the value is not 0, and the power mode 2
+when the value is 0. The function `FUN_1018ab24` at 0x1018ab24 reads the byte
+at the offset 0x18 of the sleep object. This byte can force the hibernation for
+one sleep.
+
+A second setting, `_disable_hibe`, turns the hibernation of the alarm off. The
+function `FUN_101d4834` at 0x101d4834 reads it at the start and keeps the value
+in the byte at 0x1081dfe8. The task of the alarm, the function `FUN_10284374` at
+0x10284374, reads the byte. The iPod hibernates when the alarm sounds when the
+value is 0.
+
 | Address | Function |
 |---|---|
 | 0x284374 | The method of the task `AlarmTask`. The events are 0x89, 0x8a, 0x8b and 0x94. |
@@ -1066,11 +1100,11 @@ The string `SerialNumber` is at 0x176b24. The string `GamesPlatformID` is at 0x1
 
 The word `Games` is in the JavaScript of the user interface at 0x4b145c, 0x4b38f2, 0x4b3b44 and 0x4b4308. The word `Resume Game` is at 0x4b14d8.
 
-The file `iPod_Control\Device\SysInfo` is at 0xa275c. It holds the identity of the iPod. The keys of the purchases are in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The same keys are in the file `SC Info.sidb` of the computer with iTunes. That file is encrypted with a key that comes from the hardware of the computer. The atom `user` of the file `sinf` of a game holds the number of the account. It is (account 1) in all 7 games of the owner. Refer to [re/games.md](../re/games.md).
+The file `iPod_Control\Device\SysInfo` is at 0xa275c. It holds the identity of the iPod. The keys of the purchases are in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The same keys are in the file `SC Info.sidb` of the computer with iTunes. That file is encrypted with a key that comes from the hardware of the computer. The atom `user` of the file `sinf` of a game holds the number of the account. The number is the same in all 7 games of the owner. Refer to [re/games.md](../re/games.md).
 
 The name of the folder of the games is in the osos in small letters: `games_RO`, `gamedata_RW`, `gamestats_WO` and `gamedata_ShareRW`. The program of iTunes for macOS 11.4 uses the same folders with a capital letter: `Games_RO`, `GameData_RW` and `GameStats_WO`. The file system of the iPod is FAT and it keeps the case of the names.
 
-The app cannot make the file `IC-Info.sidb`. The key of a game depends on the number of the account and on the number of the iPod. The research measured the 116 files `sinf` of the owner. The files give the numbers of 12 accounts. The account (account 1) has 31 games. The account (account 2) has 11 games. The accounts (account 3), (account 4) and (account 5) have 3, 2 and 2 games. The other 7 accounts have 1 game each. The atom `priv` of the file `sinf` holds 440 bytes of data. Each file has its own data. The data is the copy of the first part of the file `sinf`, encrypted with a key that comes from the device. The app can read the number of the account. The app cannot change it, because the file `sinf` has a signature. The app cannot know the number of the iPod for an iPod that never had the key. The app can only copy the file `IC-Info.sidb` from an iPod that has the key. Refer to [re/games.md](../re/games.md).
+The app cannot make the file `IC-Info.sidb`. The key of a game depends on the number of the account and on the number of the iPod. The research measured the 116 files `sinf` of the owner. The files give the numbers of 12 accounts. The biggest account has 31 games. The second account has 11 games. Four accounts have 3, 2, 2 and 2 games. The other 7 accounts have 1 game each. The atom `priv` of the file `sinf` holds 440 bytes of data. Each file has its own data. The data is the copy of the first part of the file `sinf`, encrypted with a key that comes from the device. The app can read the number of the account. The app cannot change it, because the file `sinf` has a signature. The app cannot know the number of the iPod for an iPod that never had the key. The app can only copy the file `IC-Info.sidb` from an iPod that has the key. Refer to [re/games.md](../re/games.md).
 
 The manifest of a game has an array `Files`. The array has 2,528 entries in the 56 games of the owner. Each entry has a `Path`, a `Size` and a `Digest`. The `Digest` has 40 hexadecimal characters. The digest is not the SHA-1 of the file. The osos has the constants of SHA-1 at 0xa7448 and the constants of MD5 at 0xedc18. The algorithm of the digest is not known yet. The `PlatformID` is 1 in all 56 games. It is 2 in 49 games, 3 in 49 games and 4 in 11 games.
 
@@ -1124,6 +1158,8 @@ The program of a game is encrypted. The research measured the entropy of the 56 
 The four names of the folders of the games are in the data area. The function `FUN_000d9d30` at 0xd9d30 gives the name by the number. The function uses the table of the pointers at 0xd9d64. The names are `games_RO` at 0x2a9c3c, `gamedata_RW` at 0x2a9c48, `gamestats_WO` at 0x2a9c54 and `gamedata_ShareRW` at 0x2a9c64. The game runs in the task `eAppMotor` (the name is at 0x24e7fc). The function `FUN_0024e718` at 0x24e718 makes this task. The function `FUN_001d32e0` at 0x1d32e0 starts the game. It gives a message to the application object at the RAM address 0x1081da80.
 
 The program of iTunes for macOS 11.4 has the code that writes the file `IC-Info.sidb` to the iPod. The addresses are in the slice for x86_64 of the program.
+
+The other file of the keys, the file `iPod_Control/iTunes/iEKInfo`, has a known format. The file is a tree of records. Each record has a size of 4 bytes, a name of 4 bytes and a body. The size counts the size field, the name and the body. The size and the name are big endian. The names of the records are `sean`, `valu`, `indx`, `user`, `key ` and `guid`. The record `user` holds the number of an account of the Apple ID and the records `key ` of its keys. The record `key ` holds the number of the key and the record `valu`. The record `valu` holds the key of 16 bytes. The first 0x4C bytes of the file are the header. The file of a real iPod has 12 accounts and 198 keys. The research tried all 198 keys against the program of a game with AES-128-CBC, AES-128-ECB and AES-128-CTR. The program stays encrypted. Refer to [re/games-keyfile.md](../re/games-keyfile.md).
 
 The research with a real iPod gave the size of the account and the size of the file. The function at 0x1006f5799 makes the account of the file of the keys. The function sets the size of the account to 0x14 at 0x1006f57b9. The function makes 20 bytes. The number of the account in the file `sinf` of a game has 4 bytes. The two numbers are not the same size. The function at 0x1006f6614 reads the file of the keys of the iPod. The function makes a buffer of 0x690 bytes at 0x1006f6681. The function copies 0x220 bytes into the buffer at 0x1006f66cd. The 0x220 bytes are 544 bytes. The research does not know the layout of the bytes. The real iPod of the owner has no file `IC-Info.sidb`.
 

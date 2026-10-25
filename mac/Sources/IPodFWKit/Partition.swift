@@ -192,6 +192,15 @@ public final class FirmwarePartition {
 
     public func image(_ name: String) throws -> [UInt8] { Array(data[try imageRange(name)]) }
 
+    /// Take the data and the directory of another partition.
+    ///
+    /// The function is for the repair of a partition, for example the restore of
+    /// the hibernation image. The function changes the whole partition.
+    public func replace(with other: FirmwarePartition) {
+        data = other.data
+        entries = other.entries
+    }
+
     public func checksumOK(_ name: String) -> Bool {
         guard let e = try? entry(name), let r = try? imageRange(name), r.upperBound <= data.count else { return false }
         return byteSum(data[r]) == e.chksum
@@ -206,12 +215,23 @@ public final class FirmwarePartition {
     /// Images start at a multiple of 2048 bytes, as in Apple's files.
     static let imageAlign = 0x800
 
+    /// The gap between the end of the image aupd and the start of the hibernation area.
+    /// The research measured the gap in the backups of the owner. Refer to re/firmware-hibe.md.
+    static let hibeGap = 0x1000
+
+    /// The size of the header of a hibernation snapshot. The memory image starts after it.
+    static let hibeHeader = 0x800
+
     /// Move rsrc if an osos of `ososLength` bytes does not fit before it.
     ///
     /// An iPod partition has free space after its last image: rsrc goes there, and aupd and hibe
     /// stay where they are. A firmware file has no free space: rsrc and the images after it move
     /// forward together and the file becomes longer. The content of the images does not change.
     /// The OS finds each image through the directory.
+    ///
+    /// An iPod can lose the entry of the image hibe and keep the hibernation area at its
+    /// fixed place. The function then finds the area by the header of the snapshot and parks
+    /// rsrc after the area. Refer to re/firmware-hibe.md.
     public func makeRoom(ososLength: Int) throws {
         let align = Self.imageAlign
         let osos = try entry("osos")
@@ -223,13 +243,22 @@ public final class FirmwarePartition {
         let rsrcData = try image("rsrc")
         let lastEnd = (entries.map { Int($0.devOffset) + Int($0.length) }.max()! + align - 1) / align * align
         if imageBase + lastEnd + Int(rsrc.length) <= data.count {
-            // an iPod partition: put rsrc after the last image
-            let at = imageBase + lastEnd
-            guard data[at..<at + Int(rsrc.length)].allSatisfy({ $0 == 0 }) else {
+            // an iPod partition: rsrc goes after the last image, and never over the
+            // hibernation area of the iPod.
+            var at = lastEnd
+            if let area = hibeArea() {
+                at = max(at, (area.devOffset + area.length + align - 1) / align * align)
+            } else if data[imageBase + lastEnd..<imageBase + lastEnd + Int(rsrc.length)].contains(where: { $0 != 0 }) {
+                throw FirmwareError("The space after the last image holds data that is not a hibernation area; restore the image hibe first.")
+            }
+            guard imageBase + at + Int(rsrc.length) <= data.count else {
+                throw FirmwareError("There is no space for rsrc after the hibernation area.")
+            }
+            guard data[imageBase + at..<imageBase + at + Int(rsrc.length)].allSatisfy({ $0 == 0 }) else {
                 throw FirmwareError("The space after the last image is not empty; rsrc cannot move there.")
             }
-            data.replaceSubrange(at..<at + Int(rsrc.length), with: rsrcData)
-            rsrc.devOffset = UInt32(lastEnd)
+            data.replaceSubrange(imageBase + at..<imageBase + at + Int(rsrc.length), with: rsrcData)
+            rsrc.devOffset = UInt32(at)
             writeEntry(rsrc)
             return
         }
@@ -253,6 +282,64 @@ public final class FirmwarePartition {
             data.replaceSubrange(start..<start + img.count, with: img)
             writeEntry(e)
         }
+    }
+
+    /// The devOffset range of the hibernation area of this iPod, or nil.
+    ///
+    /// The area is the image hibe when the directory has the entry. Without the entry, the
+    /// area starts at the end of the image aupd with a gap of 0x1000 bytes. A valid header
+    /// of a snapshot gives the size of the area: the version 1, a page size that is a power
+    /// of two of at least 0x1000, and the number of the pages. The area holds one megabyte
+    /// of memory for each page: the memory of the iPod Video is 64 MB and the header gives
+    /// 64 pages of 0x20000 bytes. The research proved this: the image hibe is 0x4000800
+    /// bytes. Refer to re/firmware-hibe.md and re/firmware-hibernation.md.
+    public func hibeArea() -> (devOffset: Int, length: Int)? {
+        if let e = try? entry("hibe") { return (Int(e.devOffset), Int(e.length)) }
+        guard let aupd = try? entry("aupd") else { return nil }
+        let start = Int(aupd.devOffset) + Int(aupd.length) + Self.hibeGap
+        let at = imageBase + start
+        guard at + 0x14 <= data.count else { return nil }
+        let version = le32(data, at), pageSize = le32(data, at + 4), pages = le32(data, at + 8)
+        guard version == 1, pageSize >= 0x1000, pageSize & (pageSize - 1) == 0,
+              pages > 0, pages <= 128 else { return nil }
+        let length = Self.hibeHeader + (Int(pages) << 20)
+        guard at + length <= data.count else { return nil }
+        return (start, length)
+    }
+
+    /// Write the entry of the image hibe into the directory, without its data.
+    ///
+    /// The iPod writes the entry of the image hibe itself, through its boot code. The iPod
+    /// can lose the entry and keep the hibernation area. The function writes the entry back:
+    /// the fields come from the healthy partitions of the research, and the place and the
+    /// size come from the hibernation area of this partition. The data of the area does not
+    /// change: the area holds the memory of the iPod. Refer to re/firmware-hibe.md.
+    public func addHibeEntry() throws {
+        guard !has("hibe") else { throw FirmwareError("The partition already has the image hibe.") }
+        guard let area = hibeArea() else {
+            throw FirmwareError("The partition has no hibernation area for the image hibe.")
+        }
+        var entry = [UInt8](repeating: 0, count: 40)
+        entry.replaceSubrange(0..<4, with: Array("!ATA".utf8))
+        entry.replaceSubrange(4..<8, with: Array("ebih".utf8))
+        put32(&entry, 8, 1)                        // the image id
+        put32(&entry, 12, UInt32(area.devOffset))  // the place of the image
+        put32(&entry, 16, UInt32(area.length))     // the size of the image
+        put32(&entry, 20, 0x10000000)              // the load address in SDRAM
+        put32(&entry, 24, 0)                       // the entry point
+        put32(&entry, 28, 0)                       // the checksum: the image is not code
+        put32(&entry, 32, 0)                       // the version
+        put32(&entry, 36, 0xFFFFFFFF)              // the second load address
+        let tags = [Array("!ATA".utf8), Array("DNAN".utf8)]
+        for index in 0..<10 {
+            let at = dirOffset + index * 40
+            guard tags.contains(Array(data[at..<at + 4])) else {
+                data.replaceSubrange(at..<at + 40, with: entry)
+                if let reparsed = try? FirmwarePartition(data: data) { entries = reparsed.entries }
+                return
+            }
+        }
+        throw FirmwareError("The directory of the partition has no free entry.")
     }
 
     func writeEntry(_ e: ImageEntry) {

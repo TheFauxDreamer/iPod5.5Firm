@@ -37,6 +37,8 @@ Thus, about 8,500 lines of the app are in Swift. The UI and the helper (about 3,
 | `MusicImport.swift` | `libimport.py`, `mp4tags.py` |
 | `Device.swift`, `Operations.swift` | `device.py`, `cli.py` (`devices`, `backup`, `flash`, `restore`) |
 | `FirmwareVersion.swift` | None |
+| `GameKeys.swift` (the key store, the manifest, the library and the copy of the games) | `games.py` |
+| `Hibe.swift` (the hibernation image and the repair of a partition) | `hibe.py` |
 | `PatchLibrary.swift` (install and export of a `.ipodpatch` file) | None |
 | `USBProbeLog.swift` | None |
 | `HelperXPC.swift` | None. The Python tool runs with `sudo`. |

@@ -149,6 +149,116 @@ def cmd_devices(args) -> None:
         print(f"/dev/{i.disk}: {i.media_name}, {i.size / 1e9:.1f} GB, {i.block_size}-byte blocks")
 
 
+def cmd_game_keys(args) -> None:
+    from . import games
+    root = Path(args.volume)
+    store_path = root / "iTunes" / games.KEY_STORE_NAME
+    if not store_path.exists():
+        sys.exit(f"The file of the keys {store_path} not found.")
+    store = games.load_key_store(store_path)
+    total = sum(len(a.keys) for a in store.accounts)
+    print(f"File of the keys: {store_path}")
+    print(f"Accounts: {len(store.accounts)}   Keys: {total}")
+    print()
+    for a in store.accounts:
+        print(f"Account 0x{a.number:08x}   {len(a.keys)} keys")
+        for k in a.keys:
+            print(f"    key {k.index:<4} {k.hex()}")
+    games_dir = games.games_directory(root)
+    if args.games and games_dir is not None:
+        print()
+        print(f"Games in {games_dir}")
+        for name, sinf in games.find_games(games_dir):
+            g = games.game_keys(sinf.read_bytes(), store)
+            state = g.key.hex() if g.key else "the file of the keys has no such key"
+            print(f"    {name:<10} account 0x{g.number:08x}  key {g.key_index:<4} {state}")
+
+
+def cmd_install_games(args) -> None:
+    from . import games
+    source = Path(args.source)
+    # The source can be the folder with the games, or the folder iPod_Control of an iPod.
+    games_dir = games.games_directory(source)
+    if games_dir is None:
+        games_dir = source
+    library = games.load_library(games_dir)
+    if not library:
+        sys.exit(f"The folder {games_dir} has no game with a file Manifest.plist.")
+    print(f"Games in {games_dir}: {len(library)}")
+    for g in library:
+        problems = games.check_game(g)
+        state = "complete" if not problems else f"INCOMPLETE: {problems[0]}"
+        print(f"    {g.folder:<10} {g.name:<20} {state}")
+
+    # The option --game selects the games. Without the option, the app copies all the games.
+    if args.game:
+        wanted = [g for g in library if g.folder in args.game]
+        missing = [name for name in args.game if name not in {g.folder for g in library}]
+        if missing:
+            sys.exit("The folder has no game with the name " + ", ".join(missing) + ".")
+    else:
+        wanted = library
+    print()
+    print(f"Copying {len(wanted)} game(s).")
+    report = games.install_library(wanted, args.target,
+                                   copy_key_file=bool(args.key_file),
+                                   key_file_source=args.key_file)
+    print(f"Copied {len(report.installed)} game(s), {report.bytes_copied} bytes -> {Path(args.target) / 'games_RO'}")
+    for folder in report.installed:
+        print(f"    {folder}")
+    for warning in report.warnings:
+        print(f"    skipped: {warning}")
+    if report.key_file_copied:
+        print(f"    copied the file {games.KEY_FILE_NAME}")
+
+
+def cmd_hibe(args) -> None:
+    from . import hibe
+    from .partition import FirmwarePartition
+    path = Path(args.partition)
+    if not path.exists():
+        sys.exit(f"The file {path} not found.")
+    data = path.read_bytes()
+    partition = FirmwarePartition(data)
+    report = hibe.check_hibe(partition)
+    print(f"Partition: {path}")
+    for e in partition.entries:
+        print(f"    {e.name:<6} 0x{e.dev_offset:08x} .. 0x{e.dev_offset + e.length:08x}")
+    print()
+    print(f"The entry of the image hibe is present: {report.present}")
+    if report.present:
+        print(f"    the place: 0x{report.offset:08x}   the size: 0x{report.length:08x}")
+        print("The partition is in the state that the app expects.")
+        return
+    for note in report.notes:
+        print(f"    {note}")
+    if not args.repair:
+        print()
+        print("Run the command again with --repair to write the entry back.")
+        return
+
+    # The image hibe: only when the hibernation area has no valid header.
+    image = None
+    if args.hibe_file:
+        image = Path(args.hibe_file).read_bytes()
+    elif partition.hibe_area() is None:
+        found = hibe.find_hibe_in_backups(path.parent)
+        if found is None:
+            sys.exit("No file in the folder has the image hibe. Use --hibe-file to give the image.")
+        print(f"The image hibe comes from {found[0]}")
+        image = found[1]
+    out = hibe.restore_hibe(data, image)
+    out_path = path.with_suffix(path.suffix + ".repaired")
+    out_path.write_bytes(out)
+    fixed = FirmwarePartition(out)
+    print()
+    print("The repaired partition:")
+    for e in fixed.entries:
+        print(f"    {e.name:<6} 0x{e.dev_offset:08x} .. 0x{e.dev_offset + e.length:08x}")
+    print(f"Wrote {out_path}")
+    print("Flash the repaired partition to the iPod to use it.")
+
+
 def cmd_backup(args) -> None:
     require_root()
     ipod = device.pick_ipod(args.disk)
@@ -279,6 +389,28 @@ def main(argv: list[str] | None = None) -> None:
 
     s = sub.add_parser("devices", help="list connected iPods")
     s.set_defaults(func=cmd_devices)
+
+    s = sub.add_parser("hibe", help="check the hibernation image of a firmware partition")
+    s.add_argument("partition", help="the firmware partition of the iPod, a backup of it")
+    s.add_argument("--repair", action="store_true",
+                   help="write the hibernation image back into the partition")
+    s.add_argument("--hibe-file", help="the file with the hibernation image")
+    s.set_defaults(func=cmd_hibe)
+
+    s = sub.add_parser("game-keys", help="read the keys of the games of an iPod")
+    s.add_argument("volume", help="the iPod_Control folder of the iPod, or a copy of it")
+    s.add_argument("--games", action="store_true",
+                   help="also show the key of each game in the folder of the games")
+    s.set_defaults(func=cmd_game_keys)
+
+    s = sub.add_parser("install-games", help="copy the games to the iPod_Control folder of an iPod")
+    s.add_argument("source", help="the folder with the games, or the folder iPod_Control of an iPod")
+    s.add_argument("target", help="the folder iPod_Control of the target iPod")
+    s.add_argument("--game", action="append", default=[], metavar="GUID",
+                   help="copy only this game; use the option more than once for more games")
+    s.add_argument("--all", action="store_true", help="copy all the games (the default)")
+    s.add_argument("--key-file", help="the file IC-Info.sidb to copy to the target iPod")
+    s.set_defaults(func=cmd_install_games)
 
     s = sub.add_parser("backup", help="dump the iPod's whole firmware partition (sudo)")
     s.add_argument("-o", "--output", default="backups/firmware-backup.bin")

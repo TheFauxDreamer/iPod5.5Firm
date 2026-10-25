@@ -31,6 +31,15 @@ DEVICE_TAGS = (b"!ATA", b"DNAN")
 IMAGE_BASE_CANDIDATES = (2048, 512, 1024, 4096, 0)
 IMAGE_ALIGN = 0x800         # images start at a multiple of 2048 bytes (as in Apple's files)
 
+# The gap between the end of the image aupd and the start of the hibernation area.
+# The research measured the gap in the backups of the owner. The gap is the same in
+# all of them. Refer to re/firmware-hibe.md.
+HIBE_GAP = 0x1000
+# The size of the header of a hibernation snapshot. The memory image starts after it.
+HIBE_HEADER = 0x800
+# The name of the hibernation image in the directory.
+HIBE_NAME = "hibe"
+
 # The type field is stored byte-reversed on disk ("soso" == "osos").
 IMAGE_NAMES = {b"soso": "osos", b"crsr": "rsrc", b"dpua": "aupd", b"kbso": "osbk", b"ebih": "hibe"}
 
@@ -199,6 +208,10 @@ class FirmwarePartition:
         hibe stay where they are. A firmware file has no free space: rsrc and the images after
         it move forward together and the file becomes longer. The content of the images does
         not change. The OS finds each image through the directory.
+
+        An iPod can lose the entry of the image hibe and keep the hibernation area at its
+        fixed place. The function then finds the area by the header of the snapshot and parks
+        rsrc after the area. Refer to re/firmware-hibe.md.
         """
         osos = self.entry("osos")
         need = osos.dev_offset + osos_length
@@ -212,11 +225,23 @@ class FirmwarePartition:
         last_end = max(e.dev_offset + e.length for e in self.entries)
         last_end = (last_end + IMAGE_ALIGN - 1) // IMAGE_ALIGN * IMAGE_ALIGN
         if self.image_base + last_end + rsrc.length <= len(self.data):
-            # an iPod partition: put rsrc after the last image
-            if any(self.data[self.image_base + last_end:self.image_base + last_end + rsrc.length]):
+            # an iPod partition: rsrc goes after the last image, and never over
+            # the hibernation area of the iPod.
+            at = last_end
+            area = self.hibe_area()
+            if area is not None:
+                after = (area[0] + area[1] + IMAGE_ALIGN - 1) // IMAGE_ALIGN * IMAGE_ALIGN
+                at = max(at, after)
+            elif any(self.data[self.image_base + last_end:self.image_base + last_end + rsrc.length]):
+                raise FirmwareError(
+                    "the space after the last image holds data that is not a hibernation "
+                    "area; restore the image hibe first")
+            if self.image_base + at + rsrc.length > len(self.data):
+                raise FirmwareError("there is no space for rsrc after the hibernation area")
+            if any(self.data[self.image_base + at:self.image_base + at + rsrc.length]):
                 raise FirmwareError("the space after the last image is not empty; rsrc cannot move there")
-            self.data[self.image_base + last_end:self.image_base + last_end + rsrc.length] = data
-            rsrc.dev_offset = last_end
+            self.data[self.image_base + at:self.image_base + at + rsrc.length] = data
+            rsrc.dev_offset = at
             self._write_entry(rsrc)
             return
         if self.has("hibe"):
@@ -235,6 +260,80 @@ class FirmwarePartition:
             start = self.image_base + e.dev_offset
             self.data[start:start + e.length] = img
             self._write_entry(e)
+
+    def add_hibe_entry(self) -> None:
+        """Write the entry of the image hibe into the directory, without its data.
+
+        The iPod writes the entry of the image hibe itself, through its boot code. The
+        iPod can lose the entry and keep the hibernation area. The function writes the
+        entry back: the fields come from the healthy partitions of the research, and the
+        place and the size come from the hibernation area of this partition. The data of
+        the area does not change: the area holds the memory of the iPod. Refer to
+        re/firmware-hibe.md.
+        """
+        if self.has(HIBE_NAME):
+            raise FirmwareError("the partition already has the image hibe")
+        area = self.hibe_area()
+        if area is None:
+            raise FirmwareError("the partition has no hibernation area for the image hibe")
+        start, length = area
+        entry = bytearray(ENTRY_SIZE)
+        entry[0:4] = b"!ATA"
+        entry[4:8] = b"ebih"
+        struct.pack_into("<I", entry, 8, 1)               # the image id
+        struct.pack_into("<I", entry, 12, start)          # the place of the image
+        struct.pack_into("<I", entry, 16, length)         # the size of the image
+        struct.pack_into("<I", entry, 20, 0x10000000)     # the load address in SDRAM
+        struct.pack_into("<I", entry, 24, 0)              # the entry point
+        struct.pack_into("<I", entry, 28, 0)              # the checksum: the image is not code
+        struct.pack_into("<I", entry, 32, 0)              # the version
+        struct.pack_into("<I", entry, 36, 0xFFFFFFFF)     # the second load address
+        for index in range(10):
+            at = self.dir_offset + index * ENTRY_SIZE
+            if self.data[at:at + 4] in DEVICE_TAGS:
+                continue
+            self.data[at:at + ENTRY_SIZE] = entry
+            self.entries = self._read_directory()
+            return
+        raise FirmwareError("the directory of the partition has no free entry")
+
+    def hibe_area(self) -> tuple[int, int] | None:
+        """The devOffset range of the hibernation area of this iPod, or None.
+
+        The area is the image hibe when the directory has the entry. Without the entry, the
+        area starts at the end of the image aupd with a gap of 0x1000 bytes. A valid header
+        of a snapshot gives the size of the area: the version 1, a page size that is a power
+        of two of at least 0x1000, and the number of the pages. The size of the area is the
+        header of 0x800 bytes plus the memory: the page size times the number of the pages.
+        The function gives None when the data there has no such header.
+
+        The research measured the header in the backups of the owner: the page size
+        0x20000 and 64 pages on the iPod Video. Refer to re/firmware-hibe.md and
+        re/firmware-hibernation.md.
+        """
+        if self.has(HIBE_NAME):
+            e = self.entry(HIBE_NAME)
+            return e.dev_offset, e.length
+        if not self.has("aupd"):
+            return None
+        aupd = self.entry("aupd")
+        start = aupd.dev_offset + aupd.length + HIBE_GAP
+        at = self.image_base + start
+        if at + 0x14 > len(self.data):
+            return None
+        version, page_size, pages = struct.unpack_from("<III", self.data, at)
+        if (version != 1 or page_size < 0x1000 or page_size & (page_size - 1)
+                or pages == 0 or pages > 128):
+            return None
+        # The header holds the page size of the disk and the number of the pages of the
+        # memory. The area holds one megabyte of memory for each page: the memory of the
+        # iPod is 64 MB and the header gives 64 pages of 0x20000 bytes. The research
+        # proved this: the image hibe is 0x4000800 bytes and the header gives the pages
+        # 64. Refer to re/firmware-hibernation.md, Part 2.
+        length = HIBE_HEADER + (pages << 20)
+        if at + length > len(self.data):
+            return None
+        return start, length
 
     def _room_for(self, e: ImageEntry) -> int:
         following = [o.dev_offset for o in self.entries if o.dev_offset > e.dev_offset]

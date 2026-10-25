@@ -145,11 +145,11 @@ of each atom. The size includes the 8 bytes of the header of the atom.
 | `frma` | 12 | The name of the program. It is `game` in 73 of the 116 files. It is 4 zero bytes in the other 43 files. |
 | `schm` | 20 | The scheme `itun`. All 116 files of the owner have this scheme. |
 | `schi` | 856 | The child atoms. |
-| `user` | 12 | The user ID. It is (account 1) in all 7 games of the iPod Video. |
+| `user` | 12 | The user ID. The number is the same in all 7 games of the iPod Video. |
 | `key ` | 12 | The size of the key. It is 4 in all the files. |
 | `iviv` | 24 | The initialisation vector. It is the same in all 7 games of the iPod Video. |
 | `righ` | 80 | The rights of the game. It holds the fields `veID`, `plat`, `aver`, `tran` and `medi`. |
-| `name` | 264 | The name of the game. It is `Name A` in the game `11002`. |
+| `name` | 264 | The name of the buyer of the game. The name of the game `11002` is private and is not in this note. |
 | `priv` | 448 | The data of the key. It is 440 bytes of data. |
 
 The user ID is the same in all 7 games of the owner. The initialisation vector
@@ -427,7 +427,7 @@ iPod.
 The research gives two parts.
 
 1. The account. The atom `user` of the file `sinf` holds the number of the
-   account. The number is the same in all 7 games of the owner: (account 1).
+   account. The number is the same in all 7 games of the owner.
    The file `sinf` of the game `1C300` has these atoms.
 
    | Atom | Size | Content |
@@ -436,7 +436,7 @@ The research gives two parts.
    | `frma` | 12 | The name of the program. |
    | `schm` | 20 | The scheme `itun`. |
    | `schi` | 856 | The child atoms. |
-   | `user` | 12 | The number of the account: (account 1). |
+   | `user` | 12 | The number of the account. The research does not publish the number. |
    | `key ` | 12 | The size of the key. |
    | `iviv` | 24 | The vector of AES. It is the same in all 7 games. |
    | `righ` | 80 | The rights of the game. |
@@ -731,12 +731,11 @@ accounts.
 
 | The number of the account | The number of the games |
 |---|---|
-| (account 1) | 31 |
-| (account 2) | 11 |
-| (account 3) | 3 |
-| (account 4) | 2 |
-| (account 5) | 2 |
-| (account 6), (account 7), (account 8), (account 9), (account 10), (account 11), (account 12) | 1 each |
+| The biggest account | 31 |
+| The second account | 11 |
+| Two accounts | 3 |
+| Two accounts | 2 |
+| Seven accounts | 1 each |
 
 The games of one account have the same number. The games of different
 accounts have different numbers. The number is the number of the account of the

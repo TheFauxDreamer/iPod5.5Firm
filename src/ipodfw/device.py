@@ -14,7 +14,15 @@ import struct
 import subprocess
 from dataclasses import dataclass
 
-from .partition import ENTRY_SIZE, FirmwareError, FirmwarePartition, samsung_image_header, samsung_message
+from .partition import (
+    DEVICE_TAGS,
+    ENTRY_SIZE,
+    HIBE_NAME,
+    FirmwareError,
+    FirmwarePartition,
+    samsung_image_header,
+    samsung_message,
+)
 
 
 @dataclass
@@ -131,13 +139,24 @@ def unmount(ipod: IPodDisk) -> None:
 def check_compatible(current: FirmwarePartition, new: FirmwarePartition, label: str) -> None:
     """new may only differ from current in the osos/rsrc length and checksum, and in the rsrc position.
 
-    rsrc can move (to make room for a larger osos), but it must not overlap osos, aupd or hibe.
+    rsrc can move (to make room for a larger osos), but it must not overlap osos, aupd or the
+    hibernation area of the iPod. new may have one image more than current: the image hibe.
+    The iPod can lose the entry of the image hibe (the research proved it: the entry was
+    36 bytes of zeros after the start that followed the flash of 23 October 2026), and a
+    flash may bring the entry back. The extra image must be the image hibe at the place and
+    with the size of the hibernation area of the iPod, so that the write adds the entry only.
     """
     if (current.image_base, current.dir_offset) != (new.image_base, new.dir_offset):
         raise FirmwareError(f"{label}: partition layout differs from the iPod's (image base / directory)")
-    if len(current.entries) != len(new.entries):
+    cur, nw = list(current.entries), list(new.entries)
+    if not current.has(HIBE_NAME) and new.has(HIBE_NAME) and len(nw) == len(cur) + 1:
+        e = new.entry(HIBE_NAME)
+        area = current.hibe_area()
+        if area is not None and (e.dev_offset, e.length) == area:
+            nw = [x for x in nw if x.name != HIBE_NAME]
+    if len(cur) != len(nw):
         raise FirmwareError(f"{label}: different number of firmware images than the iPod")
-    for c, n in zip(current.entries, new.entries):
+    for c, n in zip(cur, nw):
         if c.type != n.type or (c.dev_offset != n.dev_offset and c.name != "rsrc"):
             raise FirmwareError(f"{label}: image {c.name} is at a different position than on the iPod")
         if c.name not in ("osos", "rsrc", "hibe") and c.pack() != n.pack():
@@ -146,11 +165,17 @@ def check_compatible(current: FirmwarePartition, new: FirmwarePartition, label: 
         r0, r1 = new.image_range("rsrc")
         if r1 > len(new.data):
             raise FirmwareError(f"{label}: rsrc runs past the end of the image")
-        for fw, name in ((new, "osos"), (new, "aupd"), (current, "hibe")):
+        for fw, name in ((new, "osos"), (new, "aupd")):
             if fw.has(name):
                 a, b = fw.image_range(name)
                 if r0 < b and r1 > a:
                     raise FirmwareError(f"{label}: rsrc overlaps {name}; refusing")
+        # rsrc must not overlap the hibernation area of the iPod, with or without the entry.
+        area = current.hibe_area()
+        if area is not None:
+            a, b = current.image_base + area[0], current.image_base + area[0] + area[1]
+            if r0 < b and r1 > a:
+                raise FirmwareError(f"{label}: rsrc overlaps the hibernation area; refusing")
     for name in ("osos", "rsrc"):
         if new.has(name) and not new.checksum_ok(name):
             raise FirmwareError(f"{label}: {name} checksum does not verify")
@@ -161,15 +186,27 @@ def check_compatible(current: FirmwarePartition, new: FirmwarePartition, label: 
 def fit_layout(new_bytes: bytes, current: FirmwarePartition) -> bytes:
     """Put the osos and rsrc of a firmware file into the iPod's own layout.
 
-    A firmware file that has a larger osos has rsrc and aupd moved forward (see make_room). On
-    the iPod, aupd must stay where it is. For such a file, the result is the iPod's partition
-    with the new osos and rsrc. A partition from an iPod (with hibe), or an image with aupd at
-    the iPod's position, does not change: a restore writes the layout of the backup.
+    A firmware file has no image hibe and no free space after the last image. An iPod
+    partition has the hibernation area: the area holds the space for a bigger osos, and
+    the image rsrc goes after the area. The area is the image hibe when the directory has
+    the entry. Without the entry, the area keeps its fixed place, and the function finds
+    it by the header of the snapshot.
+
+    The function always gives the layout of the iPod. The image aupd stays where the
+    iPod has it. The image rsrc goes after the hibernation area of the iPod. The other
+    images of the file come unchanged.
+
+    The hibernation area of the iPod stays, with its data. When the file has the image
+    hibe and the iPod does not, the iPod lost the entry: the function adds the entry of
+    the file to the result and keeps the data of the iPod. The data of the file is a
+    snapshot of another day, and the data of the iPod is the memory of the iPod now.
+
+    The function must not return the file unchanged. A file with a hibernation area
+    holds a snapshot of another day, and a flash of the file would put that snapshot
+    over the snapshot of the iPod. Refer to ../../re/firmware-hibe.md.
     """
     new = FirmwarePartition(new_bytes)
-    if new.has("hibe") or not current.has("aupd") or not new.has("aupd"):
-        return new_bytes
-    if new.entry("aupd").dev_offset == current.entry("aupd").dev_offset:
+    if not current.has("aupd") or not new.has("aupd"):
         return new_bytes
     out = FirmwarePartition(current.data)
     osos = new.image("osos")
@@ -177,6 +214,17 @@ def fit_layout(new_bytes: bytes, current: FirmwarePartition) -> bytes:
     out.replace_image("osos", osos)
     if new.has("rsrc") and out.has("rsrc"):
         out.replace_image("rsrc", new.image("rsrc"))
+    if new.has(HIBE_NAME) and not out.has(HIBE_NAME):
+        # The file has the entry of the image hibe and the iPod does not. The iPod
+        # lost the entry. Add the entry of the file at the place of the area of the
+        # iPod. The data of the area of the iPod stays.
+        area = out.hibe_area()
+        e = new.entry(HIBE_NAME)
+        if area is None or (e.dev_offset, e.length) != area:
+            raise FirmwareError(
+                "the file has the image hibe at a different place than the "
+                "hibernation area of the iPod; the file does not fit this iPod")
+        out.add_hibe_entry()
     return out.to_bytes()
 
 

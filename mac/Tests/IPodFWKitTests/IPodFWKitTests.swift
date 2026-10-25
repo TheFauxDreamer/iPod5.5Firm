@@ -1908,3 +1908,614 @@ final class PatchLibraryTests: XCTestCase {
         XCTAssertThrowsError(try library.saveCode(builtIn, PatchCode(patch: builtIn)))
     }
 }
+
+// The tests of the key store of the games. The tests use a small synthetic file
+// of keys. The tests do not use the file of a real iPod.
+final class GameKeysTests: XCTestCase {
+    static let keyA = Data([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+                            0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff])
+    static let keyB = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                            0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10])
+
+    static func words(_ values: [UInt32]) -> Data {
+        var d = Data()
+        for v in values { withUnsafeBytes(of: v.bigEndian) { d.append(contentsOf: $0) } }
+        return d
+    }
+
+    /// One record of the file iEKInfo. The length counts the length field, the name and the body.
+    static func record(_ tag: String, _ body: Data) -> Data {
+        var d = Data()
+        withUnsafeBytes(of: UInt32(8 + body.count).bigEndian) { d.append(contentsOf: $0) }
+        d.append(contentsOf: Array(tag.utf8))
+        d.append(body)
+        return d
+    }
+
+    /// One atom of a file sinf. The size counts the size field, the name and the body.
+    static func atom(_ tag: String, _ body: Data) -> Data {
+        record(tag, body)
+    }
+
+    static func keyRecord(_ index: UInt32, _ value: Data) -> Data {
+        record("key ", words([index, 1, 0]) + record("valu", words([1, 0, 0]) + value))
+    }
+
+    static func userRecord(_ number: UInt32, _ keys: [(UInt32, Data)]) -> Data {
+        var body = words([number, UInt32(keys.count), 0])
+        for (i, v) in keys { body += keyRecord(i, v) }
+        return record("user", body)
+    }
+
+    static func buildKeyStore(_ accounts: [(UInt32, [(UInt32, Data)])],
+                              guids: [Data] = []) -> Data {
+        var body = words([1, 0, 0]) + Data(repeating: 0, count: 20)
+        body += record("indx", words([1, 0, 0, 8]))
+        for (number, keys) in accounts { body += userRecord(number, keys) }
+        for guid in guids { body += record("guid", words([1, 0, 0]) + guid) }
+        let top = record("sean", body)
+        var data = Data()
+        withUnsafeBytes(of: UInt32(top.count).bigEndian) { data.append(contentsOf: $0) }
+        data += Data(repeating: 0, count: 0x48)
+        data += top
+        return data
+    }
+
+    func testReadsTheAccountsAndTheKeys() throws {
+        let data = Self.buildKeyStore([(0x11111111, [(1, Self.keyA), (4, Self.keyB)]),
+                                       (0x22222222, [(2, Self.keyA)])])
+        let store = try GameKeys.parseKeyStore(data)
+        XCTAssertEqual(store.accounts.count, 2)
+        XCTAssertEqual(store.accounts.map { $0.number }, [0x11111111, 0x22222222])
+        XCTAssertEqual(store.accounts[0].keys.count, 2)
+        XCTAssertEqual(store.keyCount, 3)
+        XCTAssertEqual(store.account(0x11111111)!.keys[1].value, Self.keyB)
+        XCTAssertEqual(store.key(0x11111111, 1)!.value, Self.keyA)
+        XCTAssertEqual(store.key(0x22222222, 2)!.value, Self.keyA)
+        XCTAssertNil(store.key(0x11111111, 99))
+        XCTAssertNil(store.account(1))
+    }
+
+    func testTheKeyIndexIsTheNumberOfTheKey() throws {
+        let data = Self.buildKeyStore([(0x11111111, [(1, Self.keyA), (4, Self.keyB)])])
+        let store = try GameKeys.parseKeyStore(data)
+        let account = store.account(0x11111111)!
+        XCTAssertEqual(account.key(1)!.value, Self.keyA)
+        XCTAssertEqual(account.key(4)!.value, Self.keyB)
+    }
+
+    func testAFileThatIsNotAKeyStoreIsRefused() {
+        XCTAssertThrowsError(try GameKeys.parseKeyStore(Data(repeating: 0, count: 200)))
+        XCTAssertThrowsError(try GameKeys.parseKeyStore(Data()))
+    }
+
+    func testAFileWithAWrongNameIsRefused() {
+        var data = Self.buildKeyStore([(1, [(1, Self.keyA)])])
+        data.replaceSubrange(0x50..<0x54, with: Array("xxxx".utf8))
+        XCTAssertThrowsError(try GameKeys.parseKeyStore(data))
+    }
+
+    func testTheDeviceIdsAreRead() throws {
+        // A synthetic device id. A real id holds the serial of the USB of the iPod.
+        let guid = Data([0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67])
+        let data = Self.buildKeyStore([(1, [(1, Self.keyA)])], guids: [guid])
+        let store = try GameKeys.parseKeyStore(data)
+        XCTAssertEqual(store.deviceIDs.count, 1)
+        XCTAssertEqual(store.deviceIDs[0], guid)
+    }
+
+    func testSinfAtoms() {
+        // The test uses synthetic values.
+        let inner = Self.atom("user", Self.words([0x11111111]))
+            + Self.atom("key ", Self.words([4]))
+            + Self.atom("iviv", Data([0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
+                                      0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10]))
+            + Self.atom("name", Data("Test Account".utf8) + Data(repeating: 0, count: 256 - 12))
+        let sinf = Self.atom("sinf", Self.atom("schi", inner))
+        let parsed = GameKeys.parseSinf(sinf)
+        XCTAssertEqual(be32(parsed["user"]!, 0), 0x11111111)
+        XCTAssertEqual(be32(parsed["key "]!, 0), 4)
+        XCTAssertEqual(parsed["iviv"]!.count, 16)
+        XCTAssertEqual(parsed["iviv"]![0], 0xfe)
+    }
+
+    func testTheGameGivesTheAccountAndTheKey() {
+        let inner = Self.atom("user", Self.words([0x11111111]))
+            + Self.atom("key ", Self.words([4]))
+            + Self.atom("iviv", Data(repeating: 0, count: 16))
+            + Self.atom("name", Data("Test Account".utf8) + Data(repeating: 0, count: 256 - 12))
+        let sinf = Self.atom("sinf", Self.atom("schi", inner))
+        let store = try! GameKeys.parseKeyStore(Self.buildKeyStore([(0x11111111, [(4, Self.keyB)])]))
+        let g = GameKeys.gameKeys(sinf, store)
+        XCTAssertEqual(g.number, 0x11111111)
+        XCTAssertEqual(g.keyIndex, 4)
+        XCTAssertEqual(g.name, "Test Account")
+        XCTAssertEqual(g.key!.value, Self.keyB)
+    }
+
+    func testAGameWithoutAKeyInTheStore() {
+        let inner = Self.atom("user", Self.words([0x11111111])) + Self.atom("key ", Self.words([9]))
+        let sinf = Self.atom("sinf", Self.atom("schi", inner))
+        let store = try! GameKeys.parseKeyStore(Self.buildKeyStore([(0x11111111, [(4, Self.keyB)])]))
+        let g = GameKeys.gameKeys(sinf, store)
+        XCTAssertNil(g.key)
+    }
+}
+
+// The test of the detection of the iPod. The test does not run without a connected iPod.
+final class DeviceFindTests: XCTestCase {
+    func testFindsTheConnectedIPod() throws {
+        // The number of the iPods that the command diskutil gives. The test compares the
+        // two numbers. The test fails when the app misses an iPod.
+        let external = try Device.diskutilForTest("list", "external", "physical")
+        let expected = (external["WholeDisks"] as? [String] ?? []).count
+        let ipods = try Device.findIPods()
+        guard expected > 0 else { throw XCTSkip("No external disk is connected.") }
+        XCTAssertEqual(ipods.count, expected,
+                       "The app must find every external disk that names an iPod.")
+        for ipod in ipods {
+            XCTAssertTrue(ipod.mediaName.lowercased().contains("ipod"),
+                          "The name of the disk is \(ipod.mediaName). The name must name the iPod.")
+            XCTAssertGreaterThan(ipod.size, 0)
+        }
+    }
+}
+
+// The test of the name of the folder of the games. The firmware asks for the name
+// games_RO with small letters. The program of iTunes writes the name Games_RO with a
+// capital letter.
+final class GameKeysDirectoryTests: XCTestCase {
+    func testAcceptsBothNames() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("iPodFirm-games-dir-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        XCTAssertNil(GameKeys.gamesDirectory(at: dir.path))
+
+        // The file system of macOS keeps no case by default. The test uses the name of the
+        // case that the file system keeps. The function must find the folder in both cases.
+        for name in ["games_RO", "Games_RO"] {
+            let games = dir.appendingPathComponent(name)
+            try FileManager.default.createDirectory(at: games, withIntermediateDirectories: true)
+            let found = GameKeys.gamesDirectory(at: dir.path)
+            XCTAssertNotNil(found, "The function must find the folder \(name).")
+            // The two names can be the same folder on a file system without case.
+            XCTAssertTrue(found!.lowercased().hasSuffix("games_ro"))
+            try FileManager.default.removeItem(at: games)
+        }
+    }
+}
+
+// The tests of the manifest of a game and of the copy of the games to an iPod.
+final class GameInstallerTests: XCTestCase {
+    static func manifestData(guid: String = "11002", name: String = "iQuiz",
+                              files: [[String: Any]]? = nil) -> Data {
+        let list: [[String: Any]] = files ?? [
+            ["Digest": String(repeating: "A", count: 40), "Path": "Fonts/Arial15Hira13Hybrid0.ipd", "Size": 19504],
+            ["Digest": String(repeating: "B", count: 40), "Path": "Fonts/Arial15Hira13Hybrid0.txt", "Size": 4779],
+        ]
+        let root: [String: Any] = [
+            "BuildIdentifier": "1446269457-ca6ac6febe09",
+            "Files": list,
+            "GUID": guid,
+            "Name": name,
+            "Platforms": [["BuildID": 2902110, "ExecutablePath": "Executables/TWA_1_1_2902110.bin",
+                           "LaunchingArtwork": "iQuiz.raw.lcd5", "PlatformID": 1, "PlatformVersion": 1,
+                           "Size": 463944]],
+            "SampleDataPath": "UserTrivia/Samples",
+            "UserDataPath": "UserTrivia/Packs",
+            "Version": "1.0",
+        ]
+        return try! PropertyListSerialization.data(fromPropertyList: root, format: .xml, options: 0)
+    }
+
+    /// Make a folder of a game with the files of the manifest.
+    static func makeGame(_ folder: URL, guid: String = "11002", name: String = "iQuiz",
+                         withFiles: Bool = true) throws -> URL {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try manifestData(guid: guid, name: name).write(to: folder.appendingPathComponent("Manifest.plist"))
+        try Data(repeating: 0x30, count: 3548).write(to: folder.appendingPathComponent("Manifest.plist.p7b"))
+        try Data("<plist></plist>".utf8).write(to: folder.appendingPathComponent("iTunesMetaData"))
+        let exe = folder.appendingPathComponent("Executables")
+        try FileManager.default.createDirectory(at: exe, withIntermediateDirectories: true)
+        try Data(repeating: 0, count: 463944).write(to: exe.appendingPathComponent("TWA_1_1_2902110.bin"))
+        if withFiles {
+            for (path, size) in [("Fonts/Arial15Hira13Hybrid0.ipd", 19504), ("Fonts/Arial15Hira13Hybrid0.txt", 4779)] {
+                let out = folder.appendingPathComponent(path)
+                try FileManager.default.createDirectory(at: out.deletingLastPathComponent(),
+                                                        withIntermediateDirectories: true)
+                try Data(repeating: 0, count: size).write(to: out)
+            }
+        }
+        let packs = folder.appendingPathComponent("UserTrivia/Packs")
+        try FileManager.default.createDirectory(at: packs, withIntermediateDirectories: true)
+        try Data("questions".utf8).write(to: packs.appendingPathComponent("sample1.txt"))
+        return folder
+    }
+
+    private func tempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("iPodFirm-games-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    func testReadsTheManifest() throws {
+        let m = try GameManifest.parse(Self.manifestData())
+        XCTAssertEqual(m.guid, "11002")
+        XCTAssertEqual(m.name, "iQuiz")
+        XCTAssertEqual(m.version, "1.0")
+        XCTAssertEqual(m.platformID, 1)
+        XCTAssertEqual(m.executable, "Executables/TWA_1_1_2902110.bin")
+        XCTAssertEqual(m.executableSize, 463944)
+        XCTAssertEqual(m.files.count, 2)
+        XCTAssertEqual(m.files[0].path, "Fonts/Arial15Hira13Hybrid0.ipd")
+        XCTAssertEqual(m.files[0].size, 19504)
+        XCTAssertEqual(m.totalSize, 19504 + 4779)
+    }
+
+    func testAFileThatIsNotAManifestIsRefused() {
+        XCTAssertThrowsError(try GameManifest.parse(Data("not a plist".utf8)))
+        XCTAssertThrowsError(try GameManifest.parse(try! PropertyListSerialization.data(
+            fromPropertyList: ["GUID": "1"], format: .xml, options: 0)))
+    }
+
+    func testReadsTheLibrary() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Self.makeGame(dir.appendingPathComponent("11002"), guid: "11002", name: "iQuiz")
+        try Self.makeGame(dir.appendingPathComponent("50514"), guid: "50514", name: "Royal Solitaire")
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent("not-a-game"),
+                                                withIntermediateDirectories: true)
+        let library = GameLibrary.load(dir.path)
+        XCTAssertEqual(library.map { $0.folder }, ["11002", "50514"])
+        XCTAssertEqual(library[0].name, "iQuiz")
+    }
+
+    func testTheCheckGivesTheProblems() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let game = try GameLibrary.loadGame(try Self.makeGame(dir.appendingPathComponent("11002")))
+        XCTAssertEqual(GameLibrary.check(game), [])
+        try Data(repeating: 0, count: 100).write(to: game.path.appendingPathComponent("Fonts/Arial15Hira13Hybrid0.txt"))
+        XCTAssertTrue(GameLibrary.check(game).contains { $0.contains("Arial15Hira13Hybrid0.txt") })
+    }
+
+    func testInstallsAGame() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = try Self.makeGame(dir.appendingPathComponent("source/11002"))
+        let game = try GameLibrary.loadGame(source)
+        let target = dir.appendingPathComponent("target")
+        let report = try GameInstaller.install(game, to: target)
+        XCTAssertEqual(report.installed, ["11002"])
+        let dest = target.appendingPathComponent("games_RO/11002")
+        XCTAssertEqual(try Data(contentsOf: dest.appendingPathComponent("Manifest.plist")),
+                       try Data(contentsOf: source.appendingPathComponent("Manifest.plist")))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.appendingPathComponent("Manifest.plist.p7b").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.appendingPathComponent("iTunesMetaData").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.appendingPathComponent("Executables/TWA_1_1_2902110.bin").path))
+        // The files that are not in the manifest are part of the game.
+        XCTAssertEqual(try Data(contentsOf: dest.appendingPathComponent("UserTrivia/Packs/sample1.txt")),
+                       Data("questions".utf8))
+    }
+
+    func testInstallsOnlyTheSelectedGames() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = dir.appendingPathComponent("source")
+        try Self.makeGame(source.appendingPathComponent("11002"), guid: "11002", name: "iQuiz")
+        try Self.makeGame(source.appendingPathComponent("50514"), guid: "50514", name: "Royal Solitaire")
+        let library = GameLibrary.load(source.path)
+        let wanted = library.filter { $0.folder == "11002" }
+        let target = dir.appendingPathComponent("target")
+        let report = GameInstaller.install(wanted, to: target)
+        XCTAssertEqual(report.installed, ["11002"])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: target.appendingPathComponent("games_RO").path).sorted(),
+                       ["11002"])
+    }
+
+    func testInstallSkipsAGameThatIsNotComplete() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = dir.appendingPathComponent("source")
+        try Self.makeGame(source.appendingPathComponent("11002"), guid: "11002", name: "iQuiz")
+        try Self.makeGame(source.appendingPathComponent("50514"), guid: "50514", name: "Royal Solitaire", withFiles: false)
+        let library = GameLibrary.load(source.path)
+        let report = GameInstaller.install(library, to: dir.appendingPathComponent("target"))
+        XCTAssertEqual(report.installed, ["11002"])
+        XCTAssertEqual(report.skipped, ["50514"])
+        XCTAssertFalse(report.warnings.isEmpty)
+    }
+
+    func testInstallCopiesTheKeyFile() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = try Self.makeGame(dir.appendingPathComponent("source/11002"))
+        let key = dir.appendingPathComponent("IC-Info.sidb")
+        try Data(repeating: 0x11, count: 23396).write(to: key)
+        let target = dir.appendingPathComponent("target")
+        let report = try GameInstaller.install(try GameLibrary.loadGame(source), to: target,
+                                               copyKeyFile: true, keyFileSource: key)
+        XCTAssertTrue(report.keyFileCopied)
+        XCTAssertEqual(try Data(contentsOf: target.appendingPathComponent("iTunes/IC-Info.sidb")),
+                       Data(repeating: 0x11, count: 23396))
+    }
+
+    func testInstallNeverRemovesAFile() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = try Self.makeGame(dir.appendingPathComponent("source/11002"))
+        let game = try GameLibrary.loadGame(source)
+        let target = dir.appendingPathComponent("target")
+        try GameInstaller.install(game, to: target)
+        let keep = target.appendingPathComponent("games_RO/11002/KeepMe.txt")
+        try Data("keep".utf8).write(to: keep)
+        try GameInstaller.install(game, to: target)
+        XCTAssertEqual(try Data(contentsOf: keep), Data("keep".utf8))
+    }
+}
+
+// The tests of the hibernation image of the iPod and of the repair of a partition.
+
+// The tests of the hibernation area of the iPod and of the repair of a partition.
+final class HibeTests: XCTestCase {
+    /// A valid snapshot: the header of the iPod and the memory of one page.
+    static func makeSnapshot(_ size: Int = 0x100800) -> [UInt8] {
+        var buf = [UInt8](repeating: 0, count: size)
+        put32(&buf, 0, 1)                 // the version
+        put32(&buf, 4, 0x20000)           // the page size
+        put32(&buf, 8, 1)                 // the pages
+        for i in 0x18..<(0x3c) { buf[i] = 0x88 }     // the pattern of the pages
+        for i in 0x800..<size { buf[i] = 0x5a }      // the memory of the iPod
+        return buf
+    }
+
+    /// Make a small partition with the images osos, rsrc and aupd.
+    ///
+    /// The layout copies the iPod of the owner, at a small scale. The image aupd ends at
+    /// 0x2800. The hibernation area starts at 0x3800: the gap of 0x1000 bytes, as on the
+    /// iPod. The header of the test gives one page, thus the area is 0x800 + 0x100000
+    /// bytes and it ends at 0x103800. The image rsrc parks at 0x103800 when the osos
+    /// grows. The partition is 0x108000 bytes, thus the parked rsrc of 0x400 bytes fits.
+    ///
+    /// The directory is at 0x800, as the value at 0x104 says. The image base is 2048.
+    static func makePartition(withHibe: Bool = true, stale: Int = 0, snapshot: Bool = true) -> [UInt8] {
+        let size = 0x108000
+        var buf = [UInt8](repeating: 0, count: size)
+        // The header.
+        let banner = Array("{{~~  /-----\\   ".utf8)
+        buf.replaceSubrange(0..<banner.count, with: banner)
+        buf.replaceSubrange(0x100..<0x104, with: Array("]ih[".utf8))
+        put32(&buf, 0x104, UInt32(0x800 - 0x200))
+        buf[0x10A] = 3; buf[0x10B] = 0
+        // The images. The image base of the test partition is 2048.
+        var images: [(String, UInt32, UInt32)] = [("soso", 0x1000, 0x800), ("crsr", 0x1800, 0x400),
+                                                 ("dpua", 0x1C00, 0xC00)]
+        if withHibe { images.append(("ebih", 0x3800, 0x100800)) }
+        for (n, item) in images.enumerated() {
+            let at = 0x800 + n * 40
+            buf.replaceSubrange(at..<(at + 4), with: Array("!ATA".utf8))
+            buf.replaceSubrange(at + 4..<(at + 8), with: Array(item.0.utf8))
+            put32(&buf, at + 8, UInt32(n + 1))
+            put32(&buf, at + 12, item.1)
+            put32(&buf, at + 16, item.2)
+            put32(&buf, at + 32, 0xB012)
+            let start = 2048 + Int(item.1)
+            if item.0 == "ebih" {
+                // The image hibe holds a valid snapshot, so that the area is readable
+                // when the entry is missing.
+                let snap = Self.makeSnapshot(Int(item.2))
+                buf.replaceSubrange(start..<(start + snap.count), with: snap)
+            } else {
+                for i in 0..<Int(item.2) { buf[start + i] = UInt8(n + 1) }
+            }
+            if item.0 == "soso" {
+                put32(&buf, at + 28, UInt32(byteSum(buf[start..<(start + Int(item.2))])))
+            }
+        }
+        // The header of the snapshot at the fixed place of the area, when the directory
+        // has no entry for the image hibe.
+        if !withHibe && snapshot {
+            let at = 2048 + 0x3800
+            var snap = Self.makeSnapshot(0x1800)
+            put32(&snap, 8, 1)
+            buf.replaceSubrange(at..<(at + snap.count), with: snap)
+        }
+        if stale > 0 {
+            let at = 2048 + 0x2800
+            for i in 0..<stale { buf[at + i] = 0xA5 }
+        }
+        return buf
+    }
+
+    func testCheckGivesTheStateOfAHealthyPartition() throws {
+        let p = try FirmwarePartition(data: Self.makePartition(withHibe: true))
+        let report = Hibe.check(p)
+        XCTAssertTrue(report.present)
+        XCTAssertTrue(report.ok)
+        XCTAssertEqual(report.length, 0x100800)
+        XCTAssertEqual(report.offset, 0x3800)
+    }
+
+    func testCheckGivesTheStateOfAPartitionThatLostTheEntry() throws {
+        let p = try FirmwarePartition(data: Self.makePartition(withHibe: false, snapshot: true))
+        let report = Hibe.check(p)
+        XCTAssertFalse(report.present)
+        XCTAssertFalse(report.ok)
+        XCTAssertEqual(report.offset, 0x3800)
+        XCTAssertEqual(report.length, 0x100800)
+        XCTAssertEqual(report.staleBytes, 0)
+    }
+
+    func testCheckGivesTheStateOfABrokenArea() throws {
+        let p = try FirmwarePartition(data: Self.makePartition(withHibe: false, stale: 64, snapshot: false))
+        let report = Hibe.check(p)
+        XCTAssertFalse(report.present)
+        XCTAssertFalse(report.ok)
+        XCTAssertEqual(report.staleBytes, 64)
+        XCTAssertFalse(report.notes.isEmpty)
+    }
+
+    func testTheHibernationAreaOfAHealthyPartition() throws {
+        let p = try FirmwarePartition(data: Self.makePartition(withHibe: true))
+        XCTAssertEqual(p.hibeArea()?.devOffset, 0x3800)
+        XCTAssertEqual(p.hibeArea()?.length, 0x100800)
+    }
+
+    func testTheHibernationAreaWithoutTheEntry() throws {
+        let p = try FirmwarePartition(data: Self.makePartition(withHibe: false, snapshot: true))
+        XCTAssertEqual(p.hibeArea()?.devOffset, 0x3800)
+        XCTAssertEqual(p.hibeArea()?.length, 0x100800)
+    }
+
+    func testTheHibernationAreaRefusesDataWithoutAHeader() throws {
+        let p = try FirmwarePartition(data: Self.makePartition(withHibe: false, stale: 0x400, snapshot: false))
+        XCTAssertNil(p.hibeArea())
+    }
+
+    func testThePlaceOfTheImageHibe() throws {
+        let p = try FirmwarePartition(data: Self.makePartition(withHibe: true))
+        let offset = try Hibe.offset(in: p)
+        let aupd = try p.entry("aupd")
+        XCTAssertEqual(offset, aupd.devOffset + aupd.length + UInt32(Hibe.gap))
+    }
+
+    func testTheRepairWritesTheEntryOnlyWhenTheAreaIsIntact() throws {
+        let broken = Self.makePartition(withHibe: false, snapshot: true)
+        let before = broken
+        let out = try Hibe.restore(broken)
+        XCTAssertNotEqual(out, before)
+        let fixed = try FirmwarePartition(data: out)
+        XCTAssertTrue(fixed.has(Hibe.name))
+        // Only the directory changed.
+        for i in 0..<out.count where out[i] != before[i] {
+            XCTAssertTrue(i >= 0x800 && i < 0x800 + 4 * 40, "the repair changed byte \(i)")
+        }
+        // The data of the area did not change.
+        let at = 2048 + 0x3800
+        XCTAssertEqual(Array(out[at..<(at + 0x1800)]), Array(before[at..<(at + 0x1800)]))
+    }
+
+    func testTheRepairMakesTheEntryOfTheImageHibe() throws {
+        let broken = Self.makePartition(withHibe: false, snapshot: true)
+        let out = try Hibe.restore(broken)
+        let fixed = try FirmwarePartition(data: out)
+        let entry = try fixed.entry(Hibe.name)
+        XCTAssertEqual(entry.type, Array("ebih".utf8))
+        XCTAssertEqual(entry.id, 1)
+        XCTAssertEqual(entry.addr, 0x10000000)
+        XCTAssertEqual(entry.loadAddr, 0xFFFFFFFF)
+        XCTAssertEqual(entry.chksum, 0)
+        XCTAssertEqual(entry.vers, 0)
+        XCTAssertEqual(Int(entry.devOffset), fixed.hibeArea()?.devOffset)
+        XCTAssertEqual(Int(entry.length), fixed.hibeArea()?.length)
+    }
+
+    func testTheRepairWithABackupClearsAnAreaWithoutAHeader() throws {
+        let broken = Self.makePartition(withHibe: false, stale: 0x400, snapshot: false)
+        let before = try FirmwarePartition(data: broken)
+        let snapshot = Self.makeSnapshot()
+        let out = try Hibe.restore(broken, hibe: snapshot)
+        let fixed = try FirmwarePartition(data: out)
+        XCTAssertTrue(fixed.has(Hibe.name))
+        XCTAssertEqual(try fixed.image(Hibe.name), snapshot)
+        for name in ["osos", "rsrc", "aupd"] {
+            XCTAssertEqual(try fixed.image(name), try before.image(name))
+        }
+    }
+
+    func testTheRepairRefusesAPartitionThatHasTheImage() throws {
+        let healthy = Self.makePartition(withHibe: true)
+        XCTAssertThrowsError(try Hibe.restore(healthy))
+    }
+
+    func testTheRepairRefusesAShortImage() throws {
+        let broken = Self.makePartition(withHibe: false, stale: 0x100, snapshot: false)
+        XCTAssertThrowsError(try Hibe.restore(broken, hibe: [UInt8](repeating: 0, count: 16)))
+    }
+
+    func testTheRepairRefusesAnImageThatCoversTheArea() throws {
+        var broken = Self.makePartition(withHibe: false, stale: 0, snapshot: false)
+        // Make the image rsrc longer, so that it covers the place of the snapshot.
+        put32(&broken, 0x800 + 40 + 16, 0x2800)     // rsrc: from 0x1800 to 0x4000
+        let at = 2048 + 0x1800
+        for i in 0..<0x2800 { broken[at + i] = 0x02 }
+        let snapshot = Self.makeSnapshot()
+        XCTAssertThrowsError(try Hibe.restore(broken, hibe: snapshot))
+    }
+
+    func testTheRepairMakesTheSpaceForABiggerOsos() throws {
+        let broken = Self.makePartition(withHibe: false, snapshot: true)
+        let out = try Hibe.restore(broken)
+        var fixed = try FirmwarePartition(data: out)
+        try fixed.makeRoom(ososLength: Int(try fixed.entry("osos").length) + 0x100)
+        let hibe = try fixed.entry(Hibe.name)
+        let rsrc = try fixed.entry("rsrc")
+        XCTAssertEqual(rsrc.devOffset, hibe.devOffset + hibe.length)
+    }
+
+    func testMakeRoomParksRsrcAfterTheAreaWithoutTheEntry() throws {
+        let broken = Self.makePartition(withHibe: false, snapshot: true)
+        var fixed = try FirmwarePartition(data: broken)
+        try fixed.makeRoom(ososLength: Int(try fixed.entry("osos").length) + 0x100)
+        let area = try FirmwarePartition(data: broken).hibeArea()
+        XCTAssertGreaterThanOrEqual(Int(try fixed.entry("rsrc").devOffset), area!.devOffset + area!.length)
+        // The data of the area did not change.
+        let at = fixed.imageBase + area!.devOffset
+        XCTAssertEqual(Array(fixed.data[at..<(at + area!.length)]), Array(broken[at..<(at + area!.length)]))
+    }
+
+    func testMakeRoomRefusesDataWithoutAHeader() throws {
+        let broken = Self.makePartition(withHibe: false, stale: 0x400, snapshot: false)
+        var fixed = try FirmwarePartition(data: broken)
+        XCTAssertThrowsError(try fixed.makeRoom(ososLength: Int(try fixed.entry("osos").length) + 0x100))
+    }
+
+    func testTheFlashAddsTheEntryWhenTheIPodLostIt() throws {
+        let healthy = Self.makePartition(withHibe: true)
+        let file = try FirmwarePartition(data: healthy)
+        // The iPod lost the entry, and its memory is different.
+        var currentBytes = healthy
+        let at = file.dirOffset + (try file.entry(Hibe.name)).index * 40
+        currentBytes.replaceSubrange(at..<(at + 40), with: [UInt8](repeating: 0, count: 40))
+        let memAt = 2048 + 0x3800 + 0x800
+        for i in 0..<0x100 { currentBytes[memAt + i] = 0x77 }
+        let current = try FirmwarePartition(data: currentBytes)
+        XCTAssertFalse(current.has(Hibe.name))
+        XCTAssertEqual(current.hibeArea()?.devOffset, 0x3800)
+        let out = try FirmwareFlasher.fitLayout(new: healthy, current: current)
+        let fixed = try FirmwarePartition(data: out)
+        XCTAssertTrue(fixed.has(Hibe.name))
+        // The data of the area of the iPod stays.
+        XCTAssertEqual(Array(out[memAt..<(memAt + 0x100)]), Array(repeating: 0x77, count: 0x100))
+    }
+
+    func testTheFlashOfAFileWithTheEntryOnAnIPodWithoutTheArea() throws {
+        let broken = Self.makePartition(withHibe: false, stale: 0x400, snapshot: false)
+        let current = try FirmwarePartition(data: broken)
+        let healthy = Self.makePartition(withHibe: true)
+        XCTAssertThrowsError(try FirmwareFlasher.fitLayout(new: healthy, current: current))
+    }
+
+    func testCheckCompatibleAllowsOneExtraHibe() throws {
+        let broken = Self.makePartition(withHibe: false, snapshot: true)
+        let current = try FirmwarePartition(data: broken)
+        let healthy = Self.makePartition(withHibe: true)
+        let new = try FirmwarePartition(data: try FirmwareFlasher.fitLayout(new: healthy, current: current))
+        XCTAssertTrue(new.has(Hibe.name))
+        XCTAssertFalse(current.has(Hibe.name))
+        XCTAssertNoThrow(try FirmwareFlasher.checkCompatible(current: current, new: new, label: "New firmware"))
+    }
+
+    func testCheckCompatibleRefusesARsrcOverTheArea() throws {
+        let broken = Self.makePartition(withHibe: false, snapshot: true)
+        let current = try FirmwarePartition(data: broken)
+        // Move rsrc to the place of the area.
+        var buf = broken
+        let at = current.dirOffset + (try current.entry("rsrc")).index * 40
+        put32(&buf, at + 12, 0x3800)
+        let new = try FirmwarePartition(data: buf)
+        XCTAssertThrowsError(try FirmwareFlasher.checkCompatible(current: current, new: new, label: "New firmware"))
+    }
+}

@@ -78,6 +78,43 @@ struct IPodView: View {
             } header: { Text("Recovery") }
 
             Section {
+                HStack {
+                    Button("Check the Hibernation Image") { Task { await model.checkHibe() } }
+                        .help("Back up the firmware partition of the connected iPod and check its hibernation image")
+                    Spacer()
+                }
+                if let report = model.hibeReport {
+                    if report.present {
+                        Label("The hibernation image is present. The partition is in the state that iPodFirm expects.",
+                              systemImage: "checkmark.circle").foregroundStyle(.green)
+                    } else if report.length > 0 {
+                        Label("The partition has no entry for the hibernation image. The hibernation area of the iPod is intact.",
+                              systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Text("Patches flash with or without the entry: the image rsrc goes after the hibernation area. The entry brings back the fast start, when the iPod accepts it. The repair adds the entry only and changes no data.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        HStack {
+                            Button("Repair the Hibernation Image") { Task { await model.repairHibe() } }
+                                .help("Write the entry of the hibernation image back into the partition of the connected iPod. iPodFirm backs up the iPod first and writes the directory block only.")
+                            Spacer()
+                        }
+                    } else {
+                        Label("The space after the last image holds data that is not a hibernation area.",
+                              systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                        Text("The data holds \(report.staleBytes) bytes that iPodFirm cannot identify. The repair clears the data and writes a snapshot from a backup of this iPod. A restore in Finder also clears the data.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        HStack {
+                            Button("Repair the Hibernation Image") { Task { await model.repairHibe() } }
+                                .help("Clear the data after the last image and write a snapshot from a backup of this iPod.")
+                            Spacer()
+                        }
+                    }
+                    ForEach(report.notes, id: \.self) { note in
+                        Text(note).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            } header: { Text("Hibernation Image") }
+
+            Section {
                 SafetyRow(symbol: "externaldrive.badge.timemachine", text: "Before each flash or restore, iPodFirm makes a backup of the full firmware partition of the iPod. iPodFirm keeps the first backup as a permanent “Original”. iPodFirm reads each backup again to check it, and never overwrites a backup.")
                 SafetyRow(symbol: "lock.shield", text: "iPodFirm never changes the boot-flash updater (aupd). Only a change to aupd can make the iPod unusable. iPodFirm stops a flash that changes aupd or writes to aupd.")
                 SafetyRow(symbol: "checklist", text: "The new firmware must have correct checksums and agree with the partition layout of the iPod. Before a write, iPodFirm shows each part that it will write.")

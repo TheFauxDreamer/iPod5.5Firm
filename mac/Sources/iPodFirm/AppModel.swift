@@ -7,7 +7,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Pane: String, CaseIterable, Identifiable {
-    case overview = "Firmware", pictures = "Pictures", strings = "Text", patches = "Patches", ipod = "iPod", emulator = "Emulator"
+    case overview = "Firmware", pictures = "Pictures", strings = "Text", patches = "Patches", games = "Games", ipod = "iPod", emulator = "Emulator"
     var id: String { rawValue }
     var symbol: String {
         switch self {
@@ -15,6 +15,7 @@ enum Pane: String, CaseIterable, Identifiable {
         case .pictures: "photo.on.rectangle"
         case .strings: "textformat"
         case .patches: "puzzlepiece.extension"
+        case .games: "gamecontroller"
         case .ipod: "externaldrive.connected.to.line.below"
         case .emulator: "play.display"
         }
@@ -65,6 +66,14 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
     }
     @Published var themes: [ThemeFile] = AppModel.loadThemes()
+    /// The file of the keys of the connected iPod, after the user reads it.
+    @Published var gameKeyStore: GameKeys.KeyStore?
+    /// The games of the connected iPod, after the user reads them.
+    @Published var gameKeyGames: [GameKeys.Game] = []
+    /// The size of the file IC-Info.sidb of the connected iPod, in bytes. Zero: the iPod has no such file.
+    @Published var gameKeyFileSize = 0
+    /// The state of the last read of the file of the keys.
+    @Published var gameKeyStatus = ""
     @Published var selectedThemeName: String? = UserDefaults.standard.string(forKey: "darkTheme") {
         didSet { UserDefaults.standard.set(selectedThemeName, forKey: "darkTheme") }
     }
@@ -287,6 +296,13 @@ final class AppModel: ObservableObject {
         busy = label
         defer { busy = nil }
         return try await Task.detached(priority: .userInitiated) { try body() }.value
+    }
+
+    /// Run async work under the busy indicator.
+    func workAsync<T>(_ label: String, _ body: @escaping () async throws -> T) async throws -> T {
+        busy = label
+        defer { busy = nil }
+        return try await Task.detached(priority: .userInitiated) { try await body() }.value
     }
 
     func edited() {
@@ -820,6 +836,236 @@ final class AppModel: ObservableObject {
         try fw.makeRoom(ososLength: osos.count)
         try fw.replaceImage("osos", with: osos)
         return fw.data
+    }
+
+    /// The firmware partition to flash to the iPod, from the file that the app has open
+    /// and the partition of the iPod.
+    ///
+    /// A firmware file (an .ipsw) has no image hibe and no free space after the last
+    /// image. The function gives the layout of the iPod: the image hibe of the iPod
+    /// stays, and the image rsrc goes after the image hibe. The function refuses to work
+    /// when the iPod has no image hibe, because the function cannot make one.
+    /// Refer to [re/firmware-hibe.md](../re/firmware-hibe.md).
+    nonisolated static func outputPartitionForIPod(_ editor: FirmwareEditor, _ current: FirmwarePartition,
+                                                   _ patches: [PatchInfo], appearance: AppearanceBuild?,
+                                                   version: FirmwareVersion?) throws -> [UInt8] {
+        let built = try outputPartition(editor, patches, appearance: appearance, version: version)
+        return try FirmwareFlasher.fitLayout(new: built, current: current)
+    }
+
+    /// The state of the hibernation area of the connected iPod.
+    /// The pane of the iPod shows the state. A patch flashes with or without
+    /// the entry. Refer to [re/firmware-hibe.md](../re/firmware-hibe.md).
+    @Published var hibeReport: Hibe.Report?
+
+    /// Check the hibernation image of the connected iPod.
+    ///
+    /// The function reads the newest backup of the iPod and checks its partition. The pane
+    /// of the iPod shows the state. A partition without the entry cannot bring the fast
+    /// start back, but a patch flashes with or without the entry. Refer to
+    /// [re/firmware-hibe.md](../re/firmware-hibe.md).
+    func checkHibe() async {
+        guard let ipod = currentIPod else {
+            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The check reads the firmware partition of the iPod.")
+            return
+        }
+        do {
+            let r = try await runBackup(ipod)
+            guard r.ok else { throw FirmwareError(r.message, code: r.code) }
+            refreshBackups()
+            guard let newest = backups.first else {
+                alert = AlertInfo(title: "No backup", message: "The backup did not finish. Try the check again.")
+                return
+            }
+            let bytes = try [UInt8](Data(contentsOf: backupURL(newest)))
+            let partition = try FirmwarePartition(data: bytes)
+            hibeReport = Hibe.check(partition)
+        } catch { fail("Cannot check the hibernation image", error) }
+    }
+
+    /// Write the entry of the hibernation image back into the partition of the connected iPod.
+    ///
+    /// The repair reads the partition of the iPod from the newest backup of this session,
+    /// writes the entry into those bytes, and flashes the result through the normal flash
+    /// path. The helper backs up the iPod first, then writes only the directory block that
+    /// changed. The data of the hibernation area of the iPod does not change. When no
+    /// backup of the partition of the iPod is fresh, the function tells the owner to make a
+    /// backup first.
+    ///
+    /// The repair is optional. A patch flashes with or without the entry: the image rsrc
+    /// goes after the hibernation area. The entry brings back the fast start, when the
+    /// iPod accepts it. Refer to [re/firmware-hibe.md](../re/firmware-hibe.md).
+    func repairHibe() async {
+        guard let ipod = currentIPod else {
+            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The repair writes into the partition of the iPod.")
+            return
+        }
+        do {
+            // A fresh backup: the repair must flash the bytes of the iPod, not of a file.
+            let r = try await runBackup(ipod)
+            guard r.ok else { throw FirmwareError(r.message, code: r.code) }
+            refreshBackups()
+            guard let newest = backups.first else {
+                alert = AlertInfo(title: "No backup", message: "The backup did not finish. Try the repair again.")
+                return
+            }
+            let staging = Self.supportDir.appendingPathComponent("Staging/hibe-repair.bin")
+            try await workAsync("Repairing the hibernation image…") {
+                let bytes = try [UInt8](Data(contentsOf: self.backupURL(newest)))
+                let partition = try FirmwarePartition(data: bytes)
+                guard !partition.has(Hibe.name) else {
+                    throw FirmwareError("The iPod already has the entry of the hibernation image.")
+                }
+                let out = try Hibe.restore(bytes)
+                try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try Data(out).write(to: staging, options: .atomic)
+            }
+            await prepareFlash(image: staging, reason: "repair")
+        } catch { fail("Cannot repair the hibernation image", error) }
+    }
+
+    /// Read the file of the keys of the connected iPod, and the games of the iPod.
+    /// The pane of the games shows the result.
+    func readGameKeys() async {
+        guard currentIPod != nil else {
+            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The pane of the games reads the file of the keys of the iPod.")
+            return
+        }
+        guard let volume = ipodVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            return
+        }
+        await readGameKeys(at: volume.appendingPathComponent("iPod_Control"), name: "the iPod")
+    }
+
+    /// Read the file of the keys and the games from a folder that the user chooses.
+    /// The folder must have the same shape as the folder `iPod_Control` of an iPod.
+    /// The folder can come from any iPod, also from a copy of a backup.
+    func readGameKeysFromFolder() async {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose the folder iPod_Control of an iPod, or a copy of it."
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        await readGameKeys(at: folder, name: folder.lastPathComponent)
+    }
+
+    /// Read the file of the keys and the games from a folder. The folder holds the
+    /// folder `iTunes` with the file of the keys, and the folder `Games_RO` with the games.
+    /// The name of the folder `Games_RO` can also have a capital letter, as on an iPod
+    /// with the file system HFS+. The app tries both names.
+    func readGameKeys(at root: URL, name: String) async {
+        let storeURL = root.appendingPathComponent("iTunes/\(GameKeys.keyStoreName)")
+        let keyFile = root.appendingPathComponent("iTunes/\(GameKeys.keyFileName)")
+        let gamesDir = GameKeys.gamesDirectory(at: root.path)
+        do {
+            let result = try await work("Reading the file of the keys of \(name)…") {
+                let store = try GameKeys.loadKeyStore(storeURL.path)
+                let games = gamesDir.map { GameKeys.findGames($0, store) } ?? []
+                let keyFileSize = (try? FileManager.default.attributesOfItem(atPath: keyFile.path)[.size] as? Int) ?? 0
+                return (store, games, keyFileSize)
+            }
+            gameKeyStore = result.0
+            gameKeyGames = result.1
+            gameKeyFileSize = result.2
+            gameKeyStatus = "\(result.0.accounts.count) accounts, \(result.0.keyCount) keys, \(result.1.count) games"
+        } catch {
+            gameKeyStore = nil
+            gameKeyGames = []
+            gameKeyFileSize = 0
+            gameKeyStatus = "The folder has no file of the keys that the app can read. The file \(GameKeys.keyStoreName) is not in the folder iTunes."
+        }
+    }
+
+    /// The folder with the games. The firmware asks for the name `games_RO` with small
+    /// letters. The program of iTunes writes the name `Games_RO` with a capital letter.
+    /// The app accepts both names.
+    static func gamesDirectory(at root: URL) -> URL? {
+        GameKeys.gamesDirectory(at: root.path).map { URL(fileURLWithPath: $0) }
+    }
+
+    /// The folder of the games that the user chooses. The folder holds the games, or the
+    /// folder `iPod_Control` of an iPod.
+    @Published var gamesSourceFolder: URL?
+
+    /// The games of the folder that the user chose.
+    @Published var gamesLibrary: [GameLibraryItem] = []
+
+    /// The GUID of each game that the user selected. Empty: the user selects no game.
+    @Published var selectedGameFolders: Set<String> = []
+
+    /// The state of the last copy of the games.
+    @Published var gameInstallStatus = ""
+
+    /// Copy the games to the connected iPod. The pane of the games shows the result.
+    func installGames() async {
+        guard currentIPod != nil else {
+            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The pane of the games copies the games to the iPod.")
+            return
+        }
+        guard let volume = ipodVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            return
+        }
+        guard let source = gamesSourceFolder else {
+            alert = AlertInfo(title: "No folder of games", message: "Choose the folder with the games first.")
+            return
+        }
+        let gamesDir = AppModel.gamesDirectory(at: source) ?? source
+        let library = GameLibrary.load(gamesDir.path)
+        guard !library.isEmpty else {
+            alert = AlertInfo(title: "No game found", message: "The folder \(gamesDir.lastPathComponent) has no game with a file Manifest.plist.")
+            return
+        }
+        // An empty selection means that the user wants all the games.
+        let wanted = selectedGameFolders.isEmpty ? library : library.filter { selectedGameFolders.contains($0.folder) }
+        guard !wanted.isEmpty else {
+            alert = AlertInfo(title: "No game selected", message: "Select at least one game, or select all the games.")
+            return
+        }
+        let root = volume.appendingPathComponent("iPod_Control")
+        do {
+            let report = try await work("Copying \(wanted.count) game(s) to the iPod…") {
+                GameInstaller.install(wanted, to: root)
+            }
+            gameInstallStatus = "\(report.installed.count) game(s), \(report.bytesCopied) bytes"
+            for folder in report.installed { gameInstallStatus += "  \(folder)" }
+            for warning in report.warnings { gameInstallStatus += "  skipped: \(warning)" }
+        } catch {
+            gameInstallStatus = "The games could not be copied: \(error.localizedDescription)"
+        }
+    }
+
+    /// Let the user choose the folder with the games. The folder holds the games, or the
+    /// folder `iPod_Control` of an iPod. The app reads the games of the folder.
+    func chooseGamesFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose the folder with the games, or the folder iPod_Control of an iPod."
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        gamesSourceFolder = folder
+        gameInstallStatus = ""
+        let gamesDir = AppModel.gamesDirectory(at: folder) ?? folder
+        gamesLibrary = GameLibrary.load(gamesDir.path)
+        selectedGameFolders = []
+    }
+
+    /// Select all the games, or no game.
+    func selectAllGames(_ all: Bool) {
+        selectedGameFolders = all ? Set(gamesLibrary.map { $0.folder }) : []
+    }
+
+    /// The mounted volume of the connected iPod. The volume must have the folder iPod_Control.
+    func ipodVolume() -> URL? {
+        guard let ipod = currentIPod else { return nil }
+        return FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: [.volumeNameKey], options: [])?
+            .first { url in
+                (try? url.resourceValues(forKeys: [.volumeNameKey]).volumeName) == ipod.volumeName &&
+                FileManager.default.fileExists(atPath: url.appendingPathComponent("iPod_Control").path)
+            }
     }
 
     /// The mounted volume of the connected iPod, if it has a music database.
