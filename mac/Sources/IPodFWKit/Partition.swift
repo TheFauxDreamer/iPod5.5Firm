@@ -208,10 +208,10 @@ public final class FirmwarePartition {
 
     /// Move rsrc if an osos of `ososLength` bytes does not fit before it.
     ///
-    /// An iPod partition has free space after its last image: rsrc goes there, and aupd and hibe
-    /// stay where they are. A firmware file has no free space: rsrc and the images after it move
-    /// forward together and the file becomes longer. The content of the images does not change.
-    /// The OS finds each image through the directory.
+    /// An iPod partition has free space after its last image: rsrc goes into the first empty
+    /// area there, and aupd and hibe stay where they are. A firmware file has no free space:
+    /// rsrc and the images after it move forward together and the file becomes longer. The
+    /// content of the images does not change. The OS finds each image through the directory.
     public func makeRoom(ososLength: Int) throws {
         let align = Self.imageAlign
         let osos = try entry("osos")
@@ -223,13 +223,15 @@ public final class FirmwarePartition {
         let rsrcData = try image("rsrc")
         let lastEnd = (entries.map { Int($0.devOffset) + Int($0.length) }.max()! + align - 1) / align * align
         if imageBase + lastEnd + Int(rsrc.length) <= data.count {
-            // an iPod partition: put rsrc after the last image
-            let at = imageBase + lastEnd
-            guard data[at..<at + Int(rsrc.length)].allSatisfy({ $0 == 0 }) else {
-                throw FirmwareError("The space after the last image is not empty; rsrc cannot move there.")
+            // an iPod partition: put rsrc into the first empty area after the last image.
+            // A restore can leave old data (a stale hibernation dump) in that area, so the
+            // area right after the last image is not always empty.
+            guard let at = findEmptyArea(start: lastEnd, length: Int(rsrc.length)) else {
+                throw FirmwareError("The firmware partition has no empty area for rsrc.")
             }
-            data.replaceSubrange(at..<at + Int(rsrc.length), with: rsrcData)
-            rsrc.devOffset = UInt32(lastEnd)
+            let start = imageBase + at
+            data.replaceSubrange(start..<start + Int(rsrc.length), with: rsrcData)
+            rsrc.devOffset = UInt32(at)
             writeEntry(rsrc)
             return
         }
@@ -253,6 +255,53 @@ public final class FirmwarePartition {
             data.replaceSubrange(start..<start + img.count, with: img)
             writeEntry(e)
         }
+    }
+
+    /// The offset of the first 0x800-aligned all-zero area of `length` bytes at or after `start`.
+    ///
+    /// A restore can leave old data in the partition (a stale hibernation dump after the last
+    /// image). The area right after the last image is therefore not always empty. The scan
+    /// never writes into data: it returns only an all-zero area.
+    func findEmptyArea(start: Int, length: Int) -> Int? {
+        let align = Self.imageAlign
+        let limit = data.count - imageBase - length
+        var at = (start + align - 1) / align * align
+        while at <= limit {
+            if let nz = firstNonzero(imageBase + at, imageBase + at + length) {
+                // move past the first byte that is not zero, then align again
+                at = (at + nz + 1 + align - 1) / align * align
+            } else {
+                return at
+            }
+        }
+        return nil
+    }
+
+    /// Where the first byte that is not zero sits in [lo, hi); nil when all bytes are zero.
+    /// The value is an offset from `lo`. The probe starts at the left edge: in a partition
+    /// with old data, most candidate areas start on that data.
+    private func firstNonzero(_ lo: Int, _ hi: Int) -> Int? {
+        let first = min(lo + 0x800, hi)
+        let leftSlice = data[lo..<first]
+        if let i = leftSlice.firstIndex(where: { $0 != 0 }) {
+            return i - lo
+        }
+        var p = first
+        while p < hi {
+            let step = min(hi - p, 0x100000)
+            if !data[p..<p + step].contains(where: { $0 != 0 }) {
+                p += step
+                continue
+            }
+            while p < hi {                          // a byte that is not zero is in this step
+                let q = min(p + 0x800, hi)
+                if let i = data[p..<q].firstIndex(where: { $0 != 0 }) {
+                    return i - lo
+                }
+                p = q
+            }
+        }
+        return nil
     }
 
     func writeEntry(_ e: ImageEntry) {

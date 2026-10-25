@@ -1069,14 +1069,16 @@ The new Settings menu is a copy of the Apple menu with one more item after Click
 
 **Change.** `FirmwarePartition.makeRoom` in [Partition.swift](../mac/Sources/IPodFWKit/Partition.swift) does this:
 
-- **iPod partition** (it has hibe): copy rsrc to the first free space after the last image, aligned to 0x800. The space must be all zero. aupd and hibe do not move.
-- **Firmware file** (no hibe and no free space): move rsrc and all images after it forward by the same aligned value. The file becomes longer.
+- **iPod partition** (it has free space after the last image): copy rsrc to the first all-zero area that fits it, at or after the last image, aligned to 0x800. aupd and hibe do not move. An iTunes restore can leave old data in this space (a stale hibernation dump); refer to [../re/hibernation-restore.md](../re/hibernation-restore.md). The move does not write into old data. When the partition has no all-zero area for rsrc, the move stops with an error.
+- **Firmware file** (no free space): move rsrc and all images after it forward by the same aligned value. The file becomes longer.
 
 Then the function writes the new devOffset into the rsrc directory entry. The content of rsrc does not change.
 
-**Flash.** A firmware file has aupd at a different position than the iPod. `FirmwareFlasher.fitLayout` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift) puts the new osos and rsrc into the layout of the iPod. On the iPod, aupd never moves.
+**Flash.** A firmware file has aupd at a different position than the iPod. `FirmwareFlasher.fitLayout` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift) puts the new osos and rsrc into the layout of the iPod. On the iPod, aupd never moves. When the file and the iPod differ in the hibe image, the result follows the iPod. Thus a file with a hibe image also fits an iPod that a restore reduced to three images.
 
 **Ghidra result.** RetailOS finds rsrc through the directory, by its type and ID. The code loads the tag `crsr` at 0xaf548 and 0x1afe44. Both call 0xfc3bc, which calls 0xc60ec. 0xc60ec reads the directory and selects the entry by type (+4) and ID (+8), not by its index. Rockbox `ipodpatcher` also moves rsrc.
+
+**Test status.** Emulator: yes. Real iPod (2 October 2026): yes. After the iTunes restore (25 October 2026): two flashes moved rsrc to dev 0x4d44000, past the stale hibernation dump, and both started the iPod. Refer to [../re/hibernation-restore.md](../re/hibernation-restore.md#test-on-the-real-ipod-25-october-2026).
 
 **Test status.** Tested on a real iPod 5.5G on 2 October 2026.
 

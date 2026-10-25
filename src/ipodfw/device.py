@@ -163,13 +163,15 @@ def fit_layout(new_bytes: bytes, current: FirmwarePartition) -> bytes:
 
     A firmware file that has a larger osos has rsrc and aupd moved forward (see make_room). On
     the iPod, aupd must stay where it is. For such a file, the result is the iPod's partition
-    with the new osos and rsrc. A partition from an iPod (with hibe), or an image with aupd at
-    the iPod's position, does not change: a restore writes the layout of the backup.
+    with the new osos and rsrc. When the file and the iPod differ in the hibe image, the
+    result follows the iPod. An image that already agrees with the iPod does not change:
+    a restore writes the layout of the backup.
     """
     new = FirmwarePartition(new_bytes)
-    if new.has("hibe") or not current.has("aupd") or not new.has("aupd"):
+    if not current.has("aupd") or not new.has("aupd"):
         return new_bytes
-    if new.entry("aupd").dev_offset == current.entry("aupd").dev_offset:
+    if (new.has("hibe") == current.has("hibe")
+            and new.entry("aupd").dev_offset == current.entry("aupd").dev_offset):
         return new_bytes
     out = FirmwarePartition(current.data)
     osos = new.image("osos")

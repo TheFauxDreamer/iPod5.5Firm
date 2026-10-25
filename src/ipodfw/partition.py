@@ -212,11 +212,14 @@ class FirmwarePartition:
         last_end = max(e.dev_offset + e.length for e in self.entries)
         last_end = (last_end + IMAGE_ALIGN - 1) // IMAGE_ALIGN * IMAGE_ALIGN
         if self.image_base + last_end + rsrc.length <= len(self.data):
-            # an iPod partition: put rsrc after the last image
-            if any(self.data[self.image_base + last_end:self.image_base + last_end + rsrc.length]):
-                raise FirmwareError("the space after the last image is not empty; rsrc cannot move there")
-            self.data[self.image_base + last_end:self.image_base + last_end + rsrc.length] = data
-            rsrc.dev_offset = last_end
+            # an iPod partition: put rsrc into the first empty area after the last image.
+            # A restore can leave old data (a stale hibernation dump) in that area, so the
+            # area right after the last image is not always empty.
+            at = self._find_empty_area(last_end, rsrc.length)
+            if at is None:
+                raise FirmwareError("the firmware partition has no empty area for rsrc")
+            self.data[self.image_base + at:self.image_base + at + rsrc.length] = data
+            rsrc.dev_offset = at
             self._write_entry(rsrc)
             return
         if self.has("hibe"):
@@ -235,6 +238,46 @@ class FirmwarePartition:
             start = self.image_base + e.dev_offset
             self.data[start:start + e.length] = img
             self._write_entry(e)
+
+    def _find_empty_area(self, start: int, length: int) -> int | None:
+        """The offset of the first 0x800-aligned all-zero area of `length` bytes at or after `start`.
+
+        A restore can leave old data in the partition (a stale hibernation dump after the last
+        image). The area right after the last image is therefore not always empty. The scan
+        never writes into data: it returns only an all-zero area.
+        """
+        limit = len(self.data) - self.image_base - length
+        at = (start + IMAGE_ALIGN - 1) // IMAGE_ALIGN * IMAGE_ALIGN
+        while at <= limit:
+            nz = self._first_nonzero(self.image_base + at, self.image_base + at + length, self.data)
+            if nz is None:
+                return at
+            # move past the first byte that is not zero, then align again
+            at = (at + nz + 1 + IMAGE_ALIGN - 1) // IMAGE_ALIGN * IMAGE_ALIGN
+        return None
+
+    @staticmethod
+    def _first_nonzero(lo: int, hi: int, data: bytes) -> int | None:
+        """Where the first byte that is not zero sits in [lo, hi); None when all bytes are zero.
+
+        The value is an offset from `lo`. The probe starts at the left edge: in a partition
+        with old data, most candidate areas start on that data.
+        """
+        first = min(lo + 0x800, hi)
+        if data.count(0, lo, first) != first - lo:
+            return first - lo - len(data[lo:first].lstrip(b"\x00"))
+        p = first
+        while p < hi:
+            step = min(hi - p, 0x100000)
+            if data.count(0, p, p + step) == step:
+                p += step
+                continue
+            while p < hi:                      # a byte that is not zero is in this step
+                q = min(p + 0x800, hi)
+                if data.count(0, p, q) != q - p:
+                    return p - lo + q - p - len(data[p:q].lstrip(b"\x00"))
+                p = q
+        return None
 
     def _room_for(self, e: ImageEntry) -> int:
         following = [o.dev_offset for o in self.entries if o.dev_offset > e.dev_offset]

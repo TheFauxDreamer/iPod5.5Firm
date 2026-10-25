@@ -257,6 +257,7 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x1d8cd0 | Timer handler. Its part at 0x1d9308 calls 0x1ee8d0 and, after the wake, 0x1d813c. | Static, Patch |
 | 0x1dfdd4 | Sleep method (vtable 0x670720, offset 0x70). Calls 0xb43dc. | Static |
 | 0xb43dc | Sleep function: display off (0xb7c64(0)), keep-awake message type 4, power mode 3 or 2 (0x2823bc). After the wake it ends with `bl 0x1b9118` at 0xb45f4. | Static, Emulator |
+| 0x388 | Hibernation dump handler in the boot block. The literals at 0x534 and 0x538 hold `!ATA` and `ebih`. The handler scans the directory through boot-ROM services (0x350 → 0x40003828, reads 0x40003260, header write 0x40003400, dump write 0x40001a34). At 0x468 it checks the entry length against the value + 0x800 (the dump is 64 MB of RAM plus the 0x800-byte header). It writes a dump only when the directory already has an `ebih` entry. Nothing in osos creates the entry. Refer to [re/hibernation-restore.md](../re/hibernation-restore.md). | Static, Real iPod |
 | 0x2823bc | Power-state entry (modes 1, 2, 3, 5). | Static |
 | 0x1c1f5c | Returns the voice recorder object (component 0x3d00). Byte +0x66 is 1 during a recording. | Static |
 | 0x151c98 | Stops a timer. | Patch |

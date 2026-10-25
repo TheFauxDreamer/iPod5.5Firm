@@ -29,6 +29,21 @@ def ipod_layout(partition_bytes: bytes, hibe_length: int = 0x2000, free: int = 0
     return bytes(buf)
 
 
+def restored_layout(partition_bytes: bytes, stale: int = 0x2000, free: int = 0x10000) -> bytes:
+    """The fixture for an iPod that iTunes restored: no hibe entry, stale data after aupd.
+
+    A restore writes the content of the firmware file, removes the hibe entry, and leaves the
+    old hibernation dump in the partition. The stale bytes represent that dump.
+    """
+    fw = FirmwarePartition(partition_bytes)
+    end = max(e.dev_offset + e.length for e in fw.entries)
+    stale_at = (end + 0x7FF) // 0x800 * 0x800
+    buf = bytearray(partition_bytes[:fw.image_base + end])
+    buf += bytes(fw.image_base + stale_at + stale + free - len(buf))
+    buf[fw.image_base + stale_at:fw.image_base + stale_at + stale] = b"\x66" * stale
+    return bytes(buf)
+
+
 def grow(fw: FirmwarePartition, extra: int) -> bytes:
     osos = fw.image("osos") + b"\x01" * extra
     fw.make_room(len(osos))
@@ -69,14 +84,40 @@ def test_make_room_on_an_ipod_moves_only_rsrc(partition_bytes):
     device.check_compatible(FirmwarePartition(data), again, "new")
 
 
-def test_make_room_refuses_to_overwrite_data(partition_bytes):
+def test_make_room_on_a_restored_ipod_moves_rsrc_past_the_stale_data(partition_bytes):
+    data = restored_layout(partition_bytes)
+    fw = FirmwarePartition(data)
+    aupd_at = fw.entry("aupd").dev_offset
+    stale_at = (aupd_at + fw.entry("aupd").length + 0x7FF) // 0x800 * 0x800
+    rsrc = fw.image("rsrc")
+    grow(fw, 1500)                          # osos can grow up to aupd
+    again = FirmwarePartition(fw.to_bytes())
+    assert len(again.data) == len(data)
+    assert again.entry("aupd").dev_offset == aupd_at
+    assert again.entry("rsrc").dev_offset >= stale_at + 0x2000
+    assert again.image("rsrc") == rsrc and again.checksum_ok("rsrc")
+    # the stale data stays where it is: the move does not write into it
+    assert again.data[fw.image_base + stale_at:fw.image_base + stale_at + 0x2000] == b"\x66" * 0x2000
+    device.check_compatible(FirmwarePartition(data), again, "new")
+
+
+def test_make_room_refuses_when_the_partition_has_no_empty_area(partition_bytes):
+    data = restored_layout(partition_bytes, stale=0x8000, free=0)  # stale data to the end
+    fw = FirmwarePartition(data)
+    with pytest.raises(FirmwareError, match="no empty area"):
+        grow(fw, 1500)                      # osos grows; rsrc has nowhere to go
+
+
+def test_make_room_never_writes_into_data_in_the_free_space(partition_bytes):
     data = bytearray(ipod_layout(partition_bytes))
     fw = FirmwarePartition(bytes(data))
     hibe_end = fw.entry("hibe").dev_offset + fw.entry("hibe").length
     data[fw.image_base + hibe_end + 10] = 1  # old data in the free space after hibe
     fw = FirmwarePartition(bytes(data))
-    with pytest.raises(FirmwareError, match="not empty"):
-        grow(fw, 1500)
+    grow(fw, 1500)
+    again = FirmwarePartition(fw.to_bytes())
+    assert again.data[fw.image_base + hibe_end + 10] == 1      # the old byte stays
+    assert again.entry("rsrc").dev_offset >= hibe_end + 0x800  # rsrc moved past it
 
 
 def test_check_compatible_refuses_rsrc_over_hibe(partition_bytes):
@@ -104,6 +145,29 @@ def test_fit_layout_keeps_a_restore_unchanged(partition_bytes):
     current = FirmwarePartition(ipod_layout(partition_bytes))
     backup = current.to_bytes()
     assert device.fit_layout(backup, current) == backup
+
+
+def test_fit_layout_moves_rsrc_past_the_stale_dump_on_a_restored_ipod(partition_bytes):
+    current = FirmwarePartition(restored_layout(partition_bytes))
+    f = FirmwarePartition(file_layout(partition_bytes))
+    osos = grow(f, 1500)
+    fitted = FirmwarePartition(device.fit_layout(f.to_bytes(), current))
+    assert fitted.image("osos") == osos
+    assert fitted.entry("aupd").dev_offset == current.entry("aupd").dev_offset
+    assert not fitted.has("hibe")
+    stale_at = (current.entry("aupd").dev_offset + current.entry("aupd").length + 0x7FF) // 0x800 * 0x800
+    assert fitted.entry("rsrc").dev_offset >= stale_at + 0x2000
+    assert fitted.data[fitted.image_base + stale_at:fitted.image_base + stale_at + 0x2000] == b"\x66" * 0x2000
+    device.check_compatible(current, fitted, "new firmware")
+
+
+def test_fit_layout_drops_the_files_hibe_when_the_ipod_has_none(partition_bytes):
+    current = FirmwarePartition(restored_layout(partition_bytes))      # the restored iPod
+    f = FirmwarePartition(ipod_layout(partition_bytes))                # a file with a hibe image
+    fitted = FirmwarePartition(device.fit_layout(f.to_bytes(), current))
+    assert not fitted.has("hibe")
+    assert fitted.entry("aupd").dev_offset == current.entry("aupd").dev_offset
+    device.check_compatible(current, fitted, "new firmware")
 
 
 def test_merge_words_changes_only_agreeing_words():

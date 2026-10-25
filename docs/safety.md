@@ -43,8 +43,8 @@ The helper does these checks in `Operations.flash` ([Operations.swift](../mac/So
 5. Read the model code. Stop if the iPod is not an iPod Video.
 6. Read the partition as a firmware partition. If this fails, stop with the code `firmware-unreadable`. The app then offers the rescue restore.
 7. Make sure that the new image is not larger than the partition.
-8. Put the new osos and rsrc into the layout of the iPod (`fitLayout`).
-9. Copy the `hibe` entry and data of the iPod into the new image (`preserveHibernation`).
+8. Put the new osos and rsrc into the layout of the iPod (`fitLayout`). When the file has a `hibe` image and the iPod has none (a restore removed it), the result follows the iPod and has no `hibe` image.
+9. Copy the `hibe` entry and data of the iPod into the new image (`preserveHibernation`). This step does nothing when the iPod has no `hibe` entry.
 10. Make sure that the new image is for the iPod Video.
 11. Compare the new image with the iPod (`checkCompatible`):
     - The same image base and directory offset.
@@ -152,7 +152,7 @@ A test in the emulator is strong evidence, but not proof:
 | Flash and backup | No (no USB) | Yes |
 | Restore of a backup | No (no USB) | Not recorded. Tested on a disk image (`IPODFW_DISK_TEST=1`). |
 | Rescue restore | No | Not recorded |
-| Dark theme and moved rsrc | Yes | Yes (2 October 2026) |
+| Dark theme and moved rsrc | Yes | Yes (2 October 2026). The empty-area scan after an iTunes restore (25 October 2026): two flashes on the restored iPod, both started the iPod; the stale dump stayed untouched. Refer to [../re/hibernation-restore.md](../re/hibernation-restore.md). |
 | The patches on the iPod: the read, the iPodFirm list and the mirror of the switches | A firmware with the list starts (22 October 2026) | Yes (22 October 2026): the owner flashed, connected the iPod again, and the switches agreed with the iPod. A changed switch showed in the banner |
 | `album-art` | Versions 2.2–2.4: yes (9 and 10 October 2026) | Version 1.0: yes. Version 2.1: installed, the scroll is slow (9 October 2026). Version 2.2: measured (9 October 2026). Version 2.3, file mode: the scroll is much better (10 October 2026). Version 2.4, file mode with `cover-flow` 0.6.1: yes (10 October 2026); artwork mode with the file present: yes (10 October 2026); artwork mode without the file: yes, most rows are grey until a stop (10 October 2026). Version 2.5: the covers did not load (10 October 2026). Version 2.6: yes (14 October 2026) |
 | `backlight-60s` | Menu only | No |
@@ -174,6 +174,7 @@ A test in the emulator is strong evidence, but not proof:
 
 ## Known problems
 
+- An iTunes restore removes the `hibe` entry and leaves the old 64 MB hibernation dump in the partition ([re/hibernation-restore.md](../re/hibernation-restore.md)). After a restore, the iPod does not hibernate. This is Apple's own behaviour. iPodFirm does not repair the hibernation: the research did not read the dump header yet (open item). The rsrc move writes around the old dump, never into it.
 - The owner reported slower scroll in lists with `flash-keep-awake`. The emulator shows that the patch code does not run during a scroll. The cause is not known.
 - In the dark theme, the rating stars in Now Playing are almost invisible.
 - After a computer session, the stock firmware defers Sleep for approximately 1 minute. `sleep-now` works around this. The cause is not known.

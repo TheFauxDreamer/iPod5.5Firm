@@ -838,6 +838,19 @@ final class ThemeTests: XCTestCase {
         return d
     }
 
+    /// The layout of an iPod that iTunes restored: no hibe entry, a stale dump after aupd.
+    /// A restore writes the file content, removes the hibe entry, and leaves the old dump.
+    /// `free` must hold rsrc (0x500800 bytes) after the stale data.
+    func restoredLayout(stale: Int = 0x2000, free: Int = 0x510000) -> [UInt8] {
+        var d = stock
+        let fw = try! FirmwarePartition(data: stock)
+        let aupdEnd = Int(try! fw.entry("aupd").devOffset + fw.entry("aupd").length)
+        let staleAt = (aupdEnd + 0x7FF) / 0x800 * 0x800
+        d += [UInt8](repeating: 0, count: 2048 + staleAt + stale + free - d.count)
+        d.replaceSubrange(2048 + staleAt..<2048 + staleAt + stale, with: [UInt8](repeating: 0x66, count: stale))
+        return d
+    }
+
     func larger(_ fw: FirmwarePartition) throws -> [UInt8] {
         let osos = try fw.image("osos") + [UInt8](repeating: 1, count: 40_000)
         try fw.makeRoom(ososLength: osos.count)
@@ -890,6 +903,46 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(try fitted.entry("hibe").devOffset, try current.entry("hibe").devOffset)
         try FirmwareFlasher.checkCompatible(current: current, new: fitted, label: "t")
         XCTAssertEqual(try FirmwareFlasher.fitLayout(new: current.data, current: current), current.data)   // a restore
+    }
+
+    /// A restore leaves a stale hibernation dump after aupd: makeRoom must move rsrc past it.
+    func testMakeRoomOnARestoredIPodMovesRsrcPastTheStaleData() throws {
+        let data = restoredLayout()
+        let current = try FirmwarePartition(data: data)
+        let fw = try FirmwarePartition(data: data)
+        let aupd = try current.entry("aupd")
+        let aupdEnd = Int(aupd.devOffset) + Int(aupd.length)
+        let staleAt = (aupdEnd + 0x7FF) / 0x800 * 0x800
+        _ = try larger(fw)
+        XCTAssertEqual(fw.data.count, data.count)
+        XCTAssertEqual(try fw.entry("aupd").devOffset, aupd.devOffset)
+        let rsrcAt = Int(try fw.entry("rsrc").devOffset)
+        XCTAssertGreaterThanOrEqual(rsrcAt, staleAt + 0x2000)
+        XCTAssertEqual(try fw.image("rsrc"), try current.image("rsrc"))
+        // the stale data stays where it is: the move does not write into it
+        XCTAssertEqual(Array(fw.data[2048 + staleAt..<2048 + staleAt + 0x2000]), [UInt8](repeating: 0x66, count: 0x2000))
+        try FirmwareFlasher.checkCompatible(current: current, new: FirmwarePartition(data: fw.data), label: "t")
+    }
+
+    /// When stale data fills the rest of the partition, rsrc has no empty area: refuse.
+    func testMakeRoomRefusesWhenThePartitionHasNoEmptyArea() throws {
+        // 0x501000 bytes of stale data: more than rsrc (0x500800), to the end of the partition
+        let data = restoredLayout(stale: 0x501000, free: 0)
+        let fw = try FirmwarePartition(data: data)
+        XCTAssertThrowsError(try larger(fw)) { e in
+            XCTAssertEqual((e as? FirmwareError)?.message, "The firmware partition has no empty area for rsrc.")
+        }
+    }
+
+    /// The file has a hibe image, the restored iPod has none: the result follows the iPod.
+    func testFitLayoutDropsTheFilesHibeWhenTheIPodHasNone() throws {
+        let current = try FirmwarePartition(data: restoredLayout())
+        let file = try FirmwarePartition(data: ipodLayout())
+        let fitted = try FirmwarePartition(data: FirmwareFlasher.fitLayout(new: file.data, current: current))
+        XCTAssertFalse(fitted.has("hibe"))
+        XCTAssertEqual(try fitted.entry("aupd").devOffset, try current.entry("aupd").devOffset)
+        XCTAssertEqual(try fitted.image("osos"), try file.image("osos"))
+        try FirmwareFlasher.checkCompatible(current: current, new: fitted, label: "t")
     }
 
     func testMergeWords() {

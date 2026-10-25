@@ -266,18 +266,23 @@ public enum FirmwareFlasher {
     ///
     /// A firmware file that has a larger osos has rsrc and aupd moved forward (see makeRoom). On the
     /// iPod, aupd must stay where it is. For such a file, the result is the iPod's partition with the
-    /// new osos and rsrc. A partition from an iPod (with hibe), or an image with aupd at the iPod's
-    /// position, does not change: a restore writes the layout of the backup.
+    /// new osos and rsrc. When the file and the iPod differ in the hibe image, the result follows the
+    /// iPod. An image that already agrees with the iPod does not change: a restore writes the layout
+    /// of the backup.
     public static func fitLayout(new newBytes: [UInt8], current: FirmwarePartition) throws -> [UInt8] {
         let new = try FirmwarePartition(data: newBytes)
-        guard !new.has("hibe"), current.has("aupd"), new.has("aupd"),
-              try new.entry("aupd").devOffset != current.entry("aupd").devOffset else { return newBytes }
-        let out = try FirmwarePartition(data: current.data)
-        let osos = try new.image("osos")
-        try out.makeRoom(ososLength: osos.count)
-        try out.replaceImage("osos", with: osos)
-        if new.has("rsrc"), out.has("rsrc") { try out.replaceImage("rsrc", with: new.image("rsrc")) }
-        return out.data
+        guard current.has("aupd"), new.has("aupd") else { return newBytes }
+        guard new.has("hibe") == current.has("hibe"),
+              try new.entry("aupd").devOffset == current.entry("aupd").devOffset else {
+            // the file and the iPod differ: rebuild from the iPod's own partition
+            let out = try FirmwarePartition(data: current.data)
+            let osos = try new.image("osos")
+            try out.makeRoom(ososLength: osos.count)
+            try out.replaceImage("osos", with: osos)
+            if new.has("rsrc"), out.has("rsrc") { try out.replaceImage("rsrc", with: new.image("rsrc")) }
+            return out.data
+        }
+        return newBytes
     }
 
     /// The hibernation image (hibe) is RAM state the iPod writes to itself while asleep. It belongs to
