@@ -7,7 +7,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Pane: String, CaseIterable, Identifiable {
-    case overview = "Firmware", pictures = "Pictures", strings = "Text", patches = "Patches", ipod = "iPod", emulator = "Emulator"
+    case overview = "Firmware", pictures = "Pictures", strings = "Text", patches = "Patches", games = "Games", ipod = "iPod", emulator = "Emulator"
     var id: String { rawValue }
     var symbol: String {
         switch self {
@@ -15,6 +15,7 @@ enum Pane: String, CaseIterable, Identifiable {
         case .pictures: "photo.on.rectangle"
         case .strings: "textformat"
         case .patches: "puzzlepiece.extension"
+        case .games: "gamecontroller"
         case .ipod: "externaldrive.connected.to.line.below"
         case .emulator: "play.display"
         }
@@ -64,6 +65,23 @@ final class AppModel: ObservableObject {
     @Published var appearance: Appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .light {
         didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance"); switchesChanged(oldValue != appearance) }
     }
+    /// The file of the keys of the connected iPod, after the user reads it.
+    @Published var gameKeyStore: GameKeys.KeyStore?
+    /// The games of the connected iPod, after the user reads them.
+    @Published var gameKeyGames: [GameKeys.Game] = []
+    /// The size of the file IC-Info.sidb of the connected iPod, in bytes. Zero: the iPod has no such file.
+    @Published var gameKeyFileSize = 0
+    /// The state of the last read of the file of the keys.
+    @Published var gameKeyStatus = ""
+    /// The folder of the games that the user chooses. The folder holds the games, or the
+    /// folder `iPod_Control` of an iPod.
+    @Published var gamesSourceFolder: URL?
+    /// The games of the folder that the user chose.
+    @Published var gamesLibrary: [GameLibraryItem] = []
+    /// The GUID of each game that the user selected. Empty: the user selects no game.
+    @Published var selectedGameFolders: Set<String> = []
+    /// The state of the last copy of the games.
+    @Published var gameInstallStatus = ""
     /// True if the owner changed a patch switch, an option or the appearance after the last flash, restore
     /// or read of the iPod. Then a new read of the iPod does not change the switches (`applyIPodState`).
     @Published var switchesChangedSinceSync = UserDefaults.standard.bool(forKey: "switchesChangedSinceSync") {
@@ -847,6 +865,138 @@ final class AppModel: ObservableObject {
             .first { url in
                 (try? url.resourceValues(forKeys: [.volumeNameKey]).volumeName) == ipod.volumeName &&
                 FileManager.default.fileExists(atPath: url.appendingPathComponent("iPod_Control/iTunes/iTunesDB").path)
+            }
+    }
+
+    // MARK: games
+
+    /// The folder of the games. The firmware asks for the name `games_RO` with small
+    /// letters. The program of iTunes writes the name `Games_RO` with a capital letter.
+    static func gamesDirectory(at root: URL) -> URL? {
+        GameKeys.gamesDirectory(at: root.path).map { URL(fileURLWithPath: $0) }
+    }
+
+    /// Read the file of the keys of the connected iPod, and the games of the iPod.
+    /// The pane of the games shows the result.
+    func readGameKeys() async {
+        guard currentIPod != nil else {
+            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The pane of the games reads the file of the keys of the iPod.")
+            return
+        }
+        guard let volume = ipodVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            return
+        }
+        await readGameKeys(at: volume.appendingPathComponent("iPod_Control"), name: "the iPod")
+    }
+
+    /// Read the file of the keys and the games from a folder that the user chooses.
+    /// The folder must have the same shape as the folder `iPod_Control` of an iPod.
+    /// The folder can come from any iPod, also from a copy of a backup.
+    func readGameKeysFromFolder() async {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose the folder iPod_Control of an iPod, or a copy of it."
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        await readGameKeys(at: folder, name: folder.lastPathComponent)
+    }
+
+    /// Read the file of the keys and the games from a folder. The folder holds the
+    /// folder `iTunes` with the file of the keys, and the folder `Games_RO` with the games.
+    /// The name of the folder `Games_RO` can also have a capital letter, as on an iPod
+    /// with the file system HFS+. The app tries both names.
+    func readGameKeys(at root: URL, name: String) async {
+        let storeURL = root.appendingPathComponent("iTunes/\(GameKeys.keyStoreName)")
+        let keyFile = root.appendingPathComponent("iTunes/\(GameKeys.keyFileName)")
+        let gamesDir = GameKeys.gamesDirectory(at: root.path)
+        do {
+            let result = try await work("Reading the file of the keys of \(name)…") {
+                let store = try GameKeys.loadKeyStore(storeURL.path)
+                let games = gamesDir.map { GameKeys.findGames($0, store) } ?? []
+                let keyFileSize = (try? FileManager.default.attributesOfItem(atPath: keyFile.path)[.size] as? Int) ?? 0
+                return (store, games, keyFileSize)
+            }
+            gameKeyStore = result.0
+            gameKeyGames = result.1
+            gameKeyFileSize = result.2
+            gameKeyStatus = "\(result.0.accounts.count) accounts, \(result.0.keyCount) keys, \(result.1.count) games"
+        } catch {
+            gameKeyStore = nil
+            gameKeyGames = []
+            gameKeyFileSize = 0
+            gameKeyStatus = "The folder has no file of the keys that the app can read. The file \(GameKeys.keyStoreName) is not in the folder iTunes."
+        }
+    }
+
+    /// Copy the games to the connected iPod. The pane of the games shows the result.
+    func installGames() async {
+        guard currentIPod != nil else {
+            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The pane of the games copies the games to the iPod.")
+            return
+        }
+        guard let volume = ipodVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            return
+        }
+        guard let source = gamesSourceFolder else {
+            alert = AlertInfo(title: "No folder of games", message: "Choose the folder with the games first.")
+            return
+        }
+        let gamesDir = AppModel.gamesDirectory(at: source) ?? source
+        let library = GameLibrary.load(gamesDir.path)
+        guard !library.isEmpty else {
+            alert = AlertInfo(title: "No game found", message: "The folder \(gamesDir.lastPathComponent) has no game with a file Manifest.plist.")
+            return
+        }
+        // An empty selection means that the user wants all the games.
+        let wanted = selectedGameFolders.isEmpty ? library : library.filter { selectedGameFolders.contains($0.folder) }
+        guard !wanted.isEmpty else {
+            alert = AlertInfo(title: "No game selected", message: "Select at least one game, or select all the games.")
+            return
+        }
+        let root = volume.appendingPathComponent("iPod_Control")
+        do {
+            let report = try await work("Copying \(wanted.count) game(s) to the iPod…") {
+                GameInstaller.install(wanted, to: root)
+            }
+            gameInstallStatus = "\(report.installed.count) game(s), \(report.bytesCopied) bytes"
+            for folder in report.installed { gameInstallStatus += "  \(folder)" }
+            for warning in report.warnings { gameInstallStatus += "  skipped: \(warning)" }
+        } catch {
+            gameInstallStatus = "The games could not be copied: \(error.localizedDescription)"
+        }
+    }
+
+    /// Let the user choose the folder with the games. The folder holds the games, or the
+    /// folder `iPod_Control` of an iPod. The app reads the games of the folder.
+    func chooseGamesFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose the folder with the games, or the folder iPod_Control of an iPod."
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        gamesSourceFolder = folder
+        gameInstallStatus = ""
+        let gamesDir = AppModel.gamesDirectory(at: folder) ?? folder
+        gamesLibrary = GameLibrary.load(gamesDir.path)
+        selectedGameFolders = []
+    }
+
+    /// Select all the games, or no game.
+    func selectAllGames(_ all: Bool) {
+        selectedGameFolders = all ? Set(gamesLibrary.map { $0.folder }) : []
+    }
+
+    /// The mounted volume of the connected iPod. The volume must have the folder iPod_Control.
+    func ipodVolume() -> URL? {
+        guard let ipod = currentIPod else { return nil }
+        return FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: [.volumeNameKey], options: [])?
+            .first { url in
+                (try? url.resourceValues(forKeys: [.volumeNameKey]).volumeName) == ipod.volumeName &&
+                FileManager.default.fileExists(atPath: url.appendingPathComponent("iPod_Control").path)
             }
     }
 

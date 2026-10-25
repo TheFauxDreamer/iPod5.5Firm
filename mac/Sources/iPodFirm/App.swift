@@ -172,6 +172,7 @@ struct ContentView: View {
                 case .pictures: model.editor == nil ? AnyView(WelcomeView()) : AnyView(PicturesView())
                 case .strings: model.editor == nil ? AnyView(WelcomeView()) : AnyView(StringsView())
                 case .patches: AnyView(PatchesView())
+                case .games: AnyView(GamesView())
                 case .ipod: AnyView(IPodView())
                 case .emulator: AnyView(EmulatorView())
                 }

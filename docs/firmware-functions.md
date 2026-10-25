@@ -44,12 +44,22 @@ A typical sequence:
 | Temurin JDK 21 | `~/Library/Application Support/iPodFirm/tools/jdk-21.0.12.1+1/` | Java runtime for Ghidra. |
 | Ghidra project `osos13` | `~/Library/Application Support/iPodFirm/re/ghidra-project/` | The analyzed osos 1.3, base address 0x0. |
 | [DecompileAt.java](../re/ghidra-scripts/DecompileAt.java) | `re/ghidra-scripts/` | Writes the C code, the callers and the callees of the functions at the given addresses. If no function contains an address, it makes a function at the nearest `stmdb sp!, {..., lr}` before the address. |
+| [DecompileAll.java](../re/ghidra-scripts/DecompileAll.java) | `re/ghidra-scripts/` | Writes the C code of every function of the program to one file. The file has one block for each function. The block starts with a line that has the address and the name. |
+| [decompile-all.sh](../re/decompile-all.sh) | `re/` | Decompiles the whole image `osos` with REA and with Ghidra. It writes the C code and the index of the functions. |
+| [decompile-with-strings.sh](../re/decompile-with-strings.sh) | `re/` | Decompiles the whole image `osos` and makes the map of the strings. It gives the words that hold the address of a string the type of a pointer. The decompiler then names every string that a function uses. |
+| [DefineStringPointers.java](../re/ghidra-scripts/DefineStringPointers.java) | `re/ghidra-scripts/` | Gives the type of a pointer to every word of the image that holds the address of a string. |
+| [DecompileWithStrings.java](../re/ghidra-scripts/DecompileWithStrings.java) | `re/ghidra-scripts/` | Writes the C code of every function. The C code has the name of every string that the function uses. |
+| [make-string-map.py](../re/make-string-map.py) | `re/` | Makes the map of the strings from a file of decompiled C code and from the image. The map has the name and the group of each function. |
+| [make-function-index.py](../re/make-function-index.py) | `re/` | Makes the table of the functions from a file of decompiled C code. The table has the address, the name, the number of lines, the number of bytes and the number of calls of each function. |
+| [make-systems-state.py](../re/make-systems-state.py) | `re/` | Makes the table of the state of the research of each system. The table has the number of the parts, the number of the parts that a note names, the note that gives the full research of the system and the other notes. |
 | [CallerTree.java](../re/ghidra-scripts/CallerTree.java) | `re/ghidra-scripts/` | Writes the caller tree of functions to a given depth. |
 | [SetArmOptions.java](../re/ghidra-scripts/SetArmOptions.java) | `re/ghidra-scripts/` | Pre-script. Turns on "ARM Aggressive Instruction Finder" for the first analysis. |
 | `FindXrefs.java`, `FindConstant.java`, `FindBytes.java`, `ListVtable.java`, `MakeSignature.java` | `re/ghidra-scripts/` | Search scripts. Refer to [ghidra-guide.md](ghidra-guide.md#2-the-scripts). |
+| [DumpCode.java](../re/ghidra-scripts/DumpCode.java) | `re/ghidra-scripts/` | Writes the instructions of the functions at the given addresses, one line per instruction. With `--range`, it writes the instructions of a range of addresses. Use it when the decompiler does not give the function. |
 | [find-pattern.py](../re/find-pattern.py) | `re/` | Finds a byte pattern in a raw file without Ghidra. |
 | Instrumented emulator | `~/Library/Application Support/iPodFirm/emulator-src/target/release/ipod-emulator` | The emulator with the iPodFirm instrumentation patch. Refer to [re/emulator.md](../re/emulator.md). |
 | `ipodfw.emucontrol` | [src/ipodfw/emucontrol.py](../src/ipodfw/emucontrol.py) | Python control of the emulator socket. |
+| REA | `/tmp/rea` | The tool for the analysis. It has a provider for Ghidra. Refer to the note [../re/retailos-decompile.md](../re/retailos-decompile.md). |
 
 The tools are not in the repository. The Ghidra download does not include the native decompiler for Apple silicon. To build it:
 
@@ -96,6 +106,54 @@ For a caller tree, use `-postScript CallerTree.java OUT.txt DEPTH ADDRESS ...`.
 - The screens are objects with vtables (C++ classes). A vtable word hook changes the method for all objects of a class.
 
 ## Functions
+
+### The whole image
+
+The research of 21 October 2026 decompiled the whole image `osos` of RetailOS
+1.3 with REA and with Ghidra. The research gives 14,411 functions. The research
+failed for 0 functions. The C code has 551,459 lines.
+
+| The item | The value |
+|---|---|
+| The functions | 14,411 |
+| The C code | 551,459 lines. 13,378,201 bytes. |
+| The range of the addresses | 0x100000f0 to 0x10733b64 |
+| The median size of a function | 24 lines of C code |
+| The functions under 50 lines | 11,902 |
+| The functions over 500 lines | 31 |
+| The C code and the index | `~/Library/Application Support/iPodFirm/re/retailos-1.3-decompiled/` |
+
+The research confirmed the addresses of the other notes. The research confirmed
+the 6 addresses of the patch of the community with the graph of the basic
+blocks. Refer to [../re/retailos-decompile.md](../re/retailos-decompile.md).
+
+> CAUTION: The image has no symbols. The names of the functions are `FUN_` and
+> the address. The C code of a function with many paths has the name
+> `extraout_r1` many times. The logic of the code is still correct.
+
+### The map of the strings
+
+The research of 22 October 2026 made the map of the strings of the image
+`osos`. The map gives the name of each function and the group of each
+function. The name comes from the strings that the function uses.
+
+| The item | The value |
+|---|---|
+| The functions of the image | 14,411 |
+| The functions with a string | 382 |
+| The functions with a name | 380 |
+| The different strings | 841 |
+| The groups | Files and storage 60. System and services 31. Tools and build 29. Music and audio 27. Video and photo 26. DRM and FairPlay 1. |
+| The files of the map | `~/Library/Application Support/iPodFirm/re/retailos-1.3-decompiled/` |
+
+The function `FUN_10175c74` uses 83 strings. These strings are the names of
+the atoms of the files of the DRM. The list has `AppleDRM`, `AppleLossless`,
+`AppleVideoDRM`, `FireWireGUID` and `FireWireVersion`. The note
+[../re/games-drm.md](../re/games-drm.md) says that the key of the DRM binds to
+the number of the device in the NOR. The map of the strings confirms this.
+
+Refer to [../re/retailos-decompile.md](../re/retailos-decompile.md) for the
+method, the limits and the whole table.
 
 ### Resources and strings
 
@@ -598,6 +656,344 @@ Refer to [re/usb-host.md](../re/usb-host.md) and [USB-AUDIO-OUT.md](../USB-AUDIO
 | 0xe7a50 | hubAddDeviceHandler: a state machine (+0x18) for a new device on a hub port. The completion callback drives it. |
 | 0xe7980 | Root port status (port, &{wPortStatus, wPortChange}). Called at 0xd28f0 (root hub GET_STATUS) and 0x10e75c (status-change poll 0x10e6e0). |
 
+### The camera
+
+Refer to [re/firmware-camera.md](../re/firmware-camera.md). The iPod Video has
+no camera. The firmware has the code of the camera of the iPod Photo. The code
+came with the USB host stack of the Camera Connector of 2005. The facts are
+Static.
+
+| Address | Function |
+|---|---|
+| 0x6c8898 | The record of the driver of the camera of the type 4. The tag "usbd" at +0, the vendor 0x04A9 at +8, the name at +0x14. |
+| 0x6c88f0 | The record of the driver of the camera of the protocol of the pictures. The class 6, the subclass 1 and the protocol 1 at +0x10. |
+| 0x6c88d8 | The table of the methods of the driver of the camera of the type 4. The version 0x1100. The 5 methods: 0x113a78, 0x118514, 0x1190a4, 0x110868, 0x10d86c. |
+| 0x6c8930 | The table of the methods of the driver of the camera of the protocol of the pictures. The 5 methods: 0x110620, 0x1174d8, 0x118b50, 0x10d580, 0x105c1c. |
+| 0x113a78 | The type 4 driver accepts the device. It calls 0x11281c with the vendor and the product. |
+| 0x11281c | The check of the product. It accepts the vendor 0x04A9 and 40 numbers of the product. It refuses 0x3042, 0x304a, 0x3053 and 0x3054. |
+| 0x113aa4 | Makes the object of the device of the type 4. The 4 methods of the class are at 0xe74c0, 0xec968, 0x10fa48 and 0x10e2d0. |
+| 0x118b50 | The pictures driver accepts an interface. The class at +5 must be 6, the subclass at +6 must be 1 and the protocol at +7 must be 1. It makes the object with 0x110780. |
+| 0x10d86c | The type 4 driver starts the device. It does nothing if the operation is not 0x0b. It sends the notification 0x12 with the code 3. |
+| 0x105c1c | The pictures driver starts the device. It sends the notification 0x12 with the code 3 and the code 2. |
+| 0x0e74c0 | The method of the class that starts the session of the camera. The states are 8, 0x0b and 0x0e. |
+| 0x0de9d8 | The method of the task `ICAPTPCameraIOTask`. It makes the task at the run time. The name is at 0x0deb4c. The priority is 0xc0 and the size of the stack is 0xc0. |
+| 0x10a744 | Makes the buffer of the pictures. The buffer has 64000 bytes. |
+| 0x100978 | Makes one request to the camera and reads the answer. It sends the data in parts of 0x1000 bytes. |
+| 0xdd0dc | The task sends a request and waits for the answer. |
+| 0xd5f64 | The task reads the answer of the stack. |
+| 0xe0b2c | Reads the information of one object of the camera. The record has 0xa4 bytes. |
+| 0x199f70 | The method of the task `PhotoCopyTask`. The name is at 0x199ff8. The size of the stack is 8. |
+| 0x16c588 | The name of the device of the capture. The string "Image Capture device" is at 0x16c5f8. |
+| 0x197e70 | The state of the import of the pictures. It gives 1 for the states 1 to 5 and for the state 7. |
+| 0x211ddc | The name of each channel of the application. The channels of the pictures are 0x0d, 0x0e, 0x10, 0x17, 0x18 and 0x1b. |
+
+### The USB device
+
+Refer to [re/firmware-usb.md](../re/firmware-usb.md). The iPod Video is a USB
+device. The firmware has the stack of the device of the Mac OS 9 USB family of
+Apple. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x15fe28 | The table of the registers of the controller. The address of each register and the mask of each register. |
+| 0x15fd30 | Fills the 34 words of the registers of the object of the controller. |
+| 0x15fe6c | Writes one register. It does nothing if the value is the same. |
+| 0x221278 | Makes the object of the controller. The interrupt object is at +0x104. |
+| 0x24d628 | Makes the object of the interface of the USB. It makes 4 objects of interfaces. |
+| 0x24d1f0 | Writes the number of the vendor of the device. The number is at +8 of the object. |
+| 0x24d1c0 | Writes the number of the product of the device. The number is at +0xa of the object. |
+| 0x24d1a4 | Writes the version of the device. The version is at +0xc of the object. |
+| 0xd85d8 | Gives the identity of the iPod to the computer. The number of the vendor is 0x05ac. The number of the product tells the model. |
+| 0xd86b4 | The numbers of the product: 0x1202, 0x1203, 0x1204, 0x1205, 0x1206, 0x1207, 0x1209, 0x120a. |
+| 0xcd06c | Makes the descriptor of the device. The descriptor has 18 bytes. |
+| 0xe5f84 | Makes the descriptor of a configuration. |
+| 0xc0bb4 | Answers the requests of the computer. The type of the request is the byte at +0 of the message. |
+| 0xe34f8 | The state machine of the device. The states are 1 to 4. |
+| 0x170fec | Makes the object of the task `USBDeviceTask`. The name is at 0x17107c. The size of the stack is 0x20, the priority is 0x1000. |
+| 0x170f2c | The method of the task `USBDeviceTask`. The loop calls the start, the session and the stop of the device. |
+| 0x18472c | Makes the object of the task `USB MSC`. The name is at 0x184824. The size of the stack is 0x11. |
+| 0xb95a4 | The task of the mode manager of the USB. The modes are the idle, the device and the host. |
+| 0x184aec | Makes the object of the mode manager. |
+| 0x184860 | Starts a mode. The function starts the mode only from the mode 0. |
+| 0x18482c | Stops a mode. The function starts the mode 0 again. |
+| 0x284338 | The method of the task `AccessoryDetectTask`. |
+| 0x284eb0 | The method of the task `HPhoneDetTask`. It reads the state of the headphones. |
+| 0x284f90 | The method of the task `OptoTask`. It reads the sensor of the click wheel. |
+| 0x28558c | The method of the task `SerialOptoTask`. It reads the sensor of the serial port. |
+| 0x28564c | The method of the task `TopPlugTask`. It reads the accessory of the plug. |
+| 0xfebf8 | The method of the task `RsistrAccsryMgr`. It reads the resistance of the accessory of the click wheel. |
+| 0x266034 | The state of the accessory of the resistor. It gives 0, 1, 3 or 100. |
+| 0x1fb50c | Sends the command of the lingo 6 of iAP. The command 3 tells the accessory to change to the host mode. |
+| 0x1242b8 | Makes an iAP message and puts it into the queue of the accessory. |
+| 0x1d62d4 | Makes the thread of the incoming data of iAP. The name is at 0x1d6410. |
+| 0x1d73e4 | Makes the thread of the outgoing data of iAP. The name is at 0x1d7520. |
+
+### The user interface
+
+Refer to [re/firmware-ui.md](../re/firmware-ui.md). The screens of the iPod are
+not in the code. They are in the resources of the image. The code holds the
+classes that read the resources. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x331da0 | The main block of the resources. The 8 sections. |
+| 0x336188 | The table of the `Type` section. 158 entries. |
+| 0x3368f0 | The table of the `View` section. 619 entries. |
+| 0x333128 | The table of the `Menu` section. 40 entries. |
+| 0x333308 | The table of the `Str ` section. 991 entries. |
+| 0x331e2c | The table of the `BMap` section. 403 entries. |
+| 0x653048 | The base of the offset of the table of a class in a `Type` resource. |
+| 0x66a904 | The table of the class of the screens. 11 slots. 39 types use it. |
+| 0x66a938 | The table of the class of the screens. 8 slots. 57 types use it. |
+| 0x66a920 | The table of the class of the screens. 4 slots. 16 types use it. |
+| 0x668250 | The table of the class of the empty element. 8 slots. |
+| 0x168938 | Reads the `Type` section and registers the class of the screen. |
+| 0x16914c | Makes the object of a screen of a class. |
+| 0x21a168 | Registers a class. It looks up the class of a type. |
+| 0x21f3dc | Looks up a name in the registry of the modules. |
+| 0x21f254 | Looks up a name in the list of the children of an object. |
+| 0x1fc128 | Makes the object of the engine of the screen. The name is at 0x1fc220. |
+| 0x170bc8 | Makes the task `WindowManager`. The name is at 0x170c5c. |
+| 0x155e7c | Makes the task `SearchHelperThread`. The name is at 0x155ed0. |
+| 0x141060 | Makes the object of the empty element. |
+| 0x141184 | Reads the element of the tag `enoN`. The tag is at 0x1411fc. |
+| 0xab7f0 | Reads the element of the tag `paMB`. The tag is at 0xab8a4. |
+| 0xa6bd0 | Reads the element of the tag ` rtS`. The tag is at 0xa6d28. |
+| 0x12f150 | Reads the element of the tag `warD`. The tag is at 0x12f1a0. |
+| 0x16c080 | Reads the element of the tag `ltnC`. The tag is at 0x16c0e8. |
+| 0x10d278 | Reads the element of the tag `mTtD`. The tag is at 0x10d2b0. |
+| 0x16c328 | The method of the class of the control. The type is at +4 of the object. |
+
+### The modules of the screen
+
+Refer to [re/firmware-modules.md](../re/firmware-modules.md). The table of the
+modules is in the resource section of the image. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x79474 | The record of the module `OpenGLES`. The module has 179 methods. |
+| 0x79784 | The record of the module `Filesytem`. The module has 4 methods. |
+| 0x797d8 | The record of the module `Audio`. The module has 61 methods. |
+| 0x79910 | The record of the module `Metadata`. The module has 152 methods. |
+| 0x79bb4 | The record of the module `AsyncFileIO`. The module has 17 methods. |
+| 0x79c3c | The record of the module `InputEvents`. The module has 2 methods. |
+| 0x79c88 | The record of the module `Settings`. The module has 3 methods. |
+| 0x7947c | The name "OpenGLES". |
+| 0x7978c | The name "Filesytem". |
+| 0x797dc | The name "Audio". |
+| 0x79918 | The name "Metadata". |
+| 0x79bb8 | The name "AsyncFileIO". |
+| 0x79c40 | The name "InputEvents". |
+| 0x79c8c | The name "Settings". |
+| 0x13061973 | The magic of a record of the table of the modules. |
+
+### The library of C
+
+Refer to [re/firmware-library.md](../re/firmware-library.md). The library is
+the code of the compiler of Apple. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x7ca44 | `memcmp`. It compares 2 blocks of bytes. |
+| 0x7cae0 | `memcpy`. It copies a block of bytes. |
+| 0x7cad0 | `memset`. It fills a block with 1 byte. |
+| 0x7cc48 | `memmove`. It copies a block of bytes. |
+| 0x7ccd0 | `memset`. It fills a block with 0. |
+| 0x7cd28 | `strncpy`. It fills the rest of the block with 0. |
+| 0x7cd6c | `strcpy`. It copies a string. |
+| 0x7cdd4 | `strncmp`. It compares 2 strings. |
+| 0x7ce4c | `strncpy`. It copies a string of a number of bytes. |
+| 0x7ceb8 | `strlen`. It returns the length of a string. |
+| 0x7cfdc | `strcmp`. It compares 2 strings. |
+| 0x7d018 | `__di3di3`. It divides 2 numbers of 64 bits. |
+| 0x7d024 | `__udivsi3`. It divides 2 numbers of 32 bits. |
+| 0x7d1c4 | `__aeabi_fmul`. It multiplies 2 numbers of 32 bits with a fraction. |
+| 0x7d1f0 | `__floatundisf`. It changes a number of 32 bits into a number with a fraction. |
+| 0x7d284 | `__aeabi_ldivmod`. It divides 2 numbers of 64 bits. |
+| 0x7d394 | `__floatdidf`. It changes a number of 64 bits into a number of 32 bits with a fraction. |
+| 0x7d4f4 | `__floatdisf`. It changes a number of 32 bits with a fraction into a number of 64 bits. |
+| 0x7d578 | `__floatdisf`. It changes a number of 32 bits with a fraction into a number of 64 bits. |
+| 0x7d5c8 | `__aeabi_fadd`. It adds 2 numbers of 32 bits with a fraction. |
+| 0x7d69c | `__aeabi_fmul`. It multiplies 2 numbers of 32 bits with a fraction. |
+| 0x7d774 | `__aeabi_fcmp`. It compares 2 numbers of 32 bits with a fraction. |
+| 0x7d7b4 | `__aeabi_fdiv`. It divides 2 numbers of 32 bits with a fraction. |
+| 0x82694 | `__umodsi3`. It gives the rest of the division of 2 numbers of 32 bits. |
+| 0x7a794 | `malloc`. It asks for a block of a number of bytes. |
+| 0x7a7b0 | `free`. It gives a block back. |
+| 0x7a6b0 | `realloc`. It changes the size of a block. |
+| 0x7a6fc | `calloc`. It asks for a block and fills it with 0. |
+
+### The power and the hardware
+
+Refer to [re/firmware-power.md](../re/firmware-power.md). The power comes from
+the power chip of the PP5020 of Apple. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x284374 | The method of the task `AlarmTask`. The events are 0x89, 0x8a, 0x8b and 0x94. |
+| 0x28453c | The method of the task `BacklightTask`. The events are 0xa6 to 0xa9. |
+| 0x284a54 | The method of the task `CNATask`. The iPod Video has no modem. |
+| 0x284f30 | The method of the task `HoldSwitchTask`. It reads the switch with 0x2651dc. |
+| 0x284a18 | The method of the task `LowBattDebounceTask`. |
+| 0x284ff4 | The method of the task `PCFPowerMgr`. It calls the kernel with the number 0x18 at the end. |
+| 0x285460 | The method of the task `RTCTimerMgr`. The records of the timers have 0x14 bytes. |
+| 0x2856f0 | The method of the task `WatchdogTask`. It calls the software interrupt 0x123456 if the memory for the table is not there. |
+| 0x148108 | Makes the object of the manager of the power. The name is at 0x14815c. |
+| 0x281b4c | Fills the table of the pins of the general purpose input and output. The table is at 0x281f00. |
+| 0x281f00 | The table of the pins. The 5 registers are 0x6000D000, 0x6000D080, 0x6000D0EC, 0x6000D100 and 0x6000D154. |
+| 0x1b73c8 | Makes the object of the power management unit. The object has the address 0x70000034 at +8. |
+| 0x1b741c | The word with the address 0x70000020. The function 0x1b73c8 sets the bit 0x40000000. |
+| 0x1c7f58 | Makes the object of the clock of the system. The object has the address 0x70000020 at +0xc. |
+| 0x265164 | Reads the value of the converter of the analog to the digital. The 16 high bits are the channel. The 16 low bits are the measurement. |
+| 0x2657fc | Gives the state of the power. The function gives 1 when the channel is 10, 11 or 12. |
+| 0x265820 | Gives the state of the charger. The function gives 1 when the channel is 5, 6, 8 or 9. |
+| 0x265a74 | Gives the state of the battery. The function gives 1 when the channel is 10, 11 or 12. |
+| 0x264fa4 | Gives the state of the power. The function has a switch with the cases 4 to 0xc. |
+| 0x265abc | Gives the state of the audio. The function has a switch with the cases 4 to 0xc. |
+| 0x175818 | Reads the state of the battery and the state of the charger. The states are at +0x1bc and at +0x1be. |
+| 0x2823bc | Starts the driver of the general purpose input and output. |
+| 0x1fcf50 | The table of the clock. The table has 11 registers from 0x60004000 to 0x60004030. |
+| 0x1fca88 | Copies the table of the clock into the registers. |
+| 0x28578c | The string "watchdog: Could not allocate timer!". |
+| 0x2857bc | The string "watchdog: No registered handlers for ". |
+
+### The music and the media
+
+Refer to [re/firmware-media.md](../re/firmware-media.md). The video is decoded by
+the video processor of Broadcom. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x205cfc | Makes the task `ArtworkLoadTask`. The stack is 0x20, the priority 0x8000. The name is at 0x2aa7fc. |
+| 0x16b0b0 | Makes the task `MP3ExampleTask`. The stack is 0x10, the priority is the value at 0x16b0fc << 4. The name is at 0x16b104. |
+| 0x199f70 | Makes the task `PhotoCopyTask`. The stack is 8. The name is at 0x199ff8. |
+| 0x158124 | Makes the thread `TcMemManagerThread`. The name is at 0x158260. |
+| 0x9483c | Makes the task `TrackCacheReadTask`. The stack is 8, the priority 0x2000. The name is at 0x94974. |
+| 0x165164 | Makes the task `VCUpdateTask`. The stack is 0x20, the priority 0x800. The name is at 0x16522c. |
+| 0x1419f4 | Makes the task `VideoDaisyTask`. The stack is 0x20, the priority 0x1000. The name is at 0x500c98. The method is at 0x14165c. |
+| 0x1ddc50 | Makes the 2 tasks of the copy of the stream. The names are at 0x1ddc88 and 0x1ddc8c. |
+| 0x20be1c | Makes the task `StreamCacheReadTask`. The stack is 8, the priority 0x4000. The name is at 0x20be64. |
+| 0x1f9754 | Reads the statistics of the video processor. The value 0 is the audio and the value 1 is the video. |
+| 0x1f996c | The name "mp_get_stats video". |
+| 0x1f9980 | The name "mp_get_stats audio". |
+| 0x1f9994 | The names of the statistics of the video processor. There are 22 names. |
+| 0x287664 | Sends a command to the video processor. |
+| 0x287250 | Reads a value of the statistics. |
+| 0x1ca110 | The names of the boxes of the MP4 for the video. |
+| 0x1ca758 | The names of the boxes of the MP4 for the audio. |
+
+### The equalizer of the audio
+
+Refer to [re/custom-eq.md](../re/custom-eq.md). The equalizer is a software
+equalizer. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x14cfcc | The dispatcher of the filter. The function has 3 stages. |
+| 0x14cfb8 | Says that the number of the filter is in the range 0x20 to 0x7f. |
+| 0x14cfbc | Says that the number of the filter is less than 0x60. |
+| 0x14cfa4 | Says that the number of the stage is 0x10 or 0x18. |
+| 0x14e430 | Reads the coefficient of the stage 1. |
+| 0x14e184 | Reads the coefficient of the stage 2. |
+| 0x14e7a8 | Reads the coefficient of the stage 3. |
+| 0x14d438 | Applies the filter. |
+| 0x14e65c | The table of the coefficients of the stage 1. The table has 32 entries. |
+| 0x14e3b0 | The table of the coefficients of the stage 2. The table has 32 entries. |
+| 0x14e948 | The table of the coefficients of the stage 3. The table has 32 entries. |
+| 0x26a9e8 | Selects the object of a command of the audio engine. The case 0x1f is the command of the equalizer. |
+
+### The storage and the file system
+
+Refer to [re/firmware-storage.md](../re/firmware-storage.md). The iPod has a
+disk with an ATA bus. The facts are Static.
+
+| Address | Function |
+|---|---|
+| 0x186b34 | Makes the 2 tasks of the bus of the disk. The stack is 0xc0, the priority 0x800. The names are at 0x186bbc and 0x186bd0. |
+| 0x17775c | Makes the task `DiskReaderTask`. The stack is 8, the priority 0x800. The name is at 0x1777b4. |
+| 0x284b0c | The method of the task `DiskMgrTask`. The table of the states of the partitions has 0x2d entries. |
+| 0x34dec | The dispatcher of the file systems. It takes 6 arguments. It uses the 3 names of the table at 0xc26d8. |
+| 0xc26d8 | The names of the file systems FAT12, FAT16 and FAT32. Each name has 8 bytes. |
+| 0x176c14 | The name HFSPLUS in the table of the DRM. |
+| 0x212b68 | The name "Disk Activity". |
+| 0x213dcc | The name "Disk Spinup". |
+| 0x213dd8 | The name "Disk Spindown". |
+| 0x213de8 | The name "Disk Obtain Access". |
+| 0x213dfc | The name "Disk Release Access". |
+| 0x177038 | The name "ForcedDiskMode". |
+| 0x17704c | The name "BangFolder". |
+| 0x177058 | The name "CorruptDataPartition". |
+| 0x177070 | The name "CorruptFirmwarePartition". |
+
+### The file systems
+
+Refer to [re/firmware-filesystems.md](../re/firmware-filesystems.md). The
+firmware has the code of the FAT and the code of the HFS+. The facts are
+Static.
+
+| Address | Function |
+|---|---|
+| 0xc22b4 | Reads the table of the partitions of the disk. It reads 4 partitions. It gives the type of the file system of each partition. |
+| 0x93c4 | Reads the header of the volume of the HFS+. It looks for the 2 signatures. |
+| 0x95a0 | Reads the header of the volume of the HFS+. |
+| 0x96c0 | The signature "Standard_Eta" of the volume of the HFS+. |
+| 0x96d0 | The signature "STANDARD" of the volume of the HFS. |
+| 0x9da4 | Changes the byte order of a 32 bit number. |
+| 0x9dd8 | Changes the byte order of a 32 bit number. |
+| 0x9e0c | Changes the byte order of a 32 bit number. |
+| 0x9e34 | Reads the record of the tree of the catalog. |
+| 0x9e9c | Reads the record of the tree of the catalog. |
+| 0x9f1c | Reads the record of the tree of the catalog. |
+| 0x9f70 | Reads the record of the tree of the catalog. |
+| 0x9ff4 | Reads the record of the tree of the catalog. |
+| 0xa08c | Reads the record of the tree of the catalog. |
+| 0xa130 | Reads the record of the tree of the catalog. |
+| 0xa1ec | Moves the pointer of the record by a number of bytes. |
+| 0xa204 | Moves the pointer of the record by a number of words. |
+| 0xa21c | Moves the pointer of the record by a number of 16 bit values. |
+| 0xa23c | Moves the pointer of the record by a number of 32 bit values. |
+| 0xa260 | Moves the pointer of the record by a number of values. |
+| 0xa288 | Moves the pointer of the record by a number of values. |
+| 0xa6e4 | Changes the 4 words of 4 bytes with a table of 256 bytes. |
+| 0xa720 | Changes the 4 words of 4 bytes with a table of 256 bytes. |
+| 0xa75c | Changes the order of the bytes of a value. |
+| 0xa7c0 | Changes the order of the bytes of a value. |
+| 0xa824 | Changes the value with a table. |
+| 0xa988 | Changes the value with a table. |
+| 0xab18 | Changes the 4 words of 4 bytes with a key of 16 bytes. |
+| 0xab58 | Changes the 4 words of 4 bytes with a key of 16 bytes. |
+| 0xac40 | Changes the 4 words of 4 bytes with a key of 16 bytes. |
+| 0xad24 | Changes the 16 bytes of a key with a key. |
+| 0xade0 | Changes the 16 bytes of a key with a key. |
+| 0xaedc | Makes the object of the node of the tree. |
+| 0xaf8c | Reads the record of a file of the catalog. |
+| 0xb104 | Reads the record of a file of the catalog. |
+| 0xb27c | Reads the record of a folder of the catalog. |
+| 0xb54c | Reads the record of a folder of the catalog. |
+| 0xb800 | Reads the node of the tree of the catalog. The 2 kinds of the node are 0x44332211 and 0x11223344. |
+| 0xb8c8 | Reads the kind of the node of the tree of the catalog. |
+| 0xb9a0 | Reads the name of a record of the catalog. |
+| 0xbaf0 | Reads the data of a record of the catalog. |
+| 0xbf00 | The first kind of the node of the tree. The value is 0x44332211. |
+| 0xbf04 | The second kind of the node of the tree. The value is 0x11223344. |
+| 0xbf18 | Reads the header of the volume of the HFS+. |
+| 0xc034 | Reads the header of the volume of the HFS+. The object of the volume has 0x250 bytes. |
+| 0xc140 | Reads the node of the tree of the volume. |
+| 0xc264 | Reads the node of the tree of the volume. |
+| 0xc300 | Looks for a name in the catalog. |
+| 0xc408 | Looks for a name in the catalog. |
+| 0xc510 | Looks for a name in the catalog. |
+| 0xc628 | Looks for a name in the catalog. |
+| 0xc744 | Looks for a name in the catalog. |
+| 0xc868 | Looks for a name in the catalog. |
+| 0x7100 | Copies the clusters of the FAT. |
+| 0x7278 | Changes the bytes of a value with the cipher of the FAT. |
+| 0x7c14 | Copies the clusters of the FAT. |
+| 0x7d84 | Reads a record of the directory of the FAT. |
+| 0x7f3c | Reads a record of the directory of the FAT. |
+| 0x8140 | Reads the file of the FAT. The function has 24 arguments. |
+| 0x8a48 | Reads the file of the FAT. The function has 24 arguments. |
+
 ### The JavaScript engine
 
 | Address | Function | Evidence |
@@ -696,11 +1092,11 @@ The string `SerialNumber` is at 0x176b24. The string `GamesPlatformID` is at 0x1
 
 The word `Games` is in the JavaScript of the user interface at 0x4b145c, 0x4b38f2, 0x4b3b44 and 0x4b4308. The word `Resume Game` is at 0x4b14d8.
 
-The file `iPod_Control\Device\SysInfo` is at 0xa275c. It holds the identity of the iPod. The keys of the purchases are in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The same keys are in the file `SC Info.sidb` of the computer with iTunes. That file is encrypted with a key that comes from the hardware of the computer. The atom `user` of the file `sinf` of a game holds the number of the account. It is (account 1) in all 7 games of the archive. Refer to [re/games.md](../re/games.md).
+The file `iPod_Control\Device\SysInfo` is at 0xa275c. It holds the identity of the iPod. The keys of the purchases are in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The same keys are in the file `SC Info.sidb` of the computer with iTunes. That file is encrypted with a key that comes from the hardware of the computer. The atom `user` of the file `sinf` of a game holds the number of the account. The number is the same in all 7 games of the owner. Refer to [re/games.md](../re/games.md).
 
 The name of the folder of the games is in the osos in small letters: `games_RO`, `gamedata_RW`, `gamestats_WO` and `gamedata_ShareRW`. The program of iTunes for macOS 11.4 uses the same folders with a capital letter: `Games_RO`, `GameData_RW` and `GameStats_WO`. The file system of the iPod is FAT and it keeps the case of the names.
 
-The app cannot make the file `IC-Info.sidb`. The key of a game depends on the number of the account and on the number of the iPod. The research measured the 116 files `sinf` of the archive. The files give the numbers of 12 accounts. The account (account 1) has 31 games. The account (account 2) has 11 games. The accounts (account 3), (account 4) and (account 5) have 3, 2 and 2 games. The other 7 accounts have 1 game each. The atom `priv` of the file `sinf` holds 440 bytes of data. Each file has its own data. The data is the copy of the first part of the file `sinf`, encrypted with a key that comes from the device. The app can read the number of the account. The app cannot change it, because the file `sinf` has a signature. The app cannot know the number of the iPod for an iPod that never had the key. The app can only copy the file `IC-Info.sidb` from an iPod that has the key. Refer to [re/games.md](../re/games.md).
+The app cannot make the file `IC-Info.sidb`. The key of a game depends on the number of the account and on the number of the iPod. The research measured the 116 files `sinf` of the owner. The files give the numbers of 12 accounts. The biggest account has 31 games. The second account has 11 games. Four accounts have 3, 2, 2 and 2 games. The other 7 accounts have 1 game each. The atom `priv` of the file `sinf` holds 440 bytes of data. Each file has its own data. The data is the copy of the first part of the file `sinf`, encrypted with a key that comes from the device. The app can read the number of the account. The app cannot change it, because the file `sinf` has a signature. The app cannot know the number of the iPod for an iPod that never had the key. The app can only copy the file `IC-Info.sidb` from an iPod that has the key. Refer to [re/games.md](../re/games.md).
 
 The manifest of a game has an array `Files`. The array has 2,528 entries in the 56 games of the archive. Each entry has a `Path`, a `Size` and a `Digest`. The `Digest` has 40 hexadecimal characters. The digest is not the SHA-1 of the file. The osos has the constants of SHA-1 at 0xa7448 and the constants of MD5 at 0xedc18. The algorithm of the digest is not known yet. The `PlatformID` is 1 in all 56 games. It is 2 in 49 games, 3 in 49 games and 4 in 11 games.
 

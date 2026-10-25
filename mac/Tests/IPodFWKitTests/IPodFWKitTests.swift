@@ -2030,3 +2030,334 @@ final class FirmwareManifestTests: XCTestCase {
         XCTAssertEqual(Patcher.detect(osos: small, patches: all)["sleep-now"], .installed(version: nil))
     }
 }
+
+// The tests of the key store of the games. The tests use a small synthetic file
+// of keys. The tests do not use the file of a real iPod.
+final class GameKeysTests: XCTestCase {
+    static let keyA = Data([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+                            0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff])
+    static let keyB = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                            0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10])
+
+    static func words(_ values: [UInt32]) -> Data {
+        var d = Data()
+        for v in values { withUnsafeBytes(of: v.bigEndian) { d.append(contentsOf: $0) } }
+        return d
+    }
+
+    /// One record of the file iEKInfo. The length counts the length field, the name and the body.
+    static func record(_ tag: String, _ body: Data) -> Data {
+        var d = Data()
+        withUnsafeBytes(of: UInt32(8 + body.count).bigEndian) { d.append(contentsOf: $0) }
+        d.append(contentsOf: Array(tag.utf8))
+        d.append(body)
+        return d
+    }
+
+    /// One atom of a file sinf. The size counts the size field, the name and the body.
+    static func atom(_ tag: String, _ body: Data) -> Data {
+        record(tag, body)
+    }
+
+    static func keyRecord(_ index: UInt32, _ value: Data) -> Data {
+        record("key ", words([index, 1, 0]) + record("valu", words([1, 0, 0]) + value))
+    }
+
+    static func userRecord(_ number: UInt32, _ keys: [(UInt32, Data)]) -> Data {
+        var body = words([number, UInt32(keys.count), 0])
+        for (i, v) in keys { body += keyRecord(i, v) }
+        return record("user", body)
+    }
+
+    static func buildKeyStore(_ accounts: [(UInt32, [(UInt32, Data)])],
+                              guids: [Data] = []) -> Data {
+        var body = words([1, 0, 0]) + Data(repeating: 0, count: 20)
+        body += record("indx", words([1, 0, 0, 8]))
+        for (number, keys) in accounts { body += userRecord(number, keys) }
+        for guid in guids { body += record("guid", words([1, 0, 0]) + guid) }
+        let top = record("sean", body)
+        var data = Data()
+        withUnsafeBytes(of: UInt32(top.count).bigEndian) { data.append(contentsOf: $0) }
+        data += Data(repeating: 0, count: 0x48)
+        data += top
+        return data
+    }
+
+    func testReadsTheAccountsAndTheKeys() throws {
+        let data = Self.buildKeyStore([(0x11111111, [(1, Self.keyA), (4, Self.keyB)]),
+                                       (0x22222222, [(2, Self.keyA)])])
+        let store = try GameKeys.parseKeyStore(data)
+        XCTAssertEqual(store.accounts.count, 2)
+        XCTAssertEqual(store.accounts.map { $0.number }, [0x11111111, 0x22222222])
+        XCTAssertEqual(store.accounts[0].keys.count, 2)
+        XCTAssertEqual(store.keyCount, 3)
+        XCTAssertEqual(store.account(0x11111111)!.keys[1].value, Self.keyB)
+        XCTAssertEqual(store.key(0x11111111, 1)!.value, Self.keyA)
+        XCTAssertEqual(store.key(0x22222222, 2)!.value, Self.keyA)
+        XCTAssertNil(store.key(0x11111111, 99))
+        XCTAssertNil(store.account(1))
+    }
+
+    func testTheKeyIndexIsTheNumberOfTheKey() throws {
+        let data = Self.buildKeyStore([(0x11111111, [(1, Self.keyA), (4, Self.keyB)])])
+        let store = try GameKeys.parseKeyStore(data)
+        let account = store.account(0x11111111)!
+        XCTAssertEqual(account.key(1)!.value, Self.keyA)
+        XCTAssertEqual(account.key(4)!.value, Self.keyB)
+    }
+
+    func testAFileThatIsNotAKeyStoreIsRefused() {
+        XCTAssertThrowsError(try GameKeys.parseKeyStore(Data(repeating: 0, count: 200)))
+        XCTAssertThrowsError(try GameKeys.parseKeyStore(Data()))
+    }
+
+    func testAFileWithAWrongNameIsRefused() {
+        var data = Self.buildKeyStore([(1, [(1, Self.keyA)])])
+        data.replaceSubrange(0x50..<0x54, with: Array("xxxx".utf8))
+        XCTAssertThrowsError(try GameKeys.parseKeyStore(data))
+    }
+
+    func testTheDeviceIdsAreRead() throws {
+        // A synthetic device id. A real id holds the serial of the USB of the iPod.
+        let guid = Data([0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67])
+        let data = Self.buildKeyStore([(1, [(1, Self.keyA)])], guids: [guid])
+        let store = try GameKeys.parseKeyStore(data)
+        XCTAssertEqual(store.deviceIDs.count, 1)
+        XCTAssertEqual(store.deviceIDs[0], guid)
+    }
+
+    func testSinfAtoms() {
+        // The test uses synthetic values.
+        let inner = Self.atom("user", Self.words([0x11111111]))
+            + Self.atom("key ", Self.words([4]))
+            + Self.atom("iviv", Data([0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
+                                      0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10]))
+            + Self.atom("name", Data("Test Account".utf8) + Data(repeating: 0, count: 256 - 12))
+        let sinf = Self.atom("sinf", Self.atom("schi", inner))
+        let parsed = GameKeys.parseSinf(sinf)
+        XCTAssertEqual(be32(parsed["user"]!, 0), 0x11111111)
+        XCTAssertEqual(be32(parsed["key "]!, 0), 4)
+        XCTAssertEqual(parsed["iviv"]!.count, 16)
+        XCTAssertEqual(parsed["iviv"]![0], 0xfe)
+    }
+
+    func testTheGameGivesTheAccountAndTheKey() {
+        let inner = Self.atom("user", Self.words([0x11111111]))
+            + Self.atom("key ", Self.words([4]))
+            + Self.atom("iviv", Data(repeating: 0, count: 16))
+            + Self.atom("name", Data("Test Account".utf8) + Data(repeating: 0, count: 256 - 12))
+        let sinf = Self.atom("sinf", Self.atom("schi", inner))
+        let store = try! GameKeys.parseKeyStore(Self.buildKeyStore([(0x11111111, [(4, Self.keyB)])]))
+        let g = GameKeys.gameKeys(sinf, store)
+        XCTAssertEqual(g.number, 0x11111111)
+        XCTAssertEqual(g.keyIndex, 4)
+        XCTAssertEqual(g.name, "Test Account")
+        XCTAssertEqual(g.key!.value, Self.keyB)
+    }
+
+    func testAGameWithoutAKeyInTheStore() {
+        let inner = Self.atom("user", Self.words([0x11111111])) + Self.atom("key ", Self.words([9]))
+        let sinf = Self.atom("sinf", Self.atom("schi", inner))
+        let store = try! GameKeys.parseKeyStore(Self.buildKeyStore([(0x11111111, [(4, Self.keyB)])]))
+        let g = GameKeys.gameKeys(sinf, store)
+        XCTAssertNil(g.key)
+    }
+}
+
+
+// The test of the name of the folder of the games. The firmware asks for the name
+// games_RO with small letters. The program of iTunes writes the name Games_RO with a
+// capital letter.
+final class GameKeysDirectoryTests: XCTestCase {
+    func testAcceptsBothNames() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("iPodFirm-games-dir-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        XCTAssertNil(GameKeys.gamesDirectory(at: dir.path))
+
+        // The file system of macOS keeps no case by default. The test uses the name of the
+        // case that the file system keeps. The function must find the folder in both cases.
+        for name in ["games_RO", "Games_RO"] {
+            let games = dir.appendingPathComponent(name)
+            try FileManager.default.createDirectory(at: games, withIntermediateDirectories: true)
+            let found = GameKeys.gamesDirectory(at: dir.path)
+            XCTAssertNotNil(found, "The function must find the folder \(name).")
+            // The two names can be the same folder on a file system without case.
+            XCTAssertTrue(found!.lowercased().hasSuffix("games_ro"))
+            try FileManager.default.removeItem(at: games)
+        }
+    }
+}
+
+
+// The tests of the manifest of a game and of the copy of the games to an iPod.
+final class GameInstallerTests: XCTestCase {
+    static func manifestData(guid: String = "11002", name: String = "iQuiz",
+                              files: [[String: Any]]? = nil) -> Data {
+        let list: [[String: Any]] = files ?? [
+            ["Digest": String(repeating: "A", count: 40), "Path": "Fonts/Arial15Hira13Hybrid0.ipd", "Size": 19504],
+            ["Digest": String(repeating: "B", count: 40), "Path": "Fonts/Arial15Hira13Hybrid0.txt", "Size": 4779],
+        ]
+        let root: [String: Any] = [
+            "BuildIdentifier": "1446269457-ca6ac6febe09",
+            "Files": list,
+            "GUID": guid,
+            "Name": name,
+            "Platforms": [["BuildID": 2902110, "ExecutablePath": "Executables/TWA_1_1_2902110.bin",
+                           "LaunchingArtwork": "iQuiz.raw.lcd5", "PlatformID": 1, "PlatformVersion": 1,
+                           "Size": 463944]],
+            "SampleDataPath": "UserTrivia/Samples",
+            "UserDataPath": "UserTrivia/Packs",
+            "Version": "1.0",
+        ]
+        return try! PropertyListSerialization.data(fromPropertyList: root, format: .xml, options: 0)
+    }
+
+    /// Make a folder of a game with the files of the manifest.
+    static func makeGame(_ folder: URL, guid: String = "11002", name: String = "iQuiz",
+                         withFiles: Bool = true) throws -> URL {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try manifestData(guid: guid, name: name).write(to: folder.appendingPathComponent("Manifest.plist"))
+        try Data(repeating: 0x30, count: 3548).write(to: folder.appendingPathComponent("Manifest.plist.p7b"))
+        try Data("<plist></plist>".utf8).write(to: folder.appendingPathComponent("iTunesMetaData"))
+        let exe = folder.appendingPathComponent("Executables")
+        try FileManager.default.createDirectory(at: exe, withIntermediateDirectories: true)
+        try Data(repeating: 0, count: 463944).write(to: exe.appendingPathComponent("TWA_1_1_2902110.bin"))
+        if withFiles {
+            for (path, size) in [("Fonts/Arial15Hira13Hybrid0.ipd", 19504), ("Fonts/Arial15Hira13Hybrid0.txt", 4779)] {
+                let out = folder.appendingPathComponent(path)
+                try FileManager.default.createDirectory(at: out.deletingLastPathComponent(),
+                                                        withIntermediateDirectories: true)
+                try Data(repeating: 0, count: size).write(to: out)
+            }
+        }
+        let packs = folder.appendingPathComponent("UserTrivia/Packs")
+        try FileManager.default.createDirectory(at: packs, withIntermediateDirectories: true)
+        try Data("questions".utf8).write(to: packs.appendingPathComponent("sample1.txt"))
+        return folder
+    }
+
+    private func tempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("iPodFirm-games-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    func testReadsTheManifest() throws {
+        let m = try GameManifest.parse(Self.manifestData())
+        XCTAssertEqual(m.guid, "11002")
+        XCTAssertEqual(m.name, "iQuiz")
+        XCTAssertEqual(m.version, "1.0")
+        XCTAssertEqual(m.platformID, 1)
+        XCTAssertEqual(m.executable, "Executables/TWA_1_1_2902110.bin")
+        XCTAssertEqual(m.executableSize, 463944)
+        XCTAssertEqual(m.files.count, 2)
+        XCTAssertEqual(m.files[0].path, "Fonts/Arial15Hira13Hybrid0.ipd")
+        XCTAssertEqual(m.files[0].size, 19504)
+        XCTAssertEqual(m.totalSize, 19504 + 4779)
+    }
+
+    func testAFileThatIsNotAManifestIsRefused() {
+        XCTAssertThrowsError(try GameManifest.parse(Data("not a plist".utf8)))
+        XCTAssertThrowsError(try GameManifest.parse(try! PropertyListSerialization.data(
+            fromPropertyList: ["GUID": "1"], format: .xml, options: 0)))
+    }
+
+    func testReadsTheLibrary() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Self.makeGame(dir.appendingPathComponent("11002"), guid: "11002", name: "iQuiz")
+        try Self.makeGame(dir.appendingPathComponent("50514"), guid: "50514", name: "Royal Solitaire")
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent("not-a-game"),
+                                                withIntermediateDirectories: true)
+        let library = GameLibrary.load(dir.path)
+        XCTAssertEqual(library.map { $0.folder }, ["11002", "50514"])
+        XCTAssertEqual(library[0].name, "iQuiz")
+    }
+
+    func testTheCheckGivesTheProblems() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let game = try GameLibrary.loadGame(try Self.makeGame(dir.appendingPathComponent("11002")))
+        XCTAssertEqual(GameLibrary.check(game), [])
+        try Data(repeating: 0, count: 100).write(to: game.path.appendingPathComponent("Fonts/Arial15Hira13Hybrid0.txt"))
+        XCTAssertTrue(GameLibrary.check(game).contains { $0.contains("Arial15Hira13Hybrid0.txt") })
+    }
+
+    func testInstallsAGame() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = try Self.makeGame(dir.appendingPathComponent("source/11002"))
+        let game = try GameLibrary.loadGame(source)
+        let target = dir.appendingPathComponent("target")
+        let report = try GameInstaller.install(game, to: target)
+        XCTAssertEqual(report.installed, ["11002"])
+        let dest = target.appendingPathComponent("games_RO/11002")
+        XCTAssertEqual(try Data(contentsOf: dest.appendingPathComponent("Manifest.plist")),
+                       try Data(contentsOf: source.appendingPathComponent("Manifest.plist")))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.appendingPathComponent("Manifest.plist.p7b").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.appendingPathComponent("iTunesMetaData").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.appendingPathComponent("Executables/TWA_1_1_2902110.bin").path))
+        // The files that are not in the manifest are part of the game.
+        XCTAssertEqual(try Data(contentsOf: dest.appendingPathComponent("UserTrivia/Packs/sample1.txt")),
+                       Data("questions".utf8))
+    }
+
+    func testInstallsOnlyTheSelectedGames() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = dir.appendingPathComponent("source")
+        try Self.makeGame(source.appendingPathComponent("11002"), guid: "11002", name: "iQuiz")
+        try Self.makeGame(source.appendingPathComponent("50514"), guid: "50514", name: "Royal Solitaire")
+        let library = GameLibrary.load(source.path)
+        let wanted = library.filter { $0.folder == "11002" }
+        let target = dir.appendingPathComponent("target")
+        let report = GameInstaller.install(wanted, to: target)
+        XCTAssertEqual(report.installed, ["11002"])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: target.appendingPathComponent("games_RO").path).sorted(),
+                       ["11002"])
+    }
+
+    func testInstallSkipsAGameThatIsNotComplete() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = dir.appendingPathComponent("source")
+        try Self.makeGame(source.appendingPathComponent("11002"), guid: "11002", name: "iQuiz")
+        try Self.makeGame(source.appendingPathComponent("50514"), guid: "50514", name: "Royal Solitaire", withFiles: false)
+        let library = GameLibrary.load(source.path)
+        let report = GameInstaller.install(library, to: dir.appendingPathComponent("target"))
+        XCTAssertEqual(report.installed, ["11002"])
+        XCTAssertEqual(report.skipped, ["50514"])
+        XCTAssertFalse(report.warnings.isEmpty)
+    }
+
+    func testInstallCopiesTheKeyFile() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = try Self.makeGame(dir.appendingPathComponent("source/11002"))
+        let key = dir.appendingPathComponent("IC-Info.sidb")
+        try Data(repeating: 0x11, count: 23396).write(to: key)
+        let target = dir.appendingPathComponent("target")
+        let report = try GameInstaller.install(try GameLibrary.loadGame(source), to: target,
+                                               copyKeyFile: true, keyFileSource: key)
+        XCTAssertTrue(report.keyFileCopied)
+        XCTAssertEqual(try Data(contentsOf: target.appendingPathComponent("iTunes/IC-Info.sidb")),
+                       Data(repeating: 0x11, count: 23396))
+    }
+
+    func testInstallNeverRemovesAFile() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = try Self.makeGame(dir.appendingPathComponent("source/11002"))
+        let game = try GameLibrary.loadGame(source)
+        let target = dir.appendingPathComponent("target")
+        try GameInstaller.install(game, to: target)
+        let keep = target.appendingPathComponent("games_RO/11002/KeepMe.txt")
+        try Data("keep".utf8).write(to: keep)
+        try GameInstaller.install(game, to: target)
+        XCTAssertEqual(try Data(contentsOf: keep), Data("keep".utf8))
+    }
+}
+

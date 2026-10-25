@@ -50,7 +50,7 @@ The type names are byte-reversed:
 | `soso` | osos | RetailOS code and the UI resources, 7.2 MB. |
 | `crsr` | rsrc | A FAT16 file system at offset 0x600 with fonts (`/Resources/Fonts/*.ttf`) and the programs for the Broadcom BCM2722 video processor (`/Resources/VideoCore/`), 5.0 MB. |
 | `dpua` | aupd | The encrypted boot-flash updater, 1.0 MB. |
-| `ebih` | hibe | The hibernation image: a 0x800-byte header, then the RAM of the iPod (64 MB). Only an iPod partition has it. A firmware file does not. An iTunes restore removes the directory entry and leaves the old dump in the partition ([re/hibernation-restore.md](../re/hibernation-restore.md)). |
+| `ebih` | hibe | The hibernation image: a 0x800-byte header, then the RAM of the iPod (64 MB). Only an iPod partition has it. A firmware file does not. The start code of the iPod can remove the directory entry; the data of the image stays in the partition ([re/hibernation-restore.md](../re/hibernation-restore.md)). |
 | `kbso` | osbk | A backup of osos. Firmware 1.3 does not have it. |
 
 On firmware 1.3 the osos entry has devOffset 0x4800 and length 0x736000. rsrc starts 0x736800 bytes after osos. Thus the gap after osos is 2 KB.

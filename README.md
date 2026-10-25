@@ -218,7 +218,43 @@ CAUTION: The removal of the data of the app removes the backups of the iPod. Mak
 
 ## The iPod games
 
-The research of the games is in [re/games.md](re/games.md) and in the notes beside it. The note [re/games-vm.md](re/games-vm.md) gives the virtual machine of the community that installs the games on an iPod. The note [re/games-drm.md](re/games-drm.md) gives the check of the DRM in the firmware.
+The research of the games is in [re/games.md](re/games.md) and in the notes beside it. The note [re/games-vm.md](re/games-vm.md) gives the virtual machine of the community that installs the games on an iPod. The note [re/games-drm.md](re/games-drm.md) gives the check of the DRM in the firmware. The note [re/games-keyfile.md](re/games-keyfile.md) gives the format of the file `iEKInfo` of the keys and the result of the test of these keys against the program of a game.
+
+The app reads the file of the keys of the connected iPod. Open the **Games** pane. Click **Read the Keys**. The pane shows the accounts of the Apple ID, the number of their keys, and the games of the iPod with their account and their key.
+
+If the app does not see the iPod, or if you have a copy of the files of an iPod, click **Choose a Folder…**. Choose the folder `iPod_Control` of the iPod, or a copy of it. The app reads the same files from that folder. The app accepts the name `games_RO` and the name `Games_RO` for the folder of the games. Thus the app works with a Windows iPod and with a macOS iPod.
+
+To put the games on an iPod, open the section **Install Games** in the same pane. Click **Select Games Folder...** and choose the folder with the games. The pane shows each game with a switch. Click **Select All** or **Select None**, or click the switches of the games that you want. Then click **Install Games**. The app copies the selected games to the folder `games_RO` of the connected iPod. The app checks the size of each file of the manifest before the copy. The app skips a game that is not complete. The app never removes a file of the iPod.
+
+The app cannot make the file of the keys. The file comes from the server of Apple. The file works only on the iPod that made the purchases.
+
+## The firmware
+
+The note [re/retailos-decompile.md](re/retailos-decompile.md) gives the decompilation of the whole image `osos` of RetailOS 1.3. The research gives 14,411 functions. The research also gives the map of the strings. The map names 380 functions and puts each function into a group. The C code, the index of the functions and the map of the strings are in `~/Library/Application Support/iPodFirm/re/retailos-1.3-decompiled/`. The script [re/decompile-all.sh](re/decompile-all.sh) does the work again. The script [re/decompile-with-strings.sh](re/decompile-with-strings.sh) does the work with the map of the strings.
+
+The note [re/firmware-coverage.md](re/firmware-coverage.md) gives the index of all the research of the firmware. The note lists every part of the firmware and gives the state of the research for each part. The note also gives the limits of the names. The firmware is not fully reverse engineered. The research covers 7.3% of the functions of the code and 13.3% of the lines.
+
+The note [re/firmware-systems.md](re/firmware-systems.md) gives the systems and the sub-systems of the firmware. The note has the table of the 21 tasks of the firmware, the 49 names of the classes and the 222 tables of the classes.
+
+The note [re/firmware-task-system.md](re/firmware-task-system.md) gives the kernel of the firmware. The kernel is ThreadX, the real-time kernel of Azure RTOS of Microsoft. The note gives the base class of the tasks, the object of a task, the 9 classes of the priority and the scheduler.
+
+The note [re/firmware-camera.md](re/firmware-camera.md) gives the camera of the iPod Video. The iPod Video has no camera. The firmware has the code of the camera of the iPod Photo. The note gives the class drivers of the USB host stack, the task of the camera and the path of the import of the pictures.
+
+The note [re/firmware-usb.md](re/firmware-usb.md) gives the USB of the iPod Video. The note gives the 11 tasks, the mode manager, the stack of the device, the identity of the iPod and the protocol of the accessory.
+
+The note [re/firmware-ui.md](re/firmware-ui.md) gives the user interface of the iPod Video. The screens are not in the code. The screens are in the resources of the image. The note gives the resources, the 19 classes of the screens, the elements of a screen and the registry of the modules.
+
+The note [re/firmware-power.md](re/firmware-power.md) gives the power of the iPod Video. The note gives the 8 tasks, the registers of the power chip, the clock and the manager of the power.
+
+The note [re/firmware-media.md](re/firmware-media.md) gives the music and the video of the iPod Video. The note gives the 7 tasks, the caches, the video processor of Broadcom and the MP4 parser.
+
+The note [re/firmware-storage.md](re/firmware-storage.md) gives the storage of the iPod Video. The note gives the 7 tasks, the bus of the disk, the 4 file systems and the partitions.
+
+The note [re/firmware-filesystems.md](re/firmware-filesystems.md) gives the code of the file systems. The note gives the code of the FAT, the code of the HFS+, the table of the partitions and the 2 signatures of the volume.
+
+The note [re/firmware-modules.md](re/firmware-modules.md) gives the table of the modules of the screen. The note gives the 7 modules, the 418 methods and the layout of each record of the table.
+
+The note [re/firmware-library.md](re/firmware-library.md) gives the library of C of the compiler of Apple. The note gives the functions of the strings, the memory, the arithmetic, the floating point and the heap.
 
 ## Other iPod models
 
@@ -363,6 +399,8 @@ sudo .venv/bin/ipodfw restore backups/firmware-backup.bin --rescue --reference b
 | `repack FILE DIR -o OUT` | Puts the changes into a new file and calculates the checksum. |
 | `pack-ipsw IPSW FILE -o OUT` | Puts a changed firmware into a copy of an `.ipsw` file. |
 | `make-library -o DIR` | Makes a music library for tests in the emulator. |
+| `game-keys FOLDER [--games]` | Reads the file of the keys of the iPod in the folder `FOLDER`. The folder must have the shape of the folder `iPod_Control` of an iPod. It shows the accounts and the keys. `--games` also shows the key of each game. |
+| `install-games SOURCE TARGET [--game GUID] [--key-file FILE]` | Copies the games from the folder `SOURCE` to the folder `iPod_Control` of the iPod in the folder `TARGET`. It copies all the games. The option `--game` copies only this game; use the option more than once for more games. The option `--key-file` copies the file `IC-Info.sidb` to the target iPod. |
 | `import-theme THEME BASE TARGET -o OUT` | Makes an iPodFirm theme file from an iPodWizard theme. BASE is the Apple firmware of the theme. TARGET is the Apple firmware 1.3. |
 | `apply-theme FILE THEME -o OUT [--switch]` | Applies an iPodFirm theme file to a firmware image. It moves `rsrc` if necessary. `--switch` makes the light firmware with a "Dark Mode" item in Settings. |
 | `devices`, `backup`, `flash`, `restore` | Operate on the iPod. These commands need `sudo`. |

@@ -2,9 +2,7 @@
 
 This note describes how the iPod Video with RetailOS 1.3 finds and runs iPod
 Games. The research uses Ghidra 12.1.4 on the osos image of firmware 1.3. It
-uses the game files of the archive `iPod.Games.Files.7z` of the
-[iPod Clickwheel Games Preservation Project](https://github.com/Olsro/ipodclickwheelgamespreservationproject).
-The owner unpacked the archive in the folder `~/Downloads/iPod Games Files`.
+uses the game files of the owner in the folder `~/Downloads/iPod Games Files`.
 
 The goal is to add games to an iPod. The iPod cannot receive games from iTunes
 any more, because iTunes does not run on macOS. The iPodFirm app must copy the
@@ -43,14 +41,9 @@ function at 0x1006f588f makes the two paths of the files of the keys. The
 program uses the names of the folders of the games with a capital letter. The
 firmware uses the names with small letters.
 
-## The game files of the archive
+## The game files of the owner
 
-The game files come from the archive `iPod.Games.Files.7z` of the
-[iPod Clickwheel Games Preservation Project](https://github.com/Olsro/ipodclickwheelgamespreservationproject).
-The archive is public. The numbers of the accounts in the files `sinf` come
-from the archive. They are not the accounts of the owner.
-
-The archive has two folders with game files.
+The owner has two folders with game files.
 
 | Folder | Content | Size |
 |---|---|---|
@@ -61,7 +54,7 @@ The `PlatformID` and the `PlatformVersion` in the manifest select the iPod. The
 iPod Video accepts the games with the `PlatformID` 1 only. The games with the
 `PlatformID` 123 or 1234 do not run on the iPod Video.
 
-The games of the archive for the iPod Video are these.
+The games of the owner for the iPod Video are these.
 
 | Folder | Name | Size | Executable |
 |---|---|---|---|
@@ -150,16 +143,16 @@ of each atom. The size includes the 8 bytes of the header of the atom.
 |---|---|---|
 | `sinf` | 1032 | The whole file. |
 | `frma` | 12 | The name of the program. It is `game` in 73 of the 116 files. It is 4 zero bytes in the other 43 files. |
-| `schm` | 20 | The scheme `itun`. All 116 files of the archive have this scheme. |
+| `schm` | 20 | The scheme `itun`. All 116 files of the owner have this scheme. |
 | `schi` | 856 | The child atoms. |
-| `user` | 12 | The user ID. It is (account 1) in all 7 games of the iPod Video. |
+| `user` | 12 | The user ID. The number is the same in all 7 games of the iPod Video. |
 | `key ` | 12 | The size of the key. It is 4 in all the files. |
 | `iviv` | 24 | The initialisation vector. It is the same in all 7 games of the iPod Video. |
 | `righ` | 80 | The rights of the game. It holds the fields `veID`, `plat`, `aver`, `tran` and `medi`. |
-| `name` | 264 | The name of the game. It is `Name A` in the game `11002`. |
+| `name` | 264 | The name of the buyer of the game. The name of the game `11002` is private and is not in this note. |
 | `priv` | 448 | The data of the key. It is 440 bytes of data. |
 
-The user ID is the same in all 7 games of the archive. The initialisation vector
+The user ID is the same in all 7 games of the owner. The initialisation vector
 is the same in all 7 games. The key is not in the `sinf` file. The key is in
 the file `IC-Info.sidb` of the iPod.
 
@@ -350,7 +343,7 @@ the bit of a menu item. The bit for the games is not known yet.
 
 ## The test in the emulator
 
-The test used the emulator of the project. The games of the archive were copied
+The test used the emulator of the project. The games of the owner were copied
 to the folder `iPod_Control/Games_RO` of the volume of the emulator. The
 volume is FAT32.
 
@@ -374,7 +367,7 @@ gave the same result for the two names. The details are in
 
 The machine of the owner has no file `IC-Info.sidb`. The key of the DRM is
 therefore not present in the test. The real iPod of the owner also has no
-file `IC-Info.sidb`. The game of the archive shows the message "This game cannot
+file `IC-Info.sidb`. The game of the owner shows the message "This game cannot
 be played." The step of the key is the only step that fails.
 
 ## The DRM of iTunes on Windows
@@ -434,7 +427,7 @@ iPod.
 The research gives two parts.
 
 1. The account. The atom `user` of the file `sinf` holds the number of the
-   account. The number is the same in all 7 games of the archive: (account 1).
+   account. The number is the same in all 7 games of the owner.
    The file `sinf` of the game `1C300` has these atoms.
 
    | Atom | Size | Content |
@@ -443,7 +436,7 @@ The research gives two parts.
    | `frma` | 12 | The name of the program. |
    | `schm` | 20 | The scheme `itun`. |
    | `schi` | 856 | The child atoms. |
-   | `user` | 12 | The number of the account: (account 1). |
+   | `user` | 12 | The number of the account. The research does not publish the number. |
    | `key ` | 12 | The size of the key. |
    | `iviv` | 24 | The vector of AES. It is the same in all 7 games. |
    | `righ` | 80 | The rights of the game. |
@@ -733,17 +726,16 @@ The research gives the reason in three parts.
 #### The key depends on the number of the account
 
 The atom `user` of the file `sinf` holds the number of the account. The
-research measured the 116 files of the archive. The files give the numbers of 12
+research measured the 116 files of the owner. The files give the numbers of 12
 accounts.
 
 | The number of the account | The number of the games |
 |---|---|
-| (account 1) | 31 |
-| (account 2) | 11 |
-| (account 3) | 3 |
-| (account 4) | 2 |
-| (account 5) | 2 |
-| (account 6), (account 7), (account 8), (account 9), (account 10), (account 11), (account 12) | 1 each |
+| The biggest account | 31 |
+| The second account | 11 |
+| Two accounts | 3 |
+| Two accounts | 2 |
+| Seven accounts | 1 each |
 
 The games of one account have the same number. The games of different
 accounts have different numbers. The number is the number of the account of the
@@ -834,7 +826,7 @@ the keys of an iPod that has the key.
 
 > The app must not ship the code of Apple. The app must not copy the program
 > of Apple. The app must copy the file of the keys of the iPod, and it must
-> copy the game files of the user.
+> copy the game files of the owner.
 
 The research of the 8 functions of the library `CoreFP.framework` is not
 needed for the app. The app copies the file. The research is only for the

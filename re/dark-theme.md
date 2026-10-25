@@ -69,7 +69,7 @@ The background has only grey pixels. The import stores it as a 4-bit grey pictur
 
 The OS finds `rsrc` through the directory. The theme dump from an iPod and the emulator tests show this. Rockbox `ipodpatcher` also moves images on the disk to make room.
 
-- In an iPod partition, `rsrc` moves to the first all-zero area at or after the last image. The 192 MB partition of the test iPod has 32 MB of zeros at 0x4d44000. After that there is old data (a FAT boot sector at 0x6db2400). `make_room` writes only into an area that is all zero. An iTunes restore can leave old data right after the last image (a stale hibernation dump); the move then goes past it. Refer to [hibernation-restore.md](hibernation-restore.md).
+- In an iPod partition, `rsrc` moves to the first all-zero area at or after the last image. The 192 MB partition of the test iPod has 32 MB of zeros at 0x4d44000. After that there is old data (a FAT boot sector at 0x6db2400). `make_room` writes only into an area that is all zero. Without the entry of `hibe`, the hibernation area is data right after the last image; the move then goes past it. Refer to [hibernation-restore.md](hibernation-restore.md).
 - In a firmware file, `rsrc` and `aupd` move forward together. The content does not change. This keeps the file below 16 MB, which is the limit of the emulator's `make-disk`.
 - On the iPod, `aupd` never moves. The flash puts the osos and `rsrc` of a file into the iPod's layout (`fit_layout`). When the file and the iPod differ in the hibe image, the result follows the iPod.
 

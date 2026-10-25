@@ -1069,7 +1069,7 @@ The new Settings menu is a copy of the Apple menu with one more item after Click
 
 **Change.** `FirmwarePartition.makeRoom` in [Partition.swift](../mac/Sources/IPodFWKit/Partition.swift) does this:
 
-- **iPod partition** (it has free space after the last image): copy rsrc to the first all-zero area that fits it, at or after the last image, aligned to 0x800. aupd and hibe do not move. An iTunes restore can leave old data in this space (a stale hibernation dump); refer to [../re/hibernation-restore.md](../re/hibernation-restore.md). The move does not write into old data. When the partition has no all-zero area for rsrc, the move stops with an error.
+- **iPod partition** (it has free space after the last image): copy rsrc to the first all-zero area that fits it, at or after the last image, aligned to 0x800. aupd and hibe do not move. The start code of the iPod can remove the `hibe` entry; the hibernation area then stays in this space as data without a directory entry. Refer to [../re/hibernation-restore.md](../re/hibernation-restore.md). The move does not write into old data. When the partition has no all-zero area for rsrc, the move stops with an error.
 - **Firmware file** (no free space): move rsrc and all images after it forward by the same aligned value. The file becomes longer.
 
 Then the function writes the new devOffset into the rsrc directory entry. The content of rsrc does not change.
