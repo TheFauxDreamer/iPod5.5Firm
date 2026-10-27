@@ -22,6 +22,10 @@
  *    ArtworkDB and of the album names. A sync that changes them makes the file not valid.
  *  - The optional thumbnail file iPod_Control\iTunes\iPodFirmAlbumArt, which iPodFirm writes.
  *    It has the playlists, and the albums that iPodFirm found.
+ *  - A playlist that is not in that file gets a collage (version 3.0): the first 4 different
+ *    albums of the playlist that have a thumbnail, in a 2 x 2 square, as iPodFirm makes it. With
+ *    1 to 3 albums, the first thumbnail alone. The patch finds the playlist by the hash of its
+ *    name in the list at db + 0x2c (re/playlist-art.md). On-The-Go also gets a collage.
  * The order for an album (version 2.9): the file of iPodFirm, then a valid cache, then the
  * artwork. Thus the file that the owner wrote comes first, and the patch fills the gaps. The
  * cache always has all albums with artwork, thus it is complete also without the file.
@@ -126,6 +130,17 @@ void view_invalidate(void *view);
 #define TRACK_NEXT     4
 #define TRACK_ALBUM    0x34
 #define TRACK_DBID     0x108
+/* The playlists (re/playlist-art.md). */
+#define DB_PLAYLIST_FIRST 0x2c            /* the first playlist; playlist + 0x00 is the next one */
+#define PL_ROOT        0x28               /* the root node of the items */
+#define PL_NAME_POOL   0xb4               /* the name pool in the playlist object */
+#define PL_NAME_INDEX  0xe0               /* the pool index of the name */
+#define NODE_FIRST     0x20               /* root or group: the first child */
+#define NODE_COUNT     0x32               /* root: u16 count of items */
+#define ITEM_NEXT      0x08
+#define ITEM_TRACK     0x20
+#define COLLAGE_SLOTS  16
+#define WALK_MAX       4000               /* the most items that one walk reads */
 #define NAME_BYTES     512                /* UTF-16 bytes of an album name that the patch reads */
 
 /* The artwork. */
@@ -151,6 +166,18 @@ static unsigned cache_stamp;              /* the stamp of the artwork and the al
 static unsigned cache_count;
 static Entry *cache_index;                /* sorted by hash; offset = the index of the thumbnail */
 static unsigned short *cache_px;          /* cache_count thumbnails of TH x TH */
+
+/* The collages of the playlists (version 3.0). A slot keeps the hash of the playlist name, the
+ * playlist, its item count when the collage was made, and the collage. */
+typedef struct {
+    unsigned hash;                        /* 0: the slot is empty */
+    char *playlist;                       /* 0: no playlist with this name */
+    unsigned count;
+    int state;                            /* 1: px is the collage, -1: no album thumbnail */
+    unsigned short px[TH * TH];
+} Collage;
+static Collage *collages;                 /* COLLAGE_SLOTS slots, or 0 */
+static unsigned collage_next;
 
 /* The open F1028_N.ithmb file (refer to the comment at the top). */
 #define ART_CLOSE_US   30000000           /* close the file 30 s after the last read */
@@ -235,14 +262,15 @@ enum {
     T_BLIT, T_RUNS,
     T_ART_OPEN,                           /* an open of F1028_N.ithmb (version 2.8) */
     T_CACHE_LOAD, T_CACHE_WRITE,          /* the cache file (version 2.8) */
+    T_COLLAGE,                            /* a playlist collage: find, walk and make (version 3.0) */
     T_COUNT
 };
 typedef struct { unsigned count, total_us, max_us; } Timer;
 static struct {
-    unsigned magic, version, record, time_us;     /* "AAST", 5, the record number, USEC_TIMER */
+    unsigned magic, version, record, time_us;     /* "AAST", 6, the record number, USEC_TIMER */
     Timer t[T_COUNT];
     unsigned art_hits, art_failed, file_all_hits, file_cache_hits, db_loaded_calls;
-    unsigned cache_hits, art_closes;
+    unsigned cache_hits, art_closes, collage_hits;
     unsigned alloc_failed;                        /* a bit for each allocation that failed */
     unsigned art_state, art_count, art_slots;
     unsigned file_state, file_count, file_size, file_all, file_cache;
@@ -509,13 +537,13 @@ COLD static unsigned fnv_byte(unsigned h, unsigned b)
     return (h ^ (b & 0xff)) * FNV_PRIME;
 }
 
-/* The FNV-1a hash of the UTF-8 form of an album name in the pool, as the label text gives it.
+/* The FNV-1a hash (from `h`) of the UTF-8 form of a name in a pool, as the label text gives it.
  * Returns 0 for an empty name. */
-COLD static unsigned album_hash(char *db, int pool_index, unsigned short *name)
+COLD static unsigned pool_hash(void *pool, int pool_index, unsigned h, unsigned short *name)
 {
-    unsigned h = FNV_BASIS, c;
+    unsigned c;
     int length = 0, n, k;
-    pool_copy(db + DB_ALBUM_POOL, pool_index, name, &length, NAME_BYTES);
+    pool_copy(pool, pool_index, name, &length, NAME_BYTES);
     n = length >> 1;
     if (n <= 0)
         return 0;
@@ -542,6 +570,12 @@ COLD static unsigned album_hash(char *db, int pool_index, unsigned short *name)
         }
     }
     return h;
+}
+
+/* The hash of an album name in the album pool of the database. */
+COLD static unsigned album_hash(char *db, int pool_index, unsigned short *name)
+{
+    return pool_hash(db + DB_ALBUM_POOL, pool_index, FNV_BASIS, name);
 }
 
 COLD static void free_album_hashes(void)
@@ -602,10 +636,21 @@ COLD static void make_album_hashes(void)
 COLD static void albums_ready(void)
 {
     char *library = PROVIDER ? lib_resolve(*(void **)(PROVIDER + PROVIDER_LIBRARY)) : 0;
-    if (albums_state == 0 || (albums_state == 1 && library &&
-                              (*(int **)(library + LIBRARY_ALBUMS) != album_rows ||
-                               *(unsigned *)(library + LIBRARY_ALBUM_COUNT) != album_count)))
+    /* The library makes its album list when the Albums list opens the first time. Thus try
+       again after a failure (-1) when the list exists (emulator, 27 October 2026). */
+    if (albums_state == 0 ||
+        (albums_state == -1 && library && *(int **)(library + LIBRARY_ALBUMS)) ||
+        (albums_state == 1 && library &&
+         (*(int **)(library + LIBRARY_ALBUMS) != album_rows ||
+          *(unsigned *)(library + LIBRARY_ALBUM_COUNT) != album_count)))
         make_album_hashes();
+}
+
+/* The music database, or 0. */
+COLD static char *music_db(void)
+{
+    char *library = PROVIDER ? lib_resolve(*(void **)(PROVIDER + PROVIDER_LIBRARY)) : 0;
+    return library ? *(char **)(library + LIBRARY_DB) : 0;
 }
 
 /* The tracks sorted by dbid, with the hash of their album (only while the table is made). */
@@ -932,25 +977,49 @@ COLD static int prefill_one(void)
 /* ---------- the cache file ---------- */
 
 /* The stamp of the cache: the FNV-1a hash of the first STAMP_BYTES of ArtworkDB (the mhfd header
- * has the length of the file and the next image ID) and of the sorted album hashes. Thus a sync
- * that changes the artwork or the albums gives a different stamp. Returns 0 if it is not known. */
-COLD static unsigned art_stamp(void)
+ * has the length of the file and the next image ID) and of the album names of all tracks (the
+ * album pool db + DB_ALBUM_POOL). Thus a sync that changes the artwork or the albums gives a
+ * different stamp. Version 3.0: the album pool exists from the start. Version 2.9 used the album
+ * list of the library, which exists only after the first open of the Albums list. The pool has
+ * + 0x08: a handle of the entries {offset, length}, + 0x10: a handle of the UTF-16 data,
+ * + 0x14: the count of entries; a free entry has bit 31 set in its offset (0x88a00).
+ * Returns 0 if the stamp is not known; *later is 1 if the database is not ready yet. */
+COLD static unsigned art_stamp(int *later)
 {
-    unsigned fh[0x30 / 4], i, k, h = FNV_BASIS;
+    unsigned fh[0x30 / 4], i, k, h = FNV_BASIS, slots;
     unsigned char b[STAMP_BYTES];
+    char *db = music_db(), *pool;
+    const unsigned *entries;
+    const unsigned char *data;
     int err;
-    albums_ready();
-    if (albums_state != 1 || open_path(fh, ART_DB_PATH, 0) != 0)
+    *later = 1;
+    if (!db)
+        return 0;
+    pool = db + DB_ALBUM_POOL;
+    if (!*(void **)(pool + 8) || !*(void **)(pool + 0x10))
+        return 0;
+    entries = **(const unsigned ***)(pool + 8);
+    data = **(const unsigned char ***)(pool + 0x10);
+    slots = *(unsigned *)(pool + 0x14);
+    if (!entries || !data || slots == 0)
+        return 0;
+    *later = 0;
+    if (slots > 0x40000 || open_path(fh, ART_DB_PATH, 0) != 0)
         return 0;
     err = read_at(fh, 0, b, STAMP_BYTES);
     file_close(fh);
     if (err != 0 || get32(b) != TAG('m', 'h', 'f', 'd'))
         return 0;
     for (i = 0; i < STAMP_BYTES; i++)
-        h = fnv_byte(h, b[i]);
-    for (i = 0; i < album_count; i++)
-        for (k = 0; k < 32; k += 8)
-            h = fnv_byte(h, album_hashes[i] >> k);
+        h = (h ^ b[i]) * FNV_PRIME;
+    for (i = 0; i < slots; i++) {
+        unsigned off = entries[2 * i], len = entries[2 * i + 1];
+        if ((off & 0x80000000u) || len > NAME_BYTES)
+            continue;
+        h = (h ^ len) * FNV_PRIME;
+        for (k = 0; k < len; k++)
+            h = (h ^ data[off + k]) * FNV_PRIME;
+    }
     return h ? h : 1;
 }
 
@@ -969,9 +1038,12 @@ COLD static void free_cache(void)
 COLD static void cache_load(void)
 {
     unsigned fh[0x30 / 4], header[4], n, t0 = STAT_NOW();
+    int later;
     free_cache();
     cache_state = -1;
-    cache_stamp = art_stamp();
+    cache_stamp = art_stamp(&later);
+    if (!cache_stamp && later)
+        cache_state = 0;                  /* the database is not ready: try again later */
     if (!cache_stamp || open_path(fh, CACHE_PATH, 0) != 0) {
         STAT_ADD(T_CACHE_LOAD, t0);
         return;
@@ -1247,7 +1319,7 @@ COLD static void write_stats(void)
     unsigned path[0x108 / 4], fh[0x30 / 4], len = sizeof stats, offset;
     int err;
     stats.magic = 0x54534141u;            /* "AAST" */
-    stats.version = 5;                    /* 5: with the cache and the open file (version 2.8) */
+    stats.version = 6;                    /* 6: with the playlist collages (version 3.0) */
     stats.time_us = USEC_TIMER;
     stats.art_state = (unsigned)art_state;
     stats.art_count = art_count;
@@ -1303,6 +1375,211 @@ COLD static int view_slot(void *view, int make)
     return empty;
 }
 
+/* ---------- the playlist collages (version 3.0, re/playlist-art.md) ---------- */
+
+static char *collage_db;                  /* the database of the collages in `collages` */
+
+COLD static void free_collages(void)
+{
+    fw_free(collages);
+    collages = 0;
+    collage_next = 0;
+    collage_db = 0;
+}
+
+/* The item count of a playlist (root + NODE_COUNT). */
+COLD static unsigned playlist_count(char *pl)
+{
+    char *root = *(char **)(pl + PL_ROOT);
+    return root ? *(unsigned short *)(root + NODE_COUNT) : 0;
+}
+
+/* The playlist whose name has the hash `h` (the hash of a playlist row), or 0. The list at
+ * db + DB_PLAYLIST_FIRST also has On-The-Go and the hidden playlists. */
+COLD static char *find_playlist(char *db, unsigned h, unsigned short *name)
+{
+    char *pl = *(char **)(db + DB_PLAYLIST_FIRST);
+    int k, index;
+    for (k = 0; pl && k < 1000; k++, pl = *(char **)pl) {
+        index = *(int *)(pl + PL_NAME_INDEX);
+        if (index > 0 && pool_hash(pl + PL_NAME_POOL, index, PLAYLIST_BASIS, name) == h)
+            return pl;
+    }
+    return 0;
+}
+
+/* The TH x TH thumbnail of an album, in the order of the album rows: the file of iPodFirm, the
+ * cache, then the artwork. Without `disk`, a thumbnail that needs the disk sets *need. */
+COLD static const unsigned short *album_px(unsigned h, int disk, int *need)
+{
+    const Entry *e;
+    const unsigned short *p;
+    int n;
+    if ((e = find(h)) != 0 && size == TH) {
+        if (!disk && !file_in_memory(e)) {
+            *need = 1;
+            return 0;
+        }
+        if ((p = pixels(e)) != 0)
+            return p;
+    }
+    if ((p = cache_find(h)) != 0)
+        return p;
+    if (cache_state == 1)
+        return 0;                         /* a valid cache has each album with artwork */
+    if (art_state == 0) {
+        if (!disk) {
+            *need = 1;
+            return 0;
+        }
+        build_art();
+    }
+    if ((n = art_find(h)) < 0 || art[n].slot == FAILED)
+        return 0;
+    if (art[n].slot < art_slots)
+        return art_pixels + art[n].slot * TH * TH;
+    if (!disk) {
+        *need = 1;
+        return 0;
+    }
+    return art_thumb(n);
+}
+
+/* The average of 4 RGB565 pixels, rounded. The channels are spread apart in one word. */
+static unsigned short avg4(unsigned a, unsigned b, unsigned c, unsigned d)
+{
+    unsigned s = ((a | a << 16) & 0x07e0f81fu) + ((b | b << 16) & 0x07e0f81fu) +
+                 ((c | c << 16) & 0x07e0f81fu) + ((d | d << 16) & 0x07e0f81fu) + 0x00401002u;
+    s = (s >> 2) & 0x07e0f81fu;
+    return (unsigned short)(s | s >> 16);
+}
+
+/* Makes the collage of a playlist in `dst`, as iPodFirm does (MusicImport.playlistArt): the first
+ * 4 different albums that have a thumbnail, in the playlist order, in a 2 x 2 square. With 1 to 3
+ * albums, the first thumbnail alone. Returns 1 if made, 0 if no album has a thumbnail, and -1 if
+ * a thumbnail needs the disk and `disk` is 0. A podcast playlist has groups: a child of the root
+ * can be a group (its first child has the playlist at + 0x00, a track has the db there). */
+COLD static int make_collage(char *db, char *pl, unsigned short *dst, int disk, unsigned short *name)
+{
+    const unsigned short *px[4];
+    unsigned albums[4];
+    int found = 0, steps = 0, need = 0, i, k, x, y;
+    char *root = *(char **)(pl + PL_ROOT), *item, *group = 0;
+
+    if (cache_state == 0) {
+        if (!disk)
+            return -1;
+        cache_load();
+    }
+    item = root ? *(char **)(root + NODE_FIRST) : 0;
+    while (item && found < 4 && steps++ < WALK_MAX) {
+        char *track = *(char **)(item + ITEM_TRACK);
+        if (track && *(char **)track != db) {
+            if (!group && *(char **)track == pl) {
+                group = item;             /* go into the group */
+                item = track;
+                continue;
+            }
+            track = 0;
+        }
+        if (track) {
+            /* Compare the hashes, not the pool indexes: two tracks of one album can have
+               different indexes (emulator, 27 October 2026). */
+            unsigned h = album_hash(db, *(int *)(track + TRACK_ALBUM), name);
+            for (i = 0; i < found && albums[i] != h; i++)
+                ;
+            if (h && i == found) {
+                const unsigned short *p = album_px(h, disk, &need);
+                if (need)
+                    return -1;
+                if (p) {
+                    albums[found] = h;
+                    px[found++] = p;
+                }
+            }
+        }
+        item = *(char **)(item + ITEM_NEXT);
+        if (!item && group) {             /* the end of a group: the next child of the root */
+            item = *(char **)(group + ITEM_NEXT);
+            group = 0;
+        }
+    }
+    if (found == 0)
+        return 0;
+    if (found < 4) {
+        for (k = 0; k < TH * TH; k++)
+            dst[k] = px[0][k];
+        return 1;
+    }
+    for (k = 0; k < 4; k++) {             /* 1 2 in the top row, 3 4 in the bottom row */
+        unsigned short *d = dst + (k >> 1) * (TH / 2) * TH + (k & 1) * (TH / 2);
+        for (y = 0; y < TH / 2; y++)
+            for (x = 0; x < TH / 2; x++) {
+                const unsigned short *p = px[k] + 2 * y * TH + 2 * x;
+                d[y * TH + x] = avg4(p[0], p[1], p[TH], p[TH + 1]);
+            }
+    }
+    return 1;
+}
+
+/* The collage of the playlist row with the hash `h`, or 0. The collage is made at the first draw
+ * of the row, and again when the item count of the playlist changes (On-The-Go, a live smart
+ * playlist). While the wheel moves, a collage that needs the disk waits (*wait). */
+COLD static const unsigned short *playlist_collage(unsigned h, int busy, int *wait)
+{
+    Collage *c = 0;
+    char *db = music_db();
+    unsigned short *name;
+    unsigned t0;
+    int i, r;
+
+    if (!db)
+        return 0;
+    if (collages && collage_db != db)
+        free_collages();                  /* a new database */
+    if (!collages) {
+        collages = alloc(COLLAGE_SLOTS * sizeof(Collage), 65536);
+        if (!collages)
+            return 0;
+        fw_memset0(collages, COLLAGE_SLOTS * sizeof(Collage));
+        collage_db = db;
+    }
+    for (i = 0; i < COLLAGE_SLOTS; i++)
+        if (collages[i].hash == h) {
+            c = &collages[i];
+            break;
+        }
+    if (c && (!c->playlist || playlist_count(c->playlist) == c->count)) {
+        if (c->state != 1)
+            return 0;
+        STAT_COUNT(collage_hits);
+        return c->px;
+    }
+    t0 = STAT_NOW();
+    if (!(name = alloc(NAME_BYTES, 1024)))
+        return 0;
+    if (!c) {
+        c = &collages[collage_next];
+        collage_next = (collage_next + 1) & (COLLAGE_SLOTS - 1);
+        c->hash = h;
+        c->playlist = find_playlist(db, h, name);
+    }
+    r = 0;
+    if (c->playlist) {
+        c->count = playlist_count(c->playlist);
+        r = make_collage(db, c->playlist, c->px, !busy, name);
+    }
+    fw_free(name);
+    if (r < 0) {
+        c->hash = 0;                      /* make it after the movement */
+        *wait = 1;
+        return 0;
+    }
+    c->state = r ? 1 : -1;
+    STAT_ADD(T_COLLAGE, t0);
+    return r ? c->px : 0;
+}
+
 COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *text, void *a3)
 {
     Rect r;
@@ -1325,6 +1602,7 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
         db_loaded = 0;
         free_art();
         free_cache();
+        free_collages();
         cache_written = 0;
         free_album_hashes();
         if (state == 1)
@@ -1369,6 +1647,11 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
             wait = 1;
         else
             px = pixels(e);
+    }
+    /* A playlist that is not in the file gets the collage of its albums (version 3.0). */
+    if (h && !px && !wait && id == PLAYLIST_NAME_ID) {
+        if ((px = playlist_collage(h, busy, &wait)) != 0 || wait)
+            ts = TH;
     }
     /* A valid cache has each album with artwork. Then an album that is not in it has no artwork,
        and the patch does not make the album table. */
