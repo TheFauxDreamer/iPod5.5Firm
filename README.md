@@ -90,7 +90,7 @@ The table shows the status that the test notes record. For the full test record,
 
 | Patch | Letter | Function | Tested on a real iPod |
 |---|---|---|---|
-| Album Artwork | a | Shows a small album cover at the left of each album and each playlist in the lists. | Yes (version 2.6) |
+| Album Artwork | a | Shows a small album cover at the left of each album and each playlist in the lists. | Yes (version 2.8). Version 2.9: not tested |
 | Album Artists | l | Adds an Album Artists item to the Music menu. All the songs of a compilation are under one entry. You can also put the item in the main menu. | Yes (version 1.1) |
 | Cover Flow | c | Hold Select in the Albums list to see the album covers in 3D. This is a new version for the iPod Video, not the Apple version from the iPod Classic. It replaces "hold Select to add an album to On-The-Go". With Up Next, Settings > Hold Select decides if the hold opens Cover Flow. | Yes (version 0.6.2) |
 | 60-Second Backlight | b | The Backlight Timer menu has 60 Seconds in place of 2 Seconds. | No |
@@ -115,7 +115,7 @@ CAUTION: Do not try to put more data in the firmware than the space allows. If t
 
 ### Album Artwork
 
-The albums use the artwork that Finder or iTunes put on the iPod. The playlists need a thumbnail file:
+The albums use the artwork that Finder or iTunes put on the iPod. After a sync, the iPod makes the album pictures one time and keeps them in a file. You do not have to do a step for the albums. The playlists need a thumbnail file:
 
 1. In the **Patches** pane, select "Album Artwork".
 2. Click **Write Thumbnails to iPod**.

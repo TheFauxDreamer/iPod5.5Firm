@@ -10,20 +10,30 @@
  * the right, calls the original method, and draws the thumbnail. A song title has a different
  * element ID, thus a song with the name of an album gets no thumbnail.
  *
- * The thumbnails come from two sources:
+ * The thumbnails come from three sources:
  *  - Albums: the artwork that iTunes or Finder put on the iPod. iPod_Control\Artwork\ArtworkDB
  *    links each image (mhii) to the dbid of a track (track + 0x108). The patch reads the 100 x 100
  *    image (format 1028, RGB565) from F1028_N.ithmb and makes a 20 x 20 thumbnail with a 5 x 5
  *    average. The table of the albums is made at the first album row that needs the artwork after
  *    a database load.
- *  - Playlists, and albums without artwork on the iPod: the optional thumbnail file
- *    iPod_Control\iTunes\iPodFirmAlbumArt, which iPodFirm writes.
- * The option "source" (patch.json) sets the order for an album. SOURCE_ARTWORK: the artwork
- * first, then the file. SOURCE_FILE: the file first, then the artwork. The file is in memory, so
- * SOURCE_FILE reads the disk only for an album that is not in the file. iPodFirm writes the value
- * into option_source when it applies the patch.
+ *  - The cache: when each album with artwork has a thumbnail in memory, the patch writes all of
+ *    them to iPod_Control\iTunes\iPodFirmAlbumCache. At the next start, the patch reads this file
+ *    into memory and does not read the artwork. The stamp of the file is a hash of the start of
+ *    ArtworkDB and of the album names. A sync that changes them makes the file not valid.
+ *  - The optional thumbnail file iPod_Control\iTunes\iPodFirmAlbumArt, which iPodFirm writes.
+ *    It has the playlists, and the albums that iPodFirm found.
+ * The order for an album (version 2.9): the file of iPodFirm, then a valid cache, then the
+ * artwork. Thus the file that the owner wrote comes first, and the patch fills the gaps. The
+ * cache always has all albums with artwork, thus it is complete also without the file.
  * The hash of a playlist name starts with the byte 0x01, thus a playlist and an album with the
  * same name have different thumbnails.
+ *
+ * The open of F1028_N.ithmb is slow if the file is large (one image for each track: 104 MB for
+ * 5201 tracks). Thus the patch keeps the file open while it reads covers. It closes the file when
+ * the background fill has no more work, and 30 s after the last read (an open takes 0.93 s on the
+ * real iPod; version 2.8 closed after 2 s and opened 8 times in one fill). The firmware also keeps its
+ * own ArtworkDB handle open during a USB session and closes it after (0xb4fe4 calls 0x91164).
+ * Thus after a USB session the patch closes its old handle first.
  *
  * A thumbnail draws with one call of the firmware blit 0x210114. The source of the blit is a
  * graphics context with a bitmap around the thumbnail pixels. The firmware clips the blit and
@@ -39,12 +49,13 @@
  * label, the patch makes the album table again and reads the header of the file again. If the
  * header changed, it loads the file again. If there was no file, it tries to load the file.
  *
- * Thumbnail file (written by iPodFirm), all values little-endian:
+ * Thumbnail file (written by iPodFirm) and cache file (written by the patch), all values
+ * little-endian:
  *   0x00  "IFAT"
  *   0x04  u16 version (1), u16 thumbnail size S (pixels, square)
  *   0x08  u32 count N
- *   0x0C  u32 stamp: FNV-1a hash of all the bytes after the header. It changes when the albums
- *         or the thumbnails change.
+ *   0x0C  u32 stamp. Thumbnail file: FNV-1a hash of all the bytes after the header. It changes
+ *         when the albums or the thumbnails change. Cache file: refer to art_stamp().
  *   0x10  N entries { u32 FNV-1a hash of the UTF-8 album name (or of 0x01 and the playlist
  *         name), u32 file offset of the pixels }, sorted by hash
  *   then  N thumbnails of S*S RGB565 pixels, row by row
@@ -99,8 +110,6 @@ void view_invalidate(void *view);
 #define VIEW_ELEMENT_ID 0x1c              /* u16: the layout element of a view, also its data property */
 #define ALBUM_NAME_ID   0x6421            /* element of the album name in an album list row */
 #define PLAYLIST_NAME_ID 0x6425           /* element of the playlist name in a playlist list row */
-#define SOURCE_ARTWORK  0                 /* option_source: the artwork of the iPod first */
-#define SOURCE_FILE     1                 /* option_source: the thumbnail file first */
 #define FNV_BASIS       2166136261u
 #define FNV_PRIME       16777619u
 #define PLAYLIST_BASIS  ((FNV_BASIS ^ 1u) * FNV_PRIME)   /* the FNV-1a state after the byte 0x01 */
@@ -133,8 +142,21 @@ typedef struct { unsigned hash, offset; } Entry;
 /* An album with artwork. `slot` is its thumbnail in art_pixels, NO_SLOT or FAILED. */
 typedef struct { unsigned hash, offset; unsigned short slot; unsigned char file, pad; } Art;
 
-/* The option "source" in patch.json. The patcher writes the selected value. */
-unsigned option_source = SOURCE_ARTWORK;
+/* The cache file: all thumbnails from the artwork, written by the patch. */
+#define CACHE_PATH     "iPod_Control\\iTunes\\iPodFirmAlbumCache"
+#define STAMP_BYTES    0x40               /* the start of ArtworkDB in the stamp (the mhfd header) */
+static int cache_state;                   /* 0 = not examined, 1 = valid and in memory, -1 = none */
+static int cache_written;                 /* 1: the patch wrote the cache for the current stamp */
+static unsigned cache_stamp;              /* the stamp of the artwork and the albums now */
+static unsigned cache_count;
+static Entry *cache_index;                /* sorted by hash; offset = the index of the thumbnail */
+static unsigned short *cache_px;          /* cache_count thumbnails of TH x TH */
+
+/* The open F1028_N.ithmb file (refer to the comment at the top). */
+#define ART_CLOSE_US   30000000           /* close the file 30 s after the last read */
+static unsigned art_fh[0x30 / 4];
+static int art_fh_file;                   /* N of the open file, or 0 */
+static unsigned art_used;                 /* USEC_NOW at the last read */
 
 /* The thumbnail file. */
 static int state;                         /* 0 = not loaded, 1 = loaded, -1 = no file */
@@ -211,17 +233,21 @@ enum {
     T_ART_FILL,                           /* a thumbnail from the ithmb file: read and average */
     T_FILE_READ,                          /* a thumbnail read from the iPodFirmAlbumArt file */
     T_BLIT, T_RUNS,
+    T_ART_OPEN,                           /* an open of F1028_N.ithmb (version 2.8) */
+    T_CACHE_LOAD, T_CACHE_WRITE,          /* the cache file (version 2.8) */
     T_COUNT
 };
 typedef struct { unsigned count, total_us, max_us; } Timer;
 static struct {
-    unsigned magic, version, record, time_us;     /* "AAST", 4, the record number, USEC_TIMER */
+    unsigned magic, version, record, time_us;     /* "AAST", 5, the record number, USEC_TIMER */
     Timer t[T_COUNT];
     unsigned art_hits, art_failed, file_all_hits, file_cache_hits, db_loaded_calls;
+    unsigned cache_hits, art_closes;
     unsigned alloc_failed;                        /* a bit for each allocation that failed */
     unsigned art_state, art_count, art_slots;
     unsigned file_state, file_count, file_size, file_all, file_cache;
-    unsigned write_errors, source, waits, ends, redraws, prefills;
+    unsigned write_errors, waits, ends, redraws, prefills;
+    unsigned cache_state, cache_count, cache_written, cache_errors;
 } stats;
 
 static void stat_add(int i, unsigned start)
@@ -304,6 +330,31 @@ COLD static int read_file(unsigned offset, void *buf, unsigned len)
     err = read_at(fh, offset, buf, len);
     file_close(fh);
     return err;
+}
+
+/* Closes the open F1028_N.ithmb file, if a file is open. */
+COLD static void art_close(void)
+{
+    if (art_fh_file) {
+        file_close(art_fh);
+        art_fh_file = 0;
+        STAT_COUNT(art_closes);
+    }
+}
+
+/* Opens F1028_N.ithmb, if it is not open. Another file closes first. Returns 0 if correct. */
+COLD static int art_open(int number)
+{
+    unsigned t0;
+    if (art_fh_file == number)
+        return 0;
+    art_close();
+    t0 = STAT_NOW();
+    if (open_path(art_fh, ITHMB_PATH, number) != 0)
+        return -1;
+    STAT_ADD(T_ART_OPEN, t0);
+    art_fh_file = number;
+    return 0;
 }
 
 /* ---------- the thumbnail file ---------- */
@@ -431,6 +482,7 @@ COLD static const unsigned short *pixels(const Entry *e)
 
 COLD static void free_art(void)
 {
+    art_close();
     fw_free(art);
     fw_free(art_pixels);
     fw_free(slot_owner);
@@ -554,24 +606,6 @@ COLD static void albums_ready(void)
                               (*(int **)(library + LIBRARY_ALBUMS) != album_rows ||
                                *(unsigned *)(library + LIBRARY_ALBUM_COUNT) != album_count)))
         make_album_hashes();
-}
-
-/* 1 if `hash` is an album of the library, or if the albums are not known. 0 for the row "All". */
-COLD static int is_album(unsigned hash)
-{
-    unsigned lo = 0, hi;
-    albums_ready();
-    if (albums_state != 1)
-        return 1;
-    hi = album_count;
-    while (lo < hi) {
-        unsigned mid = (lo + hi) >> 1;
-        if (album_hashes[mid] < hash)
-            lo = mid + 1;
-        else
-            hi = mid;
-    }
-    return lo < album_count && album_hashes[lo] == hash;
 }
 
 /* The tracks sorted by dbid, with the hash of their album (only while the table is made). */
@@ -834,7 +868,6 @@ __attribute__((noinline)) static void shrink(const unsigned short *in, unsigned 
 COLD static const unsigned short *art_thumb(int n)
 {
     Art *a = &art[n];
-    unsigned fh[0x30 / 4];
     unsigned s, t0;
     int bad;
     if (a->slot < art_slots) {
@@ -851,12 +884,12 @@ COLD static const unsigned short *art_thumb(int n)
     if (slot_owner[s] != NO_SLOT)               /* the oldest thumbnail gives its slot */
         art[slot_owner[s]].slot = NO_SLOT;
     slot_owner[s] = NO_SLOT;
-    bad = open_path(fh, ITHMB_PATH, a->file);
-    if (bad == 0) {
-        bad = read_at(fh, a->offset, art_buffer, ART_SIZE * ART_SIZE * 2);
-        file_close(fh);
-    }
+    bad = art_open(a->file);              /* the file stays open for the next cover */
+    if (bad == 0)
+        bad = read_at(art_fh, a->offset, art_buffer, ART_SIZE * ART_SIZE * 2);
+    art_used = USEC_NOW;
     if (bad) {
+        art_close();                      /* the next cover opens the file again */
         a->slot = FAILED;
         STAT_COUNT(art_failed);
         return 0;
@@ -896,6 +929,183 @@ COLD static int prefill_one(void)
     return 0;
 }
 
+/* ---------- the cache file ---------- */
+
+/* The stamp of the cache: the FNV-1a hash of the first STAMP_BYTES of ArtworkDB (the mhfd header
+ * has the length of the file and the next image ID) and of the sorted album hashes. Thus a sync
+ * that changes the artwork or the albums gives a different stamp. Returns 0 if it is not known. */
+COLD static unsigned art_stamp(void)
+{
+    unsigned fh[0x30 / 4], i, k, h = FNV_BASIS;
+    unsigned char b[STAMP_BYTES];
+    int err;
+    albums_ready();
+    if (albums_state != 1 || open_path(fh, ART_DB_PATH, 0) != 0)
+        return 0;
+    err = read_at(fh, 0, b, STAMP_BYTES);
+    file_close(fh);
+    if (err != 0 || get32(b) != TAG('m', 'h', 'f', 'd'))
+        return 0;
+    for (i = 0; i < STAMP_BYTES; i++)
+        h = fnv_byte(h, b[i]);
+    for (i = 0; i < album_count; i++)
+        for (k = 0; k < 32; k += 8)
+            h = fnv_byte(h, album_hashes[i] >> k);
+    return h ? h : 1;
+}
+
+COLD static void free_cache(void)
+{
+    fw_free(cache_index);
+    fw_free(cache_px);
+    cache_index = 0;
+    cache_px = 0;
+    cache_count = 0;
+    cache_state = 0;
+}
+
+/* Reads the cache file into memory if its stamp is the stamp of the artwork and the albums now.
+ * Sets cache_state to 1 or -1. */
+COLD static void cache_load(void)
+{
+    unsigned fh[0x30 / 4], header[4], n, t0 = STAT_NOW();
+    free_cache();
+    cache_state = -1;
+    cache_stamp = art_stamp();
+    if (!cache_stamp || open_path(fh, CACHE_PATH, 0) != 0) {
+        STAT_ADD(T_CACHE_LOAD, t0);
+        return;
+    }
+    n = 0;
+    if (read_at(fh, 0, header, sizeof header) == 0 && header[0] == 0x54414649u &&   /* "IFAT" */
+        header[1] == (1u | TH << 16) && header[3] == cache_stamp && header[2] <= ART_MAX_SLOTS)
+        n = header[2];
+    if (n) {
+        cache_index = alloc(n * sizeof(Entry), 8192);
+        cache_px = alloc(n * TH * TH * 2, 16384);
+        if (cache_index && cache_px && read_at(fh, 16, cache_index, n * sizeof(Entry)) == 0 &&
+            read_at(fh, 16 + n * sizeof(Entry), cache_px, n * TH * TH * 2) == 0) {
+            cache_count = n;
+            cache_state = 1;
+        }
+    }
+    file_close(fh);
+    if (cache_state != 1) {
+        free_cache();
+        cache_state = -1;
+    }
+    STAT_ADD(T_CACHE_LOAD, t0);
+}
+
+/* The thumbnail of an album in the valid cache, or 0. The offset of an entry is the file offset
+ * of its pixels. The file is longer than the data if an earlier cache was larger. */
+COLD static const unsigned short *cache_find(unsigned hash)
+{
+    unsigned lo = 0, hi = cache_count, base = 16 + cache_count * sizeof(Entry), off;
+    if (cache_state != 1)
+        return 0;
+    while (lo < hi) {
+        unsigned mid = (lo + hi) >> 1;
+        if (cache_index[mid].hash < hash)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    if (lo == cache_count || cache_index[lo].hash != hash)
+        return 0;
+    off = cache_index[lo].offset - base;
+    if (cache_index[lo].offset < base || off > (cache_count - 1) * TH * TH * 2 || (off & 1))
+        return 0;
+    STAT_COUNT(cache_hits);
+    return cache_px + (off >> 1);
+}
+
+/* 1: each album with artwork has its thumbnail in memory. A cover that failed does not count. */
+COLD static int all_filled(void)
+{
+    unsigned i;
+    if (art_state != 1)
+        return 0;
+    for (i = 0; i < art_count; i++)
+        if (art[i].slot >= art_slots && art[i].slot != FAILED)
+            return 0;
+    return 1;
+}
+
+/* Writes the thumbnails in memory to the cache file. `art` is sorted by hash and has one entry for
+ * each album, thus the index is sorted. The header is written last: a write that stops leaves the
+ * stamp 0, and the next load does not use the file. The patch tries one time for each stamp. */
+COLD static void cache_write(void)
+{
+    unsigned path[0x108 / 4], fh[0x30 / 4], header[4], len, want, i, k, n = 0, base;
+    unsigned t0 = STAT_NOW();
+    Entry *idx;
+    int err;
+    cache_written = 1;
+    for (i = 0; i < art_count; i++)
+        if (art[i].slot < art_slots)
+            n++;
+    if (n == 0 || !cache_stamp || !(idx = alloc(n * sizeof(Entry), 32768)))
+        return;
+    base = 16 + n * sizeof(Entry);
+    for (i = k = 0; i < art_count; i++)
+        if (art[i].slot < art_slots) {
+            idx[k].hash = art[i].hash;
+            idx[k].offset = base + k * TH * TH * 2;
+            k++;
+        }
+    header[0] = 0x54414649u;              /* "IFAT" */
+    header[1] = 1u | TH << 16;
+    header[2] = n;
+    header[3] = 0;                        /* not valid until the end */
+    fw_memset0(path, sizeof path);
+    fw_strcpy((char *)path + 4, CACHE_PATH);
+    fw_memset0(fh, sizeof fh);
+    err = file_open_rw(path, fh, 0x1000, MODE_DATA);
+    if (err == 0) {
+        err = file_seek(fh, 0, 0);
+        len = want = sizeof header;
+        if (err == 0)
+            err = file_write(fh, &len, header) != 0 || len != want;
+        len = want = n * sizeof(Entry);
+        if (err == 0)
+            err = file_write(fh, &len, idx) != 0 || len != want;
+        for (i = 0; err == 0 && i < art_count; i++)
+            if (art[i].slot < art_slots) {
+                len = want = TH * TH * 2;
+                err = file_write(fh, &len, art_pixels + art[i].slot * TH * TH) != 0 || len != want;
+            }
+        header[3] = cache_stamp;
+        if (err == 0)
+            err = file_seek(fh, 0, 0);
+        len = want = sizeof header;
+        if (err == 0)
+            err = file_write(fh, &len, header) != 0 || len != want;
+        if (file_close(fh) != 0)
+            err = -1;
+    }
+    fw_free(idx);
+    STAT_ADD(T_CACHE_WRITE, t0);
+#if ALBUM_ART_STATS
+    if (err != 0)
+        stats.cache_errors++;
+#endif
+}
+
+/* The background fill has no more work: close the artwork file, and write the cache if each
+ * album with artwork is in memory. If not (more albums than ART_MAX_SLOTS, or an album that is
+ * not in the album list), the fill cannot complete: do not try again for this stamp. */
+COLD static void fill_done(void)
+{
+    art_close();
+    if (art_state != 1 || cache_written || cache_state == 1)
+        return;
+    if (all_filled())
+        cache_write();
+    else
+        cache_written = 1;
+}
+
 /* Starts the 100 ms timer of the list for the patch, if the patch did not start it already. The
  * list uses this timer for the blink of the selected row after a push of Select (0x23b704: method
  * +0x184, count at list + 0xf8). Thus the patch does not start it shortly after a key push. The
@@ -911,10 +1121,11 @@ COLD static void start_tick(int *list)
     timer_start((char *)list + LIST_TIMER);
 }
 
-/* 1: the background fill has work: the artwork mode, the table is made and a slot is free. */
+/* 1: the background fill has work: the table is made and a slot is free. Or the fill is complete
+ * and the cache is not written. */
 COLD static int fill_has_work(void)
 {
-    return option_source == SOURCE_ARTWORK && art_state == 1 && slot_owner[art_next] == NO_SLOT;
+    return art_state == 1 && (slot_owner[art_next] == NO_SLOT || (!cache_written && cache_state != 1));
 }
 
 /* ---------- the draw ---------- */
@@ -1036,7 +1247,7 @@ COLD static void write_stats(void)
     unsigned path[0x108 / 4], fh[0x30 / 4], len = sizeof stats, offset;
     int err;
     stats.magic = 0x54534141u;            /* "AAST" */
-    stats.version = 4;                    /* 4: with the background fill (version 2.5) */
+    stats.version = 5;                    /* 5: with the cache and the open file (version 2.8) */
     stats.time_us = USEC_TIMER;
     stats.art_state = (unsigned)art_state;
     stats.art_count = art_count;
@@ -1046,7 +1257,9 @@ COLD static void write_stats(void)
     stats.file_size = size;
     stats.file_all = all_pixels != 0;
     stats.file_cache = cache_pixels != 0;
-    stats.source = option_source;
+    stats.cache_state = (unsigned)cache_state;
+    stats.cache_count = cache_count;
+    stats.cache_written = cache_written;
     offset = stats.record * sizeof stats;
     fw_memset0(path, sizeof path);
     fw_strcpy((char *)path + 4, STATS_PATH);
@@ -1106,10 +1319,13 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
         STAT_ADD(T_OTHER_ROW, t0);
         return;
     }
-    /* After a USB session the database, the artwork and the file can be new or changed. */
+    /* After a USB session the database, the artwork and the files can be new or changed. The
+       artwork file of the patch is still open from before the session: free_art closes it. */
     if (db_loaded) {
         db_loaded = 0;
-        art_state = 0;
+        free_art();
+        free_cache();
+        cache_written = 0;
         free_album_hashes();
         if (state == 1)
             check_for_new_file();
@@ -1117,6 +1333,8 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
             state = 0;
     }
     load();
+    if (art_fh_file && USEC_NOW - art_used >= ART_CLOSE_US)
+        art_close();
     view_bounds(view, &r);
     height = r.bottom - r.top;
     /* Only rows of a list: at the left edge of the screen. */
@@ -1143,15 +1361,24 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
             }
         }
     }
-    if (h && option_source == SOURCE_FILE && (e = find(h)) != 0) {
+    /* The file of iPodFirm first. While the wheel moves, a thumbnail of the file that is not in
+       memory waits. */
+    if (h && (e = find(h)) != 0) {
         ts = (int)size;
         if (busy && !file_in_memory(e))
             wait = 1;
         else
             px = pixels(e);
     }
-    /* In the file mode, the row "All" is not in the file: it must not make the album table. */
-    if (h && !px && !wait && id == ALBUM_NAME_ID && (option_source != SOURCE_FILE || is_album(h))) {
+    /* A valid cache has each album with artwork. Then an album that is not in it has no artwork,
+       and the patch does not make the album table. */
+    if (h && !px && !wait && id == ALBUM_NAME_ID) {
+        if (cache_state == 0)
+            cache_load();
+        if ((px = cache_find(h)) != 0)
+            ts = TH;
+    }
+    if (h && !px && !wait && id == ALBUM_NAME_ID && cache_state != 1) {
         if (art_state == 0 && busy) {
             wait = 1;                     /* make the table after the movement */
             ts = TH;
@@ -1165,16 +1392,6 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
                 else
                     px = art_thumb(n);
             }
-        }
-    }
-    if (h && !px && option_source != SOURCE_FILE && (e = find(h)) != 0) {
-        if (busy && !file_in_memory(e)) {
-            wait = 1;
-            ts = (int)size;
-        } else {
-            px = pixels(e);
-            ts = (int)size;
-            wait = 0;                     /* the file has the thumbnail in memory */
         }
     }
     if (wait && !px) {
@@ -1236,8 +1453,9 @@ void hook_label_draw(void *view, const char *text, void *a3)
  * cover-flow patch hooks the same slot. A wheel step sets `moving`. At the end of the movement
  * (step 0), the list draws again if a row has an empty square. The real wheel often sends no end
  * event. Thus the patch also uses the 100 ms timer of the list (and the event type 0xd): a tick
- * MOVE_LIMIT_US after the last step does the same. In the artwork mode, a tick without a redraw
- * makes one thumbnail in the background, if it comes to the visible list of the last album row. */
+ * MOVE_LIMIT_US after the last step does the same. A tick without a redraw makes one thumbnail in
+ * the background, if it comes to the visible list of the last album row. When no thumbnail is
+ * missing, the tick closes the artwork file and writes the cache (fill_done). */
 COLD static void tick(int *list)
 {
     if (wheel_moves()) {
@@ -1246,10 +1464,13 @@ COLD static void tick(int *list)
         waiting = 0;
         STAT_COUNT(redraws);
         view_invalidate(list);            /* the draw starts the tick again if there is more work */
-    } else if (option_source == SOURCE_ARTWORK && list == album_list &&
-               (list[VIEW_FLAGS_WORD] & 0x1800) == 0x800 && prefill_one()) {
-        STAT_COUNT(prefills);
-        start_tick(list);
+    } else if (list == album_list && (list[VIEW_FLAGS_WORD] & 0x1800) == 0x800) {
+        if (prefill_one()) {
+            STAT_COUNT(prefills);
+            start_tick(list);
+        } else {
+            fill_done();
+        }
     }
 }
 
@@ -1266,6 +1487,8 @@ int hook_list_event(int *list, int *ev, void *a3, int a4)
         key_time = USEC_NOW;              /* the list can start its blink: the timer is for the list */
         timer_on = 0;
     }
+    if (art_fh_file && USEC_NOW - art_used >= ART_CLOSE_US)
+        art_close();                      /* also when a different list shows */
     if (ev[1] == EV_WHEEL) {
         if (ev[3] != 0) {
             moving = 1;
@@ -1286,8 +1509,7 @@ int hook_list_event(int *list, int *ev, void *a3, int a4)
             waiting = 0;
             STAT_COUNT(redraws);
             view_invalidate(list);
-        } else if (option_source == SOURCE_ARTWORK && list == album_list &&
-                   (list[VIEW_FLAGS_WORD] & 0x1800) == 0x800 && prefill_one()) {
+        } else if (list == album_list && (list[VIEW_FLAGS_WORD] & 0x1800) == 0x800 && prefill_one()) {
             STAT_COUNT(prefills);
         }
     }

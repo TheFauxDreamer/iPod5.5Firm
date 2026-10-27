@@ -225,16 +225,16 @@ def test_chain_target_rules():
 
 @pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
 def test_patch_option():
-    """The album-art option "source": the patcher writes the value into option_source."""
+    """The up-next option "hold": the patcher writes the value into hold_default."""
     osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
-    artwork, report = patcher.apply(osos, REPO / "patches/album-art", 0x736800)
-    file, _ = patcher.apply(osos, REPO / "patches/album-art", 0x736800, options={"source": 1})
-    at = int(report["symbols"]["option_source"], 16)
-    assert struct.unpack_from("<I", artwork, at)[0] == 0
-    assert struct.unpack_from("<I", file, at)[0] == 1
-    assert [i for i in range(len(file)) if file[i] != artwork[i]] == [at]
+    standard, report = patcher.apply(osos, REPO / "patches/up-next", 0x736800)
+    nxt, _ = patcher.apply(osos, REPO / "patches/up-next", 0x736800, options={"hold": 1})
+    at = int(report["symbols"]["hold_default"], 16)
+    assert struct.unpack_from("<I", standard, at)[0] == 3
+    assert struct.unpack_from("<I", nxt, at)[0] == 1
+    assert [i for i in range(len(nxt)) if nxt[i] != standard[i]] == [at]
     with pytest.raises(patcher.PatchError, match="no choice"):
-        patcher.apply(osos, REPO / "patches/album-art", 0x736800, options={"source": 7})
+        patcher.apply(osos, REPO / "patches/up-next", 0x736800, options={"hold": 7})
 
 
 def test_insert_menu_item():

@@ -424,3 +424,88 @@ CAUTION: The patch has no hook at the start of a USB session. An open file durin
 ### Documents for that change
 
 Update this note, `docs/modifications.md`, `docs/patch-system.md` and `docs/firmware-functions.md`. Set `version` to 2.1 in `patch.json`. Build the app with `mac/scripts/build-app.sh`.
+
+## Version 2.8: the cache and the open file (27 October 2026)
+
+The owner asked for album covers that need no step in iPodFirm. The work is on the branch `album-art-cache`. Playlists still use the file of iPodFirm. The owner chose to do automatic playlist covers later.
+
+### The cause
+
+After a restore with iTunes, the sync wrote one image for each track. The owner's iPod has `F1028_1.ithmb` of 104,020,000 bytes (5201 × 20000) and `F1029_1.ithmb` of 416,080,000 bytes. Cover Flow measured 1.1 s for each firmware open of the large file (refer to [cover-flow.md](cover-flow.md)). Version 2.7 opened and closed `F1028_1.ithmb` for each cover. The open time of the 104 MB file is not measured. The stats file on the iPod showed `source=1` (the file mode) and no fill, thus the owner did not see the slow open.
+
+### Ghidra results
+
+- The only caller of 0x1ed828 is the `bl` at 0x1eea00 (word 0xebfffb88) in 0x1ee8d0, the sleep sequence. Older notes said that 0x1ed828 runs at the start of the disk mode. No path from the disk mode start to 0x1ed828 is known.
+- Only 0xb4ff8, in the database reload 0xb4fe4, writes the usage-log event 0xe ("Enter Disk Mode"). Only 0xb4ad4 writes the event 0xf. Method: a scan of all `bl` to 0x213c5c with `mov r1, #0xe` or `#0xf` in the 5 instructions before them.
+- 0xb4fe4 frees the firmware's own `ArtworkDB` handle with 0x91164. Thus the firmware keeps a read handle open during the USB session and closes it after.
+- No safe hook at the start of the disk mode is known.
+
+### The changes
+
+1. **The open file.** `art_open` and `art_close` keep `F1028_N.ithmb` open, as Cover Flow 0.6.6 does. The patch closes the file when the background fill has no more work, 2 s after the last read (at a draw or a list event), after a failed read, and at the first draw after a USB session (`free_art`).
+2. **The cache.** When each album with artwork has its thumbnail in memory, the tick writes `iPod_Control/iTunes/iPodFirmAlbumCache` (`fill_done`, `cache_write`). The format is the IFAT format of `iPodFirmAlbumArt`, with 20 × 20 thumbnails. The patch writes the header with the stamp 0 first, then the index and the pixels, then the header with the real stamp.
+3. **The stamp.** FNV-1a of the first 0x40 bytes of `ArtworkDB` (the `mhfd` header, with the file length and the next image ID) and of the sorted album hashes (`art_stamp`).
+4. **The load.** At the first album row after a start or a USB session, `cache_load` reads the cache if the stamp agrees. Then the patch does not make the album table (approximately 0.8 s on the real iPod) and does not read the artwork. An album that is not in a valid cache has no artwork.
+5. **The option `source` is removed.** The order for an album is: a valid cache, the artwork, then the file of iPodFirm. The app ignores a stored value of the option, because `Patcher.setOptions` reads only the options in `patch.json`.
+6. **The measurement.** Record version 5 adds the timers `ithmb open`, `cache load` and `cache write`, the counters `cache_hits` and `art_closes`, and the state `cache_state`, `cache_count`, `cache_written` and `cache_errors`. It removes `source`. [album-art-stats.py](album-art-stats.py) reads version 5.
+
+Limits:
+
+- The cache holds a maximum of 1310 albums (1 MB of thumbnails). With more albums, the patch does not write the cache and operates as version 2.7.
+- An open handle can stay open during a USB session if the session starts in the 2 s after a read. The firmware does the same with its `ArtworkDB` handle. The patch does not use the old handle after the session.
+
+The size is 14248 bytes (version 2.7: 12360 bytes).
+
+### Emulator tests (27 October 2026)
+
+The instrumented emulator, with the FolderLibrary (138 albums, `iPodFirmAlbumArt` present), album-art 2.8 alone. The values come from `peek` of the variables and of `stats`:
+
+| Test | Result |
+|---|---|
+| First start, Albums open for 4 s | 138 fills (mean 2183 µs, maximum 5469 µs), 1 open of `F1028_1.ithmb` (3228 µs), 1 close, `build_art` 37.8 ms, cache write 21.7 ms, 0 errors |
+| The cache file | 111,520 bytes = 16 + 138 × 8 + 138 × 800, the hashes sorted, the stamp agrees. The same 138 album hashes as `iPodFirmAlbumArt`. The pixels differ by a mean of 2.85 (R + G/2 + B, 5-bit units) from the thumbnails of iPodFirm |
+| Second cold start, Albums, 60 detents fast | Cache load 4.0 ms, 76 cache hits, no `build_art`, no fill, no open, 0 waits. Each row showed its cover |
+| `ArtworkDB` with one changed padding byte (0x3c) and the old cache | New stamp (0xbc873366, before 0x880818b3), the old cache not used, all covers filled again, the new cache has the new stamp |
+
+In version 2.7 the emulator fill was approximately 4.8–5.3 ms, with an open for each cover. In version 2.8 it is 2.2 ms.
+
+### Real iPod, version 2.8 (27 October 2026)
+
+The owner flashed 2.8 with "iPodFirm Album Cache Test" (0.1.158), without `iPodFirmAlbumArt` (`file_state` −1). The stats file had 18 records. The results:
+
+| Value | Result |
+|---|---|
+| The open of `F1028_1.ithmb` (104 MB) | 919–943 ms (8 opens). This is the cause of the slow artwork mode after the restore |
+| A fill (read and average), without the open | Approximately 27 ms (version 2.2: 22 ms) |
+| `build_art` (336 albums with artwork) | 761 ms and 769 ms |
+| The first fill of all covers | 334 fills with 1 open, in record 0 |
+| The cache write (336 albums) | 303 ms and 121 ms, 0 errors |
+| The cache load | Approximately 36 ms |
+| An album row from the cache (records 1, 2, 13–17) | 5.2–7.4 ms, the same as the original draw. No fill, no open |
+| The cache file on the iPod | 271,504 bytes = 16 + 336 × 8 + 336 × 800, the hashes sorted |
+
+The sequence: the first start had no cache. The patch filled all covers and wrote the cache. After a USB session, the cache loaded, and the rows used only the cache. After a later USB session (a sync changed `ArtworkDB`), the stamp did not agree. The patch made the table again, filled the covers in records 4–12 and wrote a new cache.
+
+Problem: during the second fill, the file closed 2 s after each read and opened again 7 times. Each open stopped the UI for approximately 0.93 s (the slowest album row: 986 ms). The 2 s close is too short for an open of 0.93 s.
+
+## Version 2.9: the file first and the close after 30 s (27 October 2026)
+
+The owner asked for two changes after the test of 2.8:
+
+1. **The order.** The thumbnail file of iPodFirm comes first, if the owner wrote it. Then the cache, then the artwork. The patch fills the albums that the file does not have. The background fill still makes all albums with artwork, thus the cache is complete also if the owner deletes the file later.
+2. **The close.** The artwork file closes 30 s after the last read, not 2 s. On the real iPod an open takes 0.93 s, and the 2 s close gave 8 opens in one fill.
+
+A limit: the patch finds an album by its name. If a cover changes in iTunes and the owner does not write the file again, the old cover in the file comes first.
+
+The fill starts when an album row needs the artwork. With a file that has each album, the row "All" is such a row, because it is not in the file.
+
+The size is 14548 bytes. The measurement is still on.
+
+Emulator test (27 October 2026, the FolderLibrary with `iPodFirmAlbumArt` of 138 albums):
+
+| Start | Result |
+|---|---|
+| First | The visible rows came from the file (16 rows, 0 from the artwork). The row "All" started the table (37.8 ms). The background fill made 138 covers with 1 open and wrote the cache (21.7 ms) |
+| Second, 60 detents fast | 67 rows from the file, the cache loaded and valid (138 albums), no table, no fill, no open, 0 waits |
+
+Step 4 of "Next steps for speed" (fewer file opens) is done in this version.

@@ -329,11 +329,11 @@ To know which item the owner selects, hook the `activate` method of the menu lis
 |---|---|
 | `id` | The name of the option, for example `source`. The app keeps the selection by patch name and `id` (`UserDefaults` key `patchOptions`). |
 | `title` | The title of the section in the Patches pane. |
-| `symbol` | A global 32-bit variable of the patch, for example `unsigned option_source = 0;`. |
+| `symbol` | A global 32-bit variable of the patch, for example `unsigned hold_default = 3;`. |
 | `choices` | One or more choices. Each choice has `value` (a number), `title`, and optional `description` and `caution`. The pane shows the description and the caution of the selected choice. |
 | `default` | Optional. The value without a selection. The default is the first choice. |
 
-After the link, the patcher writes the value of the selected choice into the variable (`Patcher.setOptions`, Python `set_options`). Thus a precompiled `patch.o` operates the same. The build stops if the value is not a choice, or if `symbol` is not a global 32-bit variable of the patch. The install examines the choices and the variable with a trial link. [patches/album-art/patch.json](../patches/album-art/patch.json) has an example.
+After the link, the patcher writes the value of the selected choice into the variable (`Patcher.setOptions`, Python `set_options`). Thus a precompiled `patch.o` operates the same. The build stops if the value is not a choice, or if `symbol` is not a global 32-bit variable of the patch. The install examines the choices and the variable with a trial link. [patches/up-next/patch.json](../patches/up-next/patch.json) has an example.
 
 ## The checks before a patch is applied
 
@@ -369,7 +369,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `flash-keep-awake` | 0x736644 | 0x736644–0x736700 (188 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
 | `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F8000 | The value 0x7eb000 in `patch.json` is not used. |
-| `album-art` | `extended` | After all other data (12360 bytes). Alone: 0x736800–0x739848. The album table, the thumbnails and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
+| `album-art` | `extended` | After all other data (14548 bytes). Alone: 0x736800–0x73a0d4. The album table, the thumbnails, the cache and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
 | `usb-audio-out` | `extended` | After all other data (15924 bytes), then three menus: Settings, the main menu and Settings > Main Menu. The control page, the siTDs and the music buffers (52 KB) come from 0xad80c | Extended patch. |
 | `usb-host-probe` | `extended` | After all other data (22248 bytes; the 32 KB log buffer and the 40 KB of the isochronous test come from allocators) | Extended patch. Test patch. |
 | `something-comforting` | `extended` | After all other data (692 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736ab4, menu at 0x737000, osos end 0x737800 | Extended patch. Example patch. |

@@ -1052,22 +1052,22 @@ final class PatcherOptionTests: XCTestCase {
     }
 
     /// A patch option: the patcher writes the selected value into the variable of the option.
-    /// The album-art option "source": 0 (the default) or 1. Another value stops the build.
+    /// The up-next option "hold": 3 (the default), 0, 1 or 2. Another value stops the build.
     func testPatchOption() throws {
         guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
         let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
-        var patch = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "album-art" }!
-        let artwork = try Patcher.apply([patch], to: osos)
-        patch.options = ["source": 1]
-        let file = try Patcher.apply([patch], to: osos)
-        XCTAssertEqual(artwork.count, file.count)
-        let changed = artwork.indices.filter { artwork[$0] != file[$0] }
+        var patch = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "up-next" }!
+        let standard = try Patcher.apply([patch], to: osos)
+        patch.options = ["hold": 1]
+        let next = try Patcher.apply([patch], to: osos)
+        XCTAssertEqual(standard.count, next.count)
+        let changed = standard.indices.filter { standard[$0] != next[$0] }
         XCTAssertEqual(changed.count, 1)
         XCTAssertEqual(changed.first.map { $0 & 3 }, 0)
-        XCTAssertEqual(changed.first.map { le32(file, $0) }, 1)
-        XCTAssertEqual(changed.first.map { le32(artwork, $0) }, 0)
-        patch.options = ["source": 7]
+        XCTAssertEqual(changed.first.map { le32(next, $0) }, 1)
+        XCTAssertEqual(changed.first.map { le32(standard, $0) }, 3)
+        patch.options = ["hold": 7]
         XCTAssertThrowsError(try Patcher.apply([patch], to: osos))
     }
 

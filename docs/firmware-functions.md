@@ -283,7 +283,7 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0xa2310 | Makes the music database object and calls 0xb4a64 (at 0xa23fc). | Static |
 | 0x1edb9c | Loads the music database again (`blne 0xb4a64` at 0x1ed2d0) if the flag at +0x489 is 0. | Static |
 | 0x213c5c | Adds an event to the usage log (log, event, value). | Static, Patch |
-| 0x213cd4 | Gives the name of a usage-log event. 0xe is "Enter Disk Mode", 0xf is "Exit Disk Mode". | Static |
+| 0x213cd4 | Gives the name of a usage-log event. 0xe is "Enter Disk Mode", 0xf is "Exit Disk Mode". Only 0xb4ff8 (in the database reload 0xb4fe4) writes the event 0xe, and only 0xb4ad4 (in the first load 0xb4a64) writes the event 0xf. This comes from a scan of all `bl` to 0x213c5c with `mov r1, #0xe` or `#0xf` before them (27 October 2026). | Static |
 
 ### Settings, sleep and restart
 
@@ -300,7 +300,7 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x0af698 | (settings): makes the settings at a start. Calls the defaults 0xf3dc0 and the load 0xe1b64 on `settings + 8`, then updates old file versions (current version 0x39). Writes the maximum volume to `+0xb78`. | Static |
 | 0x0e1b64 | (block): clears the block and reads `/iPod_Control/Device/Preferences` into it, a maximum of 0xb6c bytes, with no check. A field at `settings + X` is at file offset X − 8, for example `+0x93` at 0x8b. | Static, Emulator |
 | 0x0f3dc0 | (block): the default settings. Clears 0xb6c bytes, then sets some fields. Version 0x39. | Static |
-| 0x1a0120, 0x19ff0c, 0x19ff6c | 0x1a0120 returns the memory cache manager. 0x19ff0c(manager) sets + 0x44 = 1 and sends the event 10 ("give back the memory", 0x19f9b0) to its users until the count + 0x6c is 0. 0x19ff6c sends the event 5 at the end. 0x19fd0c (a new block) sets + 0x44 = 0. Apple calls 0x19ff0c only before the sleep (0xb43dc) and before the disk mode (0x1ed828; 0x1ed918 then calls 0x19ff6c). Earlier this table called 0x19ff0c a disk cache flush; that was not correct. The USB host probe called it at each log write until version 1.18 (the probable cause of the missing Now Playing art). | Static, Emulator, Real iPod |
+| 0x1a0120, 0x19ff0c, 0x19ff6c | 0x1a0120 returns the memory cache manager. 0x19ff0c(manager) sets + 0x44 = 1 and sends the event 10 ("give back the memory", 0x19f9b0) to its users until the count + 0x6c is 0. 0x19ff6c sends the event 5 at the end. 0x19fd0c (a new block) sets + 0x44 = 0. Apple calls 0x19ff0c only in 0x1ed828 (0x1ed918 then calls 0x19ff6c) and before the sleep (0xb43dc). The only caller of 0x1ed828 is the `bl` at 0x1eea00 in the sleep sequence 0x1ee8d0 (Ghidra, 27 October 2026). An earlier version of this table said "before the disk mode". No path from the disk mode start to 0x1ed828 is known. Earlier this table called 0x19ff0c a disk cache flush; that was not correct. The USB host probe called it at each log write until version 1.18 (the probable cause of the missing Now Playing art). | Static, Emulator, Real iPod |
 | 0x1ee8d0 | Sleep sequence: saves, writes the cache (0x1ed828, 0x19ff0c), then calls the sleep method. Does not sleep if external power is found. | Static, Emulator |
 | 0x1ecc8c | External-power test, from saved copies of the power pins (vtable offset 0xb4 → 0x9e664). | Static |
 | 0x265698 | Reads the power source pins. | Static |

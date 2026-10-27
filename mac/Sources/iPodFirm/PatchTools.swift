@@ -134,7 +134,7 @@ struct AlbumArtSections: View {
 
     var body: some View {
         Section {
-            Text("Albums show the artwork that iTunes or Finder put on the iPod. They do not need a file. Playlists need a thumbnail file. Write it after you flash this patch. Write it again after each sync that adds playlists. The file also has the album covers, for an iPod without artwork.")
+            Text("Albums show the artwork that iTunes or Finder put on the iPod. They need no step here. After a sync, the iPod makes the album pictures one time and keeps them in a file. Playlists need a thumbnail file from iPodFirm. Write it after you flash this patch. Write it again after each sync that adds playlists. The file also has the album covers. On the iPod, they come before the artwork. Thus write the file again after you change a cover.")
                 .fixedSize(horizontal: false, vertical: true)
             IPodActionsRow {
                 Button("Write Thumbnails to iPod") { Task { await model.writeThumbnails() } }

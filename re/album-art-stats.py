@@ -1,4 +1,4 @@
-"""Show the measurement of the album-art patch version 2.5 (record version 4).
+"""Show the measurement of the album-art patch version 2.8 (record version 5).
 
 Usage: python3 re/album-art-stats.py [path to iPodFirmAlbumArtStats]
 
@@ -16,14 +16,19 @@ from pathlib import Path
 TIMERS = [
     "album row (all)", "other row (original)", "original, shifted", "original, no thumbnail",
     "build_art", "load", "check_for_new_file", "ithmb fill", "file read", "blit", "draw_runs",
+    "ithmb open", "cache load", "cache write",
 ]
-COUNTERS = ["art_hits", "art_failed", "file_all_hits", "file_cache_hits", "db_loaded_calls"]
+COUNTERS = ["art_hits", "art_failed", "file_all_hits", "file_cache_hits", "db_loaded_calls",
+            "cache_hits", "art_closes"]
 STATE = ["alloc_failed", "art_state", "art_count", "art_slots", "file_state", "file_count",
-         "file_size", "file_all", "file_cache", "write_errors", "source", "waits", "ends", "redraws", "prefills"]
+         "file_size", "file_all", "file_cache", "write_errors", "waits", "ends", "redraws", "prefills",
+         "cache_state", "cache_count", "cache_written", "cache_errors"]
 WORDS = 4 + 3 * len(TIMERS) + len(COUNTERS) + len(STATE)
 MAGIC = 0x54534141                                         # "AAST"
+VERSION = 5
 ALLOCATIONS = ["index", "all_pixels", "cache_pixels", "name", "keys", "art", "window",
-               "art_pixels", "slot_owner", "art_buffer"]
+               "art_pixels", "slot_owner", "art_buffer", "album name", "album_hashes", "row_hash",
+               "cache_index", "cache_px", "cache write index"]
 
 
 def find_file() -> Path:
@@ -40,7 +45,7 @@ def records(data: bytes) -> list[dict]:
     out = []
     for offset in range(0, len(data) - WORDS * 4 + 1, WORDS * 4):
         w = struct.unpack_from(f"<{WORDS}I", data, offset)
-        if w[0] != MAGIC or w[1] != 4 or w[2] != len(out):
+        if w[0] != MAGIC or w[1] != VERSION or w[2] != len(out):
             break
         timers = [w[4 + 3 * i: 7 + 3 * i] for i in range(len(TIMERS))]
         rest = w[4 + 3 * len(TIMERS):]

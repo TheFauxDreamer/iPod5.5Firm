@@ -553,7 +553,7 @@ Each log write called 0x1a0120 and then 0x19ff0c. 0x19ff0c is not a disk flush:
 1. It locks the memory cache manager (+ 0x48) and sets + 0x44 = 1.
 2. While the user count + 0x6c is not 0, it sends the event 10 to the users (0x19f9b0 → 0x1300f4, 0x13d6d4) and waits on + 0x58.
 
-Apple calls it only before the sleep (0xb43dc) and at the start of the disk mode (0x1ed828). At the end of the disk mode, 0x1ed918 calls 0x19ff6c, which sends the event 5. The probe never sent the event 5. Probe 1.13 not started wrote no log, and the art loaded.
+Apple calls it only before the sleep (0xb43dc) and in 0x1ed828. The only caller of 0x1ed828 is 0x1ee8d0, the sleep sequence (Ghidra, 27 October 2026). An earlier version of this note said "at the start of the disk mode"; that path is not known. At the end of the disk mode, 0x1ed918 calls 0x19ff6c, which sends the event 5. The probe never sent the event 5. Probe 1.13 not started wrote no log, and the art loaded.
 
 Probe 1.19 does not call 0x19ff0c. The disk mode start writes the file data to the disk.
 
