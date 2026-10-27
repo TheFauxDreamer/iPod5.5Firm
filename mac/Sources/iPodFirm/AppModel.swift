@@ -174,7 +174,7 @@ final class AppModel: ObservableObject {
         var musicAppRunning = false
     }
 
-    static let supportDir: URL = {
+    nonisolated static let supportDir: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("iPodFirm")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir

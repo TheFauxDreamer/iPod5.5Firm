@@ -9,13 +9,13 @@ import IPodFWKit
 final class EmulatorManager: ObservableObject {
     static let appURL = URL(fileURLWithPath: "/Applications/ipod-emulator.app")
     static let bundleID = "net.siggifly.ipod-emulator"
-    static let workDir = AppModel.supportDir.appendingPathComponent("Emulator")
+    nonisolated static let workDir = AppModel.supportDir.appendingPathComponent("Emulator")
     static let sourceDir = AppModel.supportDir.appendingPathComponent("emulator-src")
     static var ipodBoot: URL { sourceDir.appendingPathComponent("target/release/ipod-boot") }
     static let emuData = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("ipod-emulator")
-    static let deviceName = "iPodFirm Test"
-    static let diskName = "ipodfirm-custom"
+    nonisolated static let deviceName = "iPodFirm Test"
+    nonisolated static let diskName = "ipodfirm-custom"
 
     @Published var log = ""
     @Published var installing = false
@@ -75,8 +75,8 @@ final class EmulatorManager: ObservableObject {
 
     /// iPodFirm runs the emulator on its own data folder (IPOD_EMULATOR_DATA), so the test device
     /// can't be confused with the user's own emulator devices, and theirs are never touched.
-    static let profile = AppModel.supportDir.appendingPathComponent("EmulatorProfile")
-    static let romSeed = "5500550055005500"
+    nonisolated static let profile = AppModel.supportDir.appendingPathComponent("EmulatorProfile")
+    nonisolated static let romSeed = "5500550055005500"
 
     /// Build the test drive from `firmware` (an Apple-layout firmware partition) and write the profile.
     /// The music library on the emulator drive.
