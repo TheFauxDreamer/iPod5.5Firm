@@ -28,6 +28,7 @@ The table "Collisions with the existing patches" shows where an idea can interfe
 | 8 | Crash screen | osos-lab `panic.c` | For development | Medium | Find the crash handler of 1.3. |
 | 9 | Custom boot logo | Rockbox boot logo patcher, iPodWizard | Low | Low | Find the Apple logo picture in rsrc. |
 | 10 | FLAC playback (for later) | flashpod | High | Very high | Find the decoder table of 1.3. |
+| 11 | Music from USB-C and the headphone jack at the same time | The owner | Medium | High | Saved for later: refer to [usb-dual-out.md](usb-dual-out.md). Read 0x1a2d60 and the codec driver in Ghidra. |
 
 ### 1. Play Next and Play Last
 
