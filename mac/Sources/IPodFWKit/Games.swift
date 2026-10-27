@@ -217,31 +217,69 @@ public enum GameInstaller {
         report.installed.append(game.folder)
 
         if copyKeyFile, let keyFileSource {
-            let out = targetRoot.appendingPathComponent("iTunes").appendingPathComponent(keyFileName)
-            try fm.createDirectory(at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if fm.fileExists(atPath: out.path) { try fm.removeItem(at: out) }
-            try fm.copyItem(at: keyFileSource, to: out)
+            try copyKey(keyFileSource, to: targetRoot)
             report.keyFileCopied = true
         }
         return report
     }
 
+    /// The largest key file that the app accepts. A real file is much smaller.
+    public static let keyFileMaxSize = 4 * 1024 * 1024
+
+    /// Check a key file that the owner chose. Returns the problem, or nil if the file can be
+    /// copied. The file has no known format, thus the check uses only the name and the size.
+    /// The function does not read the bytes of the file.
+    public static func checkKeyFile(_ url: URL) -> String? {
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), !isDir.boolValue else {
+            return "The file \(url.lastPathComponent) is not a file."
+        }
+        guard url.lastPathComponent.caseInsensitiveCompare(keyFileName) == .orderedSame else {
+            return "The key file must have the name \(keyFileName). The chosen file has the name \(url.lastPathComponent)."
+        }
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+        guard size > 0 else { return "The file \(url.lastPathComponent) is empty." }
+        guard size <= keyFileMaxSize else {
+            return "The file \(url.lastPathComponent) is too large (\(size) bytes) for a key file."
+        }
+        return nil
+    }
+
+    /// Copy the owner's key file to iPod_Control/iTunes/IC-Info.sidb. The app copies the bytes
+    /// as they are. It never reads, changes or makes a key file.
+    public static func copyKey(_ source: URL, to targetRoot: URL) throws {
+        if let problem = checkKeyFile(source) { throw InstallError.incomplete(problem) }
+        let fm = FileManager.default
+        let out = targetRoot.appendingPathComponent("iTunes").appendingPathComponent(keyFileName)
+        try fm.createDirectory(at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if fm.fileExists(atPath: out.path) { try fm.removeItem(at: out) }
+        try fm.copyItem(at: source, to: out)
+    }
+
     /// Copy the games to the folder iPod_Control of an iPod.
     ///
     /// The function copies each game that is complete. The function skips a game that is
-    /// not complete and gives the reason in the report.
+    /// not complete and gives the reason in the report. If a key file is given, it copies the
+    /// key file one time, after the games.
     public static func install(_ games: [GameLibraryItem], to targetRoot: URL,
                                 copyKeyFile: Bool = false, keyFileSource: URL? = nil) -> Report {
         var report = Report()
         for game in games {
             do {
-                let one = try install(game, to: targetRoot, copyKeyFile: copyKeyFile, keyFileSource: keyFileSource)
+                let one = try install(game, to: targetRoot)
                 report.installed.append(contentsOf: one.installed)
                 report.bytesCopied += one.bytesCopied
-                report.keyFileCopied = report.keyFileCopied || one.keyFileCopied
             } catch {
                 report.skipped.append(game.folder)
                 report.warnings.append(error.localizedDescription)
+            }
+        }
+        if copyKeyFile, let keyFileSource {
+            do {
+                try copyKey(keyFileSource, to: targetRoot)
+                report.keyFileCopied = true
+            } catch {
+                report.warnings.append("key file: \(error)")
             }
         }
         return report

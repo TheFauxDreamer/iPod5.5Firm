@@ -2213,6 +2213,47 @@ final class GameInstallerTests: XCTestCase {
                        Data(repeating: 0x11, count: 23396))
     }
 
+    /// The app accepts only a file with the name IC-Info.sidb that is not empty. The install of
+    /// several games copies the key file one time; a wrong file gives a warning and no copy.
+    func testKeyFileCheckAndLibraryInstall() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let wrong = dir.appendingPathComponent("keys.bin")
+        try Data(repeating: 0x11, count: 100).write(to: wrong)
+        XCTAssertNotNil(GameInstaller.checkKeyFile(wrong))
+        let emptyDir = dir.appendingPathComponent("empty")
+        try FileManager.default.createDirectory(at: emptyDir, withIntermediateDirectories: true)
+        let empty = emptyDir.appendingPathComponent("IC-Info.sidb")
+        try Data().write(to: empty)
+        XCTAssertNotNil(GameInstaller.checkKeyFile(empty))
+        XCTAssertNotNil(GameInstaller.checkKeyFile(dir))
+        let key = dir.appendingPathComponent("IC-Info.sidb")
+        try Data(repeating: 0x22, count: 512).write(to: key)
+        XCTAssertNil(GameInstaller.checkKeyFile(key))
+
+        let source = try Self.makeGame(dir.appendingPathComponent("source/11002"))
+        let library = [try GameLibrary.loadGame(source)]
+        let target = dir.appendingPathComponent("target")
+        let report = GameInstaller.install(library, to: target, copyKeyFile: true, keyFileSource: key)
+        XCTAssertTrue(report.keyFileCopied)
+        XCTAssertEqual(try Data(contentsOf: target.appendingPathComponent("iTunes/IC-Info.sidb")),
+                       Data(repeating: 0x22, count: 512))
+        let bad = GameInstaller.install(library, to: target, copyKeyFile: true, keyFileSource: wrong)
+        XCTAssertFalse(bad.keyFileCopied)
+        XCTAssertTrue(bad.warnings.contains { $0.hasPrefix("key file") })
+        XCTAssertEqual(try Data(contentsOf: target.appendingPathComponent("iTunes/IC-Info.sidb")),
+                       Data(repeating: 0x22, count: 512))
+    }
+
+    /// A busy iPod volume gets the attempts again; the last message tells the owner to try again.
+    func testEjectBusyMessage() {
+        XCTAssertTrue(Device.isBusy("Unmount of disk4 failed: at least one volume could not be unmounted"))
+        XCTAssertTrue(Device.isBusy("Disk disk4 failed to eject: dissented by PID 123 (mds)"))
+        XCTAssertTrue(Device.isBusy("Resource busy"))
+        XCTAssertFalse(Device.isBusy("Unable to find disk for disk9"))
+        XCTAssertTrue(Device.busyMessage("eject").contains("macOS is still accessing your iPod. Try again in a second."))
+    }
+
     func testInstallNeverRemovesAFile() throws {
         let dir = try tempDir()
         defer { try? FileManager.default.removeItem(at: dir) }

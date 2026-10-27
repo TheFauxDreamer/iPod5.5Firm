@@ -180,6 +180,10 @@ def cmd_install_games(args) -> None:
             sys.exit("The folder has no game with the name " + ", ".join(missing) + ".")
     else:
         wanted = library
+    if args.key_file:
+        problem = games.check_key_file(args.key_file)
+        if problem:
+            sys.exit(problem)
     print()
     print(f"Copying {len(wanted)} game(s).")
     report = games.install_library(wanted, args.target,
