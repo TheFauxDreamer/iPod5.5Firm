@@ -210,6 +210,14 @@ method, the limits and the whole table.
 | 0x9cabc | The artist name of row i of the Artists list (library + 0xc48, pool db + 0xe0). | Static |
 | 0x9eff8 | (pool, index, buffer, &length, maximum): copies the UTF-16 text of a pool entry. | Static |
 | 0x885ec | Stores a string in a pool. | Static |
+| 0x88a00 | (pool, string with a u16 length, &index): stores a string in a pool. The playlist parser stores each playlist name with it (pool at playlist + 0xb4, index at playlist + 0xe0). | Static, Emulator |
+| 0x93ff0 | (db, …, is master, …, &playlist): makes a playlist object for a mhyp (a track list: root at + 0x28). The master playlist goes to db + 0x30. Calls 0x1012b8 and 0xb6b54. | Static, Emulator |
+| 0x1012b8 | (playlist): sets up the name pool at playlist + 0xb4 (0x947f8) and the root node at + 0x28 (0xd1df0). | Static |
+| 0xb6b54 | (db, playlist): adds the playlist to the list of all playlists (db + 0x2c, 0x88ef0), adds 1 to db + 0x28 and writes db to playlist + 0x0c. | Static, Emulator |
+| 0x88ef0 | (head, node): adds a node at the end of a singly linked list. The next node is at node + 0x00. | Static |
+| 0x88944 | (playlist, track, cursor): makes an item for a track (0xd1df0; item + 0x20 = track) and links it (0xd6614). | Static, Emulator |
+
+The list of all playlists: db (library + 0xcf8) + 0x2c, linked by playlist + 0x00, count at db + 0x28. It also has the master playlist, "New Voice Memos", a playlist with no name and On-The-Go (library + 0xce0). The items of a playlist: root (playlist + 0x28) + 0x20, then item + 0x08; the count is root + 0x32 (u16). Emulator, 27 October 2026. Refer to [../re/playlist-art.md](../re/playlist-art.md).
 | 0x10a15c | Converts an mhod-52 sort type to a slot (album 4 → 6). | Static |
 | 0x1e804c | The property method of the main provider (class 0x670f54) for the music screens. | Static |
 | 0x21f254 | (provider, type, ID): asks the provider and its parents for a property (vtable + 0x5c). | Static |

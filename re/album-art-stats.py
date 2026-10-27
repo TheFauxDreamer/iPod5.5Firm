@@ -1,4 +1,4 @@
-"""Show the measurement of the album-art patch version 2.8 (record version 5).
+"""Show the measurement of the album-art patch version 3.0 (record version 6).
 
 Usage: python3 re/album-art-stats.py [path to iPodFirmAlbumArtStats]
 
@@ -16,19 +16,19 @@ from pathlib import Path
 TIMERS = [
     "album row (all)", "other row (original)", "original, shifted", "original, no thumbnail",
     "build_art", "load", "check_for_new_file", "ithmb fill", "file read", "blit", "draw_runs",
-    "ithmb open", "cache load", "cache write",
+    "ithmb open", "cache load", "cache write", "collage",
 ]
 COUNTERS = ["art_hits", "art_failed", "file_all_hits", "file_cache_hits", "db_loaded_calls",
-            "cache_hits", "art_closes"]
+            "cache_hits", "art_closes", "collage_hits"]
 STATE = ["alloc_failed", "art_state", "art_count", "art_slots", "file_state", "file_count",
          "file_size", "file_all", "file_cache", "write_errors", "waits", "ends", "redraws", "prefills",
          "cache_state", "cache_count", "cache_written", "cache_errors"]
 WORDS = 4 + 3 * len(TIMERS) + len(COUNTERS) + len(STATE)
 MAGIC = 0x54534141                                         # "AAST"
-VERSION = 5
+VERSION = 6
 ALLOCATIONS = ["index", "all_pixels", "cache_pixels", "name", "keys", "art", "window",
                "art_pixels", "slot_owner", "art_buffer", "album name", "album_hashes", "row_hash",
-               "cache_index", "cache_px", "cache write index"]
+               "cache_index", "cache_px", "cache write index", "collages"]
 
 
 def find_file() -> Path:

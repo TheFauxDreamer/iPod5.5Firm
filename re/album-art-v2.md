@@ -511,3 +511,28 @@ Emulator test (27 October 2026, the FolderLibrary with `iPodFirmAlbumArt` of 138
 Real iPod (27 October 2026): the owner flashed 2.9 with "iPodFirm Album Cache Test" 0.1.159 and reported: "that worked great". The stats of this test are not recorded.
 
 Step 4 of "Next steps for speed" (fewer file opens) is done in this version.
+
+## The measurement: how to switch it on again
+
+Version 3.2 (27 October 2026) switches the measurement off. The code stays in `patches/album-art/album_art.c` behind the switch `ALBUM_ART_STATS`. Versions 2.2 to 3.1 had it on.
+
+### What the measurement records
+
+- A timer for each part: the count, the total time and the longest time, with `USEC_TIMER` (0x60005010). The parts are in the `enum` before `stats` (album row, original draws, `build_art`, the file load, the fills, the blit, the open of `F1028_N.ithmb`, the cache load and write, the collage).
+- Counters (for example `art_hits`, `cache_hits`, `collage_hits`, `waits`, `prefills`) and the state (for example `art_state`, `cache_state`, `cache_written`).
+- A bit in `alloc_failed` for each allocation that failed (`alloc(size, id)`).
+- After each 256 album or playlist row draws (`STATS_EVERY`), `write_stats` writes one record to `iPod_Control/iTunes/iPodFirmAlbumArtStats` at the offset record × size. At each start, the records begin at 0 again. A maximum of 128 records (`STATS_RECORDS`).
+
+The write can stop the scroll for a short time. Thus use the measurement only in a test build.
+
+### Steps
+
+1. In `patches/album-art/album_art.c`, set `#define ALBUM_ART_STATS 1`.
+2. If you add a timer or a field, add it at the end of its group in `stats`. Increase `stats.version` in `write_stats`. Make the same change in `TIMERS`, `COUNTERS`, `STATE` and `VERSION` in [album-art-stats.py](album-art-stats.py). The order must be the same.
+3. Increase `version` in `patch.json`. Add the note "Version X is a measurement build. It writes the times of its parts to the file iPod_Control/iTunes/iPodFirmAlbumArtStats. The write can stop the scroll for a short time."
+4. Measure the size with the test `testPatchSizes` and write it in `"size"`. With the measurement, version 3.1 was 16552 bytes; without it, version 3.2 is 14848 bytes.
+5. Build a test app (for example `APP_NAME="iPodFirm Album Art Test" mac/scripts/build-app.sh`) and flash it.
+6. After the test, connect the iPod and run `python3 re/album-art-stats.py`. Without a path, the script finds the file on the iPod. Record the results in this note.
+7. Set `ALBUM_ART_STATS` to 0 again, remove the note, increase `version` and measure `size`.
+
+The record format of version 3.1 is record version 6 (15 timers, 8 counters, 18 state words).
