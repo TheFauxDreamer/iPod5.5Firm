@@ -31,6 +31,8 @@
  *  - The artwork: iPod_Control\Artwork\ArtworkDB links each image (mhii) to the dbid of a track
  *    (track + 0x108). The patch reads the 200 x 200 image (format 1029, RGB565) from F1029_N.ithmb,
  *    or else the 100 x 100 image (format 1028), and scales it to TEX x TEX with filtering.
+ *
+ * Versions 0.6.5 to 0.6.7 had a debug log. re/cover-flow.md tells how to add it again.
  */
 
 typedef struct { int top, left, bottom, right; } Rect;
@@ -123,7 +125,7 @@ int file_close(void *fh);
 #define EV_KEY_REPEAT  5
 #define EV_KEY_HOLD    6                  /* the key is held for 0.5 s */
 #define EV_KEY_UP      7
-#define EV_WHEEL       0xf                /* word 3: +1 or -1 for each step, 0 at the end */
+#define EV_WHEEL       0xf                /* word 3: the wheel ticks since the last event (+ or -), 0 at the end */
 #define KEY_OF(ev)     (((unsigned)(ev)[4] >> 16) & 0xff)
 #define KEY_PLAY       0x10
 #define KEY_MENU       0x6e
@@ -146,6 +148,8 @@ int file_close(void *fh);
 #define PRELOAD        SIDE               /* when the movement stops, load the covers to centre +/- this */
 #define OPEN_LOADS     3                  /* covers that the first frame loads: the centre and its two neighbours */
 #define CENTER_Y       100                /* the middle line of the covers */
+#define COVER_TOP      (CENTER_Y - TEX / 2)  /* the highest row of a cover (the centre cover is TEX high) */
+#define WHEEL_TICKS    6                  /* wheel ticks (event word 3) for each album: 16 albums for each turn */
 #define REFLECT_END    198                /* the reflections end above the caption */
 #define ALBUM_TOP      198                /* the album line: 198-220, the artist line: 220-240 */
 #define ARTIST_TOP     220
@@ -168,9 +172,14 @@ static unsigned short *placeholder;       /* the cover of an album without artwo
 static int cache_index[CACHE_SLOTS];
 static unsigned count, size = TEX;
 static unsigned short *source;            /* the image from the .ithmb file (up to 200 x 200) */
-static unsigned short *caption_pixels;    /* the caption rows of the screen, for caption_album */
 static int caption_album = -1;
 static int loads_left;                    /* cover loads that this frame can do */
+static int full_frame;                    /* 1: the next frame clears and sends all the rows */
+static int wheel_ticks;                   /* the wheel ticks that did not give an album step yet */
+/* The open .ithmb file. The open of a large file takes long (1.1 s for a 416 MB F1029_1.ithmb
+   on the real iPod), thus the file stays open while Cover Flow shows. */
+static unsigned art_fh[0x30 / 4];
+static int art_fh_file = -1;              /* the art_file value of the open file; -1: no file open */
 static int missing;                       /* 1: a cover of this frame is not loaded yet */
 static int animating;                     /* 1: the timer runs */
 static unsigned closed_at;                /* USEC_TIMER at the last close */
@@ -537,23 +546,24 @@ COLD static unsigned build_albums(void)
 
 /* The same steps as 0x169718. Do not call the damage function 0x17ef98 here: if the flag at
    0x1081ec54 is set, it binds the layer again and waits for the end of this update. */
-COLD static void send_screen(void)
+COLD static void send_screen(int top, int bottom)
 {
     char *server = display_server();
     display_bind(server, LAYER_INDEX);    /* waits for the end of the last update */
     display_lock(server + SERVER_LOCK);
     server[SERVER_DIRTY] = 1;
-    *(unsigned short *)(server + SERVER_DIRTY_TOP) = 0;
-    *(unsigned short *)(server + SERVER_DIRTY_BOTTOM) = H;
+    *(unsigned short *)(server + SERVER_DIRTY_TOP) = (unsigned short)top;
+    *(unsigned short *)(server + SERVER_DIRTY_BOTTOM) = (unsigned short)bottom;
     display_unlock(server + SERVER_LOCK);
     display_flush(server, LAYER_INDEX);
 }
 
-static void clear(void)
+/* Clears the rows from `top` to `bottom`. */
+static void clear(int top, int bottom)
 {
-    unsigned *p = (unsigned *)fb, bg = light ? 0xffffffffu : 0;
+    unsigned *p = (unsigned *)(fb + top * W), bg = light ? 0xffffffffu : 0;
     int i;
-    for (i = 0; i < W * H / 2; i++)
+    for (i = 0; i < (bottom - top) * W / 2; i++)
         p[i] = bg;
 }
 
@@ -628,14 +638,14 @@ __attribute__((noinline)) static void draw_cover(const unsigned short *tex, cons
     h = (p->h0 << 16) + (c - p->x0) * hstep;
     for (; c < end; c++, u += ustep, h += hstep) {
         int hh = h >> 16, top = CENTER_Y - hh / 2, y, v = 0, vstep, rl, b1, b2;
-        const unsigned short *col = tex + (u >> 16);
+        const unsigned short *col = tex + ((u >> 16) << 7);   /* the texture is in columns */
         unsigned short *out;
         if (hh <= 0 || hh >= MAX_SIZE * 2 || top < 0)
             continue;
         vstep = (int)recip[hh];
         out = fb + top * W + c;
         for (y = 0; y < hh; y++, v += vstep, out += W) {
-            unsigned short px = col[(v >> 16) << 7];
+            unsigned short px = col[v >> 16];
             if (side)                     /* a side cover is a little darker */
                 px = ((px >> 1) & 0x7bef) + ((px >> 2) & 0x39e7);
             *out = px;
@@ -649,16 +659,19 @@ __attribute__((noinline)) static void draw_cover(const unsigned short *tex, cons
         v = (hh - 1) * vstep;
         for (y = 0; y < rl; y++, v -= vstep, out += W) {
             int level = y < b1 ? 0 : y < b2 ? 1 : 2;
-            unsigned short px = col[(v >> 16) << 7];
+            unsigned short px = col[v >> 16];
             /* On white, the reflection fades to white: the same as a fade of the inverse to black. */
             *out = light ? (unsigned short)~dim((unsigned short)~px, level) : dim(px, level);
         }
     }
 }
 
-/* Makes the TEX x TEX texture from a side x side image. Smaller (200): the average of 2 x 2
- * pixels. Larger (100): bilinear filtering in each RGB565 channel. The step is side / TEX in 16.16 fixed point: side << 9. Not
- * small code: it runs for each new cover. */
+/* Makes the TEX x TEX texture from a side x side image. The texture is in columns (x * TEX + y),
+ * because draw_cover reads it one column at a time: then the reads of a column are in sequence
+ * in the cache. In rows, each read was a cache miss (version 0.6.6: 44 ms for each frame).
+ * Smaller (200): the average of 2 x 2 pixels. Larger (100): bilinear filtering in each RGB565
+ * channel. The step is side / TEX in 16.16 fixed point: side << 9. Not small code: it runs for
+ * each new cover. */
 __attribute__((noinline)) static void scale_cover(const unsigned short *src, int side, unsigned short *dst)
 {
     short x0[TEX], fx[TEX];
@@ -679,7 +692,7 @@ __attribute__((noinline)) static void scale_cover(const unsigned short *src, int
                 int a = (x * step) >> 16, b = a < last ? a + 1 : a;
                 unsigned top = (((r0[a] ^ r0[b]) & 0xf7de) >> 1) + (r0[a] & r0[b]);
                 unsigned bottom = (((r1[a] ^ r1[b]) & 0xf7de) >> 1) + (r1[a] & r1[b]);
-                dst[y * TEX + x] = (unsigned short)((((top ^ bottom) & 0xf7de) >> 1) + (top & bottom));
+                dst[x * TEX + y] = (unsigned short)((((top ^ bottom) & 0xf7de) >> 1) + (top & bottom));
             }
         }
         return;
@@ -700,9 +713,30 @@ __attribute__((noinline)) static void scale_cover(const unsigned short *src, int
             unsigned rr = ((p >> 11) * w00 + (q >> 11) * w01 + (u >> 11) * w10 + (v >> 11) * w11) >> 16;
             unsigned gg = (((p >> 5) & 63) * w00 + ((q >> 5) & 63) * w01 + ((u >> 5) & 63) * w10 + ((v >> 5) & 63) * w11) >> 16;
             unsigned bb = ((p & 31) * w00 + (q & 31) * w01 + (u & 31) * w10 + (v & 31) * w11) >> 16;
-            dst[y * TEX + x] = (unsigned short)(rr << 11 | gg << 5 | bb);
+            dst[x * TEX + y] = (unsigned short)(rr << 11 | gg << 5 | bb);
         }
     }
+}
+
+/* Opens the .ithmb file of art_file value `file`, or keeps the file that is open. */
+COLD static int art_open(int file)
+{
+    if (art_fh_file == file)
+        return 0;
+    if (art_fh_file >= 0)
+        file_close(art_fh);
+    art_fh_file = -1;
+    if (open_path(art_fh, (file & LARGE_FLAG) ? LARGE_PATH : SMALL_PATH, file & ~LARGE_FLAG) != 0)
+        return -1;
+    art_fh_file = file;
+    return 0;
+}
+
+COLD static void art_close(void)
+{
+    if (art_fh_file >= 0)
+        file_close(art_fh);
+    art_fh_file = -1;
 }
 
 COLD static const unsigned short *cover(int i)
@@ -729,14 +763,14 @@ COLD static const unsigned short *cover(int i)
     if (art_offset[i] == 0xffffffffu)
         return placeholder;
     {
-        unsigned fh[0x30 / 4];
         int bad, large = art_file[i] & LARGE_FLAG, side = large ? LARGE_SIDE : SMALL_SIDE;
-        if (open_path(fh, large ? LARGE_PATH : SMALL_PATH, art_file[i] & ~LARGE_FLAG) != 0)
+        if (art_open(art_file[i]) != 0)
             return placeholder;
-        bad = read_at(fh, art_offset[i], source, side * side * 2);
-        file_close(fh);
-        if (bad)
+        bad = read_at(art_fh, art_offset[i], source, side * side * 2);
+        if (bad) {
+            art_close();                  /* the next load opens the file again */
             return placeholder;
+        }
         scale_cover(source, side, pixels + far * size * size);
     }
     cache_index[far] = i;
@@ -874,10 +908,12 @@ COLD static int visible(int i, Place *p)
 /* `loads`: the number of new covers that this frame can load. */
 COLD static void render(int loads)
 {
-    int center = (pos + 128) >> 8, k, i;
+    int center = (pos + 128) >> 8, k, i, top = full_frame ? 0 : COVER_TOP;
+    int new_caption = center != caption_album && center == target;
     loads_left = loads;
     missing = 0;
-    clear();
+    /* Only the rows of the covers change, and the caption rows when the caption changes. */
+    clear(top, full_frame || new_caption ? H : ALBUM_TOP);
     /* Load the centre cover first, then the covers near it. */
     for (k = 0; k <= SIDE && loads_left > 0; k++)
         for (i = center - k; i <= center + k; i += (k ? 2 * k : 1)) {
@@ -899,32 +935,28 @@ COLD static void render(int loads)
             draw_cover(tex, &p, d > 128 || d < -128);
         }
     }
-    /* The caption: draw it once for each centre album, then copy it. */
-    if (center != caption_album) {
+    /* The caption: draw it when the covers stop at a new centre album (the label takes 15-25 ms).
+       While the covers move, the last caption stays. */
+    if (new_caption) {
         draw_caption(center);
-        for (i = 0; i < (H - ALBUM_TOP) * W; i++)
-            caption_pixels[i] = fb[ALBUM_TOP * W + i];
         caption_album = center;
-    } else {
-        for (i = 0; i < (H - ALBUM_TOP) * W; i++)
-            fb[ALBUM_TOP * W + i] = caption_pixels[i];
     }
-    send_screen();
+    send_screen(top, full_frame || new_caption ? H : ALBUM_TOP);
+    full_frame = 0;
 }
 
 /* ---------- open and close ---------- */
 
 COLD static void release(void)
 {
+    art_close();
     fw_free(saved);
     fw_free(pixels);
     fw_free(placeholder);
     fw_free(recip);
     fw_free(source);
-    fw_free(caption_pixels);
     recip = 0;
     source = 0;
-    caption_pixels = 0;
     saved = 0;
     pixels = 0;
     placeholder = 0;
@@ -953,8 +985,7 @@ COLD static int open_cover_flow(int *list)
     placeholder = fw_alloc(size * size * 2);
     recip = fw_alloc(MAX_SIZE * 2 * 4);
     source = fw_alloc(LARGE_SIDE * LARGE_SIDE * 2);
-    caption_pixels = fw_alloc((H - ALBUM_TOP) * W * 2);
-    if (!saved || !pixels || !placeholder || !recip || !source || !caption_pixels) {
+    if (!saved || !pixels || !placeholder || !recip || !source) {
         release();
         return 0;
     }
@@ -983,6 +1014,8 @@ COLD static int open_cover_flow(int *list)
     pos = target * 256;
     cf_list = list;
     caption_album = -1;
+    full_frame = 1;
+    wheel_ticks = 0;
     animating = 0;
     active = 1;
     render(OPEN_LOADS);
@@ -1009,7 +1042,7 @@ COLD static void close_cover_flow(int send)
     animating = 0;
     release();
     if (send)
-        send_screen();
+        send_screen(0, H);
     /* The firmware can change its views while Cover Flow shows. Thus it draws the top view of the
        list again. A view that is not visible does not change. */
     while (*(int **)((char *)view + VIEW_PARENT))
@@ -1075,11 +1108,11 @@ COLD static void tick(void)
     animating = 1;                        /* the next tick draws again, or preloads, or stops */
 }
 
-/* A wheel step: only a new target and the click. The timer makes the frames. */
-COLD static void step(int dir)
+/* `n` album steps: only a new target and the click. The timer makes the frames. */
+COLD static void step(int n)
 {
     int old = target;
-    target += dir;
+    target += n;
     if (target < 0)
         target = 0;
     if (target >= (int)count)
@@ -1141,10 +1174,17 @@ COLD static int active_event(int *list, int *ev, void *a3, int a4)
     if (type == EV_WHEEL) {
         if (ui_object)
             ui_activity(ui_object, 0);
-        if (ev[3] > 0)
-            step(1);
-        else if (ev[3] < 0)
-            step(-1);
+        /* Word 3 is the count of wheel ticks since the last event (about 96 for each turn). The
+           firmware adds the ticks while the UI task draws a frame. */
+        if ((ev[3] > 0) != (wheel_ticks > 0))
+            wheel_ticks = 0;              /* a new direction */
+        wheel_ticks += ev[3];
+        {
+            int n = sdiv(wheel_ticks, WHEEL_TICKS);
+            wheel_ticks -= n * WHEEL_TICKS;
+            if (n)
+                step(n);
+        }
         return 1;
     }
     if (type >= EV_KEY_DOWN && type <= EV_KEY_UP) {

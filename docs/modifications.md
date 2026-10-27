@@ -362,13 +362,13 @@ The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 min
 
 ## cover-flow
 
-**User interface.** Patches pane > Cover Flow, letter `c`, version 0.6.4. The patch needs no file of iPodFirm: it uses the albums, the names and the artwork that the iPod already has. The research is in [../re/cover-flow.md](../re/cover-flow.md).
+**User interface.** Patches pane > Cover Flow, letter `c`, version 0.6.8. The patch needs no file of iPodFirm: it uses the albums, the names and the artwork that the iPod already has. The research is in [../re/cover-flow.md](../re/cover-flow.md).
 
 **Effect.**
 
 1. Hold Select in the Albums list for 0.5 s. Cover Flow opens at the selected album.
-2. Turn the click wheel. Each wheel step moves the target one cover and gives the click of the lists, as the Clicker setting gives. A timer moves the covers smoothly to the target: a fast turn catches up quickly, and each stop slows down softly.
-3. The centre cover is flat. Four covers at each side are slanted and a little darker. Each cover has a reflection. The album name and the artist (grey) show below the covers, centred, in the font of the list rows.
+2. Turn the click wheel. Each 6 wheel ticks move the target one cover (approximately 16 covers for each turn). Each wheel event that moves the target gives the click of the lists, as the Clicker setting gives. A timer moves the covers smoothly to the target: a fast turn catches up quickly, and each stop slows down softly.
+3. The centre cover is flat. Four covers at each side are slanted and a little darker. Each cover has a reflection. The album name and the artist (grey) show below the covers, centred, in the font of the list rows. They change when the covers stop.
 4. Push Select. The album at the centre opens, as from the list.
 5. Push Menu. The Albums list shows again.
 
@@ -376,9 +376,11 @@ The background is white with the light theme and black with the dark theme. On w
 
 A short push of Select opens the album as usual. Play/Pause operates as usual. If the iPod shows a new screen (for example Now Playing), Cover Flow closes.
 
+**Debug log.** Versions 0.6.5 to 0.6.7 had a debug log. It measured the open, each frame, each cover load, the timer ticks and the wheel events, and wrote a text file on the iPod. The log found the cause of the slow Cover Flow after a restore with iTunes. Version 0.6.8 removes the log. [../re/cover-flow.md](../re/cover-flow.md#how-to-add-the-debug-log-again) tells how to add it again.
+
 Since version 0.6.4, the patch [up-next](#up-next) can take the hold. At each push of Select in the Albums list, Cover Flow reads `iPod_Control\iTunes\iPodFirmHoldSelect` (`hold_is_cover_flow`). It keeps the push only if the file does not exist or contains '3' (Settings > Hold Select = Cover Flow). Otherwise the push goes to the firmware, and the hold goes to Up Next.
 
-**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 11092 bytes. The functions that run once for each event or each open have `__attribute__((minsize))`; the pixel loop `draw_cover` stays fast code. The framebuffer copy (153600 bytes), the cover cache (11 covers of 128 × 128, 360448 bytes), the read buffer (80000 bytes), the caption copy (26880 bytes) and the placeholder cover come from the allocator 0x25a974 when Cover Flow opens. They are released when it closes. The album table (about 9 bytes for each album) stays in memory while the database does not change. While the table is made, the patch also uses 12 bytes for each track and a 32 KB read window.
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 11384 bytes. Since version 0.6.7, the textures are in columns, so that `draw_cover` reads each column in sequence. Since version 0.6.6, the `.ithmb` file stays open while Cover Flow shows (`art_open`); the close of Cover Flow closes it. The functions that run once for each event or each open have `__attribute__((minsize))`; the pixel loop `draw_cover` stays fast code. The framebuffer copy (153600 bytes), the cover cache (11 covers of 128 × 128, 360448 bytes), the read buffer (80000 bytes) and the placeholder cover come from the allocator 0x25a974 when Cover Flow opens. They are released when it closes. The album table (about 9 bytes for each album) stays in memory while the database does not change. While the table is made, the patch also uses 12 bytes for each track and a 32 KB read window.
 
 **Hooks.**
 
@@ -475,6 +477,8 @@ Emulator (8 October 2026), version 0.4, with the FolderLibrary (1000 tracks, 138
 - The first open made the table in 35 ms (emulated time; the emulated disk is fast). The next open took no time.
 
 Not tested: version 0.4 on the real iPod, a pop-up or a new screen while Cover Flow shows, and a database from iTunes or Finder.
+
+Real iPod 5.5G (owner, 25–27 October 2026, version 0.6.4, after a restore with iTunes and a new sync): Cover Flow operates, but it is very slow. The open takes several seconds, the frame rate is low, and one album step needs approximately two turns of the wheel. The log of version 0.6.5 showed the cause: the patch opened `F1029_1.ithmb` (416 MB, one image for each of 5201 tracks) for each cover, and each open took 1.1 s. Version 0.6.6 keeps the file open. The log of version 0.6.6 showed 1.1 s only at the open, 30 ms for each cover load and 69 ms for each frame. Word 3 of a wheel event counts the wheel ticks, so version 0.6.6 lost wheel steps. Version 0.6.7 counts the ticks and draws faster. Real iPod (27 October 2026), version 0.6.7: the owner reported that Cover Flow feels very fast. The wheel moves the covers, and a frame takes approximately 80 ms with a cover load. Version 0.6.8 removes the debug log and does not change the function. Version 0.6.8 is not tested yet.
 
 ## usb-host-probe
 

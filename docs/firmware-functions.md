@@ -1015,6 +1015,8 @@ The firmware does not contain JavaScript source text, or the names "SpiderMonkey
 
 Refer to [re/games.md](../re/games.md). The iPod reads the games from the folder `iPod_Control/games_RO`. The program of each game uses a FairPlay DRM. The key is in the file `iPod_Control/iTunes/IC-Info.sidb` of the iPod. The key is bound to the identity of the iPod. The research of the emulator measured that the key binds to the 8-byte FireWire GUID in the `sysinfo_t` block. The block is in the NOR flash.
 
+The test of the project [fairplay-decrypt](https://github.com/EthanArbuckle/fairplay-decrypt) shows that the program of a game does not use the cipher of an IPA. The program of a game has no Mach-O header. The program has no file `.supf`. The relation of the mode CBC of AES-128 does not hold for the atom `priv` of the games. The note [re/games-fairplay-feasibility.md](../re/games-fairplay-feasibility.md) gives the measurements.
+
 | Address | Function | Evidence |
 |---|---|---|
 | 0xd9d30 | (n): the name of a games folder. 0 = `games_RO`, 1 = `gamedata_RW`, 2 = `gamestats_WO`, 3 = `gamedata_ShareRW`. The names are at 0x2a9c3c. | Static |

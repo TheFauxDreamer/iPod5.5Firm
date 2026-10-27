@@ -5,12 +5,12 @@
   "symbol": "square.stack.3d.forward.dottedline",
   "category": "display",
   "version_letter": "c",
-  "version": "0.6.4",
-  "size": 11092,
+  "version": "0.6.8",
+  "size": 11384,
   "description": "Shows the album covers as Cover Flow. Hold the Select button in the Albums list to open it.",
-  "details": ["Hold the Select button in the Albums list for half a second. Cover Flow opens at the selected album.", "Turn the click wheel to move through the covers. The covers move smoothly, and each step gives the click of the lists.", "The album name and the artist show below the covers, in the font of the iPod.", "Push Select to open the album at the centre.", "Push Menu to go back to the Albums list.", "A short push of Select in the list opens the album as usual.", "The background is white with the light theme and black with Dark Mode."],
+  "details": ["Hold the Select button in the Albums list for half a second. Cover Flow opens at the selected album.", "Turn the click wheel to move through the covers. The covers move smoothly, and each step gives the click of the lists.", "The album name and the artist show below the covers, in the font of the iPod. They change when the covers stop.", "Push Select to open the album at the centre.", "Push Menu to go back to the Albums list.", "A short push of Select in the list opens the album as usual.", "The background is white with the light theme and black with Dark Mode."],
   "requires": ["Album artwork on the iPod from iTunes or Finder. Cover Flow uses the 200 × 200 artwork of Now Playing. An album without artwork shows a grey square."],
-  "notes": ["This is a test version.", "Cover Flow uses the artwork, the albums and the names that the iPod already has. You do not have to write a file after a sync.", "In the Albums list, a long push of Select does not add the album to the On-The-Go playlist.", "With the Up Next patch, Settings > Hold Select decides: a hold in the Albums list opens Cover Flow only when the value is Cover Flow."],
+  "notes": ["This is a test version.", "Version 0.6.7 moves one album for each 6 ticks of the wheel, and draws each frame faster. The album name changes when the covers stop. Version 0.6.6 keeps the artwork file open while Cover Flow shows. Version 0.6.5 opened the file again for each cover. With a large artwork file, each open took 1.1 s. Versions 0.6.5 to 0.6.7 had a debug log. Version 0.6.8 removes it.", "Cover Flow uses the artwork, the albums and the names that the iPod already has. You do not have to write a file after a sync.", "In the Albums list, a long push of Select does not add the album to the On-The-Go playlist.", "With the Up Next patch, Settings > Hold Select decides: a hold in the Albums list opens Cover Flow only when the value is Cover Flow."],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
