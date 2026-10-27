@@ -28,3 +28,6 @@ dist/
 
 # macOS Finder files
 .DS_Store
+
+# The local settings of Claude Code
+.claude/
