@@ -355,8 +355,8 @@ Refer to [re/volume-limit.md](../re/volume-limit.md).
 | 0x23a04c | Method +0x138 of a browse list: sets the selected row and posts the property event "LstS". | Static |
 | 0x1d3348 | Event method of the application object (class 0x66a510). Sends events to handlers in maps, for example 0x1d81cc. | Static, Emulator |
 | 0x1d8aa4 | Key actions of the UI handler (called for the types 4–7). | Static |
-| 0xa69dc | The click of the lists. Reads the Clicker setting (RAM 0x1081d9c4): bit 1 speaker (piezo message), bit 2 headphones (audio click 0x1b9168). No arguments. | Static, Emulator, Patch (`cover-flow`) |
-| 0x1b9168 | Plays the click on the audio path. Then, if the byte at 0x10882440 + 0x3e has bit 0, the piezo tone 0xcd430(0x55, 3000) at 0x1b91fc. | Static, Emulator |
+| 0xa69dc | The click of the lists. Reads the Clicker setting (RAM 0x1081d9c4): value 1 speaker (piezo message), value 2 headphones (audio click 0x1b9168). The test of value 2 is at 0xa6a90. No arguments. Refer to [../re/clicker.md](../re/clicker.md). | Static, Emulator, Patch (`cover-flow`, `click-speaker-only`) |
+| 0x1b9168 | Plays a sound on the audio path (the click; also called from 0x88aec and 0x26a560). Then, if the byte at 0x10882440 + 0x3e has bit 0, the piezo tone 0xcd430(0x55, 3000) at 0x1b91fc. | Static, Emulator |
 
 The first argument of 0x1d81cc and of 0x1d813c is the UI object (0x13e358a4 in the emulator). It is not the application object.
 
@@ -1286,7 +1286,7 @@ The physical address is 0x10000000 + the CPU address.
 | 0x1081e0d4 | The layer index of the display (0). |
 | 0x1081ec54 | Byte: the damage callback binds the layer if it is not 0. |
 | 0x1081da80 | Pointer to the application object (class 0x66a510). |
-| 0x1081d9c4 | The Clicker setting: bit 1 speaker, bit 2 headphones. |
+| 0x1081d9c4 | The Clicker setting (a word): value 1 speaker, value 2 headphones, default 3. The default settings 0xf3dc0 write 3. The load 0xe1b64 copies it from the settings + 0xafc. 0x95f0c keeps it and clears value 2, and 0x99098 puts it back. |
 | 0x1081e044 | Static guard of the shuffle seed (bit 0 = the seed is set). |
 | 0x1081e048 | State of the shuffle generator (Park–Miller). |
 | 0x1083e0ac | State of the card game generator. |

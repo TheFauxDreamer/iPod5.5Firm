@@ -17,6 +17,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [flash-keep-awake](#flash-keep-awake) | Code patch | Patches | 4 `bl` | Partly (an earlier version) |
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
 | [volume-unlimit](#volume-unlimit) | Data patch | Patches | 2 bytes | No |
+| [click-speaker-only](#click-speaker-only) | Data patch | Patches | 1 instruction word | Yes (2026-10-27) |
 | [shuffle-fixes](#shuffle-fixes) | Code patch (extended) | Patches | 2 `bl` and 4 instruction words | No |
 | [shuffle-album-mix](#shuffle-album-mix) | Code patch (extended) | Patches | 3 `bl`, 3 `b` and 3 vtable words (all 6 with `chain`), 1 instruction word, 2 menus | Version 1.1: partly, the order of one album. Version 1.2: no |
 | [something-comforting](#something-comforting) | Code patch (example) | Patches | 1 `b` and 2 vtable words (all with `chain`), a Settings menu | No |
@@ -659,6 +660,28 @@ A copy of the Settings row (Sound Check) in the main menu is not usable: in the 
 Thus `0xa0348` always returns 0. The other match of the iPodWizard pattern, at 0x9f0f8, is a different function. The patch does not change it.
 
 **Test status.** A script applied the change to osos 1.3 and ran the iPodWizard search: "capped" before, "uncapped" after. The emulator cannot show the effect. Not tested on a real iPod. The test needs an iPod for the EU.
+
+
+## click-speaker-only
+
+**User interface.** Patches pane > Sound > Click Only on the Speaker, letter `p`, version 1.0.
+
+**Effect.** The click of the click wheel plays only from the piezo speaker. It does not play in the headphones. Settings > Clicker continues to turn the click on and off. The other sounds of the iPod do not change.
+
+**Research.** Refer to [re/clicker.md](../re/clicker.md).
+
+- RAM 0x1081d9c4 holds the Clicker word: bit 0 (value 1) the speaker, bit 1 (value 2) the headphones. The default is 3.
+- The click 0xa69dc tests bit 1 at 0xa6a90. With bit 1, it plays the click on the audio path (0x1b9168), and also on the piezo if bit 0 is set. Without bit 1, it plays only the piezo tone if bit 0 is set.
+
+**Change.** This patch has no C code. It uses the `bytes` key of `patch.json`:
+
+| At | Expect | Value | Instruction after the change |
+|---|---|---|---|
+| 0xa6a90 | `020010e3` | `000010e3` | `tst r0, #0x0` |
+
+Thus the click always takes the path without the headphones bit. The size on the iPod is 0 bytes. The Python patcher changed only the byte offset 0xa6a90 of the Apple osos 1.3 image (27 October 2026).
+
+**Test status.** Not tested in the emulator (it has no audio). Real iPod 5.5G (owner, 27 October 2026, version 1.0): the click plays from the piezo speaker and not in the headphones.
 
 ## shuffle-fixes
 
