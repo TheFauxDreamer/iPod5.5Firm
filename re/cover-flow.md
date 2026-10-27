@@ -292,7 +292,7 @@ The frame draw does not change: its time depends on the screen pixels, not on th
 Rockbox PictureFlow (`apps/plugins/pictureflow/pictureflow.c`, read on 9 October 2026):
 
 - It prepares each slide one time: it scales the album art (with the aspect ratio), adds the reflection, and keeps the result in a disk cache (`.pfraw` files, name from a hash of the album and the artist). It builds the cache at the first start.
-- At run time, a background thread loads the slides into a RAM cache of 64 slides (LRU). An empty slide shows while a slide loads, so the wheel never waits.
+- At run time, a background thread loads the slides into a RAM cache. An empty slide shows while a slide loads, so the wheel never waits. (Correction, 27 October 2026: the cache is not an LRU cache of 64 slides. Refer to "Research: why covers load again".)
 - The draw is column by column, with a perspective projection in fixed point (`PFREAL_SHIFT` 10), a sine table and a tilt of 70°. Side slides fade with an alpha table. The reflection fades with a table.
 
 Possible next steps for this patch, from this list: load the covers in the background (a firmware task, for example as `ArtworkLoadTask` 0x205cfc does), and show the grey square until a cover is ready.
@@ -487,6 +487,60 @@ The owner asked to remove the debug log. Version 0.6.8 has the code of version 0
 - The app does not have the tool `cover-flow-log` now (`PatchSpec.knownTools`, `PatchTools.swift`, `AppModel.readCoverFlowLog`).
 
 The code and data are 11384 bytes (`testPatchSizes`). Not tested on the real iPod yet.
+
+## Research: why covers load again (27 October 2026)
+
+The owner reported: the album thumbnails load one time and stay until a restart, but Cover Flow loads a cover again after a long scroll, also inside one session. The owner asked how PictureFlow, the reference, does it. This section is research only. No code changed.
+
+### The cause in the patch
+
+- `CACHE_SLOTS` is 11: 11 textures of 128 × 128 RGB565 (32 KB each). `cover()` replaces the cover that is farthest from the target. A cover that comes back needs a new load: approximately 31 ms on the real iPod (read 80 KB from `F1029_1.ithmb` 16 ms, scale 200 → 128 15 ms), in the UI task.
+- `release()` frees the textures and closes the artwork file at each close. The next open loads the covers again, and the first load opens the 416 MB file again (1.1 s).
+- The album-art thumbnails are 20 × 20 (800 bytes). All 336 albums need 270 KB, thus album-art keeps all of them. All 336 Cover Flow textures need 10.8 MB.
+
+### How PictureFlow does it (rockpod, `apps/plugins/pictureflow/pictureflow.c`)
+
+| Item | PictureFlow | Source |
+|---|---|---|
+| The RAM buffer | The plugin buffer if playback is possible (`PF_PLAYBACK_CAPABLE`: `PLUGIN_BUFFER_SIZE` > 0x10000), else the audio buffer. On the iPod Video, `PLUGIN_BUFFER_SIZE` is 0x80000 (512 KB), thus the plugin buffer. The album index uses the same buffer. | lines 42–44, 4796–4799; `firmware/export/config/ipodvideo.h` line 95 |
+| The slides in RAM | At most 100 entries (`SLIDE_CACHE_SIZE`), but a slide must fit in the buffer (`buflib_alloc`). A square slide is 128 × 128 × 2 = 32 KB (`DISPLAY_WIDTH` = max(240 / 2, 320 × 2 / 5) = 128). Thus approximately 12–15 slides on the iPod Video: the same size as the 11 slots of the patch. | lines 287–298, 2744–2776 |
+| Which slide goes | The cache is a window around the centre. `load_new_slide` adds a slide at the side with fewer slides. When the buffer is full, `free_slide_prio` frees the end of the window that is farthest from the centre. This is the same rule as `cover()`. Thus PictureFlow also loads a slide again after a long scroll. | lines 2697–2737, 2880–2930 |
+| A load | `read_pfraw` reads a ready slide from its own small file (`.pfraw`, name from the hash of the album and the artist): the slide is already scaled. No scale at run time. | lines 2744–2805 |
+| The disk cache | Made at the first start with a progress bar (`create_albumart_cache`), and later one album at each idle loop (`incremental_albumart_cache(false)`). | lines 2316–2426, 5072–5078 |
+| The thread | A background thread ("Picture load thread", `PRIORITY_BUFFERING`) loads slides while its queue is empty, and yields after each slide. The UI shows an empty slide until a slide is ready. | lines 2461–2530 |
+
+Conclusion: PictureFlow does not keep more covers on the iPod Video. Its loads are cheaper (no scale, a small file) and do not stop the wheel (a background thread).
+
+### The free memory of the firmware (emulator)
+
+The word at 0x1081da00 is the address of the heap object of the general allocator (`fw_alloc` 0x25a974 → 0x1ac4ec with `*(0x1081da00)`). The heap object (at 0x10870154 in the emulator):
+
+| Offset | Value | Evidence |
+|---|---|---|
+| + 0x00 | The free bytes. 0x1ac4ec subtracts the size of a merged free block from it. | Static (0x1ac4ec), Emulator |
+| + 0x04 | The used bytes. + 0x00 + + 0x04 stayed 55,519,668 bytes (52.9 MB) in each reading. | Emulator |
+| + 0x08 | The count of allocations (it only increases) | Static (0x1ac4ec), Emulator |
+
+Emulator, FolderLibrary (1000 tracks, 138 albums), album-art 3.2 and cover-flow 0.6.8:
+
+| State | Free | Used |
+|---|---|---|
+| After the start | 2.92 MB | 50.03 MB |
+| The Albums list | 2.67 MB | 50.28 MB |
+| Cover Flow open | 1.94 MB | 51.01 MB |
+| After a scroll of 60 detents | 1.94 MB | 51.01 MB |
+| Cover Flow closed | 2.66 MB | 50.28 MB |
+
+Cover Flow uses 0.73 MB while it shows. The firmware uses almost all of its heap (probably the music buffer and its caches). Thus 10.8 MB for all covers is not possible, and 2 MB (64 slots) would use most of the free memory. The owner's library (5200 tracks) probably leaves less. The real value is not measured yet: a test build can read `*(*(unsigned **)0x1081da00)` and write it to the debug log.
+
+### What can make Cover Flow better
+
+1. **A disk cache of scaled textures (PictureFlow item).** A file with one 128 × 128 texture (32 KB) for each album: 10.8 MB for 336 albums. A load then reads 32 KB with no scale: approximately 7 ms in place of 31 ms (estimate from the measured 16 ms for 80 KB). Make the file as covers load, as the album-art cache does. Open questions: does the firmware file system allow a seek past the end of a file (to put a texture at its place)? Is the open of an 11 MB file faster than the 1.1 s of the 416 MB `F1029_1.ithmb`? (`ArtworkDB`, 3 MB, opens in a few ms.)
+2. **Keep the textures between two opens.** 0.73 MB stays in use while Cover Flow is closed. The free memory is small, thus this needs the real measurement first.
+3. **A background task for the loads (PictureFlow item).** ThreadX tasks are made with `bl 0x11c808` and a priority (re/usb-host.md). A patch task needs a task class, a stack and a lock for the cache and the file handle. This needs its own research.
+4. **More slots.** Only a small increase is safe (for example 16 slots, +160 KB), after the real measurement.
+
+Recommended order: measure the free memory on the real iPod; then item 1 (the largest gain with no extra RAM); then item 3.
 
 ## How to add the debug log again
 

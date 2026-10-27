@@ -275,7 +275,8 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 
 | Address | Function | Evidence |
 |---|---|---|
-| 0x25a974 | Allocates memory from the pool object at 0x1081da00. | Patch |
+| 0x25a974 | Allocates memory from the heap object at *(0x1081da00): calls 0x1ac4ec with flag 2. | Static, Patch |
+| 0x1ac4ec | (heap, size, clear, flag, old block, copy, quiet): the allocator of the heap. A block has a header word (size, bits 0–1 and 30–31 are flags). It subtracts merged free blocks from heap + 0x00 and adds 1 to heap + 0x08. | Static, Emulator |
 | 0x25a944 | Allocates memory (used by 0x223420). | Static |
 | 0x25a8e4 | Frees memory to the same pool. | Patch |
 | 0x07ccd0 | Fills memory with zeros (pointer, size). | Patch |
@@ -1183,7 +1184,7 @@ The physical address is 0x10000000 + the CPU address.
 | Address | Content |
 |---|---|
 | 0x1081da18 | Pointer to the application object. |
-| 0x1081da00 | Allocator pool object. |
+| 0x1081da00 | The address of the heap object of the general allocator (`fw_alloc`). Heap object + 0x00: the free bytes; + 0x04: the used bytes; + 0x08: the count of allocations. Emulator (27 October 2026): 52.9 MB in total, 2.67 MB free with the Albums list. Refer to [../re/cover-flow.md](../re/cover-flow.md). |
 | 0x1086bedc | Keep-awake slot flags (45 bytes). |
 | 0x1086bf0c | Keep-awake time left in ms (45 words). 0xffffffff = always on. |
 | 0x1081ff2c, 0x1081ff30, 0x1081ff34 | Power pin monitor objects (byte +6 is the saved pin state). |
