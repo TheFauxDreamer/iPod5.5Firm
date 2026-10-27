@@ -490,6 +490,8 @@ The code and data are 11384 bytes (`testPatchSizes`). Not tested on the real iPo
 
 ## Research: why covers load again (27 October 2026)
 
+The full research, with the history of all versions and the interaction with `album-art`, is in [cover-flow-loads.md](cover-flow-loads.md).
+
 The owner reported: the album thumbnails load one time and stay until a restart, but Cover Flow loads a cover again after a long scroll, also inside one session. The owner asked how PictureFlow, the reference, does it. This section is research only. No code changed.
 
 ### The cause in the patch
