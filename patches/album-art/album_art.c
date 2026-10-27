@@ -237,13 +237,14 @@ static int timer_on;                      /* 1: the patch started the list timer
 static unsigned timer_started;
 static unsigned key_time;                 /* USEC_NOW at the last key push to a list */
 
-/* ---------- the measurement (temporary, version 2.2) ----------
- * The scroll of the Albums list is slow on the real iPod, also with all thumbnails in memory. The
- * emulator does not show this. With ALBUM_ART_STATS 1, the patch counts and times its parts with
- * USEC_TIMER. After each STATS_EVERY album or playlist row draws, it writes one record to the file
- * STATS_PATH. Record N is at offset N * sizeof stats, thus the file shows the change in time.
- * re/album-art-stats.py reads the file. Set ALBUM_ART_STATS to 0 to remove the measurement. */
-#define ALBUM_ART_STATS 1
+/* ---------- the measurement (versions 2.2 to 3.1; off since version 3.2) ----------
+ * With ALBUM_ART_STATS 1, the patch counts and times its parts with USEC_TIMER. After each
+ * STATS_EVERY album or playlist row draws, it writes one record to the file STATS_PATH. Record N is
+ * at offset N * sizeof stats, thus the file shows the change in time. The write can stop the scroll
+ * for a short time. re/album-art-stats.py reads the file. To measure again, set ALBUM_ART_STATS to 1,
+ * increase "version" and measure "size" in patch.json. Refer to re/album-art-v2.md, "The
+ * measurement: how to switch it on again". */
+#define ALBUM_ART_STATS 0
 #if ALBUM_ART_STATS
 #define USEC_TIMER    (*(volatile unsigned *)0x60005010)
 #define STATS_PATH    "iPod_Control\\iTunes\\iPodFirmAlbumArtStats"

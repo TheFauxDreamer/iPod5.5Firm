@@ -300,7 +300,7 @@ The app writes these files on the mounted iPod volume. A patch can also write fi
 |---|---|---|
 | `iPod_Control/iTunes/iPodFirmAlbumArt` | "Write Thumbnails to iPod" | `album-art` patch |
 | `iPod_Control/iTunes/iPodFirmAlbumCache` | The `album-art` patch on the iPod (version 2.8 and later), after it has all album covers in memory | `album-art` patch |
-| `iPod_Control/iTunes/iPodFirmAlbumArtStats` | The `album-art` patch on the iPod (measurement builds) | `re/album-art-stats.py` |
+| `iPod_Control/iTunes/iPodFirmAlbumArtStats` | The `album-art` patch on the iPod, only in a measurement build (`ALBUM_ART_STATS` 1; off since version 3.2) | `re/album-art-stats.py` |
 | `iPod_Control/Device/Preferences` (only byte 0x8b) | A flash or restore of a firmware without `shuffle-album-mix`: Album Mix off. Refer to [safety.md](safety.md). | The iPod firmware (its settings) |
 | `iPod_Control/iTunes/iPodFirmPlaylistArt/*.png` | "Choose Image…" in Playlist Artwork | iPodFirm (the next thumbnail file) |
 | `iPod_Control/iTunes/iPodFirmDarkMode` | The `dark-mode` patch on the iPod | `dark-mode` patch |
