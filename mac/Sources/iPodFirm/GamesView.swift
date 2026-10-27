@@ -48,9 +48,23 @@ struct GamesView: View {
                     }
                 }
                 HStack {
+                    Button("Choose Key File…") { model.chooseGameKeyFile() }
+                        .help("Optional: choose your own file IC-Info.sidb. The install copies it to the iPod with the games.")
+                    Spacer()
+                    if let key = model.gameKeyFile {
+                        Text(key.lastPathComponent).foregroundStyle(.secondary)
+                        Button("Clear") { model.gameKeyFile = nil }
+                            .help("Do not copy a key file")
+                    } else {
+                        Text("No key file").foregroundStyle(.secondary)
+                    }
+                }
+                Text("Optional. A game plays only on the iPod that bought it, and only if that iPod has the key file IC-Info.sidb of the account that bought the game. A restore removes this file. Choose your own file, for example from a backup of the folder iPod_Control/iTunes of this iPod. The app copies the file to iPod_Control/iTunes as it is. The app does not read, change or make a key file.")
+                    .font(.callout).foregroundStyle(.secondary)
+                HStack {
                     Button("Install Games") { Task { await model.installGames() } }
                         .disabled(model.currentIPod == nil || model.gamesLibrary.isEmpty)
-                        .help("Copy the selected games to the folder games_RO of the connected iPod")
+                        .help("Copy the selected games to the folder games_RO of the connected iPod, and the key file if you chose one")
                     Spacer()
                 }
                 if !model.gameInstallStatus.isEmpty {

@@ -245,13 +245,41 @@ def install_game(game: Game, target_root: str | Path, copy_key_file: bool = Fals
     report.bytes_copied += copied
 
     if copy_key_file and key_file_source is not None:
-        source = Path(key_file_source)
-        if source.exists():
-            out = target_root / "iTunes" / KEY_FILE_NAME
-            out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_bytes(source.read_bytes())
-            report.key_file_copied = True
+        copy_key(key_file_source, target_root)
+        report.key_file_copied = True
     return report
+
+
+# The largest key file that the app accepts. A real file is much smaller.
+KEY_FILE_MAX_SIZE = 4 * 1024 * 1024
+
+
+def check_key_file(path: str | Path) -> str | None:
+    """Check a key file that the owner chose. Return the problem, or None if the file can be
+    copied. The file has no known format, thus the check uses only the name and the size. The
+    function does not read the bytes of the file."""
+    path = Path(path)
+    if not path.is_file():
+        return f"The file {path.name} is not a file."
+    if path.name.lower() != KEY_FILE_NAME.lower():
+        return f"The key file must have the name {KEY_FILE_NAME}. The chosen file has the name {path.name}."
+    size = path.stat().st_size
+    if size == 0:
+        return f"The file {path.name} is empty."
+    if size > KEY_FILE_MAX_SIZE:
+        return f"The file {path.name} is too large ({size} bytes) for a key file."
+    return None
+
+
+def copy_key(source: str | Path, target_root: str | Path) -> None:
+    """Copy the owner's key file to iPod_Control/iTunes/IC-Info.sidb as it is. The app never
+    reads, changes or makes a key file."""
+    problem = check_key_file(source)
+    if problem:
+        raise InstallError(problem)
+    out = Path(target_root) / "iTunes" / KEY_FILE_NAME
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(Path(source).read_bytes())
 
 
 def install_library(games: list[Game], target_root: str | Path,
@@ -259,19 +287,25 @@ def install_library(games: list[Game], target_root: str | Path,
     """Copy the games to the folder iPod_Control of an iPod.
 
     The function copies each game that is complete. The function skips a game
-    that is not complete and gives the reason in the report.
+    that is not complete and gives the reason in the report. If a key file is
+    given, the function copies it one time, after the games.
     """
     report = InstallReport()
     for game in games:
         try:
-            one = install_game(game, target_root, copy_key_file, key_file_source)
+            one = install_game(game, target_root)
         except InstallError as e:
             report.skipped.append(game.folder)
             report.warnings.append(str(e))
             continue
         report.installed.extend(one.installed)
         report.bytes_copied += one.bytes_copied
-        report.key_file_copied = report.key_file_copied or one.key_file_copied
+    if copy_key_file and key_file_source is not None:
+        try:
+            copy_key(key_file_source, target_root)
+            report.key_file_copied = True
+        except InstallError as e:
+            report.warnings.append(f"key file: {e}")
     return report
 
 

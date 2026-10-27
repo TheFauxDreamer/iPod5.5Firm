@@ -63,29 +63,47 @@ public enum Device {
         return found
     }
 
+    /// Unmount all volumes of the iPod before a write to the firmware partition. A busy volume
+    /// gets the same attempts as the eject.
     public static func unmount(_ ipod: IPodDisk) throws {
-        _ = try runTool("/usr/sbin/diskutil", ["unmountDisk", ipod.disk])
+        try retryWhileBusy(["unmountDisk", ipod.disk], action: "unmount")
     }
 
-    /// The maximum number of eject attempts, and the time between two attempts in seconds.
+    /// The maximum number of attempts, and the time between two attempts in seconds.
     static let ejectAttempts = 5
     static let ejectRetryDelay = 2.0
 
+    /// The message when the iPod stays busy after all attempts. Spotlight or another app is
+    /// still reading the iPod volume.
+    public static func busyMessage(_ action: String) -> String {
+        "The app could not \(action) your iPod. macOS is still accessing your iPod. Try again in a second."
+    }
+
+    /// True if the diskutil error says that a process uses the volume.
+    static func isBusy(_ text: String) -> Bool {
+        text.contains("dissented") || text.contains("could not be unmounted") ||
+            text.localizedCaseInsensitiveContains("busy")
+    }
+
     /// Unmount all volumes of the iPod and eject it, as Finder does. Then the iPod can be disconnected.
-    /// Spotlight (mds) often reads the volume after a write and stops the unmount. Thus the eject
-    /// tries again after a short time. Other errors stop the eject immediately.
     public static func eject(_ ipod: IPodDisk) throws {
+        try retryWhileBusy(["eject", ipod.disk], action: "eject")
+    }
+
+    /// Run diskutil. Spotlight (mds) often reads the volume after a write and stops the unmount.
+    /// Thus a busy volume gets ejectAttempts attempts, ejectRetryDelay seconds apart. Other errors
+    /// stop at once.
+    static func retryWhileBusy(_ args: [String], action: String) throws {
         for attempt in 1...ejectAttempts {
             do {
-                _ = try runTool("/usr/sbin/diskutil", ["eject", ipod.disk])
+                _ = try runTool("/usr/sbin/diskutil", args)
                 return
             } catch {
-                let text = error.localizedDescription
-                guard text.contains("dissented") || text.contains("could not be unmounted") else { throw error }
+                guard isBusy(error.localizedDescription) else { throw error }
                 if attempt < ejectAttempts { Thread.sleep(forTimeInterval: ejectRetryDelay) }
             }
         }
-        throw FirmwareError("We were unable to eject your iPod. macOS is currently accessing it. Try again.")
+        throw FirmwareError(busyMessage(action))
     }
 }
 

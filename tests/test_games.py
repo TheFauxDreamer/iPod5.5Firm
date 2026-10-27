@@ -169,6 +169,36 @@ def test_install_copies_the_key_file(tmp_path):
     assert out.read_bytes() == b"\x11" * 23396
 
 
+def test_check_key_file(tmp_path):
+    """The app accepts only a file with the name IC-Info.sidb that is not empty."""
+    wrong = tmp_path / "keys.bin"
+    wrong.write_bytes(b"\x11" * 100)
+    assert "IC-Info.sidb" in games.check_key_file(wrong)
+    empty = tmp_path / "empty" / "IC-Info.sidb"
+    empty.parent.mkdir()
+    empty.write_bytes(b"")
+    assert "empty" in games.check_key_file(empty)
+    good = tmp_path / "IC-Info.sidb"
+    good.write_bytes(b"\x11" * 23396)
+    assert games.check_key_file(good) is None
+    assert games.check_key_file(tmp_path) is not None          # a folder
+
+
+def test_install_library_copies_the_key_file_once(tmp_path):
+    first = games.load_game(make_game(tmp_path / "source" / "11002"))
+    key = tmp_path / "IC-Info.sidb"
+    key.write_bytes(b"\x22" * 512)
+    target = tmp_path / "target"
+    report = games.install_library([first], target, copy_key_file=True, key_file_source=key)
+    assert report.key_file_copied
+    assert (target / "iTunes" / "IC-Info.sidb").read_bytes() == b"\x22" * 512
+    wrong = tmp_path / "other.bin"
+    wrong.write_bytes(b"\x33")
+    report = games.install_library([first], target, copy_key_file=True, key_file_source=wrong)
+    assert not report.key_file_copied and any("key file" in w for w in report.warnings)
+    assert (target / "iTunes" / "IC-Info.sidb").read_bytes() == b"\x22" * 512
+
+
 def test_install_never_removes_a_file(tmp_path):
     source = make_game(tmp_path / "source" / "11002")
     target = tmp_path / "target"

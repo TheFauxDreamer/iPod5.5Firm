@@ -232,7 +232,13 @@ To put the games on an iPod, open the **Games** pane. Go to the section **Instal
 
 To remove games from an iPod, open the section **Remove Games** in the same pane. Click **Read the Games on the iPod**. The pane lists the GUID of each game in the folder `games_RO`. Select the games and click **Remove Selected Games…**. A sheet asks you to confirm. The removal deletes only the folder of each selected game in `games_RO`. The folders `gamedata_RW` and `gamestats_WO` hold the saves and the scores of the games. The removal does not touch them.
 
-A game runs only on an iPod that has the file of the keys `iPod_Control/iTunes/IC-Info.sidb` of the account that bought the game. The app cannot make this file. The command `install-games --key-file` copies the file as it is.
+A game runs only on the iPod that bought it, and only if that iPod has the key file `iPod_Control/iTunes/IC-Info.sidb` of the account that bought the game. A restore of the iPod removes this file. The app cannot make the file, and the repository does not supply it. To copy your own key file with the games:
+
+1. Get your file `IC-Info.sidb`, for example from a backup of the folder `iPod_Control/iTunes` of this iPod.
+2. In the section **Install Games**, click **Choose Key File…** and select the file.
+3. Click **Install Games**.
+
+The app accepts only a file with the name `IC-Info.sidb` that is not empty and not larger than 4 MB. The app copies the file as it is. It does not read, change or make the file. To copy no key file, click **Clear**. The command `install-games --key-file` does the same check and copy.
 
 ## The firmware
 

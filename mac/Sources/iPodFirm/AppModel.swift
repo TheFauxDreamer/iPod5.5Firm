@@ -74,6 +74,8 @@ final class AppModel: ObservableObject {
     @Published var selectedGameFolders: Set<String> = []
     /// The state of the last copy of the games.
     @Published var gameInstallStatus = ""
+    /// The owner's key file IC-Info.sidb, or nil. The install copies it with the games.
+    @Published var gameKeyFile: URL?
     /// The GUID of each game in the folder games_RO of the connected iPod.
     @Published var ipodGames: [String] = []
     /// The GUID of each game that the owner selected for the removal.
@@ -922,10 +924,12 @@ final class AppModel: ObservableObject {
         }
         let root = volume.appendingPathComponent("iPod_Control")
         do {
+            let key = gameKeyFile
             let report = try await work("Copying \(wanted.count) game(s) to the iPod…") {
-                GameInstaller.install(wanted, to: root)
+                GameInstaller.install(wanted, to: root, copyKeyFile: key != nil, keyFileSource: key)
             }
             gameInstallStatus = "\(report.installed.count) game(s), \(report.bytesCopied) bytes"
+            if report.keyFileCopied { gameInstallStatus += ", key file copied" }
             for folder in report.installed { gameInstallStatus += "  \(folder)" }
             for warning in report.warnings { gameInstallStatus += "  skipped: \(warning)" }
         } catch {
@@ -947,6 +951,24 @@ final class AppModel: ObservableObject {
         let gamesDir = AppModel.gamesDirectory(at: folder) ?? folder
         gamesLibrary = GameLibrary.load(gamesDir.path)
         selectedGameFolders = []
+    }
+
+    /// Let the owner choose their own key file IC-Info.sidb. The app checks the name and the
+    /// size. It does not read the bytes of the file.
+    func chooseGameKeyFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.showsHiddenFiles = true
+        panel.message = "Choose your key file IC-Info.sidb, for example from a backup of the folder iPod_Control/iTunes of this iPod."
+        guard panel.runModal() == .OK, let file = panel.url else { return }
+        if let problem = GameInstaller.checkKeyFile(file) {
+            alert = AlertInfo(title: "This is not a key file", message: problem)
+            return
+        }
+        gameKeyFile = file
+        gameInstallStatus = ""
     }
 
     /// Select all the games, or no game.
@@ -1174,7 +1196,7 @@ final class AppModel: ObservableObject {
             playlistArt = []
             playlistArtChanged = false
             await refreshIPods()
-        } catch { fail("Cannot eject the iPod", error) }
+        } catch { fail("The iPod did not eject", error) }
     }
 
     func refreshBackups() { backups = Backups.list(in: Self.backupDir) }
