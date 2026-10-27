@@ -508,4 +508,6 @@ Emulator test (27 October 2026, the FolderLibrary with `iPodFirmAlbumArt` of 138
 | First | The visible rows came from the file (16 rows, 0 from the artwork). The row "All" started the table (37.8 ms). The background fill made 138 covers with 1 open and wrote the cache (21.7 ms) |
 | Second, 60 detents fast | 67 rows from the file, the cache loaded and valid (138 albums), no table, no fill, no open, 0 waits |
 
+Real iPod (27 October 2026): the owner flashed 2.9 with "iPodFirm Album Cache Test" 0.1.159 and reported: "that worked great". The stats of this test are not recorded.
+
 Step 4 of "Next steps for speed" (fewer file opens) is done in this version.
