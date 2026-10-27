@@ -35,7 +35,7 @@ Thus, about 8,500 lines of the app are in Swift. The UI and the helper (about 3,
 | `ArtworkDB.swift` | `artworkdb.py` |
 | `AlbumArt.swift` | `albumart.py` |
 | `MusicImport.swift` | `libimport.py`, `mp4tags.py` |
-| `GameKeys.swift` (the key store, the manifest, the library, the copy and the removal of the games) | `games.py` |
+| `Games.swift` (the manifest, the library, the copy and the removal of the games) | `games.py` |
 | `Device.swift`, `Operations.swift` | `device.py`, `cli.py` (`devices`, `backup`, `flash`, `restore`) |
 | `FirmwareVersion.swift` | None |
 | `FirmwareManifest.swift` (the iPodFirm list and `Patcher.detect`) | None. The Python patcher does not write the list. |

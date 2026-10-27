@@ -156,31 +156,6 @@ def cmd_devices(args) -> None:
         print(f"/dev/{i.disk}: {i.media_name}, {i.size / 1e9:.1f} GB, {i.block_size}-byte blocks")
 
 
-def cmd_game_keys(args) -> None:
-    from . import games
-    root = Path(args.volume)
-    store_path = root / "iTunes" / games.KEY_STORE_NAME
-    if not store_path.exists():
-        sys.exit(f"The file of the keys {store_path} not found.")
-    store = games.load_key_store(store_path)
-    total = sum(len(a.keys) for a in store.accounts)
-    print(f"File of the keys: {store_path}")
-    print(f"Accounts: {len(store.accounts)}   Keys: {total}")
-    print()
-    for a in store.accounts:
-        print(f"Account 0x{a.number:08x}   {len(a.keys)} keys")
-        for k in a.keys:
-            print(f"    key {k.index:<4} {k.hex()}")
-    games_dir = games.games_directory(root)
-    if args.games and games_dir is not None:
-        print()
-        print(f"Games in {games_dir}")
-        for name, sinf in games.find_games(games_dir):
-            g = games.game_keys(sinf.read_bytes(), store)
-            state = g.key.hex() if g.key else "the file of the keys has no such key"
-            print(f"    {name:<10} account 0x{g.number:08x}  key {g.key_index:<4} {state}")
-
-
 def cmd_install_games(args) -> None:
     from . import games
     source = Path(args.source)
@@ -380,12 +355,6 @@ def main(argv: list[str] | None = None) -> None:
 
     s = sub.add_parser("devices", help="list connected iPods")
     s.set_defaults(func=cmd_devices)
-
-    s = sub.add_parser("game-keys", help="read the keys of the games of an iPod")
-    s.add_argument("volume", help="the iPod_Control folder of the iPod, or a copy of it")
-    s.add_argument("--games", action="store_true",
-                   help="also show the key of each game in the folder of the games")
-    s.set_defaults(func=cmd_game_keys)
 
     s = sub.add_parser("install-games", help="copy the games to the iPod_Control folder of an iPod")
     s.add_argument("source", help="the folder with the games, or the folder iPod_Control of an iPod")

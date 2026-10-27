@@ -1,152 +1,15 @@
-"""Tests for the key store of the games and for the file sinf of a game.
+"""Tests for the manifest of a game, and for the copy and the removal of the games.
 
-The tests use a small synthetic file of keys. The tests do not use the file of
-a real iPod. The file of a real iPod is personal data.
+The tests use small synthetic games. The tests do not use the files of a real iPod.
 """
 
 from __future__ import annotations
 
 import plistlib
-import struct
 
 import pytest
 
 from ipodfw import games
-
-
-def record(tag: str, body: bytes) -> bytes:
-    """Make one record of the file iEKInfo.
-
-    The length of a record counts the length field, the name and the body.
-    The length field is 4 bytes and the name is 4 bytes.
-    """
-    assert len(tag) == 4
-    return struct.pack(">I", 8 + len(body)) + tag.encode("latin-1") + body
-
-
-def words(*values: int) -> bytes:
-    """Make the 32-bit numbers at the start of a record."""
-    return b"".join(struct.pack(">I", v) for v in values)
-
-
-def key_record(index: int, value: bytes) -> bytes:
-    """Make the record of one key."""
-    return record("key ", words(index, 1, 0) + record("valu", words(1, 0, 0) + value))
-
-
-def user_record(number: int, keys: list[tuple[int, bytes]]) -> bytes:
-    """Make the record of one account."""
-    body = words(number, len(keys), 0) + b"".join(key_record(i, v) for i, v in keys)
-    return record("user", body)
-
-
-def build_key_store(accounts: list[tuple[int, list[tuple[int, bytes]]]],
-                    guids: list[bytes] = ()) -> bytes:
-    """Make a small file of keys."""
-    body = words(1, 0, 0) + bytes(20)
-    body += record("indx", words(1, 0, 0, 8))
-    for number, keys in accounts:
-        body += user_record(number, keys)
-    for guid in guids:
-        body += record("guid", words(1, 0, 0) + guid)
-    top = record("sean", body)
-    return struct.pack(">I", len(top)) + bytes(0x48) + top
-
-
-def atom(tag: str, body: bytes) -> bytes:
-    """Make one atom of a file sinf.
-
-    The size of an atom counts the size field, the name and the body.
-    """
-    return struct.pack(">I", 8 + len(body)) + tag.encode("latin-1") + body
-
-
-KEY_A = bytes.fromhex("00112233445566778899aabbccddeeff")
-KEY_B = bytes.fromhex("0102030405060708090a0b0c0d0e0f10")
-
-
-def test_reads_the_accounts_and_the_keys():
-    data = build_key_store([
-        (0x11111111, [(1, KEY_A), (4, KEY_B)]),
-        (0x22222222, [(2, KEY_A)]),
-    ])
-    store = games.parse_key_store(data)
-    assert len(store.accounts) == 2
-    assert [a.number for a in store.accounts] == [0x11111111, 0x22222222]
-    assert len(store.accounts[0].keys) == 2
-    assert sum(len(a.keys) for a in store.accounts) == 3
-    assert store.account(0x11111111).keys[1].value == KEY_B
-    assert store.key(0x11111111, 1).value == KEY_A
-    assert store.key(0x22222222, 2).value == KEY_A
-    assert store.key(0x11111111, 99) is None
-    assert store.account(1) is None
-
-
-def test_the_key_index_is_the_number_of_the_key():
-    data = build_key_store([(0x11111111, [(1, KEY_A), (4, KEY_B)])])
-    store = games.parse_key_store(data)
-    account = store.account(0x11111111)
-    assert account.key(1).value == KEY_A
-    assert account.key(4).value == KEY_B
-
-
-def test_a_file_that_is_not_a_key_store_is_refused():
-    with pytest.raises(games.KeyStoreError):
-        games.parse_key_store(b"\x00" * 200)
-    with pytest.raises(games.KeyStoreError):
-        games.parse_key_store(b"")
-
-
-def test_a_file_with_a_wrong_name_is_refused():
-    data = bytearray(build_key_store([(1, [(1, KEY_A)])]))
-    data[0x50:0x54] = b"xxxx"
-    with pytest.raises(games.KeyStoreError):
-        games.parse_key_store(bytes(data))
-
-
-def test_the_device_ids_are_read():
-    # A synthetic device id. A real id holds the serial of the USB of the iPod.
-    guid = bytes.fromhex("0123456789abcdef01234567")
-    data = build_key_store([(1, [(1, KEY_A)])], guids=[guid])
-    store = games.parse_key_store(data)
-    assert len(store.device_ids) == 1
-    assert store.device_ids[0] == guid
-
-
-def test_sinf_atoms():
-    # The test uses synthetic values.
-    inner = (atom("user", struct.pack(">I", 0x11111111))
-             + atom("key ", struct.pack(">I", 4))
-             + atom("iviv", bytes.fromhex("fedcba9876543210fedcba9876543210"))
-             + atom("name", b"Test Account" + bytes(256 - 12)))
-    sinf = atom("sinf", atom("frma", bytes(4)) + atom("schi", inner))
-    parsed = games.parse_sinf(sinf)
-    assert struct.unpack(">I", parsed["user"])[0] == 0x11111111
-    assert struct.unpack(">I", parsed["key "])[0] == 4
-    assert parsed["iviv"] == bytes.fromhex("fedcba9876543210fedcba9876543210")
-    assert parsed["name"].split(b"\x00")[0] == b"Test Account"
-
-
-def test_the_game_gives_the_account_and_the_key():
-    inner = (atom("user", struct.pack(">I", 0x11111111))
-             + atom("key ", struct.pack(">I", 4))
-             + atom("iviv", bytes(16))
-             + atom("name", b"Test Account" + bytes(256 - 12)))
-    sinf = atom("sinf", atom("schi", inner))
-    store = games.parse_key_store(build_key_store([(0x11111111, [(4, KEY_B)])]))
-    g = games.game_keys(sinf, store)
-    assert g.number == 0x11111111
-    assert g.key_index == 4
-    assert g.name == "Test Account"
-    assert g.key.value == KEY_B
-
-
-def test_a_game_without_a_key_in_the_store():
-    inner = atom("user", struct.pack(">I", 0x11111111)) + atom("key ", struct.pack(">I", 9))
-    sinf = atom("sinf", atom("schi", inner))
-    store = games.parse_key_store(build_key_store([(0x11111111, [(4, KEY_B)])]))
-    g = games.game_keys(sinf, store)
-    assert g.key is None
 
 
 def test_the_games_directory_accepts_both_names(tmp_path):

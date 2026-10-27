@@ -2,10 +2,9 @@ import AppKit
 import IPodFWKit
 import SwiftUI
 
-// The pane of the games. The pane reads the file of the keys of the connected
-// iPod and the games in the folder games_RO of the iPod. The pane shows the
-// accounts of the Apple ID and the key of each account. The pane shows the key
-// of each game.
+// The pane of the games. The pane copies the game folders from a folder on the Mac
+// to the folder games_RO of the connected iPod. The pane also removes games from
+// the iPod.
 
 struct GamesView: View {
     @EnvironmentObject var model: AppModel
@@ -13,69 +12,10 @@ struct GamesView: View {
     var body: some View {
         Form {
             Section {
-                Label("The app does not come with the game files and does not download them. The games come from the iPod that bought them: use iTunes or the Finder on a Mac to put purchased games on the iPod. The app reads the keys and copies the game folders between the iPod and a folder on your Mac.",
+                Label("The app does not come with the game files and does not download them. The games come from the iPod that bought them: use iTunes or the Finder on a Mac to put purchased games on the iPod. The app copies the game folders from a folder on your Mac to the iPod.",
                       systemImage: "info.circle")
                     .font(.callout).foregroundStyle(.secondary)
             } header: { Text("About the Game Files") }
-
-            Section {
-                if model.currentIPod == nil {
-                    Label("No iPod is connected. Connect the iPod. The pane reads the file of the keys of the iPod.",
-                          systemImage: "cable.connector.slash").foregroundStyle(.secondary)
-                } else {
-                    HStack {
-                        Button("Read the Keys") { Task { await model.readGameKeys() } }
-                            .help("Read the file of the keys of the connected iPod")
-                        Spacer()
-                        if !model.gameKeyStatus.isEmpty { Text(model.gameKeyStatus).foregroundStyle(.secondary) }
-                    }
-                }
-                HStack {
-                    Button("Choose a Folder…") { Task { await model.readGameKeysFromFolder() } }
-                        .help("Read the file of the keys from a folder iPod_Control that you choose. The folder can come from any iPod, also from a copy of a backup.")
-                    Spacer()
-                }
-            } header: { Text("Key Store") }
-
-            if let store = model.gameKeyStore {
-                Section {
-                    HStack {
-                        Text("Accounts")
-                        Spacer()
-                        Text("\(store.accounts.count)").foregroundStyle(.secondary)
-                    }
-                    HStack {
-                        Text("Keys")
-                        Spacer()
-                        Text("\(store.keyCount)").foregroundStyle(.secondary)
-                    }
-                    if model.gameKeyFileSize > 0 {
-                        HStack {
-                            Text("File of the keys")
-                            Spacer()
-                            Text("\(model.gameKeyFileSize) bytes").foregroundStyle(.secondary)
-                        }
-                    }
-                } header: { Text("The File of the Keys") }
-
-                Section {
-                    ForEach(store.accounts) { account in
-                        AccountRow(account: account, games: model.gameKeyGames.filter { $0.keys.number == account.number })
-                    }
-                } header: { Text("Accounts") }
-            } else if !model.gameKeyStatus.isEmpty {
-                Section {
-                    Text(model.gameKeyStatus).foregroundStyle(.secondary)
-                } header: { Text("The File of the Keys") }
-            }
-
-            if !model.gameKeyGames.isEmpty {
-                Section {
-                    ForEach(model.gameKeyGames, id: \.sinfPath) { game in
-                        GameRow(game: game)
-                    }
-                } header: { Text("Games") }
-            }
 
             Section {
                 Label("The games are not in the app. The games are not in the firmware of the iPod. You must get the game files from another place: for example a backup of the folder iPod_Control of an iPod that has the games, or a folder that you keep on your Mac. Each game is a folder with the GUID of the game, for example 11002.",
@@ -219,58 +159,6 @@ struct GamePickerRow: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
-        }
-    }
-}
-
-/// One account of the Apple ID, with the number of its keys and the games that use it.
-struct AccountRow: View {
-    var account: GameKeys.Account
-    var games: [GameKeys.Game]
-    @State private var open = false
-
-    var body: some View {
-        DisclosureGroup(isExpanded: $open) {
-            if games.isEmpty {
-                Text("No game of the iPod uses this account.").foregroundStyle(.secondary)
-            }
-            ForEach(games, id: \.sinfPath) { game in
-                GameRow(game: game)
-            }
-            if !account.keys.isEmpty {
-                Text("Key indices: \(account.keys.map { String($0.index) }.sorted { $0 < $1 }.joined(separator: ", "))")
-                    .font(.callout).foregroundStyle(.secondary)
-            }
-        } label: {
-            HStack {
-                Text(String(format: "0x%08x", account.number))
-                Spacer()
-                Text("\(account.keys.count) keys").foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
-/// One game of the iPod, with its account and its key.
-struct GameRow: View {
-    var game: GameKeys.Game
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(game.folder)
-                Text("Account \(String(format: "0x%08x", game.keys.number))  •  key \(game.keys.keyIndex)")
-                    .font(.callout).foregroundStyle(.secondary)
-            }
-            Spacer()
-            if let key = game.keys.key {
-                Text(key.hex)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-            } else {
-                Label("no key", systemImage: "questionmark.circle")
-                    .font(.callout).foregroundStyle(.secondary)
-            }
         }
     }
 }

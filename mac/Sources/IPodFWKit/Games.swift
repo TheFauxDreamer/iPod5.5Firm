@@ -1,308 +1,7 @@
 import Foundation
 
-// The key store of the games of the iPod, and the files of a game.
-//
-// The file iPod_Control/iTunes/iEKInfo holds the keys of the accounts of the Apple ID.
-// The file holds one record for each account. Each account holds one record for each
-// key of the account. The key of a game is 16 bytes.
-//
-// The file iPod_Control/iTunes/IC-Info.sidb holds the same keys in a form that the app
-// cannot read. The app copies the file. The app never changes the bytes of the file.
-//
-// The file sinf of a game holds the number of the account, the number of the key, the
-// vector of AES and the encrypted data of the program.
-//
-// The research is in [../../re/games-keyfile.md](../../re/games-keyfile.md).
-// This is the Swift version of src/ipodfw/games.py.
-
-public enum GameKeys {
-    /// The name of the file of the keys in the folder iPod_Control/iTunes.
-    public static let keyStoreName = "iEKInfo"
-
-    /// The name of the other file of the keys. The app copies the file. The app cannot
-    /// read the file.
-    public static let keyFileName = "IC-Info.sidb"
-
-    /// The offset of the first record of the file iEKInfo. The first 0x4C bytes are the
-    /// header of the file.
-    public static let keyStoreHeaderSize = 0x4C
-
-    /// The size of one key, in bytes.
-    public static let keySize = 16
-
-    public enum StoreError: Error, CustomStringConvertible {
-        case tooShort
-        case notAKeyStore(String)
-
-        public var description: String {
-            switch self {
-            case .tooShort: return "The file is too short to be a file of keys."
-            case .notAKeyStore(let name): return "The file does not start with a key store. It has the name \"\(name)\"."
-            }
-        }
-    }
-
-    /// One record of the file iEKInfo.
-    public struct Record {
-        public var tag: String              // the name of the record, for example "user"
-        public var fields: [UInt32]         // the 32-bit numbers at the start of the record
-        public var data: Data               // the bytes after the numbers
-        public var children: [Record]       // the records of the body
-
-        public func child(_ tag: String) -> Record? {
-            children.first { $0.tag == tag }
-        }
-
-        public func children(_ tag: String) -> [Record] {
-            children.filter { $0.tag == tag }
-        }
-    }
-
-    /// One key of one account.
-    public struct Key: Identifiable {
-        public var index: Int               // the number of the key, for example 4
-        public var value: Data              // the key, 16 bytes
-        public var id: Int { index }
-
-        public var hex: String { value.map { String(format: "%02x", $0) }.joined() }
-    }
-
-    /// One account of the Apple ID, with all of its keys.
-    public struct Account: Identifiable {
-        public var number: UInt32           // the number of the account of the purchase
-        public var keys: [Key]
-        public var id: UInt32 { number }
-
-        public func key(_ index: Int) -> Key? {
-            keys.first { $0.index == index }
-        }
-    }
-
-    /// The file iEKInfo: the keys of the accounts of the iPod.
-    public struct KeyStore {
-        public var accounts: [Account]
-        public var deviceIDs: [Data]         // the records "guid"
-        public var version: Int              // the number of the first record
-
-        public func account(_ number: UInt32) -> Account? {
-            accounts.first { $0.number == number }
-        }
-
-        public func key(_ number: UInt32, _ index: Int) -> Key? {
-            account(number)?.key(index)
-        }
-
-        public var keyCount: Int { accounts.reduce(0) { $0 + $1.keys.count } }
-    }
-
-    // MARK: - The reader of the file of the keys
-
-    /// Read one record at this offset. Give nil when the bytes are not a record.
-    ///
-    /// A record has a length of 4 bytes, a name of 4 bytes and a body. The length
-    /// counts the name and the body. The length and the name are big endian.
-    static func readRecord(_ data: [UInt8], _ off: Int) -> (length: Int, tag: String, body: [UInt8])? {
-        if off < 0 || off + 8 > data.count { return nil }
-        let length = Int(be32(data, off))
-        if length < 8 || off + length > data.count { return nil }
-        let tag = String(bytes: data[(off + 4)..<(off + 8)], encoding: .isoLatin1) ?? ""
-        return (length, tag, Array(data[(off + 8)..<(off + length)]))
-    }
-
-    /// Tell whether the name of a record is a name.
-    ///
-    /// The name of a record has 4 characters. Each character is printable. The name of
-    /// a record of the file of the keys is "sean", "valu", "indx", "user", "key " or "guid".
-    static func hasName(_ tag: String) -> Bool {
-        tag.count == 4 && tag.unicodeScalars.allSatisfy { $0.value >= 0x20 && $0.value <= 0x7E }
-    }
-
-    /// Read the records from off to end. Give the offsets of the records.
-    ///
-    /// The function gives nil when the records do not fill the whole range, or when a
-    /// record has no name.
-    static func tile(_ data: [UInt8], _ off: Int, _ end: Int) -> [Int]? {
-        var out: [Int] = []
-        var p = off
-        while p < end {
-            guard let rec = readRecord(data, p), hasName(rec.tag) else { return nil }
-            out.append(p)
-            p += rec.length
-        }
-        return p == end ? out : nil
-    }
-
-    /// Find the records that the body of a record holds.
-    ///
-    /// The body of a record starts with some 32-bit numbers. The records come after
-    /// the numbers. The function tries every count of numbers and keeps the count that
-    /// gives the most records.
-    static func findChildren(_ data: [UInt8], _ off: Int, _ length: Int) -> [Int] {
-        let bodyLength = max(0, length - 8)
-        var best: [Int] = []
-        var skip = 0
-        while skip <= min(bodyLength, 60) {
-            if let found = tile(data, off + 8 + skip, off + length), found.count > best.count {
-                best = found
-            }
-            skip += 4
-        }
-        return best
-    }
-
-    /// Make a record and all of its child records.
-    static func parse(_ data: [UInt8], _ off: Int) -> Record? {
-        guard let rec = readRecord(data, off) else { return nil }
-        let fields = stride(from: 0, to: max(0, rec.body.count - 3), by: 4).map { be32(rec.body, $0) }
-        var record = Record(tag: rec.tag, fields: fields, data: Data(rec.body), children: [])
-        for childOff in findChildren(data, off, rec.length) {
-            if let child = parse(data, childOff) { record.children.append(child) }
-        }
-        return record
-    }
-
-    /// Read the file iEKInfo. Give the keys of the accounts.
-    public static func parseKeyStore(_ data: Data) throws -> KeyStore {
-        let bytes = [UInt8](data)
-        guard bytes.count >= keyStoreHeaderSize + 8 else { throw StoreError.tooShort }
-        guard let top = readRecord(bytes, keyStoreHeaderSize) else { throw StoreError.tooShort }
-        guard top.tag == "sean" else { throw StoreError.notAKeyStore(top.tag) }
-
-        var store = KeyStore(accounts: [], deviceIDs: [], version: 0)
-        for childOff in findChildren(bytes, keyStoreHeaderSize, top.length) {
-            guard let child = parse(bytes, childOff) else { continue }
-            switch child.tag {
-            case "user": store.accounts.append(account(child))
-            case "guid": store.deviceIDs.append(child.data.count >= 12 ? child.data.subdata(in: 12..<child.data.count) : Data())
-            case "indx": store.version = child.fields.first.map { Int($0) } ?? 0
-            default: break
-            }
-        }
-        return store
-    }
-
-    /// Make an account and its keys from a record "user".
-    static func account(_ rec: Record) -> Account {
-        let number = rec.fields.first ?? 0
-        var keys: [Key] = []
-        for keyRec in rec.children("key ") {
-            let index = Int(keyRec.fields.first ?? 0)
-            guard let valueRec = keyRec.child("valu"), valueRec.data.count >= 12 + keySize else { continue }
-            let value = valueRec.data.subdata(in: 12..<(12 + keySize))
-            keys.append(Key(index: index, value: value))
-        }
-        return Account(number: number, keys: keys)
-    }
-
-    /// Read the file iEKInfo at this path.
-    public static func loadKeyStore(_ path: String) throws -> KeyStore {
-        try parseKeyStore(Data(contentsOf: URL(fileURLWithPath: path)))
-    }
-
-    // MARK: - The reader of the file sinf of a game
-
-    /// Read the atoms of a file. Give the name and the body of each atom.
-    ///
-    /// An atom has a size of 4 bytes, a name of 4 bytes and a body. The size counts
-    /// the name and the body. The size and the name are big endian.
-    static func atoms(_ data: [UInt8], _ off: Int, _ end: Int) -> [(tag: String, body: [UInt8])] {
-        var out: [(tag: String, body: [UInt8])] = []
-        var p = off
-        while p + 8 <= end {
-            let size = Int(be32(data, p))
-            if size < 8 || p + size > end { break }
-            let tag = String(bytes: data[(p + 4)..<(p + 8)], encoding: .isoLatin1) ?? ""
-            out.append((tag, Array(data[(p + 8)..<(p + size)])))
-            p += size
-        }
-        return out
-    }
-
-    /// Read the file sinf of a game. Give the body of each atom.
-    ///
-    /// The atoms "user", "key ", "iviv", "righ", "name" and "priv" are in the atom
-    /// "schi" of the atom "sinf".
-    public static func parseSinf(_ data: Data) -> [String: [UInt8]] {
-        let bytes = [UInt8](data)
-        var out: [String: [UInt8]] = [:]
-        for atom in atoms(bytes, 0, bytes.count) where atom.tag == "sinf" {
-            for atom2 in atoms(atom.body, 0, atom.body.count) {
-                if atom2.tag == "schi" {
-                    for atom3 in atoms(atom2.body, 0, atom2.body.count) { out[atom3.tag] = atom3.body }
-                } else {
-                    out[atom2.tag] = atom2.body
-                }
-            }
-        }
-        return out
-    }
-
-    /// The keys of one game, and the account that owns the game.
-    public struct GameKey {
-        public var number: UInt32       // the number of the account, from the atom "user"
-        public var keyIndex: Int        // the number of the key, from the atom "key "
-        public var iv: Data             // the vector of AES, 16 bytes, from the atom "iviv"
-        public var name: String         // the name of the account, from the atom "name"
-        public var key: Key?            // the key of the account, when the file of the keys has it
-    }
-
-    /// Read the file sinf of a game. Give the account and the key of the game.
-    public static func gameKeys(_ sinf: Data, _ store: KeyStore?) -> GameKey {
-        let atoms = parseSinf(sinf)
-        let number = atoms["user"].map { be32($0, 0) } ?? 0
-        let index = atoms["key "].map { Int(be32($0, 0)) } ?? 0
-        let iv = Data(atoms["iviv"] ?? [])
-        let name = String(data: Data((atoms["name"] ?? []).prefix { $0 != 0 }), encoding: .isoLatin1) ?? ""
-        return GameKey(number: number, keyIndex: index, iv: iv, name: name,
-                       key: store?.key(number, index))
-    }
-
-    /// One game of a folder of games.
-    public struct Game {
-        public var folder: String       // the name of the folder of the game
-        public var sinfPath: URL        // the path of the file sinf
-        public var keys: GameKey
-    }
-
-    /// Find the folder with the games in a folder iPod_Control.
-    ///
-    /// The firmware asks for the name `games_RO` with small letters. The program of
-    /// iTunes writes the name `Games_RO` with a capital letter. The function accepts
-    /// both names. The function gives nil when the folder has no such folder.
-    public static func gamesDirectory(at root: String) -> String? {
-        for name in ["games_RO", "Games_RO"] {
-            let dir = (root as NSString).appendingPathComponent(name)
-            var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: dir, isDirectory: &isDir), isDir.boolValue {
-                return dir
-            }
-        }
-        return nil
-    }
-
-    /// Find the games in a folder. Give the name of the game and the file sinf.
-    ///
-    /// The folder holds one folder for each game. The folder holds the file sinf of the
-    /// program of the game.
-    public static func findGames(_ dir: String, _ store: KeyStore?) -> [Game] {
-        let fm = FileManager.default
-        let root = URL(fileURLWithPath: dir)
-        guard let folders = try? fm.contentsOfDirectory(atPath: dir) else { return [] }
-        var out: [Game] = []
-        for folder in folders.sorted() {
-            let exeDir = root.appendingPathComponent(folder).appendingPathComponent("Executables")
-            guard let names = try? fm.contentsOfDirectory(atPath: exeDir.path) else { continue }
-            for name in names.sorted() where name.hasSuffix(".sinf") {
-                let path = exeDir.appendingPathComponent(name)
-                guard let data = try? Data(contentsOf: path) else { continue }
-                out.append(Game(folder: folder, sinfPath: path, keys: gameKeys(data, store)))
-            }
-        }
-        return out
-    }
-}
-
-// The reader of the manifest of a game, and the copy of the games to an iPod.
+// The reader of the manifest of a game, the copy of the games to an iPod and the
+// removal of the games from an iPod.
 // This is the Swift version of src/ipodfw/games.py.
 
 /// One file of the array Files of the manifest of a game.
@@ -387,6 +86,22 @@ public enum GameLibrary {
     /// never change the manifest or its signature.
     public static let extraFiles = ["Manifest.plist", "Manifest.plist.p7b", "iTunesMetaData"]
 
+    /// Find the folder with the games in a folder iPod_Control.
+    ///
+    /// The firmware asks for the name `games_RO` with small letters. The program of
+    /// iTunes writes the name `Games_RO` with a capital letter. The function accepts
+    /// both names. The function gives nil when the folder has no such folder.
+    public static func gamesDirectory(at root: String) -> String? {
+        for name in [gamesDirName, gamesDirNameITunes] {
+            let dir = (root as NSString).appendingPathComponent(name)
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: dir, isDirectory: &isDir), isDir.boolValue {
+                return dir
+            }
+        }
+        return nil
+    }
+
     /// Read the game in this folder. The folder must hold the file Manifest.plist.
     public static func loadGame(_ folder: URL) throws -> GameLibraryItem {
         let manifestURL = folder.appendingPathComponent("Manifest.plist")
@@ -441,8 +156,8 @@ public enum GameLibrary {
 
 /// The copy of the games to the folder iPod_Control of an iPod.
 public enum GameInstaller {
-    /// The name of the file of the keys that the DRM library of the system reads.
-    /// The app copies the file. The app never changes the bytes of the file.
+    /// The name of the file of the keys of the games in the folder iPod_Control/iTunes.
+    /// The app copies the file. The app never reads or changes the bytes of the file.
     public static let keyFileName = "IC-Info.sidb"
 
     /// The result of the copy of the games to an iPod.
@@ -604,7 +319,7 @@ public enum GameRemover {
     /// The GUID must hold hexadecimal characters only. The function refuses every
     /// other name: it never removes a file outside the folder of a game.
     public static func remove(_ targetRoot: String, _ guids: [String]) throws -> Report {
-        guard let gamesDir = GameKeys.gamesDirectory(at: targetRoot) else {
+        guard let gamesDir = GameLibrary.gamesDirectory(at: targetRoot) else {
             throw RemoveError.noGamesFolder(targetRoot)
         }
         var report = Report()

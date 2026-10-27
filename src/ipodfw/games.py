@@ -1,17 +1,10 @@
-"""The key store of the games of the iPod, and the files of a game.
+"""The games of the iPod: the manifest of a game, the copy and the removal.
 
-The file `iPod_Control/iTunes/iEKInfo` holds the keys of the accounts of the
-Apple ID. The file holds one record for each account. Each record holds one
-record for each key of the account. The key of a game is 16 bytes.
+The app copies the folder of each game to the folder `iPod_Control/games_RO`
+of the iPod. The app can also copy the file `iPod_Control/iTunes/IC-Info.sidb`
+from another folder. The app never reads or changes the bytes of that file.
 
-The file `iPod_Control/iTunes/IC-Info.sidb` holds the same keys in a form
-that the app cannot read. The file has no known format. The app copies the
-file. The app never changes the bytes of the file.
-
-The file `sinf` of a game holds the number of the account, the number of the
-key, the vector of AES and the encrypted data of the program.
-
-The research is in [../../re/games-keyfile.md](../../re/games-keyfile.md).
+The research is in [../../re/games.md](../../re/games.md).
 """
 
 from __future__ import annotations
@@ -19,267 +12,8 @@ from __future__ import annotations
 import plistlib
 import re
 import shutil
-import struct
 from dataclasses import dataclass, field
 from pathlib import Path
-
-# The name of the file of the keys in the folder iPod_Control/iTunes.
-KEY_STORE_NAME = "iEKInfo"
-
-# The name of the other file of the keys. The app copies the file. The app
-# cannot read the file.
-KEY_FILE_NAME = "IC-Info.sidb"
-
-# The offset of the first record of the file iEKInfo. The first 0x4c bytes
-# are the header of the file.
-KEY_STORE_HEADER_SIZE = 0x4C
-
-# The size of one key, in bytes.
-KEY_SIZE = 16
-
-
-class KeyStoreError(Exception):
-    """The file of the keys is not a file of keys."""
-
-
-@dataclass
-class Key:
-    """One key of one account."""
-
-    index: int          # the number of the key, for example 4
-    value: bytes        # the key, 16 bytes
-
-    def hex(self) -> str:
-        return self.value.hex()
-
-
-@dataclass
-class Account:
-    """One account of the Apple ID, with all of its keys."""
-
-    number: int         # the number of the account of the purchase
-    keys: list[Key] = field(default_factory=list)
-
-    def key(self, index: int) -> Key | None:
-        """Give the key with this number, or None when the account has no such key."""
-        for k in self.keys:
-            if k.index == index:
-                return k
-        return None
-
-
-@dataclass
-class Record:
-    """One record of the file iEKInfo."""
-
-    tag: str            # the name of the record, for example "user"
-    fields: list[int]   # the 32-bit numbers at the start of the record
-    data: bytes         # the bytes after the numbers
-    children: list["Record"] = field(default_factory=list)
-
-    def child(self, tag: str) -> "Record | None":
-        """Give the first child record with this name, or None."""
-        for c in self.children:
-            if c.tag == tag:
-                return c
-        return None
-
-    def children_named(self, tag: str) -> list["Record"]:
-        """Give all the child records with this name."""
-        return [c for c in self.children if c.tag == tag]
-
-
-@dataclass
-class KeyStore:
-    """The file iEKInfo: the keys of the accounts of the iPod."""
-
-    accounts: list[Account] = field(default_factory=list)
-    device_ids: list[bytes] = field(default_factory=list)   # the records "guid"
-    version: int = 0                                        # the number of the first record
-
-    def account(self, number: int) -> Account | None:
-        """Give the account with this number, or None when the file has no such account."""
-        for a in self.accounts:
-            if a.number == number:
-                return a
-        return None
-
-    def key(self, number: int, index: int) -> Key | None:
-        """Give the key of this account, or None when the file has no such key."""
-        a = self.account(number)
-        return a.key(index) if a else None
-
-
-def _read_record(buf: bytes, off: int) -> tuple[int, str, bytes] | None:
-    """Read one record at this offset. Give None when the bytes are not a record.
-
-    A record has a length of 4 bytes, a name of 4 bytes and a body. The
-    length counts the name and the body. The length and the name are big
-    endian.
-    """
-    if off + 8 > len(buf):
-        return None
-    length = struct.unpack_from(">I", buf, off)[0]
-    if length < 8 or off + length > len(buf):
-        return None
-    tag = buf[off + 4:off + 8].decode("latin-1")
-    return length, tag, buf[off + 8:off + length]
-
-
-def _has_name(tag: str) -> bool:
-    """Tell whether the name of a record is a name.
-
-    The name of a record has 4 characters. Each character is printable.
-    The name of a record of the file of the keys is "sean", "valu", "indx",
-    "user", "key " or "guid".
-    """
-    return len(tag) == 4 and all(0x20 <= ord(c) <= 0x7E for c in tag)
-
-
-def _tile(buf: bytes, off: int, end: int) -> list[int] | None:
-    """Read the records from off to end. Give the offsets of the records.
-
-    The function gives None when the records do not fill the whole range, or
-    when a record has no name.
-    """
-    out: list[int] = []
-    p = off
-    while p < end:
-        rec = _read_record(buf, p)
-        if rec is None or not _has_name(rec[1]):
-            return None
-        out.append(p)
-        p += rec[0]
-    return out if p == end else None
-
-
-def _find_children(buf: bytes, off: int, length: int) -> list[int]:
-    """Find the records that the body of a record holds.
-
-    The body of a record starts with some 32-bit numbers. The records come
-    after the numbers. The function tries every count of numbers and keeps
-    the count that gives the most records.
-    """
-    body = buf[off + 8:off + length]
-    best: list[int] = []
-    for skip in range(0, min(len(body) + 1, 64), 4):
-        found = _tile(buf, off + 8 + skip, off + length)
-        if found is not None and len(found) > len(best):
-            best = found
-    return best
-
-
-def _parse(buf: bytes, off: int) -> Record:
-    """Make a record and all of its child records."""
-    length, tag, body = _read_record(buf, off)
-    fields = list(struct.unpack_from(">%dI" % (len(body) // 4), body, 0))
-    rec = Record(tag=tag, fields=fields, data=body)
-    for child_off in _find_children(buf, off, length):
-        rec.children.append(_parse(buf, child_off))
-    return rec
-
-
-def parse_key_store(data: bytes) -> KeyStore:
-    """Read the file iEKInfo. Give the keys of the accounts.
-
-    The function raises KeyStoreError when the bytes are not a file of keys.
-    """
-    if len(data) < KEY_STORE_HEADER_SIZE + 8:
-        raise KeyStoreError("The file is too short to be a file of keys.")
-    top = _read_record(data, KEY_STORE_HEADER_SIZE)
-    if top is None:
-        raise KeyStoreError("The file has no record at the start of its body.")
-    length, tag, _body = top
-    if tag != "sean":
-        raise KeyStoreError(f"The file does not start with a key store. It has the name {tag!r}.")
-
-    store = KeyStore()
-    for child_off in _find_children(data, KEY_STORE_HEADER_SIZE, length):
-        child = _parse(data, child_off)
-        if child.tag == "user":
-            store.accounts.append(_account(child))
-        elif child.tag == "guid":
-            store.device_ids.append(child.data[12:])
-        elif child.tag == "indx":
-            store.version = child.fields[0] if child.fields else 0
-    return store
-
-
-def _account(rec: Record) -> Account:
-    """Make an account and its keys from a record "user"."""
-    number = rec.fields[0] if rec.fields else 0
-    account = Account(number=number)
-    for key_rec in rec.children_named("key "):
-        index = key_rec.fields[0] if key_rec.fields else 0
-        value_rec = key_rec.child("valu")
-        if value_rec is None:
-            continue
-        value = value_rec.data[12:12 + KEY_SIZE]
-        if len(value) == KEY_SIZE:
-            account.keys.append(Key(index=index, value=value))
-    return account
-
-
-def load_key_store(path: str | Path) -> KeyStore:
-    """Read the file iEKInfo at this path."""
-    return parse_key_store(Path(path).read_bytes())
-
-
-@dataclass
-class GameKeys:
-    """The keys of one game, and the account that owns the game."""
-
-    number: int         # the number of the account, from the atom "user"
-    key_index: int      # the number of the key, from the atom "key "
-    iv: bytes           # the vector of AES, 16 bytes, from the atom "iviv"
-    name: str           # the name of the account, from the atom "name"
-    key: Key | None     # the key of the account, when the file of the keys has it
-
-
-def _atoms(buf: bytes, off: int, end: int) -> list[tuple[str, bytes]]:
-    """Read the atoms of a file. Give the name and the body of each atom.
-
-    An atom has a size of 4 bytes, a name of 4 bytes and a body. The size
-    counts the name and the body. The size and the name are big endian.
-    """
-    out: list[tuple[str, bytes]] = []
-    while off + 8 <= end:
-        size = struct.unpack_from(">I", buf, off)[0]
-        if size < 8 or off + size > end:
-            break
-        out.append((buf[off + 4:off + 8].decode("latin-1"), buf[off + 8:off + size]))
-        off += size
-    return out
-
-
-def parse_sinf(data: bytes) -> dict[str, bytes]:
-    """Read the file sinf of a game. Give the body of each atom.
-
-    The atoms "user", "key ", "iviv", "righ", "name" and "priv" are in the
-    atom "schi" of the atom "sinf".
-    """
-    out: dict[str, bytes] = {}
-    for tag, body in _atoms(data, 0, len(data)):
-        if tag != "sinf":
-            continue
-        for tag2, body2 in _atoms(body, 0, len(body)):
-            if tag2 == "schi":
-                for tag3, body3 in _atoms(body2, 0, len(body2)):
-                    out[tag3] = body3
-            else:
-                out[tag2] = body2
-    return out
-
-
-def game_keys(sinf_data: bytes, store: KeyStore | None) -> GameKeys:
-    """Read the file sinf of a game. Give the account and the key of the game."""
-    atoms = parse_sinf(sinf_data)
-    number = struct.unpack_from(">I", atoms["user"], 0)[0] if "user" in atoms else 0
-    index = struct.unpack_from(">I", atoms["key "], 0)[0] if "key " in atoms else 0
-    iv = atoms.get("iviv", b"")
-    name = atoms.get("name", b"").split(b"\x00")[0].decode("latin-1", "replace")
-    key = store.key(number, index) if store else None
-    return GameKeys(number=number, key_index=index, iv=iv, name=name, key=key)
 
 
 def games_directory(root: str | Path) -> Path | None:
@@ -295,22 +29,6 @@ def games_directory(root: str | Path) -> Path | None:
         if candidate.is_dir():
             return candidate
     return None
-
-
-def find_games(games_dir: str | Path) -> list[tuple[str, Path]]:
-    """Find the games in a folder. Give the name of the game and the path of the file sinf.
-
-    The folder holds one folder for each game. The folder holds the file
-    sinf of the program of the game.
-    """
-    root = Path(games_dir)
-    out: list[tuple[str, Path]] = []
-    for folder in sorted(root.iterdir()):
-        if not folder.is_dir():
-            continue
-        for sinf in sorted(folder.glob("Executables/*.sinf")):
-            out.append((folder.name, sinf))
-    return out
 
 
 # The name of the folder of the games. The firmware asks for the name with
@@ -441,8 +159,8 @@ def load_library(games_dir: str | Path) -> list[Game]:
     return out
 
 
-# The name of the file of the keys that the DRM library of the system reads.
-# The app copies the file. The app never changes the bytes of the file.
+# The name of the file of the keys of the games in the folder iPod_Control/iTunes.
+# The app copies the file. The app never reads or changes the bytes of the file.
 KEY_FILE_NAME = "IC-Info.sidb"
 
 # The pattern of the folder of one game: hexadecimal characters only. The GUID

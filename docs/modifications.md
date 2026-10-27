@@ -1030,7 +1030,7 @@ In the Pictures pane, the "Dark Theme" switch shows the theme pictures. "Replace
 
 - 23 Views have fields that do not agree with 1.3. The import report lists them.
 - The rating stars in Now Playing stay almost invisible. The source of the star colour is not found.
-- The theme 1.2.1 code changes (6 `nop` at (address removed)–(address removed) in 1.3) remove a file key check. They are not a part of the theme, and iPodFirm does not apply them.
+- The theme 1.2.1 also changes 17 bytes of program code. The changes are not a part of the theme. iPodFirm does not apply them.
 
 **Test status.** Tested on a real iPod 5.5G on 2 October 2026, with and without `album-art`.
 

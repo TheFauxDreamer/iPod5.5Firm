@@ -65,14 +65,6 @@ final class AppModel: ObservableObject {
     @Published var appearance: Appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .light {
         didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance"); switchesChanged(oldValue != appearance) }
     }
-    /// The file of the keys of the connected iPod, after the user reads it.
-    @Published var gameKeyStore: GameKeys.KeyStore?
-    /// The games of the connected iPod, after the user reads them.
-    @Published var gameKeyGames: [GameKeys.Game] = []
-    /// The size of the file IC-Info.sidb of the connected iPod, in bytes. Zero: the iPod has no such file.
-    @Published var gameKeyFileSize = 0
-    /// The state of the last read of the file of the keys.
-    @Published var gameKeyStatus = ""
     /// The folder of the games that the user chooses. The folder holds the games, or the
     /// folder `iPod_Control` of an iPod.
     @Published var gamesSourceFolder: URL?
@@ -899,61 +891,7 @@ final class AppModel: ObservableObject {
     /// The folder of the games. The firmware asks for the name `games_RO` with small
     /// letters. The program of iTunes writes the name `Games_RO` with a capital letter.
     static func gamesDirectory(at root: URL) -> URL? {
-        GameKeys.gamesDirectory(at: root.path).map { URL(fileURLWithPath: $0) }
-    }
-
-    /// Read the file of the keys of the connected iPod, and the games of the iPod.
-    /// The pane of the games shows the result.
-    func readGameKeys() async {
-        guard currentIPod != nil else {
-            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The pane of the games reads the file of the keys of the iPod.")
-            return
-        }
-        guard let volume = ipodVolume() else {
-            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
-            return
-        }
-        await readGameKeys(at: volume.appendingPathComponent("iPod_Control"), name: "the iPod")
-    }
-
-    /// Read the file of the keys and the games from a folder that the user chooses.
-    /// The folder must have the same shape as the folder `iPod_Control` of an iPod.
-    /// The folder can come from any iPod, also from a copy of a backup.
-    func readGameKeysFromFolder() async {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.message = "Choose the folder iPod_Control of an iPod, or a copy of it."
-        guard panel.runModal() == .OK, let folder = panel.url else { return }
-        await readGameKeys(at: folder, name: folder.lastPathComponent)
-    }
-
-    /// Read the file of the keys and the games from a folder. The folder holds the
-    /// folder `iTunes` with the file of the keys, and the folder `Games_RO` with the games.
-    /// The name of the folder `Games_RO` can also have a capital letter, as on an iPod
-    /// with the file system HFS+. The app tries both names.
-    func readGameKeys(at root: URL, name: String) async {
-        let storeURL = root.appendingPathComponent("iTunes/\(GameKeys.keyStoreName)")
-        let keyFile = root.appendingPathComponent("iTunes/\(GameKeys.keyFileName)")
-        let gamesDir = GameKeys.gamesDirectory(at: root.path)
-        do {
-            let result = try await work("Reading the file of the keys of \(name)…") {
-                let store = try GameKeys.loadKeyStore(storeURL.path)
-                let games = gamesDir.map { GameKeys.findGames($0, store) } ?? []
-                let keyFileSize = (try? FileManager.default.attributesOfItem(atPath: keyFile.path)[.size] as? Int) ?? 0
-                return (store, games, keyFileSize)
-            }
-            gameKeyStore = result.0
-            gameKeyGames = result.1
-            gameKeyFileSize = result.2
-            gameKeyStatus = "\(result.0.accounts.count) accounts, \(result.0.keyCount) keys, \(result.1.count) games"
-        } catch {
-            gameKeyStore = nil
-            gameKeyGames = []
-            gameKeyFileSize = 0
-            gameKeyStatus = "The folder has no file of the keys that the app can read. The file \(GameKeys.keyStoreName) is not in the folder iTunes."
-        }
+        GameLibrary.gamesDirectory(at: root.path).map { URL(fileURLWithPath: $0) }
     }
 
     /// Copy the games to the connected iPod. The pane of the games shows the result.
@@ -1028,7 +966,7 @@ final class AppModel: ObservableObject {
             return
         }
         let root = volume.appendingPathComponent("iPod_Control").path
-        let games = (GameKeys.gamesDirectory(at: root)).map { GameRemover.removableFolders($0) } ?? []
+        let games = (GameLibrary.gamesDirectory(at: root)).map { GameRemover.removableFolders($0) } ?? []
         ipodGames = games
         selectedIPodGames = selectedIPodGames.intersection(Set(games))
         gameRemoveStatus = games.isEmpty ? "The folder games_RO of the iPod holds no game." : ""

@@ -11,7 +11,7 @@ final class GameInstallAgreementTests: XCTestCase {
         guard FileManager.default.fileExists(atPath: root) else {
             throw XCTSkip("The folder iPod_Control is not here.")
         }
-        let gamesDir = GameKeys.gamesDirectory(at: root)!
+        let gamesDir = GameLibrary.gamesDirectory(at: root)!
         let library = GameLibrary.load(gamesDir)
         XCTAssertEqual(library.map { $0.folder },
                        ["11002", "12345", "12346", "14005", "15042", "1B200", "1C300", "22022", "50514"])

@@ -2031,157 +2031,23 @@ final class FirmwareManifestTests: XCTestCase {
     }
 }
 
-// The tests of the key store of the games. The tests use a small synthetic file
-// of keys. The tests do not use the file of a real iPod.
-final class GameKeysTests: XCTestCase {
-    static let keyA = Data([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
-                            0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff])
-    static let keyB = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                            0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10])
-
-    static func words(_ values: [UInt32]) -> Data {
-        var d = Data()
-        for v in values { withUnsafeBytes(of: v.bigEndian) { d.append(contentsOf: $0) } }
-        return d
-    }
-
-    /// One record of the file iEKInfo. The length counts the length field, the name and the body.
-    static func record(_ tag: String, _ body: Data) -> Data {
-        var d = Data()
-        withUnsafeBytes(of: UInt32(8 + body.count).bigEndian) { d.append(contentsOf: $0) }
-        d.append(contentsOf: Array(tag.utf8))
-        d.append(body)
-        return d
-    }
-
-    /// One atom of a file sinf. The size counts the size field, the name and the body.
-    static func atom(_ tag: String, _ body: Data) -> Data {
-        record(tag, body)
-    }
-
-    static func keyRecord(_ index: UInt32, _ value: Data) -> Data {
-        record("key ", words([index, 1, 0]) + record("valu", words([1, 0, 0]) + value))
-    }
-
-    static func userRecord(_ number: UInt32, _ keys: [(UInt32, Data)]) -> Data {
-        var body = words([number, UInt32(keys.count), 0])
-        for (i, v) in keys { body += keyRecord(i, v) }
-        return record("user", body)
-    }
-
-    static func buildKeyStore(_ accounts: [(UInt32, [(UInt32, Data)])],
-                              guids: [Data] = []) -> Data {
-        var body = words([1, 0, 0]) + Data(repeating: 0, count: 20)
-        body += record("indx", words([1, 0, 0, 8]))
-        for (number, keys) in accounts { body += userRecord(number, keys) }
-        for guid in guids { body += record("guid", words([1, 0, 0]) + guid) }
-        let top = record("sean", body)
-        var data = Data()
-        withUnsafeBytes(of: UInt32(top.count).bigEndian) { data.append(contentsOf: $0) }
-        data += Data(repeating: 0, count: 0x48)
-        data += top
-        return data
-    }
-
-    func testReadsTheAccountsAndTheKeys() throws {
-        let data = Self.buildKeyStore([(0x11111111, [(1, Self.keyA), (4, Self.keyB)]),
-                                       (0x22222222, [(2, Self.keyA)])])
-        let store = try GameKeys.parseKeyStore(data)
-        XCTAssertEqual(store.accounts.count, 2)
-        XCTAssertEqual(store.accounts.map { $0.number }, [0x11111111, 0x22222222])
-        XCTAssertEqual(store.accounts[0].keys.count, 2)
-        XCTAssertEqual(store.keyCount, 3)
-        XCTAssertEqual(store.account(0x11111111)!.keys[1].value, Self.keyB)
-        XCTAssertEqual(store.key(0x11111111, 1)!.value, Self.keyA)
-        XCTAssertEqual(store.key(0x22222222, 2)!.value, Self.keyA)
-        XCTAssertNil(store.key(0x11111111, 99))
-        XCTAssertNil(store.account(1))
-    }
-
-    func testTheKeyIndexIsTheNumberOfTheKey() throws {
-        let data = Self.buildKeyStore([(0x11111111, [(1, Self.keyA), (4, Self.keyB)])])
-        let store = try GameKeys.parseKeyStore(data)
-        let account = store.account(0x11111111)!
-        XCTAssertEqual(account.key(1)!.value, Self.keyA)
-        XCTAssertEqual(account.key(4)!.value, Self.keyB)
-    }
-
-    func testAFileThatIsNotAKeyStoreIsRefused() {
-        XCTAssertThrowsError(try GameKeys.parseKeyStore(Data(repeating: 0, count: 200)))
-        XCTAssertThrowsError(try GameKeys.parseKeyStore(Data()))
-    }
-
-    func testAFileWithAWrongNameIsRefused() {
-        var data = Self.buildKeyStore([(1, [(1, Self.keyA)])])
-        data.replaceSubrange(0x50..<0x54, with: Array("xxxx".utf8))
-        XCTAssertThrowsError(try GameKeys.parseKeyStore(data))
-    }
-
-    func testTheDeviceIdsAreRead() throws {
-        // A synthetic device id. A real id holds the serial of the USB of the iPod.
-        let guid = Data([0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67])
-        let data = Self.buildKeyStore([(1, [(1, Self.keyA)])], guids: [guid])
-        let store = try GameKeys.parseKeyStore(data)
-        XCTAssertEqual(store.deviceIDs.count, 1)
-        XCTAssertEqual(store.deviceIDs[0], guid)
-    }
-
-    func testSinfAtoms() {
-        // The test uses synthetic values.
-        let inner = Self.atom("user", Self.words([0x11111111]))
-            + Self.atom("key ", Self.words([4]))
-            + Self.atom("iviv", Data([0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
-                                      0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10]))
-            + Self.atom("name", Data("Test Account".utf8) + Data(repeating: 0, count: 256 - 12))
-        let sinf = Self.atom("sinf", Self.atom("schi", inner))
-        let parsed = GameKeys.parseSinf(sinf)
-        XCTAssertEqual(be32(parsed["user"]!, 0), 0x11111111)
-        XCTAssertEqual(be32(parsed["key "]!, 0), 4)
-        XCTAssertEqual(parsed["iviv"]!.count, 16)
-        XCTAssertEqual(parsed["iviv"]![0], 0xfe)
-    }
-
-    func testTheGameGivesTheAccountAndTheKey() {
-        let inner = Self.atom("user", Self.words([0x11111111]))
-            + Self.atom("key ", Self.words([4]))
-            + Self.atom("iviv", Data(repeating: 0, count: 16))
-            + Self.atom("name", Data("Test Account".utf8) + Data(repeating: 0, count: 256 - 12))
-        let sinf = Self.atom("sinf", Self.atom("schi", inner))
-        let store = try! GameKeys.parseKeyStore(Self.buildKeyStore([(0x11111111, [(4, Self.keyB)])]))
-        let g = GameKeys.gameKeys(sinf, store)
-        XCTAssertEqual(g.number, 0x11111111)
-        XCTAssertEqual(g.keyIndex, 4)
-        XCTAssertEqual(g.name, "Test Account")
-        XCTAssertEqual(g.key!.value, Self.keyB)
-    }
-
-    func testAGameWithoutAKeyInTheStore() {
-        let inner = Self.atom("user", Self.words([0x11111111])) + Self.atom("key ", Self.words([9]))
-        let sinf = Self.atom("sinf", Self.atom("schi", inner))
-        let store = try! GameKeys.parseKeyStore(Self.buildKeyStore([(0x11111111, [(4, Self.keyB)])]))
-        let g = GameKeys.gameKeys(sinf, store)
-        XCTAssertNil(g.key)
-    }
-}
-
-
 // The test of the name of the folder of the games. The firmware asks for the name
 // games_RO with small letters. The program of iTunes writes the name Games_RO with a
 // capital letter.
-final class GameKeysDirectoryTests: XCTestCase {
+final class GamesDirectoryTests: XCTestCase {
     func testAcceptsBothNames() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("iPodFirm-games-dir-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
-        XCTAssertNil(GameKeys.gamesDirectory(at: dir.path))
+        XCTAssertNil(GameLibrary.gamesDirectory(at: dir.path))
 
         // The file system of macOS keeps no case by default. The test uses the name of the
         // case that the file system keeps. The function must find the folder in both cases.
         for name in ["games_RO", "Games_RO"] {
             let games = dir.appendingPathComponent(name)
             try FileManager.default.createDirectory(at: games, withIntermediateDirectories: true)
-            let found = GameKeys.gamesDirectory(at: dir.path)
+            let found = GameLibrary.gamesDirectory(at: dir.path)
             XCTAssertNotNil(found, "The function must find the folder \(name).")
             // The two names can be the same folder on a file system without case.
             XCTAssertTrue(found!.lowercased().hasSuffix("games_ro"))
@@ -2417,7 +2283,7 @@ final class GameRemoverTests: XCTestCase {
         try Self.makeInstalledLibrary(target, ["11002"])
         try FileManager.default.createDirectory(at: target.appendingPathComponent("games_RO/gamedata_RW"), withIntermediateDirectories: true)
 
-        let dir = try GameKeys.gamesDirectory(at: target.path)
+        let dir = try GameLibrary.gamesDirectory(at: target.path)
         XCTAssertEqual(GameRemover.removableFolders(dir!), ["11002"])
         try? FileManager.default.removeItem(at: target)
     }

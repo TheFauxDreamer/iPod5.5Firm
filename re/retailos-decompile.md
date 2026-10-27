@@ -29,12 +29,6 @@ bytes**.
 | The functions over 500 lines | 31. |
 | The time of the analysis | 2 minutes 14 seconds for the first pass. 4 minutes 14 seconds for the decompilation. |
 
-The research confirms the results of the other notes. The research of the check
-of the DRM in [games-drm.md](games-drm.md) found the function `FUN_00131874`
-at 0x131874. The research of REA found the same function. The research of REA
-also confirms the 6 addresses of the patch of the community. The note gives
-the evidence in the section "The check of the results of the other notes".
-
 ## The images of the firmware
 
 The partition of the iPod has 4 images. The research decompiled each image.
@@ -150,56 +144,23 @@ The functions are the ones that the engine reads as data.
 
 The research checked 35 addresses that the other notes had found. The research
 of REA confirmed 34 of them. The address that the research did not find is
-0x131b84. The address 0x131b84 is not the start of a function. The address is
-the exit of the failure of the check of the DRM. The function that has the
-address 0x131b84 starts at 0x10131874. The address is at the offset 0x310 of
-that function.
+0x131b84. The address 0x131b84 is not the start of a function. The function
+that has the address 0x131b84 starts at 0x10131874. The address is at the
+offset 0x310 of that function.
 
 ### The list of the strings
 
 The command `rea search` with the kind `strings` gave 11,232 strings. The
 research checked 7 strings that the other notes had found. The research of REA
-confirmed all 7 of them.
+confirmed all 7 of them. The table gives 5 of them.
 
 | The address | The text |
 |---|---|
 | 0x4b2b18 | This game cannot be played. |
 | 0x4b2ae4 | Connect your iPod to iTunes and reinstall the game. |
-| 0x69f70c | IC-Info.sidb |
-| 0x69f6fc | IC-Info.sidd |
 | 0x678dd6 | Verify |
 | 0x2a9c3c | games_RO |
 | 0x1b085c | eAppBlockMgr |
-
-### The check of the DRM
-
-The research of REA gave the dossier of the function `FUN_10131874`. The
-dossier gave the caller of the function. The caller is `FUN_1024e37c`. The
-note [games-drm.md](games-drm.md) named the same function as the function that
-makes the check of the platform and the check of the DRM. The research agrees.
-
-The dossier gave the graph of the basic blocks of the function. The graph has
-26 blocks. **8 blocks** have the address 0x10131b84 as a successor. The
-address 0x10131b84 is the exit of the failure. The 6 sites of the patch of the
-community are the 6 instructions that make those branches.
-
-| The site | The block of the site | The block goes to the failure |
-|---|---|---|
-| (address removed) | 0x101318b0 to 0x1013191c | Yes |
-| (address removed) | 0x1013191c to 0x1013192c | Yes |
-| (address removed) | 0x1013192c to 0x10131944 | Yes |
-| (address removed) | 0x10131b10 to 0x10131b48 | Yes |
-| (address removed) | 0x10131b48 to 0x10131b54 | Yes |
-| (address removed) | 0x10131b64 to 0x10131b80 | Yes |
-
-> The research of REA confirms the 6 sites of the patch of the community. The
-> research did this with the graph of the basic blocks. The other notes did it
-> with the disassembly. The two methods agree.
-
-The dossier gave the list of the functions that the function calls. The list
-has 24 functions. The list has `FUN_101314ec` and `FUN_101315e8`. The note
-[games-drm.md](games-drm.md) named the same 2 functions as the functions that
-read the manifest and the file `sinf` of the game.
 
 ## The limits of the research
 
@@ -304,30 +265,6 @@ The names show the parts of the firmware.
 > video, the camera, the interface of the computer and the disk all have a
 > name in the code.
 
-### The function of the DRM
-
-The function `FUN_10175c74` uses 83 strings. These strings are the names of
-the atoms of the files of the DRM. The table has the most important atoms.
-
-| The atom | The meaning |
-|---|---|
-| `AppleDRMVersion` | The version of the DRM. |
-| `AppleDRM` | The file of the DRM. |
-| `AppleLossless` | The file of the lossless codec of Apple. |
-| `AppleVideoDRM` | The file of the DRM of the video. |
-| `FireWireGUID` | The number of the device. The DRM uses this number to make the key. |
-| `FireWireVersion` | The version of the interface of the computer. |
-| `FamilyID` | The group of the devices that share a key. |
-| `AlbumArt` | The picture of the album. |
-| `BuildID` | The number of the build. |
-| `ConnectedBus` | The bus of the device. |
-| `MaxTransferSpeed` | The most speed of the transfer. |
-
-> The note [games-drm.md](games-drm.md) says that the key of the DRM binds to
-> the number of the device in the NOR. The map of the strings confirms this.
-> The function `FUN_10175c74` has the name `FireWireGUID` next to the names of
-> the atoms of the DRM.
-
 ### The table of the strings
 
 The file `osos-strings.tsv` has each string and the functions that use the
@@ -391,5 +328,4 @@ folder is not in the repository. The folder holds the image of the firmware.
 | The script [make-string-map.py](make-string-map.py) | The map of the strings. |
 | The script [decompile-with-strings.sh](decompile-with-strings.sh) | The whole run of the map. |
 | The module `ipodfw.resources` of the project | The table of the resources of the image. |
-| The note [games-drm.md](games-drm.md) | The check of the DRM. The research of REA confirms it. |
 | The note [ghidra.md](ghidra.md) | The use of Ghidra in this project. |

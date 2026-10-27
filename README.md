@@ -221,19 +221,15 @@ CAUTION: The removal of the data of the app removes the backups of the iPod. Mak
 
 ## The iPod games
 
-The research of the games is in [re/games.md](re/games.md) and in the notes beside it. The note [re/games-vm.md](re/games-vm.md) gives the virtual machine of the community that installs the games on an iPod. The note [re/games-drm.md](re/games-drm.md) gives the check of the DRM in the firmware. The note [re/games-keyfile.md](re/games-keyfile.md) gives the format of the file `iEKInfo` of the keys and the result of the test of these keys against the program of a game.
+The research of the games is in [re/games.md](re/games.md). This project does not research the protection of the games.
 
 The app does not come with the game files and does not download them. The games are not in the app and are not in the firmware of the iPod. The game files come from the iPod that bought them: iTunes or the Finder on a Mac puts purchased games on the iPod. To copy the games, keep the game folders in a folder on your Mac, or use a backup of the folder `iPod_Control` of an iPod that has the games.
 
-The app reads the file of the keys of the connected iPod. Open the **Games** pane. Click **Read the Keys**. The pane shows the accounts of the Apple ID, the number of their keys, and the games of the iPod with their account and their key.
-
-If the app does not see the iPod, or if you have a copy of the files of an iPod, click **Choose a Folder…**. Choose the folder `iPod_Control` of the iPod, or a copy of it. The app reads the same files from that folder. The app accepts the name `games_RO` and the name `Games_RO` for the folder of the games. Thus the app works with a Windows iPod and with a macOS iPod.
-
-To put the games on an iPod, open the section **Install Games** in the same pane. Click **Select Games Folder...** and choose the folder with the games. The pane shows each game with a switch. Click **Select All** or **Select None**, or click the switches of the games that you want. Then click **Install Games**. The app copies the selected games to the folder `games_RO` of the connected iPod. The app checks the size of each file of the manifest before the copy. The app skips a game that is not complete. The app never removes a file of the iPod during the copy.
+To put the games on an iPod, open the **Games** pane. Go to the section **Install Games**. Click **Select Games Folder...** and choose the folder with the games, or the folder `iPod_Control` of an iPod. The app accepts the name `games_RO` and the name `Games_RO` for the folder of the games. Thus the app works with a Windows iPod and with a macOS iPod. The pane shows each game with a switch. Click **Select All** or **Select None**, or click the switches of the games that you want. Then click **Install Games**. The app copies the selected games to the folder `games_RO` of the connected iPod. The app checks the size of each file of the manifest before the copy. The app skips a game that is not complete. The app never removes a file of the iPod during the copy.
 
 To remove games from an iPod, open the section **Remove Games** in the same pane. Click **Read the Games on the iPod**. The pane lists the GUID of each game in the folder `games_RO`. Select the games and click **Remove Selected Games…**. A sheet asks you to confirm. The removal deletes only the folder of each selected game in `games_RO`. The folders `gamedata_RW` and `gamestats_WO` hold the saves and the scores of the games. The removal does not touch them.
 
-The app cannot make the file of the keys. The file comes from the server of Apple. The file works only on the iPod that made the purchases.
+A game runs only on an iPod that has the file of the keys `iPod_Control/iTunes/IC-Info.sidb` of the account that bought the game. The app cannot make this file. The command `install-games --key-file` copies the file as it is.
 
 ## The firmware
 
@@ -406,7 +402,6 @@ sudo .venv/bin/ipodfw restore backups/firmware-backup.bin --rescue --reference b
 | `repack FILE DIR -o OUT` | Puts the changes into a new file and calculates the checksum. |
 | `pack-ipsw IPSW FILE -o OUT` | Puts a changed firmware into a copy of an `.ipsw` file. |
 | `make-library -o DIR` | Makes a music library for tests in the emulator. |
-| `game-keys FOLDER [--games]` | Reads the file of the keys of the iPod in the folder `FOLDER`. The folder must have the shape of the folder `iPod_Control` of an iPod. It shows the accounts and the keys. `--games` also shows the key of each game. |
 | `install-games SOURCE TARGET [--game GUID] [--key-file FILE]` | Copies the games from the folder `SOURCE` to the folder `iPod_Control` of the iPod in the folder `TARGET`. It copies all the games. The option `--game` copies only this game; use the option more than once for more games. The option `--key-file` copies the file `IC-Info.sidb` to the target iPod. |
 | `remove-games TARGET [--game GUID]` | Removes games from the folder `iPod_Control` of the iPod in the folder `TARGET`. Without the option, it removes all the games. The option `--game` removes only this game; use the option more than once for more games. It removes only the folder of the game in `games_RO`. |
 | `import-theme THEME BASE TARGET -o OUT` | Makes an iPodFirm theme file from an iPodWizard theme. BASE is the Apple firmware of the theme. TARGET is the Apple firmware 1.3. |

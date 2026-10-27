@@ -22,12 +22,12 @@ CAUTION: A theme file in format 1 contains Apple code. Do not commit it. A theme
 | BMap | 253 pictures. Picture 21997 becomes a 320 × 240 background (rows 0–23 are (16,16,16), the other rows are black). |
 | View | 617 layouts. |
 | Type | 22 records (text colours and sizes). |
-| Program code | 17 bytes at (address removed)–(address removed). |
+| Program code | 17 bytes. |
 | Other data | The 153 KB of picture 21997 overwrite bitmap font data at 0x502df4. |
 
 ### The program code changes
 
-The theme changes 6 conditional branches to `nop` (`e1a00000`). In 1.3 the same code is at (address removed), (address removed), (address removed), (address removed), (address removed) and (address removed), in function 0x131874. This function reads a file of at most 16 KB and verifies it with a key (0x11574, 0x102b0). The `nop` changes remove this verification. They are not a part of the dark theme. The import does not apply them.
+The theme changes 17 bytes of program code. The changes are not a part of the dark theme. The import does not apply them. The import writes the reason in the list `skipped` of the theme file.
 
 ## The View format
 
