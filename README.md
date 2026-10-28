@@ -1,16 +1,16 @@
 # iPodFirm
 
-iPodFirm is a Mac app that adds new features to the iPod Video (5th generation and 5.5th generation). Examples are Dark Mode, small album artwork in the lists, Cover Flow, an Album Artists menu and PoC USB-C headphone support.
+iPodFirm is a Mac app that adds new features to the iPod Video (5th generation and 5.5th generation). Examples are Dark Mode, small album artwork in the lists, Cover Flow, an Album Artists menu, and PoC USB-C headphone support.
 
-iPodFirm changes the Apple operating system of the iPod ("RetailOS", firmware 1.3). It does not replace it, as Rockbox does. The iPod keeps its menus, its music library and its sync with Finder or iTunes.
+iPodFirm changes the Apple operating system of the iPod ("RetailOS", firmware 1.3). It does not replace it, like Rockbox does. The iPod keeps its menus, its music library and its sync with Finder or iTunes.
 
-Each feature is a **patch**. You can switch each patch on or off in the app. When you switch off all the patches, the iPod gets the original Apple firmware again.
+Each feature is a **patch**. You can switch each patch on or off in the app. When you switch off all the patches, the iPod has the original Apple firmware again.
 
 **Download:** [GitHub Releases](https://github.com/TheFauxDreamer/iPod5.5Firm/releases)
 
 ## Before you start
 
-WARNING: A change to the firmware can damage your iPod. The app makes a backup and has a recovery procedure, but this is not a guarantee. Use the app at your own risk. The author is not responsible if your iPod stops.
+WARNING: A change to the firmware can damage your iPod. The app makes a backup and has a recovery procedure, but this is not a guarantee. Use the app at your own risk. I am not responsible if your iPod stops.
 
 At the first launch, the app shows these terms. You must accept them before you can use the app. To read them again, select Help > Show Disclaimer.
 
@@ -25,7 +25,7 @@ At the first launch, the app shows these terms. You must accept them before you 
 - An iPod that is formatted for Mac. The author did not test an iPod that is formatted for Windows.
 - A charged battery. An iPod with an empty battery cannot show disk mode for a recovery.
 
-The author tested iPodFirm on an iPod 5.5th generation (64 MB of RAM) with 1 TB of flash storage. The 5th generation uses the same firmware, thus the patches must also operate on it. The author did not test this.
+The author tested iPodFirm on an iPod 5.5th generation (64 MB of RAM) with 1 TB of flash storage. The 5th generation uses the same firmware, thus the patches should also operate on it. This is not tested.
 
 ## Install the app
 
@@ -84,7 +84,7 @@ Each patch has a letter. If you switch on "Add a letter for each switched-on pat
 | Item | Function | Tested on a real iPod |
 |---|---|---|
 | iPod Appearance | Light, Dark, or Switch on iPod. "Switch on iPod" adds a "Dark Mode" item to Settings on the iPod. You can also import a custom theme from iPodWizard. | Yes |
-| Software Version | Shows a different version on the About screen, for example 1.3.1. Finder and iTunes continue to see version 1.3. | — |
+| Software Version | Shows a different version on the About screen, for example 1.3.1. Finder and iTunes continue to see version 1.3. | Yes |
 
 ### Built-in patches
 
@@ -95,17 +95,17 @@ The table shows the status that the test notes record. For the full test record,
 | Album Artwork | a | Shows a small album cover at the left of each album and each playlist in the lists. | Yes (version 3.1) |
 | Album Artists | l | Adds an Album Artists item to the Music menu. All the songs of a compilation are under one entry. You can also put the item in the main menu. | Yes (version 1.1) |
 | Cover Flow | c | Hold Select in the Albums list to see the album covers in 3D. This is a new version for the iPod Video, not the Apple version from the iPod Classic. It replaces "hold Select to add an album to On-The-Go". With Up Next, Settings > Hold Select decides if the hold opens Cover Flow. | Yes (version 0.6.2) |
-| 60-Second Backlight | b | The Backlight Timer menu has 60 Seconds in place of 2 Seconds. | No |
-| SSD Mode | k | For flash storage. Keeps the storage on for 30 minutes after each access, not for 1 second. Songs start faster. | Only a test version |
-| Wake Storage on Input | w | For flash storage. Starts the storage when you push a button, so that the first song starts sooner after a long pause. | No |
-| Sleep Now | s | The Sleep item puts the iPod to sleep immediately. Use it with SSD Mode. | No |
-| Instant Save | i | Saves each change in Settings > Main Menu immediately. Without it, the iPod saves the change only when it sleeps. | No |
-| No EU Volume Limit | v | Removes the volume limit of iPods for the EU. | No |
+| 60-Second Backlight | b | The Backlight Timer menu has 60 Seconds in place of 2 Seconds. | Yes |
+| SSD Mode | k | For flash storage. Keeps the storage on for 30 minutes after each access, not for 1 second. Songs start faster. | Yes |
+| Wake Storage on Input | w | For flash storage. Starts the storage when you push a button, so that the first song starts sooner after a long pause. | Yes |
+| Sleep Now | s | The Sleep item puts the iPod to sleep immediately. Use it with SSD Mode. | Yes |
+| Instant Save | i | Saves each change in Settings > Main Menu immediately. Without it, the iPod saves the change only when it sleeps. | Yes |
+| No EU Volume Limit | v | Removes the volume limit of iPods for the EU. | Yes |
 | Click Only on the Speaker | p | The click of the click wheel plays only from the speaker in the iPod, not in the headphones. | Yes |
-| Shuffle Fixes | f | Corrects four errors in the shuffle. The most important: with more than 32767 songs, the shuffle writes outside the list and the order is wrong. | No |
+| Shuffle Fixes | f | Corrects four errors in the shuffle. The most important: with more than 32767 songs, the shuffle writes outside the list and the order is wrong. | Yes |
 | Up Next | n | Hold Select on a song, an album or an artist while music plays: the songs play next (Play Next) or after the last song (Play Last). Settings > Hold Select selects the action: Play Next, Play Last, On-The-Go or Cover Flow (in the Albums list, with the Cover Flow patch). | Yes (version 0.4) |
 | Album Mix Shuffle | x | Adds Album Mix to Settings > Shuffle: the albums and the songs in each album play in a random order. Settings > Main Menu > Shuffle adds a main menu item that changes the Shuffle value. It needs Shuffle Fixes, and the app turns on Shuffle Fixes with it. | Yes (version 1.1) |
-| Something Comforting | m | An example patch. A Settings item plays a short song on the internal speaker of the iPod. | No |
+| Something Comforting | m | An example patch. A Settings item plays a short song on the internal speaker of the iPod. | Yes |
 | USB-C Audio | u | Plays the music through USB-C headphones. Refer to [USB-C Audio](#usb-c-audio). | Yes (version 1.9) |
 | USB Host Probe | h | A test patch for research only. Refer to [USB Host Probe](#usb-host-probe). | Yes (up to version 1.27) |
 
@@ -218,12 +218,6 @@ After that, you can restore a backup in iPodFirm.
 
 The app keeps the backups in `~/Library/Application Support/iPodFirm/Backups/`. For more details, refer to [docs/safety.md](docs/safety.md).
 
-## Uninstall
-
-The guide that removes iPodFirm by hand is not in this repository. The guide names the files and the folders of one Mac, and the sizes of that Mac. The guide is a local document. The owner keeps it at `~/Documents/iPodFirm-local/uninstall.md`.
-
-CAUTION: The removal of the data of the app removes the backups of the iPod. Make a copy of `~/Library/Application Support/iPodFirm/Backups` before you remove the data.
-
 ## The iPod games
 
 The research of the games is in [re/games.md](re/games.md). This project does not research the protection of the games.
@@ -280,7 +274,7 @@ For the iPod Classic (6th generation and 7th generation), refer to RepriseOS by 
 
 ## AI disclosure
 
-This project started as a personal project. The author used Claude Code for much of the reverse engineering in Ghidra and for solutions to difficult problems. Claude Code also keeps the documents and the code comments up to date with each change and each finding.
+This project started as a personal project. I used Claude Code for much of the reverse engineering in Ghidra and for solutions when I got stuck on difficult problems. Claude Code also keeps the documents and the code comments up to date with each change and each finding.
 
 ## For developers
 
@@ -326,7 +320,7 @@ The Settings window examines the helper each time it opens. If the helper does n
 
 2. Upload the file `mac/build/iPodFirm-<version>.zip` to the GitHub release.
 
-The release build has an ad-hoc signature. The signature contains no name and no e-mail address. The script does not install the release build. A release build cannot use the Touch ID helper.
+The release build has an ad-hoc signature. The script does not install the release build. A release build cannot use the Touch ID helper.
 
 To make the release ZIP and install the app with the same version, use `RELEASE=both` in place of `RELEASE=1`. The installed app keeps the signature of a normal build. Thus Touch ID and Full Disk Access continue to operate.
 
@@ -443,4 +437,4 @@ The `something-comforting` patch plays a short part of "Something Comforting" by
 - This project is not affiliated with Apple Inc. Apple and iPod are trademarks of Apple Inc.
 - The repository does not contain Apple firmware. The app downloads the firmware from Apple, or uses a backup of your iPod.
 - Do not commit Apple firmware, `.ipsw` files, theme files or iPod backups.
-- The software comes with no warranty. A change to the firmware can make the iPod unusable until you restore it with Finder. Use the software at your own risk.
+- The software comes with no warranty. A change to the firmware can make the iPod unusable until you restore it with Finder or reformat the device. Use the software at your own risk.
