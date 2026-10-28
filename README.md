@@ -1,6 +1,6 @@
 # iPodFirm
 
-iPodFirm is a Mac app that adds new features to the iPod Video (5th generation and 5.5th generation). Examples are Dark Mode, small album artwork in the lists, Cover Flow, an Album Artists menu and USB-C headphones.
+iPodFirm is a Mac app that adds new features to the iPod Video (5th generation and 5.5th generation). Examples are Dark Mode, small album artwork in the lists, Cover Flow, an Album Artists menu and PoC USB-C headphone support.
 
 iPodFirm changes the Apple operating system of the iPod ("RetailOS", firmware 1.3). It does not replace it, as Rockbox does. The iPod keeps its menus, its music library and its sync with Finder or iTunes.
 
