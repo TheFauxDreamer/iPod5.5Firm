@@ -46,6 +46,10 @@ final class AppModel: ObservableObject {
     @Published var helperReply: HelperReply = .unknown
     @Published var patches: [PatchInfo] = PatchSpec.visible(AppModel.patchLibrary.list(),
                                                             showTests: UserDefaults.standard.bool(forKey: "showTestPatches"))
+    /// The disclaimer sheet. It shows at the first launch, and again after a change of `Disclaimer.version`.
+    @Published var showDisclaimer = !Disclaimer.accepted
+    /// Help > Show Disclaimer: the disclaimer again, with only a Close button.
+    @Published var showDisclaimerReview = false
     /// Settings > Patches > Enable Test Patches. Off: the Patches pane hides the test patches, and a
     /// build does not include them.
     @Published var showTestPatches = UserDefaults.standard.bool(forKey: "showTestPatches") {

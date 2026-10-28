@@ -20,6 +20,10 @@ struct IPodFirmApp: App {
                 }
                 .frame(minWidth: 980, minHeight: 640)
                 .onAppear { delegate.attach(model) }
+                // A patch that Finder opened before the user accepted the disclaimer waits for the acceptance.
+                .onChange(of: model.showDisclaimer) { _, shown in
+                    if !shown { delegate.attach(model) }
+                }
                 // All copies of iPodFirm share the user patches folder. Another copy can add, change or remove a patch.
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     model.reloadPatches()
@@ -59,6 +63,9 @@ struct IPodFirmApp: App {
                 Button("Run in Emulator") { model.section = .emulator; model.runInEmulator(emulator, session) }
                     .keyboardShortcut("r")
                     .disabled(model.editor == nil || !emulator.toolsReady)
+            }
+            CommandGroup(after: .help) {
+                Button("Show Disclaimer") { model.showDisclaimerReview = true }
             }
         }
         Settings {
@@ -134,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor func attach(_ model: AppModel) {
         self.model = model
+        guard Disclaimer.accepted else { return }
         let urls = pending
         pending = []
         for url in urls { Task { await model.installPatch(from: url) } }
@@ -143,7 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, open urls: [URL]) {
         let patches = urls.filter(isPatchURL)
         Task { @MainActor in
-            guard let model else { pending += patches; return }
+            guard let model, Disclaimer.accepted else { pending += patches; return }
             for url in patches { await model.installPatch(from: url) }
         }
     }
@@ -204,6 +212,8 @@ struct ContentView: View {
         .sheet(item: $model.patchEditor) { s in PatchEditorSheet(state: s) }
         .sheet(isPresented: $model.showFullDiskAccessHelp) { FullDiskAccessSheet() }
         .sheet(isPresented: $model.showFinderRestoreHelp) { FinderRestoreSheet() }
+        .sheet(isPresented: $model.showDisclaimer) { DisclaimerSheet(review: false).interactiveDismissDisabled() }
+        .sheet(isPresented: $model.showDisclaimerReview) { DisclaimerSheet(review: true) }
         .task { await model.refreshIPods() }
         .task {
             // A connected or disconnected iPod: find the iPods again, and read the patches on a new iPod.

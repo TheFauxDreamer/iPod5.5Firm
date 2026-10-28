@@ -12,6 +12,8 @@ Each feature is a **patch**. You can switch each patch on or off in the app. Whe
 
 WARNING: A change to the firmware can damage your iPod. The app makes a backup and has a recovery procedure, but this is not a guarantee. Use the app at your own risk. The author is not responsible if your iPod stops.
 
+At the first launch, the app shows these terms. You must accept them before you can use the app. To read them again, select Help > Show Disclaimer.
+
 - This is a personal project. The author does not give technical support to each person.
 - You can open an issue or a pull request on GitHub. The author can add large corrections or well-tested changes.
 - For other iPod models or other firmware versions, make a fork of the project. Refer to [Other iPod models](#other-ipod-models).
