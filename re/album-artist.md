@@ -549,3 +549,4 @@ Menu+Select restarts the iPod at once. It runs none of these functions. Thus eac
 
 The owner then asked for a separate patch, [instant-save](../patches/instant-save/). It hooks the first instruction of the setter 0x19351c and calls 0xbbf1c after each change. A trial link on 16 October 2026 measured: inside `album-artists` 40 bytes more (no change of the image end); as a separate patch 36 bytes, but the image grows by 2 KB, because each extended patch starts at the next 0x800 step. The owner selected the separate patch. Emulator: each change ran 0xbbf1c and the write 0xbbdf8 one time, and the drive got WRITE DMA commands.
 
+Real iPod 5.5G (owner, 28 October 2026, `instant-save` version 1.0): the patch operates.

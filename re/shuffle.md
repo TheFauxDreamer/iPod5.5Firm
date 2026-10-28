@@ -317,6 +317,8 @@ A write watch on the settings word (`IPODFW_WATCH_RANGE=0x13e34d04:4`) counted 1
 
 [patches/shuffle-fixes](../patches/shuffle-fixes/patch.json) corrects Bugs 1–4. Version 1.0 had the name `shuffle-large-library` and corrected only Bugs 1 and 4.
 
+Real iPod 5.5G (owner, 28 October 2026, version 2.1): the patch operates.
+
 ### Bugs 1 and 4: 4 changed words
 
 | At | Stock | Patched |

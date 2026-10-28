@@ -94,13 +94,13 @@ The table shows the status that the test notes record. For the full test record,
 |---|---|---|---|
 | Album Artwork | a | Shows a small album cover at the left of each album and each playlist in the lists. | Yes (version 3.1) |
 | Album Artists | l | Adds an Album Artists item to the Music menu. All the songs of a compilation are under one entry. You can also put the item in the main menu. | Yes (version 1.1) |
-| Cover Flow | c | Hold Select in the Albums list to see the album covers in 3D. This is a new version for the iPod Video, not the Apple version from the iPod Classic. It replaces "hold Select to add an album to On-The-Go". With Up Next, Settings > Hold Select decides if the hold opens Cover Flow. | Yes (version 0.6.2) |
+| Cover Flow | c | Hold Select in the Albums list to see the album covers in 3D. This is a new version for the iPod Video, not the Apple version from the iPod Classic. It replaces "hold Select to add an album to On-The-Go". With Up Next, Settings > Hold Select decides if the hold opens Cover Flow. | Yes (version 0.6.8) |
 | 60-Second Backlight | b | The Backlight Timer menu has 60 Seconds in place of 2 Seconds. | Yes |
 | SSD Mode | k | For flash storage. Keeps the storage on for 30 minutes after each access, not for 1 second. Songs start faster. | Yes |
 | Wake Storage on Input | w | For flash storage. Starts the storage when you push a button, so that the first song starts sooner after a long pause. | Yes |
 | Sleep Now | s | The Sleep item puts the iPod to sleep immediately. Use it with SSD Mode. | Yes |
 | Instant Save | i | Saves each change in Settings > Main Menu immediately. Without it, the iPod saves the change only when it sleeps. | Yes |
-| No EU Volume Limit | v | Removes the volume limit of iPods for the EU. | Yes |
+| No EU Volume Limit | v | Removes the volume limit of iPods for the EU. | No. The test needs an iPod for the EU. |
 | Click Only on the Speaker | p | The click of the click wheel plays only from the speaker in the iPod, not in the headphones. | Yes |
 | Shuffle Fixes | f | Corrects four errors in the shuffle. The most important: with more than 32767 songs, the shuffle writes outside the list and the order is wrong. | Yes |
 | Up Next | n | Hold Select on a song, an album or an artist while music plays: the songs play next (Play Next) or after the last song (Play Last). Settings > Hold Select selects the action: Play Next, Play Last, On-The-Go or Cover Flow (in the Albums list, with the Cover Flow patch). | Yes (version 0.4) |

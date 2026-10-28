@@ -151,6 +151,8 @@ Findings:
 - rockpod waits 500 ms between the flush and the power cut for an iFlash. Without the wait, the SD card can lose a write. At 0x23344c the controller is already off, thus the hook cannot send FLUSH CACHE. STANDBY IMMEDIATE, which comes before, makes the drive write its cache.
 - The UI event handler 0x1d81cc runs for each button and wheel event, in the UI task. Thus the hook can send keep-awake messages. The backlight function 0x283e10 is not a good hook: only the sleep and wake paths call it.
 
+Real iPod 5.5G (owner, 28 October 2026): `flash-keep-awake` version 1.1 and `flash-wake-on-input` version 1.2 operate.
+
 Tests in the emulator:
 
 | Test | Result |

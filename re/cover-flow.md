@@ -486,7 +486,7 @@ The owner asked to remove the debug log. Version 0.6.8 has the code of version 0
 - `patch.json` has no `ui` object now: no "Start the Cover Flow Log" action, no steps and no tool.
 - The app does not have the tool `cover-flow-log` now (`PatchSpec.knownTools`, `PatchTools.swift`, `AppModel.readCoverFlowLog`).
 
-The code and data are 11384 bytes (`testPatchSizes`). Not tested on the real iPod yet.
+The code and data are 11384 bytes (`testPatchSizes`). Real iPod 5.5G (owner, 28 October 2026): version 0.6.8 operates.
 
 ## Research: why covers load again (27 October 2026)
 

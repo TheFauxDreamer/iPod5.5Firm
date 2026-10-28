@@ -44,4 +44,4 @@ An integer period gives an error of less than 1/(2 × value). For a value above 
 ## Test results
 
 - Emulator (2026-10-08, `something-comforting`): 37 calls of `tone` at the times of the note table (within approximately 10 ms). The emulator has no audio, and the event log showed no write to 0x7000a000.
-- Real iPod: not tested.
+- Real iPod 5.5G (owner, 28 October 2026, `something-comforting` version 1.1): the patch operates. The frequency of a note is not measured.

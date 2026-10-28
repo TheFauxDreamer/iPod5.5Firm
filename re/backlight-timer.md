@@ -64,6 +64,8 @@ Emulator test (stock firmware): at boot, the setter wrote 10 to +0x444 two times
 
 Emulator test: the menu showed Off, 5, 10, 15, 20, 60 Seconds and Always On. The selection of 60 Seconds operated. The emulator dimmer model did not change level in 90 seconds after the last button push. Thus, the emulator cannot measure the backlight time.
 
+Real iPod 5.5G (owner, 28 October 2026, version 1.1): the patch operates.
+
 ## Open items
 
 - Measure the backlight time on the real iPod.

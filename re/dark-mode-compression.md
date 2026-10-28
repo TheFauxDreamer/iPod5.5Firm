@@ -83,6 +83,10 @@ The free space values do not include the 16-byte alignment of the menu and the p
 
 `hook_lookup` in [dark_mode.c](../patches/dark-mode/dark_mode.c) applies the table one time, at the first View lookup (the `decided` flag). The firmware loads the light osos from the flash at each start. Thus the table only changes light to dark. A table of dark bytes is sufficient. The XOR format of the table is not necessary for the patch.
 
+## Test on the real iPod
+
+Real iPod 5.5G (owner, 28 October 2026, `dark-mode` version 1.1): the three appearances Light, Dark and Switch on iPod operate.
+
 ## Open items
 
 - Measure the time to decode on the iPod or in the emulator.

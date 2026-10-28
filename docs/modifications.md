@@ -10,25 +10,25 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 |---|---|---|---|---|
 | [Picture replacement](#picture-replacement) | Resource data | Pictures | Pixel bytes of one BMap | Not recorded |
 | [Text replacement](#text-replacement) | Resource data | Text | One Str area | Not recorded |
-| [Software version](#software-version) | Code | Patches > Software Version | 2 instructions, or 1 function body | No |
-| [backlight-60s](#backlight-60s) | Data patch | Patches | 16 byte runs and 21 strings | No |
+| [Software version](#software-version) | Code | Patches > Software Version | 2 instructions, or 1 function body | Yes (28 October 2026) |
+| [backlight-60s](#backlight-60s) | Data patch | Patches | 16 byte runs and 21 strings | Version 1.1: yes (28 October 2026) |
 | [album-art](#album-art) | Code patch (extended) | Patches | 2 vtable words and 1 `bl` | Version 1.0: yes. Version 2.9: yes (27 October 2026). Version 3.0: covers loaded slowly. Version 3.1: yes (27 October 2026) |
-| [sleep-now](#sleep-now) | Code patch | Patches | 1 vtable word and 2 `bl` | No |
-| [flash-keep-awake](#flash-keep-awake) | Code patch | Patches | 4 `bl` | Partly (an earlier version) |
-| [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | No |
+| [sleep-now](#sleep-now) | Code patch | Patches | 1 vtable word and 2 `bl` | Version 1.2: yes (28 October 2026) |
+| [flash-keep-awake](#flash-keep-awake) | Code patch | Patches | 4 `bl` | Version 1.1: yes (28 October 2026) |
+| [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | Version 1.2: yes (28 October 2026) |
 | [volume-unlimit](#volume-unlimit) | Data patch | Patches | 2 bytes | No |
 | [click-speaker-only](#click-speaker-only) | Data patch | Patches | 1 instruction word | Yes (2026-10-27) |
-| [shuffle-fixes](#shuffle-fixes) | Code patch (extended) | Patches | 2 `bl` and 4 instruction words | No |
+| [shuffle-fixes](#shuffle-fixes) | Code patch (extended) | Patches | 2 `bl` and 4 instruction words | Version 2.1: yes (28 October 2026) |
 | [shuffle-album-mix](#shuffle-album-mix) | Code patch (extended) | Patches | 3 `bl`, 3 `b` and 3 vtable words (all 6 with `chain`), 1 instruction word, 2 menus | Version 1.1: partly, the order of one album. Version 1.2: no |
-| [something-comforting](#something-comforting) | Code patch (example) | Patches | 1 `b` and 2 vtable words (all with `chain`), a Settings menu | No |
+| [something-comforting](#something-comforting) | Code patch (example) | Patches | 1 `b` and 2 vtable words (all with `chain`), a Settings menu | Version 1.1: yes (28 October 2026) |
 | [album-artists](#album-artists) | Code patch | Patches | 6 `b`, 4 `bl` and 3 vtable words (4 with `chain`), 3 menus | Version 1.1: yes. Version 1.2: no |
-| [instant-save](#instant-save) | Code patch | Patches | 1 `b` | No |
-| [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | No |
+| [instant-save](#instant-save) | Code patch | Patches | 1 `b` | Version 1.0: yes (28 October 2026) |
+| [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | Version 0.6.7: yes (27 October 2026). Version 0.6.8: yes (28 October 2026) |
 | [up-next](#up-next) | Code patch (extended) | Patches | 1 `bl`, 1 `b` and 2 vtable words (3 with `chain`), a Settings menu | Yes (version 0.4) |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
-| [Dark Mode switch](#dark-mode-switch) | Code and data | Patches > iPod Appearance | 1 `b` and 2 vtable words, a table and a menu | No |
+| [Dark Mode switch](#dark-mode-switch) | Code and data | Patches > iPod Appearance | 1 `b` and 2 vtable words, a table and a menu | Version 1.1: yes (28 October 2026) |
 | [Move of rsrc](#move-of-rsrc) | Partition layout | Automatic | 1 directory entry | Yes |
 
 ## The build sequence
@@ -121,7 +121,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 - Menu item 5 gets the value 0x6039 and the string ID −140.
 - String −140 becomes "60 Seconds" in each of the 21 languages that have it. Finnish uses "60s", because "60 s" does not fit in the string area.
 
-**Test status.** The emulator showed the new menu, and the selection operated. The emulator does not model the dimmer, so it cannot measure the backlight time.
+**Test status.** The emulator showed the new menu, and the selection operated. The emulator does not model the dimmer, so it cannot measure the backlight time. Real iPod 5.5G (owner, 28 October 2026, version 1.1): the patch operates.
 
 ## album-art
 
@@ -288,7 +288,7 @@ The large artwork in Now Playing does not come from the patch. RetailOS reads `i
 
 Outside a forced sleep, `hook_power_test` calls the Apple test 0x1ecc8c.
 
-**Test status.** In the emulator, the hook ran and the firmware wrote the cache to the disk (ATA 0xCA). Then 0xb43dc turned the display off. The emulator does not model the hardware sleep, so the test stops there. The settings were kept after a restart. Not tested on a real iPod.
+**Test status.** In the emulator, the hook ran and the firmware wrote the cache to the disk (ATA 0xCA). Then 0xb43dc turned the display off. The emulator does not model the hardware sleep, so the test stops there. The settings were kept after a restart. Real iPod 5.5G (owner, 28 October 2026, version 1.2): the patch operates.
 
 ## flash-keep-awake
 
@@ -336,7 +336,7 @@ The fix has two parts: hook 1 does not change 0, 1 or 0xffffffff, and hook 3 ign
 - The emulator cannot sleep. Thus hook 2 and hook 3 have no full test in the emulator.
 - The owner reported slower scroll in lists with this patch. The emulator showed that the patch code does not run during a scroll. The cause is not known.
 
-**Test status.** The 2-minute version of hook 1 was tested on a real iPod (2 October 2026). The current version with hooks 2, 3 and 5 is tested only in the emulator.
+**Test status.** The 2-minute version of hook 1 was tested on a real iPod (2 October 2026). Real iPod 5.5G (owner, 28 October 2026, version 1.1, with hooks 2, 3 and 5): the patch operates.
 
 ## flash-wake-on-input
 
@@ -364,7 +364,7 @@ The fix has two parts: hook 1 does not change 0, 1 or 0xffffffff, and hook 3 ign
 
 The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 minutes).
 
-**Test status.** Emulator: one button push turned on the storage power 0.05 ms later. 60 wheel steps did not run the hook. Not tested on a real iPod.
+**Test status.** Emulator: one button push turned on the storage power 0.05 ms later. 60 wheel steps did not run the hook. Real iPod 5.5G (owner, 28 October 2026, version 1.2): the patch operates.
 
 ## cover-flow
 
@@ -484,7 +484,7 @@ Emulator (8 October 2026), version 0.4, with the FolderLibrary (1000 tracks, 138
 
 Not tested: version 0.4 on the real iPod, a pop-up or a new screen while Cover Flow shows, and a database from iTunes or Finder.
 
-Real iPod 5.5G (owner, 25–27 October 2026, version 0.6.4, after a restore with iTunes and a new sync): Cover Flow operates, but it is very slow. The open takes several seconds, the frame rate is low, and one album step needs approximately two turns of the wheel. The log of version 0.6.5 showed the cause: the patch opened `F1029_1.ithmb` (416 MB, one image for each of 5201 tracks) for each cover, and each open took 1.1 s. Version 0.6.6 keeps the file open. The log of version 0.6.6 showed 1.1 s only at the open, 30 ms for each cover load and 69 ms for each frame. Word 3 of a wheel event counts the wheel ticks, so version 0.6.6 lost wheel steps. Version 0.6.7 counts the ticks and draws faster. Real iPod (27 October 2026), version 0.6.7: the owner reported that Cover Flow feels very fast. The wheel moves the covers, and a frame takes approximately 80 ms with a cover load. Version 0.6.8 removes the debug log and does not change the function. Version 0.6.8 is not tested yet.
+Real iPod 5.5G (owner, 25–27 October 2026, version 0.6.4, after a restore with iTunes and a new sync): Cover Flow operates, but it is very slow. The open takes several seconds, the frame rate is low, and one album step needs approximately two turns of the wheel. The log of version 0.6.5 showed the cause: the patch opened `F1029_1.ithmb` (416 MB, one image for each of 5201 tracks) for each cover, and each open took 1.1 s. Version 0.6.6 keeps the file open. The log of version 0.6.6 showed 1.1 s only at the open, 30 ms for each cover load and 69 ms for each frame. Word 3 of a wheel event counts the wheel ticks, so version 0.6.6 lost wheel steps. Version 0.6.7 counts the ticks and draws faster. Real iPod (27 October 2026), version 0.6.7: the owner reported that Cover Flow feels very fast. The wheel moves the covers, and a frame takes approximately 80 ms with a cover load. Version 0.6.8 removes the debug log and does not change the function. Real iPod (owner, 28 October 2026), version 0.6.8: Cover Flow operates.
 
 ## usb-host-probe
 
@@ -728,7 +728,7 @@ The `bytes` key changes 4 instruction words:
 
 The card game deck shuffle `0x12d494` also uses `0xaf4b4` and `0x55c`. It cuts its own n to 16 bits, n is a maximum of 52, and it has its own call of `0x55c`. Thus the card game does not change.
 
-**Test status.** Emulator (20 October 2026). Version 1.0: with 60 tracks, the order is the same as the stock firmware; with 40000 tracks, the shuffle completes and the state agrees with the model. Version 2.0, 60 tracks: the seed 0 of the emulator becomes 1; a fixed seed gives the stock order; the inner album shuffle (a test firmware sets `+0x93`) gives the first tracks of the model. The emulator has no audio, thus it cannot play the songs. Not tested on a real iPod.
+**Test status.** Emulator (20 October 2026). Version 1.0: with 60 tracks, the order is the same as the stock firmware; with 40000 tracks, the shuffle completes and the state agrees with the model. Version 2.0, 60 tracks: the seed 0 of the emulator becomes 1; a fixed seed gives the stock order; the inner album shuffle (a test firmware sets `+0x93`) gives the first tracks of the model. The emulator has no audio, thus it cannot play the songs. Real iPod 5.5G (owner, 28 October 2026, version 2.1): the patch operates.
 
 ## shuffle-album-mix
 
@@ -806,7 +806,7 @@ The setter 0xb3a04 does nothing for a change between Albums and Album Mix, becau
 
 **Note table.** [re/midi-to-tones.py](../re/midi-to-tones.py) makes the table from a MIDI file: track 6 (Flute), bars 41–48, the highest note at each time. 74 entries (37 notes), 12912 ms. The MIDI file is not in the repository.
 
-**Test status.** Emulator (2026-10-08): the Settings menu showed "Something Comforting" with "Play" after Clicker. Select called the set hook one time and `tone` 37 times for the notes. The times between the notes agreed with the table within approximately 10 ms. The menus worked after the melody. The emulator has no audio. Not tested on a real iPod.
+**Test status.** Emulator (2026-10-08): the Settings menu showed "Something Comforting" with "Play" after Clicker. Select called the set hook one time and `tone` 37 times for the notes. The times between the notes agreed with the table within approximately 10 ms. The menus worked after the melody. The emulator has no audio. Real iPod 5.5G (owner, 28 October 2026, version 1.1): the patch operates.
 
 ## album-artists
 
@@ -915,7 +915,7 @@ Real iPod (owner, 16 October 2026), version 1.2: after Settings > Main Menu > Al
 
 **Limits.** Each change writes the settings file. On an iPod with a hard drive, the drive can start.
 
-**Test status.** Emulator (2026-10-16), with `album-artists`: a change of the Songs row and of the Album Artists row each ran 0xbbf1c and the write 0xbbdf8 one time. A change of Playlists gave the ATA commands WRITE DMA (0xca) and READ DMA (0xc8). The emulator keeps no settings after a cold start, thus the result after a restart is not tested. Not tested on a real iPod.
+**Test status.** Emulator (2026-10-16), with `album-artists`: a change of the Songs row and of the Album Artists row each ran 0xbbf1c and the write 0xbbdf8 one time. A change of Playlists gave the ATA commands WRITE DMA (0xca) and READ DMA (0xc8). The emulator keeps no settings after a cold start, thus the result after a restart is not tested in the emulator. Real iPod 5.5G (owner, 28 October 2026, version 1.0): the patch operates.
 
 ## up-next
 
@@ -1095,7 +1095,7 @@ The new Settings menu is a copy of the Apple menu with one more item after Click
   3. Prepare a restart (0x094e08).
   4. Restart (0x001630). This writes 4 to `DEV_RS` (0x60006004).
 
-**Test status.** Emulator: the item changed the mode in both directions, and the settings were kept. The same result came without the file on the disk. The Swift build and the Python build give the same osos. Not tested on a real iPod.
+**Test status.** Emulator: the item changed the mode in both directions, and the settings were kept. The same result came without the file on the disk. The Swift build and the Python build give the same osos. Real iPod 5.5G (owner, 28 October 2026, `dark-mode` version 1.1): the three appearances Light, Dark and Switch on iPod operate.
 
 ## Move of rsrc
 

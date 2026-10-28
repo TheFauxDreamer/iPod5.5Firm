@@ -50,6 +50,8 @@ Then 0x1d8718 calls 0x94cec. 0x94cec returns 1 if any of the 45 keep-awake slots
 
 Test in the emulator: the Sleep item ran the hook, the sleep part, the power test (no power) and the real sleep branch. The firmware wrote the cache to the storage (ATA 0xCA). Then 0xb43dc called 0xb7c64(0). The emulator stops after this point, also with the stock firmware, because it does not model the hardware sleep. After a restart, the language and the Sleep item setting were kept. Thus the settings were saved.
 
+Real iPod 5.5G (owner, 28 October 2026, version 1.2): the patch operates. The note does not record the conditions of the test.
+
 ## Open items
 
 - Test on the real iPod: after a computer session, during playback, and on a charger.
