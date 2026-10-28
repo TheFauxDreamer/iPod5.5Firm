@@ -477,6 +477,8 @@ Emulator test, 22 October 2026, fixed seed, 60 tracks. Run 1 with `shuffle-fixes
 
 In run 1, the row had no name, because the patch used the string 0x6057. Run 2 used −135 and showed "Shuffle".
 
+Real iPod 5.5G (owner, 28 October 2026): version 1.2 operates.
+
 ## How to copy the algorithm exactly
 
 1. Use a 32-bit state and the Schrage form above. Use signed division that truncates toward zero.

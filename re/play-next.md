@@ -135,6 +135,8 @@ Version 0.5 uses the key 0x60007e0f, in the string range of the patch. Emulator 
 
 Real iPod (21 October 2026): with 0.4, Daylight Saving Time showed "Play Next". With 0.5, it shows On or Off.
 
+Real iPod 5.5G (owner, 28 October 2026): version 0.5 operates.
+
 ## The pop-up menu (research, 21 October 2026)
 
 A pop-up menu (Play Next, Play Last, Add to On-The-Go) needs a new screen. The firmware has 40 Menu resources, for example 24441 ("Cancel", "Confirm"). No ARM code refers to a Menu ID directly: the script (`TCmd` 9088) opens the menus through View resources. Native code asks for a screen with 0x1d2ee8 (event type 8 with an ID, through 0x13d6d4). The patcher can add items to a Menu, but it cannot add a Menu or a View. Thus the patch uses the Settings item "Hold Select" for now. The pop-up menu is a later step.

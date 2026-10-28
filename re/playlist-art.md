@@ -149,6 +149,8 @@ Emulator test (FolderLibrary, 138 albums, `iPodFirmAlbumArt` present; Playlists 
 
 Real iPod (27 October 2026): the owner flashed 3.1 with "iPodFirm Playlist Art Test" 0.1.162 and reported: "that works well". The stats of this test are not recorded.
 
+Real iPod 5.5G (owner, 28 October 2026): version 3.2 operates.
+
 ## Implementation outline (done in version 3.0)
 
 1. Work on a new branch `playlist-art` in `../iPod5.5Firm-playlist-art`. Use the test app "iPodFirm Playlist Art Test".
