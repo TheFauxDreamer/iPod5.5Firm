@@ -9,7 +9,8 @@ Status: research only (29 October 2026). There is no patch. The owner stopped th
 - The limit is a RAM limit. RetailOS keeps the whole music database in RAM. Other people who researched the limit agree.
 - Rockbox has no special RAM method. It does not use iTunesDB. Its database is a set of files on the disk, and it reads each entry from the disk.
 - RetailOS already finds the RAM size itself. Thus the Rockbox RAM test gives nothing to RetailOS.
-- An on-iPod patch can increase the limit, but it cannot remove it. The best option is to keep one copy of each equal string (option E). The next option is to skip strings that the iPod does not show (option B).
+- RetailOS already keeps one copy of each equal string on a 32 MB iPod (option E). It turns this off only on a 64 MB iPod. Thus option E gives no more tracks on a 32 MB iPod.
+- An on-iPod patch can increase the limit a little, but it cannot remove it. The remaining option is to skip strings that the iPod does not show (option B). The gain is small, and the risk is not zero.
 - Tracks on the disk, as in Rockbox, are not practical in RetailOS.
 
 ## What Rockbox does
@@ -104,7 +105,7 @@ The strings are in string pools. A pool has these fields:
 
 | Offset | Content |
 |---|---|
-| + 0x04 | Flags. Bit 0 = search for an equal string before the add. |
+| + 0x04 | Flags. Bit 0 = share: search for an equal string before the add, and keep a reference count for each entry. |
 | + 0x08 | Handle of the index (8 bytes for each entry: offset and length). |
 | + 0x0c | Handle of the reference counts. |
 | + 0x10 | Handle of the text. |
@@ -115,6 +116,45 @@ The data uses relocatable handles. The pool functions are 0x885ec (add), 0x9eff8
 - 0x9eff8 has 6 calls in 4 functions: 0x9f0c4, 0xb5828, 0x9c288 and 0x21c1e0.
 - 0x885ec has 7 callers.
 - The track objects are used in many more places: the lists, the play list, shuffle, On-The-Go, the artwork and the patches.
+
+### The share flag depends on the RAM size
+
+0x105cb8 makes the pools of the database with 0x947f8 (pool, flags). Evidence: Static.
+
+| Pool | Flags | Pool | Flags |
+|---|---|---|---|
+| db + 0xb4 title | 0 | db + 0x1e8 EQ | 1 |
+| db + 0xe0 artist, composer | 1 | db + 0x214 comment | 0 |
+| db + 0x10c artist sort | 1 | db + 0x240 category | 0 |
+| db + 0x138 album | 1 | db + 0x424 description | 0 |
+| db + 0x164 grouping | 1 | db + 0x450 | 0 |
+| db + 0x190 genre | 1 | db + 0x47c type 19 | 1 |
+| db + 0x1bc file type | 1 | db + 0x4a8 type 20 | 0 |
+
+0x947f8 then clears bit 0 if `FUN_1009d9d0()` is more than 0x3ffffff. 0x9d9d0 returns SysInfo + 0xe0, the RAM size. Thus:
+
+- On a 32 MB iPod (0x2000000), the shared pools keep one copy of each equal string.
+- On a 64 MB iPod (0x4000000), no pool shares. Each track has its own copy.
+
+The search in 0x885ec is linear: it compares the new string with each entry of the pool. Thus on a 32 MB iPod, the load time increases with the tracks × the different strings. Apple probably turned the share off on 64 MB to make the start faster.
+
+The emulator results in this document come from 64 MB, or from the 32 MB copy below. That copy did not change SysInfo + 0xe0, so its pools also did not share.
+
+### Remove and replace
+
+- 0x95ad0 (pool, index) removes one entry. If bit 0 is set, it decreases the reference count and frees the entry only at 0. It has 22 calls.
+- 0xb3e0c (pool, text, length, &index) replaces an entry: 0x95ad0, then an add.
+- 0xffaf4 removes all strings of one track. Only 0xfb288 calls it, from the message handler 0xb6930. It does nothing if db + 0x19 bit 1 is set.
+
+### The readers of the unshared strings
+
+Each text has a read function: comment 0x9f988 and 0x9f99c, category 0x9f93c and 0x9f950, grouping 0x9fbd8 and 0x9fbec, description 0x9fa3c. Their callers are:
+
+- 0x91d44: compares two tracks, field by field.
+- 0x92c74 and 0xbadac: copy the strings of a track to a different record.
+- 0x21de3c, 0x21ded4, 0x21e054, 0x21c1e0, 0x21c094 and 0x21c148: methods of the general track interface. The vtables are at 0x66bfd8 and 0x6765f8.
+
+The track interface gives each field to other parts of the firmware. Static analysis cannot show that the iPod never uses these fields. Possible users are the podcast screens, accessories (iAP) and smart playlists that update on the iPod.
 
 The jump table of the mhod types is at 0xd7e48. The parser keeps these types:
 
@@ -145,23 +185,22 @@ All options operate on the iPod. "Tracks added" is an estimate for a 32 MB iPod 
 | Option | What it does | Tracks added | Work | Risk |
 |---|---|---|---|---|
 | A. Smaller music buffer | Use a smaller music buffer on a 32 MB iPod. | Unknown | Medium | Medium. We did not find the buffer size. A flash iPod reads more frequently, which costs little. |
-| B. Skip unused strings | The parser skips comment (8), description (14), category (9), grouping (13) and the podcast data. | Small for music, large for podcasts | Low | Low. A hook in the jump table at 0xd7e48. The iPod does not show these fields in the menus. |
+| B. Skip unused strings | The parser skips comment (8), category (9) and grouping (13). | Small: 0 to 100 bytes for each track, it depends on the library | Low | Medium. A hook in the jump table at 0xd7e48. The menus do not show these fields, but the track interface gives them to other code. A smart playlist with a rule on these fields can change. Keep the description (14), because the podcast screens can show it. |
 | C. Strings on the disk | At the load, the iPod writes the strings to its own file and keeps only an offset in RAM. A small cache serves the lists. | Large (about 200 bytes for each track or more) | Very high | High. All pool functions must change. The lists read many strings at each scroll. |
 | D. Tracks on the disk (full Rockbox method) | Keep the track objects on the disk. | Very large | Not practical | Very high. Too many functions use the track objects directly. |
-| E. One copy of each equal string | Turn on the search for an equal string (pool + 0x04 bit 0) for album, artist, genre and file type. | Medium: an album of 12 tracks keeps 1 copy instead of 12 | Low to medium | Medium. The add 0x885ec already has the search code. We must find if the remove and the reference counts operate correctly. The search time at the load also increases. |
+| E. One copy of each equal string | RetailOS already does this on a 32 MB iPod. A patch can do it also on a 64 MB iPod, with a hash table in front of the slow search. | None on 32 MB. Medium on 64 MB. | Medium | Medium. The reference counts make a remove safe. |
+| F. A fast share search | A hash table in front of the linear search in 0x885ec. | None | Medium | Medium. It makes the start of a 32 MB iPod with a large library faster. It does not add tracks. |
 
-The file type text alone used 147 KB for 5,000 tracks. With option E, it uses a few hundred bytes.
+On a 64 MB iPod, the file type text alone used 147 KB for 5,000 tracks. A 32 MB iPod keeps only one copy of each file type.
 
 ## Recommendation
 
 1. Do not port the Rockbox RAM test. RetailOS already gets the size from SysInfo.
 2. The full Rockbox method (option D) is not practical.
-3. If the owner wants a patch, start with option E. Then add option B.
-4. Before a patch, do these steps:
-   1. Find why the search in 0x885ec is off for the track pools.
-   2. Measure the load time with the search on.
-   3. Measure the RAM with a real library, not a test library.
-5. Option A needs more research: find the function that sets the size of the music buffer.
+3. Option E gives no tracks on a 32 MB iPod, because RetailOS already shares strings there.
+4. Option B gives a small gain. It is useful only if the library has many comments. Test smart playlists and accessories before a release.
+5. Option A is the only option that can give a large gain on 32 MB without the Rockbox method. It needs more research: find the function that sets the size of the music buffer.
+6. Options E and F can help a 64 MB iPod with a very large library, and the start of a 32 MB iPod. They do not help the 32 MB limit.
 
 Each patch must have a user interface in the iPodFirm app, a `version_letter`, a `version` and a measured `size`.
 
@@ -174,7 +213,7 @@ The owner has only a 64 MB iPod. To copy a 32 MB iPod, change osos at 0x13e8:
 | Original | `e0 30 90 e5` | `ldr r3, [r0, #0xe0]` |
 | 32 MB | `02 34 a0 e3` | `mov r3, #0x2000000` |
 
-The heap total then becomes approximately 32 MB smaller (33,554,192 bytes in the test). The emulator option `trace --sysinfo=SIZE` also sets the size, but `ipod-gui` (`emu.rs`) always uses 0x04000000.
+The heap total then becomes approximately 32 MB smaller (33,554,192 bytes in the test). This copy is not complete: 0x9d9d0 reads SysInfo + 0xe0 directly, so the pools do not share as on a real 32 MB iPod. The emulator option `trace --sysinfo=SIZE` also sets the size, but `ipod-gui` (`emu.rs`) always uses 0x04000000.
 
 CAUTION: Do not set `IPODFW_RESET_AFTER` with a large library. The start takes more than 10⁹ instructions, and a start check then restarts the emulated iPod again and again. Refer to [shuffle.md](shuffle.md).
 
@@ -186,3 +225,5 @@ The emulator is slow with a large library (about 2 million instructions each sec
 - Which function sets the size of the music buffer.
 - How much RAM the path pool, the sorted lists and the playlist items use.
 - Where the usage log is on the disk. It records "Music Database Size" on the real iPod.
+- Which code uses the comment, category and grouping through the track interface.
+- How long a 32 MB iPod with a large library takes to start, because of the linear search.
