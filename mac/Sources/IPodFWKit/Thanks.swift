@@ -32,6 +32,8 @@ public enum Thanks {
                     link: URL(string: "https://github.com/TheFauxDreamer/iPod5.5Firm/issues/1"), version: "0.1.172"),
         ThanksEntry(name: "RetroCux", reason: "The idea of Search on the iPod 5G and the byte to change.",
                     link: URL(string: "https://github.com/RetroCux/Enable-the-Search-function-on-iPod-Video-5th-Gen"), version: "0.1.176"),
+        ThanksEntry(name: "u/Linusssk (Reddit)", reason: "The idea of Playlist Folders.",
+                    link: URL(string: "https://www.reddit.com/user/Linusssk/"), version: "0.1.177"),
         ThanksEntry(name: "Milli5410", reason: "The dark mode of the dark theme."),
         ThanksEntry(name: "rockpod (nuxcodes)", reason: "The idea of SSD Mode.",
                     link: URL(string: "https://github.com/nuxcodes/rockpod")),
