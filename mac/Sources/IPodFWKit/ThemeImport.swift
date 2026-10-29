@@ -187,9 +187,10 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
             guard c.old.isEmpty, let h = c.oldSHA256, !h.isEmpty else { return c }
             // The old bytes come from the firmware again. A read past the end of
             // osos gives zeros: apply extends osos with zeros before it compares,
-            // so the bytes there are zeros.
+            // so the bytes there are zeros. A change can start after the end of
+            // osos (issue 1), so the start of the read is also at most osos.count.
             let hi = c.offset + c.new.count
-            var old = osos[c.offset..<min(hi, osos.count)].map { $0 }
+            var old = osos[min(c.offset, osos.count)..<min(hi, osos.count)].map { $0 }
             let zeroFrom = max(c.offset, osos.count)
             if hi > zeroFrom { old += [UInt8](repeating: 0, count: hi - zeroFrom) }
             if !c.new.isEmpty && ThemeImport.sha256(old) != h {

@@ -439,6 +439,8 @@ final class AppModel: ObservableObject {
             if out.contains(where: { $0.name == theme.name }) { continue }
             let dest = themesDir.appendingPathComponent(url.lastPathComponent)
             if !FileManager.default.fileExists(atPath: dest.path) {
+                // At the first start, the folder is not there. Without it, the copy fails (issue 1).
+                try? FileManager.default.createDirectory(at: themesDir, withIntermediateDirectories: true)
                 try? FileManager.default.copyItem(at: url, to: dest)
                 if let copied = try? ImportedTheme.load(dest) {
                     out.append(ThemeFile(name: copied.name, url: dest, theme: copied))

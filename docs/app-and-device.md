@@ -283,7 +283,7 @@ All paths are in `~/Library/Application Support/iPodFirm/`.
 | `Backups/*.bin`, `Backups/*.bin.json` | The firmware partition backups and their metadata. |
 | `Backups/Original (first backup).bin` | The first backup. The app never replaces it. |
 | `Firmware/iPod_25.1.3.ipsw` | The cached Apple firmware. |
-| `Themes/*.ipodtheme` | The themes of the owner (JSON). A file in format 1 holds the old bytes of each change. A file in format 2 holds the hash of the old bytes and no byte of the Apple firmware. The app copies the built-in themes into this folder at the first start. |
+| `Themes/*.ipodtheme` | The themes of the owner (JSON). A file in format 1 holds the old bytes of each change. A file in format 2 holds the hash of the old bytes and no byte of the Apple firmware. The app makes the folder and copies the built-in themes into it at the first start. |
 | `Patches/<name>/` | The patches that the owner installed or made with New Patch…. At the start, the app writes the measured `size` into a `patch.json` that has no size. |
 | `Staging/flash.bin` | The partition that the helper writes. |
 | `Staging/ipod-osos.bin` | The osos of the iPod that the helper command `read` writes. The app deletes it after the read. |

@@ -2379,4 +2379,22 @@ final class StrippedThemeTests: XCTestCase {
         XCTAssertEqual(Array(edited[4..<8]), [0x45, 0x44, 0x49, 0x54])            // the edit stays
         XCTAssertEqual(r.conflicts, 1)
     }
+
+    /// Issue 1: a change that starts after the end of osos. The built-in Dark Gray theme has
+    /// a picture at 0x736800, after the end of Apple's osos. The old bytes there are zeros.
+    func testChangePastTheEndOfOsosDoesNotCrash() throws {
+        var t = ImportedTheme(name: "Past", source_sha256: "", osos_sha256: "abc")
+        t.format = ThemeImport.formatStripped
+        t.changes = [ThemeChange(resource: "View 2", offset: 16, old: Data(), new: Data([1, 2, 3, 4]),
+                                 oldSHA256: ThemeImport.sha256([0, 0, 0, 0]))]
+        let osos: [UInt8] = [0x78, 0x78, 0x78, 0x78, 0x78, 0x78, 0x78, 0x78]
+        let full = t.withOldBytes(osos)
+        XCTAssertEqual(full.changes[0].old, Data([0, 0, 0, 0]))
+        XCTAssertEqual(DarkMode.themeEnd(t, osos: osos), DarkMode.patchAreaEnd)
+        var out = osos
+        let r = try t.apply(to: &out, originalSHA256: "abc")
+        XCTAssertEqual(r.applied, 1)
+        XCTAssertEqual(r.conflicts, 0)
+        XCTAssertEqual(Array(out[16..<20]), [1, 2, 3, 4])
+    }
 }

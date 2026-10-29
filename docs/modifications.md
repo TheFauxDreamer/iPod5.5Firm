@@ -999,6 +999,8 @@ An earlier version read the ATA IDENTIFY data in the firmware (a hook at 0x142f9
 
 **The two formats of a theme file.** A file in format 1 holds, for each change, the old bytes and the new bytes. The old bytes are bytes of the Apple firmware, so the repository cannot hold such a file. A file in format 2 holds the SHA-256 of the old bytes in place of the old bytes, so the file has no byte of the Apple firmware. The repository holds the built-in themes in format 2 ([themes/](../themes/)); the app ships them in `Contents/Resources/Themes`. The command `ipodfw strip-theme` writes format 2 from format 1. `withOldBytes` takes the old bytes from the firmware again and checks the hash, so both formats apply the same and both keep an edit of the owner.
 
+**A change after the end of osos.** A change can start after the end of Apple's osos. The built-in Dark Gray theme has a picture at 0x736800, and Apple's osos 1.3 ends at 0x736000. `withOldBytes` uses zeros for the old bytes after the end of osos, because the apply step adds zeros there first. Up to app version 0.1.171, the app stopped with a crash here when the theme was in format 2 (GitHub issue 1). The test `testChangePastTheEndOfOsosDoesNotCrash` checks this case.
+
 **Rules when the theme is applied.**
 
 - Each change is applied only if the bytes are the old bytes. If they are already the new bytes, the change counts as done. Other bytes are an edit of the owner, and the change is left out.
