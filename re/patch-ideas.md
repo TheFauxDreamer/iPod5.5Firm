@@ -29,7 +29,7 @@ The table "Collisions with the existing patches" shows where an idea can interfe
 | 9 | Custom boot logo | Rockbox boot logo patcher, iPodWizard | Low | Low | Find the Apple logo picture in rsrc. |
 | 10 | FLAC playback (for later) | flashpod | High | Very high | Find the decoder table of 1.3. |
 | 11 | Music from USB-C and the headphone jack at the same time | The owner | Medium | High | Saved for later: refer to [usb-dual-out.md](usb-dual-out.md). Read 0x1a2d60 and the codec driver in Ghidra. |
-| 12 | More tracks on a 32 MB iPod | Rockbox, the owner | High for 30 GB owners | Low to high | Done: refer to [ram-limit.md](ram-limit.md). Start with one copy of each equal string (pool + 0x04 bit 0). The Rockbox method is not practical in RetailOS. |
+| 12 | More tracks on a 32 MB iPod | Rockbox, the owner | High for 30 GB owners | Low to high | Done: refer to [ram-limit.md](ram-limit.md). The Rockbox method is not practical in RetailOS. A 32 MB iPod already shares equal strings. The next step is to find the size of the music buffer. |
 
 ### 1. Play Next and Play Last
 
