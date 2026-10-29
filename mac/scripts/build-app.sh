@@ -30,13 +30,21 @@ fi
 BUILD_NUMBER=$((BUILD_NUMBER + 1))
 echo "==> Building iPodFirm $MARKETING_VERSION ($BUILD_NUMBER)"
 
-swift build -c release --arch arm64
-BIN="$(swift build -c release --arch arm64 --show-bin-path)"
+# The compiler writes the path of each source file into the program. The option
+# -file-prefix-map writes "." in place of the project folder. Thus the build does not
+# change with the location of the project folder.
+ROOT="$(cd .. && pwd)"
+SWIFT_FLAGS=(-c release --arch arm64 -Xswiftc -file-prefix-map -Xswiftc "$ROOT=.")
+swift build "${SWIFT_FLAGS[@]}"
+BIN="$(swift build "${SWIFT_FLAGS[@]}" --show-bin-path)"
 
 APP="build/$APP_NAME.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/iPodFirm" "$BIN/ipodfw-helper" "$APP/Contents/MacOS/"
+# "strip -S" removes the debug map of the linker. The app does not use it. The function
+# names stay for crash reports.
+strip -S "$APP/Contents/MacOS/iPodFirm" "$APP/Contents/MacOS/ipodfw-helper"
 mkdir -p "$APP/Contents/Library/LaunchDaemons"
 cp Resources/com.thefauxdreamer.ipodfirm.helper.plist "$APP/Contents/Library/LaunchDaemons/"
 cp Resources/install-emulator.sh "$APP/Contents/Resources/"
@@ -112,6 +120,17 @@ sign_app() {    # $1 = the app, $2 = the identity
     codesign --verify --strict "$1"
 }
 
+check_private() {    # $1 = the app for the release ZIP
+    # Stop if a file in the app contains a path of the build Mac or the Git e-mail address.
+    local email patterns=(-e '/Users/' -e "$ROOT" -e "$HOME")
+    email="$(git config user.email || true)"
+    case "$email" in ""|*@users.noreply.github.com) ;; *) patterns+=(-e "$email") ;; esac
+    if grep -rlaF "${patterns[@]}" "$1"; then
+        echo "error: the files above contain a path of the build Mac or the Git e-mail address" >&2
+        exit 1
+    fi
+}
+
 make_zip() {    # $1 = the app with an ad-hoc signature
     # Stop if the signature contains a certificate (a name or an e-mail address).
     if codesign -dvv "$1" 2>&1 | grep -q '^Authority='; then
@@ -147,6 +166,9 @@ if [ -z "$IDENTITY" ]; then
 fi
 sign_app "$APP" "$IDENTITY"
 if [ "$RELEASE" = both ]; then sign_app "$RELEASE_APP" "-"; fi
+
+if [ "$RELEASE" = 1 ]; then check_private "$APP"; fi
+if [ "$RELEASE" = both ]; then check_private "$RELEASE_APP"; fi
 
 # Only record the new numbers once the build has succeeded.
 printf 'MARKETING_VERSION=%s\nBUILD_NUMBER=%s\n' "$MARKETING_VERSION" "$BUILD_NUMBER" > version.env

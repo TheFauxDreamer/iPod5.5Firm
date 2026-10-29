@@ -64,12 +64,13 @@ The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the cent
 `mac/scripts/build-app.sh` does these steps:
 
 1. It increases the version and the build number in [mac/version.env](../mac/version.env).
-2. It runs `swift build -c release --arch arm64`.
+2. It runs `swift build -c release --arch arm64` with the option `-file-prefix-map <project folder>=.`. The compiler then writes `./mac/Sources/...` in place of the full path of each source file. Thus the build does not change with the location of the project folder.
 3. It makes `iPodFirm.app` with the app, the helper, the launchd property list, the emulator files and the patches.
-4. It writes `Info.plist`. The bundle identifier is `com.thefauxdreamer.ipodfirm`.
-5. It signs the helper with the identifier `com.thefauxdreamer.ipodfirm.helper`, then the app. It uses the first "Apple Development" or "Developer ID Application" identity, or `CODESIGN_IDENTITY`.
-6. It writes the new numbers to `version.env` only after a successful build.
-7. It quits iPodFirm with `osascript` if iPodFirm is open. Then it installs the app in `/Applications`.
+4. It runs `strip -S` on the app and on the helper. This removes the debug map of the linker. The app does not use it.
+5. It writes `Info.plist`. The bundle identifier is `com.thefauxdreamer.ipodfirm`.
+6. It signs the helper with the identifier `com.thefauxdreamer.ipodfirm.helper`, then the app. It uses the first "Apple Development" or "Developer ID Application" identity, or `CODESIGN_IDENTITY`.
+7. It writes the new numbers to `version.env` only after a successful build.
+8. It quits iPodFirm with `osascript` if iPodFirm is open. Then it installs the app in `/Applications`.
 
 The variable `APP_NAME` changes the name of the app (the default is `iPodFirm`). Use it to install a test build next to the normal app, for example `APP_NAME="iPodFirm USB-C Test" mac/scripts/build-app.sh`. The two apps have the same bundle identifier and the same helper. Do not open the two apps at the same time.
 
@@ -81,9 +82,10 @@ A stable signature is necessary. macOS connects Full Disk Access to the signatur
 
 1. It increases the version and the build number, as a normal build does.
 2. It signs the helper and the app with an ad-hoc signature (`codesign --sign -`). It ignores `CODESIGN_IDENTITY`.
-3. It stops if `codesign -dvv` shows an `Authority=` line.
-4. It makes `build/iPodFirm-<version>.zip` with `ditto -c -k --keepParent`.
-5. It does not install the app in `/Applications`.
+3. It stops if a file in the app contains a path of the build Mac or the Git e-mail address. The script does not examine an address that ends in `@users.noreply.github.com`. The check occurs before the script writes the new numbers to `version.env`.
+4. It stops if `codesign -dvv` shows an `Authority=` line.
+5. It makes `build/iPodFirm-<version>.zip` with `ditto -c -k --keepParent`.
+6. It does not install the app in `/Applications`.
 
 `RELEASE=both mac/scripts/build-app.sh` makes the release ZIP and installs the app from one build. The two copies have the same version and build number:
 
