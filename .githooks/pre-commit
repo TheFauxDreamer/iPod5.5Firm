@@ -1,0 +1,82 @@
+#!/bin/sh
+# The check before each commit.
+#
+# Git runs this script before it makes a commit. The script examines the new and the
+# changed files in the index. If it finds a problem, it stops the commit.
+#
+# To turn on the check, run this command one time in the project folder:
+#   git config core.hooksPath .githooks
+#
+# The script finds these problems:
+#   1. A file that the repository must not contain: Apple firmware, an .ipsw file,
+#      an iPod backup, an iPod key file or a music file.
+#   2. A file that is larger than 5 MB.
+#   3. An absolute path. Scripts must use relative paths.
+#   4. The Git e-mail address of the author, if it is not a GitHub noreply address.
+#   5. A private key or an access token.
+#
+# The script reads the home folder and the e-mail address when it runs.
+
+MAX_BYTES=5242880
+SELF=".githooks/pre-commit"
+fail=0
+
+problem() {
+	echo "Commit check: $1" >&2
+	fail=1
+}
+
+files=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$files" ] && exit 0
+
+# 1 and 2: The names and the sizes of the files.
+echo "$files" | while IFS= read -r f; do
+	case "$f" in
+		*.ipsw|*.bin|*.img|*.sidb|*.mid|*.midi|*.mp3|*.m4a|*.aac|*.wav|*.aiff|*.flac)
+			echo "Commit check: '$f' has a file type that the repository must not contain." >&2
+			echo x ;;
+		Firmware-*|*/Firmware-*|iPod_Control/*|*/iPod_Control/*|backups/*|*/backups/*)
+			echo "Commit check: '$f' is firmware or iPod data. Do not commit it." >&2
+			echo x ;;
+	esac
+	size=$(git cat-file -s ":$f" 2>/dev/null || echo 0)
+	if [ "$size" -gt "$MAX_BYTES" ]; then
+		echo "Commit check: '$f' is $size bytes. The limit is $MAX_BYTES bytes." >&2
+		echo x
+	fi
+done | grep -q x && fail=1
+
+# 3, 4 and 5: The added lines of the text files. The script does not examine itself,
+# because it contains the patterns.
+added=$(git diff --cached -U0 --no-color --diff-filter=ACMR -- . ":(exclude)$SELF" \
+	| grep -E '^\+' | grep -vE '^\+\+\+ ')
+
+check() {
+	# $1 is the pattern. $2 is the message.
+	hits=$(printf '%s\n' "$added" | grep -nE -e "$1" | head -3)
+	if [ -n "$hits" ]; then
+		problem "$2"
+		printf '%s\n' "$hits" | sed 's/^/    /' >&2
+	fi
+}
+
+check '/Users/[A-Za-z0-9._-]+/|/home/[A-Za-z0-9._-]+/|[Cc]:\\Users\\[A-Za-z0-9._-]+' \
+	"an absolute path is in the added text. Use a relative path, for example Path(__file__)."
+if [ -n "$HOME" ] && [ "$HOME" != "/" ]; then
+	check "$(printf '%s' "$HOME" | sed 's/[.[\*^$+?(){}|]/\\&/g')" \
+		"the home folder is in the added text."
+fi
+email=$(git config user.email)
+case "$email" in
+	""|*@users.noreply.github.com) ;;
+	*) check "$(printf '%s' "$email" | sed 's/[.[\*^$+?(){}|]/\\&/g')" \
+		"the Git e-mail address is in the added text." ;;
+esac
+check 'BEGIN [A-Z ]*PRIVATE KEY|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}' \
+	"a private key or an access token is in the added text."
+
+if [ "$fail" -ne 0 ]; then
+	echo "Commit check: the commit stopped. Correct the problems, then commit again." >&2
+	exit 1
+fi
+exit 0

@@ -52,6 +52,19 @@ This rule is mandatory. Never publish a document, a page, a report or any other 
 - Write a page for other people as one self-contained `.html` file in the repository. Put all CSS and JavaScript in the file. Do not load fonts, scripts or styles from the internet.
 - The owner shares the files.
 
+## Examine new files before each commit
+
+This rule is mandatory. Before you make a commit, examine each new file and each changed file in the commit.
+
+1. Make sure that the hook is on. Run `git config core.hooksPath .githooks` in each new clone.
+2. Read the new text. Make sure that it has no absolute path and no private data, for example a real name, an e-mail address, a key or a token.
+3. Use relative paths in scripts. Example: `Path(__file__).resolve().parents[3]`.
+4. Make sure that the commit has no Apple firmware, no `.ipsw` file, no iPod backup, no key file and no music file.
+5. Make sure that no file is larger than 5 MB.
+6. If the hook `.githooks/pre-commit` stops the commit, correct the problem. Then make the commit again.
+
+Do not use `git commit --no-verify` unless the owner tells you to do it.
+
 ## Other rules
 
 - Each feature that operates on the iPod or on the firmware must have a user interface in the iPodFirm app. A command-line tool alone is not sufficient.

@@ -343,6 +343,14 @@ This project started as a personal project. I used Claude Code for much of the r
 
 For each patch, [docs/modifications.md](docs/modifications.md) gives the user interface, the Ghidra results and the limits.
 
+### Turn on the commit check
+
+The script [.githooks/pre-commit](.githooks/pre-commit) examines each commit before Git makes it. It stops a commit that has a file or a text that the repository must not contain, for example Apple firmware or a file larger than 5 MB.
+
+1. Open Terminal.
+2. Go to the project folder.
+3. Run `git config core.hooksPath .githooks`.
+
 ### Build and install the app
 
 1. Open Terminal.
