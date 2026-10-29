@@ -58,6 +58,7 @@ Use this table to find the documents to update:
 | `re/collect-ipod-info.sh`, `re/collect-ipod-info.ps1` or their page template | Run `python3 re/build-collect-page.py` to build `re/collect-ipod-info.html` again (the test `tests/test_collect_page.py` checks it). Update [../re/ipod-classic-6g.md](../re/ipod-classic-6g.md#data-from-a-real-ipod-classic). |
 | A script in `re/ghidra-scripts/` or `re/find-pattern.py` | [ghidra-guide.md](ghidra-guide.md) (section 2 and the recipes), [firmware-functions.md](firmware-functions.md) (the tools table) |
 | A hook site of a patch | The appendix of [ghidra-guide.md](ghidra-guide.md): make the signature again with `MakeSignature.java` |
+| A change from a problem report, a fix, a test or an idea of another person | `Thanks.people` in [Thanks.swift](../mac/Sources/IPodFWKit/Thanks.swift) (name, reason, link and the `version` of the build), the Credits section of [../README.md](../README.md) |
 | A test on the real iPod | [safety.md](safety.md) (test status), [modifications.md](modifications.md) (test status), the note in [../re/](../re/) |
 
 To find the size of a compiled patch, run `swift test --filter testPatchSizes` in `mac/`. A wrong `size` gives a failure with the measured value. Do not estimate the size.

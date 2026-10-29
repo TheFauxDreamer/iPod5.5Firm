@@ -430,6 +430,10 @@ The dark theme comes from the iPodWizard community: "5.5G Ultimate Background Ha
 
 The idea of SSD Mode comes from [rockpod](https://github.com/nuxcodes/rockpod). The idea of the Album Artists menu comes from osos-lab (RepriseOS).
 
+The user braniak87 found the cause of a crash when the Patches pane opened (GitHub issue 1). braniak87 also gave the fix and tested it.
+
+In the app, select Help > Thanks… to see these people. The newest fixes are at the top. To add a person, add an entry with the release `version` to `Thanks.people` in [Thanks.swift](mac/Sources/IPodFWKit/Thanks.swift) and to this section.
+
 The `something-comforting` patch plays a short part of "Something Comforting" by Porter Robinson. The patch is an example only.
 
 ## Legal

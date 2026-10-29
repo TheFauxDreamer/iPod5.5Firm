@@ -64,3 +64,10 @@ This rule is mandatory. Never publish a document, a page, a report or any other 
 - An installed patch must also have a correct size. The install and **Export Patch…** write the measured size into `patch.json` if the value is missing or wrong. At the start, the app records the size of each installed patch that has no size. Keep this behaviour.
 - The app shows the size of each patch and of the dark theme in the Patches pane. Each new item that adds data to the firmware must also show its size there.
 - Do not commit Apple firmware files, `.ipsw` files or iPod backups.
+- Thank each person who reports a problem, supplies a fix, tests a fix or gives an idea that goes into the app. Do this in the same commit as the change:
+  1. Add an entry to `Thanks.people` in `mac/Sources/IPodFWKit/Thanks.swift`. The app shows the list in Help > Thanks….
+  2. Set `version` to the first app version that has the change. Use the version that `mac/scripts/build-app.sh` gives for the build.
+  3. If the person already has an entry, update the reason and the `version`. Do not add a second entry.
+  4. Add the person to the Credits section of `README.md`.
+
+  The tests `testThanksSortNewestFirst` and `testThanksEntries` make sure of steps 2 to 4.

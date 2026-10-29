@@ -66,6 +66,7 @@ struct IPodFirmApp: App {
             }
             CommandGroup(after: .help) {
                 Button("Show Disclaimer") { model.showDisclaimerReview = true }
+                Button("Thanks…") { model.showThanks = true }
             }
         }
         Settings {
@@ -214,6 +215,7 @@ struct ContentView: View {
         .sheet(isPresented: $model.showFinderRestoreHelp) { FinderRestoreSheet() }
         .sheet(isPresented: $model.showDisclaimer) { DisclaimerSheet(review: false).interactiveDismissDisabled() }
         .sheet(isPresented: $model.showDisclaimerReview) { DisclaimerSheet(review: true) }
+        .sheet(isPresented: $model.showThanks) { ThanksSheet() }
         .task { await model.refreshIPods() }
         .task {
             // A connected or disconnected iPod: find the iPods again, and read the patches on a new iPod.

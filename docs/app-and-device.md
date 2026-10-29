@@ -39,9 +39,11 @@ The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 |---|---|
 | File | Open Firmware… (⌘O), Download Apple Firmware 1.3, Save Firmware As… (⇧⌘S), Export as .ipsw…, Export Pictures & Text…, Import Pictures & Text…, Import iPodWizard Theme…, New Patch…, Install Patch… |
 | iPod | Flash to iPod… (⇧⌘F), Back Up iPod, Eject iPod (⌘E), Run in Emulator (⌘R) |
-| Help | Show Disclaimer |
+| Help | Show Disclaimer, Thanks… |
 
 At the first launch, the app shows the disclaimer sheet (`DisclaimerSheet` in [DisclaimerSheet.swift](../mac/Sources/iPodFirm/DisclaimerSheet.swift)). The sheet gives the risk of a flash, the absence of a warranty and the Apple trademark notice. The user cannot close the sheet with Esc. The **Agree** button is available only after the user turns on the checkbox. **Agree** records `Disclaimer.version` in `acceptedDisclaimerVersion`. **Quit** stops the app. A `.ipodpatch` file that Finder opens waits until the user accepts the disclaimer. After a large change to the text, increase `Disclaimer.version`. Then each user must accept the disclaimer again. Help > Show Disclaimer shows the sheet again with only a **Close** button.
+
+Help > Thanks… shows the Thanks sheet (`ThanksSheet` in [ThanksSheet.swift](../mac/Sources/iPodFirm/ThanksSheet.swift)). The sheet lists the people who reported problems, supplied fixes or gave ideas. Each entry has a name, a reason, an optional link and an optional `version`. The `version` is the first app version that has the fix. `Thanks.sorted` shows the newest version first. The entries with no version come last. The link opens in the browser only when the user clicks it. The list `Thanks.people` and the sort are in [Thanks.swift](../mac/Sources/IPodFWKit/Thanks.swift). To add a person, add an entry to `Thanks.people` with the `version` of the release. The position in the list is not important. Also add the person to the Credits section of the README. The tests `testThanksSortNewestFirst` and `testThanksEntries` check the sort and each entry.
 
 The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the centre of its column. In a tall column, the iPod is larger, to a maximum of 1.4 times. The settings column has a maximum width of 520 points.
 
