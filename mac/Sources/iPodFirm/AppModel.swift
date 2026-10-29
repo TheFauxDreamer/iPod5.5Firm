@@ -151,6 +151,12 @@ final class AppModel: ObservableObject {
     @Published var playlistFoldersStatus: String?
     @Published var helperSetupError: String?
     @AppStorage("requireTouchID") var requireTouchID = true
+    /// Settings > Updates: ask GitHub for a newer release at each launch.
+    @AppStorage("checkForUpdates") var checkForUpdates = true
+    /// The release that the user skipped with "Skip This Version". The launch check ignores it.
+    @AppStorage(UpdateNotifier.skippedKey) var skippedUpdateVersion = ""
+    /// A newer release, if macOS does not allow the notification. The app shows an alert instead.
+    @Published var availableUpdate: UpdateCheck.Release?
     @Published var showFullDiskAccessHelp = false
     @Published var showFinderRestoreHelp = false
 
@@ -594,6 +600,34 @@ final class AppModel: ObservableObject {
         try? FileManager.default.removeItem(at: t.url)
         themes = Self.loadThemes()
         if themes.isEmpty, appearance != .light { appearance = .light }
+    }
+
+    // MARK: updates
+
+    /// The app version without the build number, for example "0.1.178".
+    var shortVersion: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev" }
+
+    /// Ask GitHub for the newest release. A newer release gives a macOS notification.
+    /// At the launch (`manual` false), an error gives no alert, and a skipped version gives no notification.
+    /// Help > Check for Updates… (`manual` true) shows each result.
+    func checkForUpdate(manual: Bool) async {
+        if !manual { guard checkForUpdates, Disclaimer.accepted else { return } }
+        let release: UpdateCheck.Release
+        do {
+            release = try await UpdateCheck.fetchLatest()
+        } catch {
+            if manual { fail("Cannot Check for Updates", error) }
+            return
+        }
+        guard UpdateCheck.isNewer(release.version, than: shortVersion) else {
+            if manual {
+                alert = AlertInfo(title: "iPodFirm Is Up to Date",
+                                  message: "Version \(shortVersion) is the newest version on GitHub.")
+            }
+            return
+        }
+        if !manual, release.version == skippedUpdateVersion { return }
+        if await !UpdateNotifier.shared.notify(release, local: shortVersion) { availableUpdate = release }
     }
 
     // MARK: patches

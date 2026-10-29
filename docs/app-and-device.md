@@ -31,7 +31,7 @@ The app needs macOS 14 or later and an Apple silicon Mac (`--arch arm64`).
 
 [AppModel.swift](../mac/Sources/iPodFirm/AppModel.swift) holds the state and the actions of all panes.
 
-The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has three tabs. Permissions: the Touch ID helper and its check (refer to [The helper check in the Settings window](#the-helper-check-in-the-settings-window)), `requireTouchID` and Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`): 32 KB (the limit 0x7F8000, the default), 16 KB (the limit 0x7FC000, more space for patches) or 64 KB (the limit 0x7F0000, the value before 9 October 2026). The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`), and a build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`).
+The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has four tabs. Permissions: the Touch ID helper and its check (refer to [The helper check in the Settings window](#the-helper-check-in-the-settings-window)), `requireTouchID` and Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`): 32 KB (the limit 0x7F8000, the default), 16 KB (the limit 0x7FC000, more space for patches) or 64 KB (the limit 0x7F0000, the value before 9 October 2026). The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`), and a build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`). Updates: "Check for a new version at launch" (`checkForUpdates`, On by default). Refer to [The update check](#the-update-check).
 
 The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
@@ -39,11 +39,23 @@ The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 |---|---|
 | File | Open Firmware… (⌘O), Download Apple Firmware 1.3, Save Firmware As… (⇧⌘S), Export as .ipsw…, Export Pictures & Text…, Import Pictures & Text…, Import iPodWizard Theme…, New Patch…, Install Patch… |
 | iPod | Flash to iPod… (⇧⌘F), Back Up iPod, Eject iPod (⌘E), Run in Emulator (⌘R) |
-| Help | Show Disclaimer, Thanks… |
+| Help | Show Disclaimer, Thanks…, Check for Updates… |
 
 At the first launch, the app shows the disclaimer sheet (`DisclaimerSheet` in [DisclaimerSheet.swift](../mac/Sources/iPodFirm/DisclaimerSheet.swift)). The sheet gives the risk of a flash, the absence of a warranty and the Apple trademark notice. The user cannot close the sheet with Esc. The **Agree** button is available only after the user turns on the checkbox. **Agree** records `Disclaimer.version` in `acceptedDisclaimerVersion`. **Quit** stops the app. A `.ipodpatch` file that Finder opens waits until the user accepts the disclaimer. After a large change to the text, increase `Disclaimer.version`. Then each user must accept the disclaimer again. Help > Show Disclaimer shows the sheet again with only a **Close** button.
 
 Help > Thanks… shows the Thanks sheet (`ThanksSheet` in [ThanksSheet.swift](../mac/Sources/iPodFirm/ThanksSheet.swift)). The sheet lists the people who reported problems, supplied fixes or gave ideas. Each entry has a name, a reason, an optional link and an optional `version`. The `version` is the first app version that has the fix. `Thanks.sorted` shows the newest version first. The entries with no version come last. The link opens in the browser only when the user clicks it. The list `Thanks.people` and the sort are in [Thanks.swift](../mac/Sources/IPodFWKit/Thanks.swift). To add a person, add an entry to `Thanks.people` with the `version` of the release. The position in the list is not important. Also add the person to the Credits section of the README. The tests `testThanksSortNewestFirst` and `testThanksEntries` check the sort and each entry.
+
+#### The update check
+
+The app does not download or install an update. It only tells the user about a newer release on GitHub. [UpdateCheck.swift](../mac/Sources/IPodFWKit/UpdateCheck.swift) gets the release, and [UpdateNotifier.swift](../mac/Sources/iPodFirm/UpdateNotifier.swift) shows the notification.
+
+1. At the launch, `AppModel.checkForUpdate(manual: false)` starts if `checkForUpdates` is on and the user accepted the disclaimer. At the first launch, the check starts after the acceptance.
+2. `UpdateCheck.fetchLatest` gets the newest release from the GitHub API (refer to [Network connections](#network-connections)). GitHub does not give drafts or pre-releases.
+3. `UpdateCheck.isNewer` compares the numbers of the tag (without the `v`) with `CFBundleShortVersionString`. A missing number counts as 0. A version that is not a number, for example `dev`, gives no update.
+4. If the release is newer and it is not `skippedUpdateVersion`, the app posts a macOS notification. macOS asks the user one time to allow notifications.
+5. A click on the notification or on **Open GitHub** opens the release page in the browser. **Skip This Version** writes the version into `skippedUpdateVersion`.
+
+If the user does not allow notifications, the app shows an alert with the same buttons and **Later**. At the launch, a network error gives no message. Help > Check for Updates… does the same check, but it ignores `skippedUpdateVersion`. It also shows an alert if the app is up to date or if the check fails. The tests `testUpdateVersionCompare` and `testUpdateReleaseParse` check the comparison and the JSON decode.
 
 The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the centre of its column. In a tall column, the iPod is larger, to a maximum of 1.4 times. The settings column has a maximum width of 520 points.
 
@@ -254,7 +266,8 @@ The Patches pane shows the result:
 | `SecCodeCopySelf`, `SecCodeCopySigningInformation` | Read the team identifier for the signature requirement. |
 | `LAContext` | Touch ID before a write. |
 | `NSAppleScript` | The password mode. |
-| `URLSession` | Download the Apple firmware. |
+| `URLSession` | Download the Apple firmware. Get the number of the newest iPodFirm release from GitHub (`UpdateCheck.swift`). |
+| `UNUserNotificationCenter` | Tell the user about a newer release (`UpdateNotifier.swift`). If the user does not allow notifications, the app shows an alert. |
 | `CryptoKit.SHA256` | Hashes of the firmware, the osos and the backups. |
 | `CGImageSource`, `CGContext` | Read and scale the cover images and the PNG files. |
 | `AVURLAsset` | Read the cover of a non-MP4 music file. |
@@ -268,11 +281,12 @@ The Patches pane shows the result:
 | URL | When | Check |
 |---|---|---|
 | `http://appldnld.apple.com.edgesuite.net/content.info.apple.com/iPod/SBML/osx/bundles/061-2967.20080313.Cnvkg/iPod_25.1.3.ipsw` | "Download Apple Firmware 1.3", and each action that needs the Apple file if no correct copy is cached. | SHA-256 must be `840b2480ad5b692c098cb772c3d2bf8f58bf37557788782b596ac01c27ecdc32`. Apple serves this file only over HTTP, so `Info.plist` has an App Transport Security exception for this domain. |
+| `https://api.github.com/repos/TheFauxDreamer/iPod5.5Firm/releases/latest` | At each launch if Settings > Updates > "Check for a new version at launch" is on. Help > Check for Updates…. | TLS 1.2 or later. HTTP status 200 and JSON with `tag_name` and `html_url`. The app compares `tag_name` (without the `v`) with `CFBundleShortVersionString`. If the release is newer, the notification opens `html_url` in the browser. The app does not download the update. |
 | `https://sh.rustup.rs` | "Install Emulator", only if `~/.cargo/bin/cargo` does not exist. | TLS 1.2 or later. |
 | `https://github.com/siggifly/ipod-emulator.git` | "Install Emulator". | Git over HTTPS. |
 | crates.io (through `cargo`) | "Install Emulator". | Cargo lock file of the emulator. |
 
-The app makes no other network connections. It sends no data about the owner or the iPod.
+The app makes no other network connections. It sends no data about the owner or the iPod. The update check sends only a GET request with the default `User-Agent` of `URLSession`.
 
 ## Files
 
@@ -330,6 +344,8 @@ The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not ch
 | `customVersionOn`, `customVersion` | The custom version. |
 | `versionLettersOn` | The patch letters on the About screen. |
 | `requireTouchID` | Touch ID before a write (daemon mode). |
+| `checkForUpdates` | Settings > Updates > "Check for a new version at launch". The default is true. |
+| `skippedUpdateVersion` | The release version that the user skipped with **Skip This Version**. The check at launch shows no notification for this version. Help > Check for Updates… ignores it. |
 | `ososMargin` | The empty margin below 8 MB: `current` (32 KB, limit 0x7F8000), `compact` (16 KB, limit 0x7FC000) or `previous` (64 KB, limit 0x7F0000). |
 | `emulatorLibrary`, `emulatorMusicFolder`, `emulatorSongCount` | The music library on the emulator drive. |
 

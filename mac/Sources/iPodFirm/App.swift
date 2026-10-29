@@ -22,7 +22,10 @@ struct IPodFirmApp: App {
                 .onAppear { delegate.attach(model) }
                 // A patch that Finder opened before the user accepted the disclaimer waits for the acceptance.
                 .onChange(of: model.showDisclaimer) { _, shown in
-                    if !shown { delegate.attach(model) }
+                    if !shown {
+                        delegate.attach(model)
+                        Task { await model.checkForUpdate(manual: false) }
+                    }
                 }
                 // All copies of iPodFirm share the user patches folder. Another copy can add, change or remove a patch.
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -67,6 +70,8 @@ struct IPodFirmApp: App {
             CommandGroup(after: .help) {
                 Button("Show Disclaimer") { model.showDisclaimerReview = true }
                 Button("Thanks…") { model.showThanks = true }
+                Divider()
+                Button("Check for Updates…") { Task { await model.checkForUpdate(manual: true) } }
             }
         }
         Settings {
@@ -128,6 +133,18 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Patches", systemImage: "puzzlepiece.extension") }
+            Form {
+                Section {
+                    Toggle("Check for a new version at launch", isOn: $model.checkForUpdates)
+                    Text("iPodFirm asks GitHub for the number of the newest release. It sends no data about you or your iPod. If GitHub has a newer version, a notification opens the release page. iPodFirm does not download the update. To check now, select Help > Check for Updates….")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Updates")
+                }
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
         }
         .frame(width: 560, height: 300)
         .onAppear { model.recheckFullDiskAccess() }
@@ -159,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        UpdateNotifier.shared.register()
         NSApp.activate(ignoringOtherApps: true)
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -229,6 +247,17 @@ struct ContentView: View {
             }
         }
         .task { await model.recordMissingPatchSizes() }
+        .task { await model.checkForUpdate(manual: false) }
+        // The fallback if macOS does not allow notifications from iPodFirm.
+        .alert("A New Version of iPodFirm Is Available",
+               isPresented: Binding(get: { model.availableUpdate != nil }, set: { if !$0 { model.availableUpdate = nil } }),
+               presenting: model.availableUpdate) { release in
+            Button("Open GitHub") { NSWorkspace.shared.open(release.url) }.keyboardShortcut(.defaultAction)
+            Button("Skip This Version") { model.skippedUpdateVersion = release.version }
+            Button("Later", role: .cancel) {}
+        } message: { release in
+            Text("Version \(release.version) is on GitHub. You have version \(model.shortVersion). Download the new version from the GitHub release page.")
+        }
     }
 
     var title: String {
