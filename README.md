@@ -1,6 +1,6 @@
 # iPodFirm
 
-iPodFirm is a Mac app that adds new features to the iPod Video (5th generation and 5.5th generation). Examples are Dark Mode, small album artwork in the lists, Cover Flow, an Album Artists menu, and PoC USB-C headphone support.
+iPodFirm is a Mac app that adds new features to the iPod Video (5th generation and 5.5th generation). Examples are Dark Mode, small album artwork in the lists, Cover Flow, an Album Artists menu, Playlist Folders, Up Next, Search on the iPod 5G, and PoC USB-C headphone support. The app can also change the pictures and the text of the firmware, and copy your purchased iPod games to the iPod.
 
 iPodFirm changes the Apple operating system of the iPod ("RetailOS", firmware 1.3). It does not replace it, like Rockbox does. The iPod keeps its menus, its music library and its sync with Finder or iTunes.
 
@@ -159,6 +159,26 @@ The app comes with the theme "Dark Gray". The app copies it to `~/Library/Applic
 
 The tested theme is "Dark Gray (04_12_20)" for the 5.5G. To change the pictures of a theme, use the **Pictures** pane and click "Dark Theme". A theme file in the folder of the owner holds the old bytes of each change (format 1). The built-in themes hold the hash of the old bytes (format 2) and no byte of the Apple firmware.
 
+### Change the pictures and the text
+
+The **Pictures** pane shows the pictures in the firmware, for example the menu icons and the battery pictures. These are not the photos that you put on the iPod.
+
+1. Select a picture.
+2. Click **Replace…** and select a PNG file. The PNG file must have the same size as the picture.
+3. To save a picture as a PNG file, click **Export PNG…**.
+
+To change many pictures, click **Export All…**. Change the PNG files in the folder. Then click **Import Folder…**.
+
+The **Text** pane shows the text of each language of the iPod.
+
+1. Select the language.
+2. Type the new text in a row. The changed rows show in colour.
+3. Click **Apply**. To discard the changes, click **Revert**.
+
+The text cannot use more bytes than the language uses in the Apple firmware. To make one text longer, make other text shorter.
+
+After a change, flash the firmware from the **iPod** pane. For the command-line tool, refer to [The ipodfw tool](#the-ipodfw-tool).
+
 ### USB-C Audio
 
 The USB-C Audio patch plays the music of the iPod through USB-C headphones. The inline volume buttons and the play/pause button operate the iPod. Two pushes go to the next song. Three pushes go to the previous song. The click wheel also sets the volume.
@@ -192,8 +212,11 @@ The app shows the probe only if you switch on iPodFirm > Settings… > Patches >
 
 ### Make or install a patch
 
-- To install a patch from another person, double-click the `.ipodpatch` file. You can also drag it onto the list of patches.
+- To install a patch from another person, double-click the `.ipodpatch` file. You can also drag it onto the list of patches. You can also click **Install Patch…**.
 - To make a patch, select File > New Patch…. A patch is C code that you type in the app. You need Xcode to compile it.
+- To change a patch that you made or installed, select it and click **Edit Patch…**. You cannot edit a built-in patch.
+- To give a patch to another person, select it and click **Export Patch…**. The `.ipodpatch` file has the compiled code, thus the other person does not need Xcode.
+- To remove a patch that you made or installed, click **Remove Patch…**. The app moves the patch to the Trash.
 
 For the details, refer to [docs/patch-system.md](docs/patch-system.md).
 
