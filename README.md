@@ -101,6 +101,7 @@ The table shows the status that the test notes record. For the full test record,
 | Sleep Now | s | The Sleep item puts the iPod to sleep immediately. Use it with SSD Mode. | Yes |
 | Instant Save | i | Saves each change in Settings > Main Menu immediately. Without it, the iPod saves the change only when it sleeps. | Yes |
 | No EU Volume Limit | v | Removes the volume limit of iPods for the EU. | No. The test needs an iPod for the EU. |
+| Search on the 5G | e | Shows the Search menu on the iPod 5G. Firmware 1.3 shows it only on the 5.5G. On a 5.5G, the patch changes nothing. | No. RetroCux tested the same byte on a 5G. |
 | Click Only on the Speaker | p | The click of the click wheel plays only from the speaker in the iPod, not in the headphones. | Yes |
 | Shuffle Fixes | f | Corrects four errors in the shuffle. The most important: with more than 32767 songs, the shuffle writes outside the list and the order is wrong. | Yes |
 | Up Next | n | Hold Select on a song, an album or an artist while music plays: the songs play next (Play Next) or after the last song (Play Last). Settings > Hold Select selects the action: Play Next, Play Last, On-The-Go or Cover Flow (in the Albums list, with the Cover Flow patch). | Yes (version 0.5) |
@@ -429,6 +430,8 @@ The file [0001-ipodfirm-instrumentation.patch](mac/Resources/emulator-patches/00
 The dark theme comes from the iPodWizard community: "5.5G Ultimate Background Hack" by Matthew98, dark mode by Milli5410.
 
 The idea of SSD Mode comes from [rockpod](https://github.com/nuxcodes/rockpod). The idea of the Album Artists menu comes from osos-lab (RepriseOS).
+
+The idea of Search on the 5G and the byte to change come from [RetroCux](https://github.com/RetroCux/Enable-the-Search-function-on-iPod-Video-5th-Gen).
 
 The user braniak87 found the cause of a crash when the Patches pane opened (GitHub issue 1). braniak87 also gave the fix and tested it.
 

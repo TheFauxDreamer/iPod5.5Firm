@@ -30,6 +30,8 @@ public enum Thanks {
         ThanksEntry(name: "Matthew98", reason: "The \"5.5G Ultimate Background Hack\" theme. The dark theme starts from it."),
         ThanksEntry(name: "braniak87", reason: "Found the cause of the crash when the Patches pane opened, gave the fix and tested it (GitHub issue 1).",
                     link: URL(string: "https://github.com/TheFauxDreamer/iPod5.5Firm/issues/1"), version: "0.1.172"),
+        ThanksEntry(name: "RetroCux", reason: "The idea of Search on the iPod 5G and the byte to change.",
+                    link: URL(string: "https://github.com/RetroCux/Enable-the-Search-function-on-iPod-Video-5th-Gen"), version: "0.1.176"),
         ThanksEntry(name: "Milli5410", reason: "The dark mode of the dark theme."),
         ThanksEntry(name: "rockpod (nuxcodes)", reason: "The idea of SSD Mode.",
                     link: URL(string: "https://github.com/nuxcodes/rockpod")),

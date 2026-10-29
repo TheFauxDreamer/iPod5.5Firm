@@ -161,6 +161,7 @@ A test in the emulator is strong evidence, but not proof:
 | `flash-keep-awake` | Yes, without a sleep | The 2-minute version (2 October 2026). Version 1.1: yes (28 October 2026) |
 | `flash-wake-on-input` | Yes | Version 1.2: yes (28 October 2026) |
 | `volume-unlimit` | Byte check only (the emulator has no EU limit and no audio) | No |
+| `search-5g` | Byte check only (the emulator profile is a 5.5G, and a 5.5G shows Search without the patch) | Not tested with iPodFirm. RetroCux tested the same byte on a 5G |
 | `click-speaker-only` | Byte check only (the emulator has no audio) | Yes, version 1.0: the click plays only from the piezo (2026-10-27) |
 | `shuffle-album-mix` | Yes (20 October 2026): the 4 values, the settings bytes and the order of Album Mix; also with all 13 patches that are not `internal` or `test`. Version 1.2 (22 October 2026): the main menu item and its Settings > Main Menu row, alone and with `album-artists` and `usb-audio-out` | Version 1.1 (20 October 2026): Album Mix shuffled the songs of one album. With Repeat All, the album plays with no end and stays shuffled. Version 1.2: operates (28 October 2026) |
 | `shuffle-fixes` | Yes (20 October 2026): version 1.0 with 60 and 40000 tracks; version 2.0 with 60 tracks: the seed fix, the stock order with a fixed seed and the inner album shuffle (no audio in the emulator) | Version 2.1: yes (28 October 2026) |

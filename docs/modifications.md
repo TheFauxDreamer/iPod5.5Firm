@@ -17,6 +17,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [flash-keep-awake](#flash-keep-awake) | Code patch | Patches | 4 `bl` | Version 1.1: yes (28 October 2026) |
 | [flash-wake-on-input](#flash-wake-on-input) | Code patch | Patches | 1 `bl` | Version 1.2: yes (28 October 2026) |
 | [volume-unlimit](#volume-unlimit) | Data patch | Patches | 2 bytes | No |
+| [search-5g](#search-5g) | Data patch | Patches | 1 byte | No |
 | [click-speaker-only](#click-speaker-only) | Data patch | Patches | 1 instruction word | Yes (2026-10-27) |
 | [shuffle-fixes](#shuffle-fixes) | Code patch (extended) | Patches | 2 `bl` and 4 instruction words | Version 2.1: yes (28 October 2026) |
 | [shuffle-album-mix](#shuffle-album-mix) | Code patch (extended) | Patches | 3 `bl`, 3 `b` and 3 vtable words (all 6 with `chain`), 1 instruction word, 2 menus | Version 1.1: partly, the order of one album. Version 1.2: yes (28 October 2026) |
@@ -666,6 +667,27 @@ Thus `0xa0348` always returns 0. The other match of the iPodWizard pattern, at 0
 
 **Test status.** A script applied the change to osos 1.3 and ran the iPodWizard search: "capped" before, "uncapped" after. The emulator cannot show the effect. Not tested on a real iPod. The test needs an iPod for the EU.
 
+
+## search-5g
+
+**User interface.** Patches pane > Display > Search on the 5G, letter `e`, version 1.0.
+
+**Effect.** On a 5G, Music > Search is the last item of the Music menu, and Settings > Main Menu has a Search item. On a 5.5G, the patch changes nothing, because the 5.5G already shows Search.
+
+**Research.** Refer to [re/search-5g.md](../re/search-5g.md). The idea and the byte come from RetroCux.
+
+- `0x130b30` returns 0 if the hardware revision is model 0xb with a revision below 0x11 (the 5G).
+- Only two callers use it: the Search bit of the main menu (`0x105a04`, label 0x5f8b) and the Music menu (`0x130ca4`).
+
+**Change.** This patch has no C code. It uses the `bytes` key of `patch.json`:
+
+| At | Expect | Value | Instruction after the change |
+|---|---|---|---|
+| 0x130b50 | `00` | `01` | `movcc r0, #1` |
+
+Thus `0x130b30` always returns 1. The size on the iPod is 0 bytes. The pane shows "1 byte".
+
+**Test status.** The Apple osos 1.3 has `00` at 0x130b50. Not tested in the emulator: the emulator profile is a 5.5G. Not tested on a real iPod with iPodFirm. RetroCux tested the same byte on a real 5G.
 
 ## click-speaker-only
 
