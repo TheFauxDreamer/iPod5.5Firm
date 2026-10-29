@@ -306,3 +306,24 @@ def test_needs():
                 assert need in names, (p.name, need)
     with pytest.raises(patcher.PatchError, match="needs the patch"):
         patcher.apply_all(b"", [REPO / "patches/shuffle-album-mix"])
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_playlist_folders():
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    out, report = patcher.apply(osos, REPO / "patches/playlist-folders", 0x736800)
+    syms = {k: int(v, 16) for k, v in report["symbols"].items()}
+    # the four calls that change a screen row into an array index
+    for at, name in ((0x1ea66c, "hook_count"), (0x1ec914, "hook_name"), (0x1e7e7c, "hook_select"), (0x254cc4, "hook_otg")):
+        assert struct.unpack_from("<I", out, at)[0] == patcher.branch("bl", at, syms[name])
+    for at, name in ((0x1ea660, "hook_vmax"), (0x1d81cc, "hook_ui_event")):
+        assert struct.unpack_from("<I", out, at)[0] == patcher.branch("b", at, syms[name])
+    assert struct.unpack_from("<I", out, 0x6772c0)[0] == syms["hook_list_event"]
+    # the UI handler slot does not change: cover-flow hooks it, and up-next reads it
+    assert struct.unpack_from("<I", out, 0x6701f0)[0] == 0x1d81cc
+    assert report["bytes"] == json.loads((REPO / "patches/playlist-folders/patch.json").read_text())["size"]
+    # with the patches that use the same list event slot or the UI handler
+    names = ("album-art", "cover-flow", "playlist-folders", "up-next")
+    every = patcher.apply_all(osos, [REPO / "patches" / n for n in names])
+    assert struct.unpack_from("<I", every, 0x6701f0)[0] != 0x1d81cc     # the hook of cover-flow
+    assert struct.unpack_from("<I", every, 0x1d81cc)[0] >> 24 == 0xEA    # the b hook of playlist-folders

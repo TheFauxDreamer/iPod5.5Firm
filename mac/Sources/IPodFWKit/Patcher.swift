@@ -155,7 +155,7 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
         patches.filter { $0.spec.internal != true && (showTests || !$0.spec.isTest) }
     }
     /// The ids of the built-in Swift tools that `ui.tools` can name (PatchTools.swift in the app).
-    public static let knownTools = ["album-thumbnails", "usb-log"]
+    public static let knownTools = ["album-thumbnails", "usb-log", "playlist-folders"]
     public var displayTitle: String { title ?? name }
     /// The version, or nil if `version` is missing or not valid.
     public var parsedVersion: PatchVersion? { version.flatMap(PatchVersion.init) }

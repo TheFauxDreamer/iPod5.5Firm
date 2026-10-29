@@ -105,6 +105,7 @@ The table shows the status that the test notes record. For the full test record,
 | Click Only on the Speaker | p | The click of the click wheel plays only from the speaker in the iPod, not in the headphones. | Yes |
 | Shuffle Fixes | f | Corrects four errors in the shuffle. The most important: with more than 32767 songs, the shuffle writes outside the list and the order is wrong. | Yes |
 | Up Next | n | Hold Select on a song, an album or an artist while music plays: the songs play next (Play Next) or after the last song (Play Last). Settings > Hold Select selects the action: Play Next, Play Last, On-The-Go or Cover Flow (in the Albums list, with the Cover Flow patch). | Yes (version 0.5) |
+| Playlist Folders | o | Puts playlists into folders in the Playlists list. You make the folders and their names in the app. Refer to [Playlist Folders](#playlist-folders). | Yes. The folders operate. |
 | Album Mix Shuffle | x | Adds Album Mix to Settings > Shuffle: the albums and the songs in each album play in a random order. Settings > Main Menu > Shuffle adds a main menu item that changes the Shuffle value. It needs Shuffle Fixes, and the app turns on Shuffle Fixes with it. | Yes (version 1.2) |
 | Something Comforting | m | An example patch. A Settings item plays a short song on the internal speaker of the iPod. | Yes |
 | USB-C Audio | u | Plays the music through USB-C headphones. Refer to [USB-C Audio](#usb-c-audio). | Yes (version 1.9) |
@@ -127,6 +128,20 @@ A custom playlist image needs a thumbnail file:
 3. Click **Write Thumbnails to iPod**.
 
 Write the file again after each change. The pictures of the file come before the pictures that the iPod makes.
+
+### Playlist Folders
+
+The Playlists list shows the folders and the playlists that are not in a folder. Select a folder to see its playlists. Push Menu to go back.
+
+1. Connect the iPod so that it shows in Finder.
+2. In the **Patches** pane, select "Playlist Folders".
+3. Click **Add Folder**. Type a name.
+4. Open the folder row. Turn on each playlist that goes into the folder.
+5. Select the position of the folders: **Folders First** or **Alphabetical**.
+6. Click **Write Folders to iPod**.
+7. Eject the iPod.
+
+A folder cannot have the name of a playlist. A folder has no colour square at this time.
 
 ### Import an iPodWizard theme
 

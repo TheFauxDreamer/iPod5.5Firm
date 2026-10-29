@@ -121,6 +121,9 @@ public enum MusicImport {
         let art = playlistArt(volume: volume, db: db, tracks: tracks, albumCovers: covers)
         var entries = covers
         for (name, data) in art { entries[AlbumArt.playlistKey(name)] = data }
+        // Saved for later: the colour square of each folder of the playlist-folders patch.
+        // The squares did not show on the real iPod. Refer to re/playlist-folders.md, "Folder colours".
+        // for (key, data) in PlaylistFolders.read(volume: volume).artEntries() { entries[key] = data }
         try Data(AlbumArt.build(entries)).write(to: itunes.appendingPathComponent(AlbumArt.fileName), options: .atomic)
         return (albums.count, covers.count, ITunesDB.readPlaylists(db).count, art.count)
     }

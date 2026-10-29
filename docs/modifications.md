@@ -26,6 +26,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [instant-save](#instant-save) | Code patch | Patches | 1 `b` | Version 1.0: yes (28 October 2026) |
 | [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | Version 0.6.7: yes (27 October 2026). Version 0.6.8: yes (28 October 2026) |
 | [up-next](#up-next) | Code patch (extended) | Patches | 1 `bl`, 1 `b` and 2 vtable words (3 with `chain`), a Settings menu | Version 0.4: yes. Version 0.5: yes (28 October 2026) |
+| [playlist-folders](#playlist-folders) | Code patch (extended) | Patches | 4 `bl`, 2 `b` and 1 vtable word (with `chain`) | Version 0.1: emulator only (29 October 2026). Not tested on the real iPod |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
@@ -983,6 +984,59 @@ The Settings item has the key 0x60007e0f and the label 0x7e0b (`settings_items`,
 **Limits.** An item in a group (an audiobook chapter, for example) is not changed: the patch then adds the songs to On-The-Go. The patch has no pop-up menu yet.
 
 **Test status.** Refer to [safety.md](safety.md). Emulator (2026-10-21), see the list in [../re/play-next.md](../re/play-next.md#emulator-tests-of-the-patch). Real iPod (2026-10-21), version 0.4 with `cover-flow` 0.6.4: the Settings item and its value after a restart, Play Next with Shuffle Off and Shuffle Songs (the song plays at the natural end of the current song), an album or an artist, Play Last, the hold in the Albums list with Cover Flow and with Play Next, the value On-The-Go, and a hold with no music (On-The-Go) all passed. The row blinks after a hold, Now Playing shows the new count, the artwork stays correct, and the iPod did not stop or restart. Real iPod 5.5G (owner, 28 October 2026), version 0.5: the patch operates.
+
+## playlist-folders
+
+**User interface.** Patches pane > Display > Playlist Folders, letter `o`, version 0.2. The section "Playlist Folders" of the patch is the editor (`ui.tools`: `playlist-folders`, `PlaylistFoldersSection` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)). It has these controls:
+
+- "Folder position": Folders First or Alphabetical.
+- One row for each folder: the name, the count of playlists and a delete button. Open the row to put playlists into the folder. A playlist is in one folder only.
+- "Add Folder" and "Write Folders to iPod".
+
+The app does not write the folders if a folder has no name, a name of more than 63 characters, the name of a playlist or the name of a different folder. The research is in [../re/playlist-folders.md](../re/playlist-folders.md).
+
+**Effect.** The Playlists list shows the folders and the playlists that are not in a folder. Select on a folder shows its playlists on the same screen. Menu goes back to the top list, with the folder selected. A folder cannot contain a folder. There is no slide animation, and the title stays "Playlists". A folder without playlists on the iPod does not show. On-The-Go stays in the top list.
+
+**The file.** The app writes `iPod_Control/iTunes/iPodFirmPlaylistFolders` (`PlaylistFolders` in [PlaylistFolders.swift](../mac/Sources/IPodFWKit/PlaylistFolders.swift)). The app removes the file if there are no folders. All values are little-endian, and each part starts at a multiple of 4 bytes:
+
+| Part | Content |
+|---|---|
+| Header, 12 bytes | `IFPF`, u16 version (1), u16 flags (bit 0: alphabetical), u16 folder count, u16 0 |
+| Each folder | u16 colour (RGB565), u16 name units, u16 member count, u16 0, the name (UTF-16, padded to 4 bytes), the members (u64 each) |
+
+A member is the persistent ID of a playlist (`mhyp` +0x1c). The firmware keeps it at playlist + 0x18. A persistent ID does not change when the playlist gets a new name. The patch reads at most 64 folders and 64 KB.
+
+**The colour.** The firmware does not use the colour. Version 0.2 of the app does not show the colour picker and does not write colour squares. The colour squares did not show on the real iPod. The code stays in the app as comments, for later work. Refer to [../re/playlist-folders.md](../re/playlist-folders.md#folder-colours). The file keeps the colour field. The app writes the default colour into it.
+
+**Load address.** `extended`. The compiled code and data are 5444 bytes. The patch also uses heap memory: 64 KB for the file buffer, and small arrays for the views.
+
+**Hooks.**
+
+| Kind | At | Expect | To |
+|---|---|---|---|
+| `bl` | 0x1ea66c | 0xebface65 | `hook_count`: the count in 0x1ea660 (0x9e008). The count of the view + 1. |
+| `bl` | 0x1ec914 | 0xebfac19d | `hook_name`: the name of row + 1 (0x9cf90) for the label 0x6425. A folder gives its name. |
+| `bl` | 0x1e7e7c | 0xebfb2acb | `hook_select`: the selection 0xb29b0 in 0x1e7e34. |
+| `bl` | 0x254cc4 | 0xebf93b3e | `hook_otg`: the On-The-Go test 0xa39c4 in 0x254cac. 0 for a folder. |
+| `b` | 0x1ea660 | 0xe92d4010 | `hook_vmax`: keeps the JS browser of the screen; wrapper `vmax_original` (`push {r4, lr}`, then 0x1ea664) |
+| `word` | 0x6772c0 | 0x0023b704 | `hook_list_event` (`chain`: `list_event`): the event method of the browse lists |
+| `b` | 0x1d81cc | 0xe92d41f0 | `hook_ui_event`: the UI handler; wrapper `ui_original` (`push {r4-r8, lr}`, then 0x1d81d0) |
+
+The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cover-flow) hooks that slot, and [up-next](#up-next) reads it. With cover-flow, the hook of cover-flow calls 0x1d81cc, and 0x1d81cc goes to `hook_ui_event`.
+
+**Runtime logic.**
+
+1. The Playlists screen shows array entry row + 1 of the playlist array (main browser + 0xcfc, count + 0xd00). Only the four `bl` hooks change a screen row into an array index.
+2. At each hook call, `ensure` makes a checksum of the array (the pointers and the persistent IDs). If the array changed, it reads the file again and makes the views: the top list and the playlists of each folder, in the order of the array. A view item is an array index, or 0x8000 + a folder number.
+3. Folders First: the folders in the file order, then the playlists that are not in a folder. Alphabetical: before each playlist, the folders with a smaller name, in name order (a–z without case). On-The-Go stays last.
+4. Select on a folder row (`hook_list_event`, key 0x6f): the view changes to the folder. The patch calls 0x1ea660 again (it sends 'VMax'), sends `'Str '` for element 0x6387, sets the selection to row 0 (vtable +0x138) and calls 0x21ac04. It keeps the push.
+5. Menu in a folder (key 0x6e): the view changes to the top list, with the folder row selected. The patch keeps the push.
+6. `hook_ui_event` stops the rest of a push that the patch kept (types 5–7) and decreases the byte UI + 0x44 at the release. Without this, the firmware does the action of the key a second time.
+7. Menu in the top list: the patch reads the file again at the next open.
+
+**Limits.** The title of a folder is "Playlists". There is no slide animation: a second Playlists screen did not operate (refer to the research, experiments 4 and 5). An accessory (iPod Accessory Protocol, for example a car) does not see the folders. A playlist in a folder plays and shuffles as before.
+
+**Test status.** Emulator (29 October 2026, the owner in the emulator window, version 0.1): Folders First and Alphabetical, Select on a folder, a playlist in a folder, Menu back to the folder and to the top list, the next open of Playlists, and the colour squares with `album-art`. All passed. Real iPod (the owner, 29 October 2026), version 0.1: the folders operate. The colour squares did not show.
 
 ## Storage type
 

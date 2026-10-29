@@ -1,0 +1,62 @@
+{
+  "name": "pf-exp5",
+  "title": "Playlist folder experiment 2",
+  "version": "0.1",
+  "size": 0,
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "load_address": "extended",
+  "symbols": {
+    "label_original": "0x9cf90",
+    "count_original": "0x9e008",
+    "select_continue": "0x1e7e38",
+    "vmax_continue": "0x1ea664",
+    "view_invalidate": "0x21ac04",
+    "ui_event": "0x1d81cc",
+    "activate_original": "0x23ca4c"
+  },
+  "hooks": [
+    {
+      "kind": "b",
+      "at": "0x1e7e34",
+      "expect": "0xe92d4070",
+      "to": "hook_select"
+    },
+    {
+      "kind": "bl",
+      "at": "0x1ec914",
+      "expect": "0xebfac19d",
+      "to": "hook_label"
+    },
+    {
+      "kind": "b",
+      "at": "0x1ea660",
+      "expect": "0xe92d4010",
+      "to": "hook_vmax"
+    },
+    {
+      "kind": "bl",
+      "at": "0x1ea66c",
+      "expect": "0xebface65",
+      "to": "hook_count"
+    },
+    {
+      "kind": "word",
+      "at": "0x6772c0",
+      "expect": "0x0023b704",
+      "to": "hook_list_event",
+      "chain": "list_event"
+    },
+    {
+      "kind": "word",
+      "at": "0x6701f0",
+      "expect": "0x001d81cc",
+      "to": "hook_ui_event"
+    },
+    {
+      "kind": "word",
+      "at": "0x6776f8",
+      "expect": "0x0023ca4c",
+      "to": "hook_activate"
+    }
+  ]
+}

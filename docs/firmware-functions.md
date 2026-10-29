@@ -350,7 +350,7 @@ Refer to [re/volume-limit.md](../re/volume-limit.md).
 | Address | Function | Evidence |
 |---|---|---|
 | 0x1d2ee8 | (ID): posts an event of type 8 with the ID (0x2141fc, 0x2141a0, 0x13d6d4). Native code asks the script for a screen with it. | Static |
-| 0x1d81cc | UI event handler. Runs in the UI task for each button and wheel event. | Emulator |
+| 0x1d81cc | UI event handler. Runs in the UI task for each button and wheel event. It adds 1 to the byte UI + 0x44 at a key push (type 4) and subtracts 1 at the release (type 7). `playlist-folders` hooks its first instruction (`push {r4-r8, lr}`). | Static, Emulator, Patch |
 | 0x1d813c | Starts the idle timer again and turns the display on. Called at 0x1d8344 for a button event, not for the wheel events 0x10 and 0x1c. | Emulator |
 | 0x1d8264 | UI event handler part: calls 0x94bbc(4) and then 0x94d80(4, 3000) while the storage is on. | Static |
 | 0x1d8570 | 5000 ms timer of key 0x6e (a long push of Play). Posts screen 0x63f2. The handler 0x1d81cc calls it at 0x1d8260 for each event; the code after the call does not use r0. | Static, Patch (`usb-host-probe`) |
@@ -537,6 +537,29 @@ Refer to [re/album-artist.md](../re/album-artist.md#album-artists-menu-item-15-o
 | 0x130b30 | Returns 0 on a 5G and 1 on other models: 0 if the word of 0x265164 has the model 0xb and a revision below 0x11. Only Search uses it (0x105a04 label 0x5f8b, 0x130ca4). The patch `search-5g` changes 0x130b50 (`movcc r0, #0` to `#1`). Refer to [re/search-5g.md](../re/search-5g.md). | Static, Patch |
 | 0x130ca4 | Builds the Music menu (0x7600). If 0x130b30 returns 1, it adds the two Search items. It makes the task `SearchHelperThread` (0x155e7c). | Static |
 | 0x253fe4 | (item): 1 if the item is visible (item byte +4, bit 0 = 0). | Static |
+
+### The Playlists screen
+
+Refer to [../re/playlist-folders.md](../re/playlist-folders.md). The `playlist-folders` patch uses these functions. Screen row r shows entry r + 1 of the playlist array. Entry 0 is the master playlist.
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0xb4a64 | The database load. Makes the playlist array: main browser + 0xcfc (pointers), count at + 0xd00. It leaves out New Voice Memos, the podcast playlists (library + 0xce4) and some empty playlists. | Static |
+| 0x9e008 | (browser): the count of the playlist array. | Static, Emulator, Patch |
+| 0x9cf90 | (browser, index, out): the name of entry `index`. `out[0]` is the count of UTF-16 units, then the text (0x9e42c). | Static, Emulator, Patch |
+| 0x9cf58 | (browser, index): the low word of the persistent ID (playlist + 0x18) of entry `index`. iAP only. | Static |
+| 0x9cfe0 | (browser, index): the count of songs of entry `index` (root + 0x32). iAP only. | Static |
+| 0xa39c4 | (browser, index): 1 if entry `index` is On-The-Go (library + 0xce0). | Static, Patch |
+| 0x9e99c | (browser, index): playlist + 0x16c of entry `index`. 0x1eb9fc and 0x1edf54 read all entries. | Static |
+| 0x914ac, 0xb29b0 | (browser, index): selects entry `index`: browser + 4 = the playlist. Returns 0, or −50 for an index that is not in the array. | Static, Emulator, Patch |
+| 0xb2d1c | (browser, index): writes the persistent ID of entry `index` into the settings (+0xb2c, +0xb30). | Static |
+| 0x1ea660 | (JS browser): the count of the screen (`bl` 0x9e008 at 0x1ea66c). Stores count − 1 at JS browser + 0xd4. If it changed, it calls `vtable+0x54(js, 'VMax', 0x6387)`. | Static, Emulator, Patch |
+| 0x1ec614 | (JS browser, …, element, row, out): the data of a row. Element 0x6425 calls 0x9cf90(browser, row + 1) at 0x1ec914. | Static, Emulator, Patch |
+| 0x1e7e34 | (JS browser, row): selects a row. Writes JS browser + 0x3ec = row and calls 0xb29b0(browser, row + 1) at 0x1e7e7c. The script opens the songs of the row also if it returns 0. | Static, Emulator, Patch |
+| 0x254cac | (JS browser, row): 1 if the row is On-The-Go. Calls 0xa39c4(browser, row + 1) at 0x254cc4. | Static, Patch |
+| 0x4fcd58–0x4fcf00 | The table of C++ member pointers (address, 0) of the JS browser methods that the script calls, for example 0x1e7e34 at 0x4fcd60. | Static |
+
+`vtable+0x54(js, 'Str ', 0x6387)` makes the list read its labels again. The functions near 0x165000–0x16f000 that read the array are the iPod Accessory Protocol.
 
 ### The video processor
 
@@ -1268,7 +1291,7 @@ The emulator found these element IDs (view + 0x1c):
 | ">" arrow | 0x5ecc |
 | Speaker icon in a song row | 0x63eb |
 | The Albums list (the list view itself) | 0x6382 |
-| The Artists list (the list view itself) | 0x6387 |
+| The Artists list and the Playlists list (the list view itself) | 0x6387 |
 
 ## Settings keys
 

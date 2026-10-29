@@ -83,7 +83,114 @@ struct PatchTool: View {
         switch id {
         case "album-thumbnails": AlbumArtSections()
         case "usb-log": USBLogSection()
+        case "playlist-folders": PlaylistFoldersSection()
         default: EmptyView()
+        }
+    }
+}
+
+// MARK: playlist-folders
+
+/// The folder editor of the playlist-folders patch. It writes iPod_Control/iTunes/iPodFirmPlaylistFolders.
+struct PlaylistFoldersSection: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        Section {
+            if model.currentIPod == nil {
+                Text("Connect the iPod.").foregroundStyle(.secondary)
+            } else if model.folderPlaylists.isEmpty {
+                Text("The iPod has no playlists.").foregroundStyle(.secondary)
+            } else {
+                Picker("Folder position", selection: $model.playlistFolders.alphabetical) {
+                    Text("Folders First").tag(false)
+                    Text("Alphabetical").tag(true)
+                }
+                .pickerStyle(.segmented)
+                ForEach($model.playlistFolders.folders) { $folder in
+                    PlaylistFolderRow(folder: $folder)
+                }
+                HStack {
+                    Button("Add Folder") {
+                        model.playlistFolders.folders.append(.init(name: newName()))
+                    }
+                    .disabled(model.playlistFolders.folders.count >= PlaylistFolders.maxFolders)
+                    Spacer()
+                    Button("Write Folders to iPod") { Task { await model.writePlaylistFolders() } }
+                        .disabled(!model.playlistFolderProblems.isEmpty || model.playlistFolders == model.savedPlaylistFolders)
+                }
+                ForEach(model.playlistFolderProblems, id: \.self) { p in
+                    Label(p, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                }
+                if model.playlistFolders != model.savedPlaylistFolders {
+                    Label("Click Write Folders to iPod to send the changes to the iPod.", systemImage: "exclamationmark.circle")
+                        .foregroundStyle(.orange)
+                }
+                if let s = model.playlistFoldersStatus { Label(s, systemImage: "checkmark.circle").font(.callout) }
+            }
+        } header: {
+            Text("Playlist Folders")
+        } footer: {
+            FormFooter("Put each playlist into one folder, or into no folder. A folder without playlists does not show on the iPod.")
+        }
+        .task(id: model.currentIPod?.disk) { await model.loadPlaylistFolders() }
+    }
+
+    /// "New Folder", or "New Folder 2" and so on if that name is used.
+    func newName() -> String {
+        let used = Set(model.playlistFolders.folders.map(\.name))
+        var n = 1
+        while used.contains(n == 1 ? "New Folder" : "New Folder \(n)") { n += 1 }
+        return n == 1 ? "New Folder" : "New Folder \(n)"
+    }
+}
+
+struct PlaylistFolderRow: View {
+    @EnvironmentObject var model: AppModel
+    @Binding var folder: PlaylistFolders.Folder
+    @State private var expanded = false
+
+    // Saved for later: the folder colour. The colour squares did not show on the real iPod.
+    // Refer to re/playlist-folders.md, "Folder colours".
+    var colour: Binding<Color> {
+        Binding(get: {
+            let c = PlaylistFolders.components(folder.colour)
+            return Color(.sRGB, red: Double(c.red) / 255, green: Double(c.green) / 255, blue: Double(c.blue) / 255)
+        }, set: { new in
+            guard let c = NSColor(new).usingColorSpace(.sRGB) else { return }
+            folder.colour = PlaylistFolders.rgb565(red: Int((c.redComponent * 255).rounded()),
+                                                   green: Int((c.greenComponent * 255).rounded()),
+                                                   blue: Int((c.blueComponent * 255).rounded()))
+        })
+    }
+
+    var index: Int? { model.playlistFolders.folders.firstIndex { $0.id == folder.id } }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            ForEach(model.folderPlaylists) { p in
+                let home = model.playlistFolders.folderIndex(of: p.persistentID)
+                Toggle(isOn: Binding(get: { home != nil && home == index },
+                                     set: { on in model.playlistFolders.move(p.persistentID, to: on ? index : nil) })) {
+                    HStack {
+                        Text(p.name.isEmpty ? "(No name)" : p.name)
+                        if let home, home != index {
+                            Text("in “\(model.playlistFolders.folders[home].name)”").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                // ColorPicker("Colour", selection: colour, supportsOpacity: false).labelsHidden()
+                TextField("Folder name", text: $folder.name).textFieldStyle(.roundedBorder)
+                Text("\(folder.members.count) playlist(s)").font(.caption).foregroundStyle(.secondary)
+                Button(role: .destructive) {
+                    if let i = index { model.playlistFolders.folders.remove(at: i) }
+                } label: { Image(systemName: "trash") }
+                .help("Delete the folder. Its playlists go back to the Playlists list.")
+                .accessibilityLabel("Delete folder")
+            }
         }
     }
 }
