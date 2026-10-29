@@ -17,6 +17,9 @@ func emit(_ r: HelperResult) -> Never {
     exit(0)   // "do shell script" only returns stdout on success; ok=false carries errors
 }
 
+// The helper runs as root: it must not write the log file in the home folder of the user. The steps
+// stay in memory and go back to the app in HelperResult.detail.
+AppLog.directory = nil
 if CommandLine.arguments.contains("--daemon") { runDaemon() }
 
 var args = Array(CommandLine.arguments.dropFirst())
@@ -57,5 +60,5 @@ do {
         throw FirmwareError("unknown command \(command)")
     }
 } catch {
-    emit(HelperResult(ok: false, message: error.localizedDescription, code: (error as? FirmwareError)?.code))
+    emit(HelperResult(failure: error))
 }

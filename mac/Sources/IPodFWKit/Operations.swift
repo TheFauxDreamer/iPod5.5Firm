@@ -89,8 +89,24 @@ public struct HelperResult: Codable {
     public var code: String?
     public var ranges: [FirmwareFlasher.WriteRange]?
     public var backup: BackupInfo?
-    public init(ok: Bool, message: String, code: String? = nil, ranges: [FirmwareFlasher.WriteRange]? = nil, backup: BackupInfo? = nil) {
-        self.ok = ok; self.message = message; self.code = code; self.ranges = ranges; self.backup = backup
+    /// On a fault: the full error and the last steps of the helper (AppLog.failureDetail). The app
+    /// writes it to its log. An older helper does not send it.
+    public var detail: String?
+    public init(ok: Bool, message: String, code: String? = nil, ranges: [FirmwareFlasher.WriteRange]? = nil, backup: BackupInfo? = nil,
+                detail: String? = nil) {
+        self.ok = ok; self.message = message; self.code = code; self.ranges = ranges; self.backup = backup; self.detail = detail
+    }
+
+    /// The result of a fault in the helper.
+    public init(failure error: Error) {
+        self.init(ok: false, message: error.localizedDescription, code: (error as? FirmwareError)?.code,
+                  detail: AppLog.failureDetail(error))
+    }
+    /// The fault of the helper as an error for the app. The cause is the detail from the helper.
+    public func failure(file: String = #fileID, line: Int = #line, function: String = #function) -> FirmwareError {
+        var e = FirmwareError(message, code: code, file: file, line: line, function: function)
+        e.cause = detail.map { "In the helper:\n" + $0 } ?? "The helper sent no detail (an older helper)."
+        return e
     }
 }
 
@@ -113,6 +129,7 @@ public enum Operations {
     }
 
     static func readCurrent(_ ipod: IPodDisk) throws -> (bytes: [UInt8], start: Int) {
+        AppLog.step("Read the firmware partition of \(ipod.disk) (\(ipod.mediaName), \(ipod.size) bytes, block size \(ipod.blockSize))")
         let disk = try RawDisk(path: ipod.rawPath, blockSize: ipod.blockSize)
         let (start, size) = try FirmwareFlasher.locatePartition(disk)
         return (try disk.read(start, size), start)
@@ -136,7 +153,7 @@ public enum Operations {
         let osos: [UInt8]
         do { osos = try FirmwarePartition(data: bytes).image("osos") } catch {
             throw FirmwareError("The firmware on the iPod is damaged (\(error.localizedDescription)).",
-                                code: HelperResult.firmwareUnreadable)
+                                code: HelperResult.firmwareUnreadable, cause: error)
         }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent(readFileName)
@@ -153,12 +170,14 @@ public enum Operations {
         let current: FirmwarePartition
         do { current = try FirmwarePartition(data: currentBytes) } catch {
             throw FirmwareError("The firmware on the iPod is damaged (\(error.localizedDescription)). Use the rescue restore.",
-                                code: HelperResult.firmwareUnreadable)
+                                code: HelperResult.firmwareUnreadable, cause: error)
         }
+        AppLog.step("Flash (\(reason)): read the new image \(imageURL.lastPathComponent)")
         var newBytes = [UInt8](try Data(contentsOf: imageURL))
         guard newBytes.count <= currentBytes.count else {
             throw FirmwareError("The image (\(newBytes.count) bytes) is larger than the iPod's firmware partition (\(currentBytes.count)).")
         }
+        AppLog.step("Flash: fit the layout of \(newBytes.count) bytes to the iPod (\(currentBytes.count) bytes)")
         newBytes = try FirmwareFlasher.fitLayout(new: newBytes, current: current)
         try FirmwareFlasher.preserveHibernation(new: &newBytes, current: current)
         let new = try FirmwarePartition(data: newBytes)
@@ -171,20 +190,24 @@ public enum Operations {
             newBytes += currentBytes[newBytes.count..<min(currentBytes.count, newBytes.count + tail)]
         }
         let protected = current.has("aupd") ? try current.imageRange("aupd") : 0..<0
+        AppLog.step("Flash: compare the new image with the iPod")
         let ranges = try FirmwareFlasher.planWrites(current: currentBytes, new: newBytes, blockSize: bs, protected: protected)
         if ranges.isEmpty { return HelperResult(ok: true, message: "The iPod already has this firmware; nothing to write.", ranges: []) }
         let total = ranges.reduce(0) { $0 + $1.length }
         if dryRun { return HelperResult(ok: true, message: "Would write \(total) bytes in \(ranges.count) range(s).", ranges: ranges) }
 
         // Mandatory backup of exactly what is about to be replaced.
+        AppLog.step("Flash: back up the iPod before \(total) bytes in \(ranges.count) range(s)")
         let info = try Backups.save(currentBytes, ipod: ipod, reason: "before \(reason)", in: backupDir, owner: owner)
 
+        AppLog.step("Unmount \(ipod.disk), then write \(ranges.count) range(s)")
         try Device.unmount(ipod)
         let disk = try RawDisk(path: ipod.rawPath, blockSize: bs, writable: true)
         for r in ranges {
             try disk.writeAligned(partStart + r.offset, newBytes[r.offset..<r.offset + r.length])
         }
         disk.sync()
+        AppLog.step("Verify the written ranges")
         for r in ranges where try disk.read(partStart + r.offset, r.length) != Array(newBytes[r.offset..<r.offset + r.length]) {
             throw FirmwareError("Verification failed at partition offset 0x\(String(r.offset, radix: 16)). Restore the backup \"\(info.file)\".")
         }
@@ -201,6 +224,7 @@ public enum Operations {
         guard (try? FirmwarePartition(data: currentBytes)) == nil else {
             throw FirmwareError("The firmware on the iPod is not damaged. Use the normal restore.")
         }
+        AppLog.step("Rescue: compare with the original backup, then restore \(imageURL.lastPathComponent)")
         let originalURL = backupDir.appendingPathComponent(Backups.originalName)
         guard FileManager.default.fileExists(atPath: originalURL.path) else {
             throw FirmwareError("There is no original backup to compare with. Restore the iPod with Finder.")
@@ -223,7 +247,7 @@ public enum Operations {
         var newBytes = [UInt8](try Data(contentsOf: imageURL))
         let new: FirmwarePartition
         do { new = try FirmwarePartition(data: newBytes) } catch {
-            throw FirmwareError("This backup is damaged too (\(error.localizedDescription)). Select a different backup.")
+            throw FirmwareError("This backup is damaged too (\(error.localizedDescription)). Select a different backup.", cause: error)
         }
         guard new.isVideo else { throw FirmwareError("This backup is not from an iPod Video. Select a different backup.") }
         guard newBytes.count <= currentBytes.count else {
@@ -248,12 +272,14 @@ public enum Operations {
 
         let info = try Backups.save(currentBytes, ipod: ipod, reason: "before rescue", in: backupDir, owner: owner, damaged: true)
 
+        AppLog.step("Unmount \(ipod.disk), then write \(ranges.count) range(s)")
         try Device.unmount(ipod)
         let disk = try RawDisk(path: ipod.rawPath, blockSize: bs, writable: true)
         for r in ranges {
             try disk.writeAligned(partStart + r.offset, newBytes[r.offset..<r.offset + r.length])
         }
         disk.sync()
+        AppLog.step("Verify the written ranges")
         for r in ranges where try disk.read(partStart + r.offset, r.length) != Array(newBytes[r.offset..<r.offset + r.length]) {
             throw FirmwareError("Verification failed at partition offset 0x\(String(r.offset, radix: 16)). Try the rescue restore again, or restore the iPod with Finder.")
         }

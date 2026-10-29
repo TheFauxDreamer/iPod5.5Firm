@@ -30,6 +30,7 @@ final class EmulatorSession: ObservableObject {
                 try launch()
                 poll()
             } catch {
+                AppLog.warning("Cannot start the emulator\n" + AppLog.describe(error))
                 phase = .failed(error.localizedDescription)
             }
         }

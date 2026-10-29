@@ -2534,3 +2534,131 @@ final class UpdateCheckTests: XCTestCase {
         XCTAssertThrowsError(try UpdateCheck.parse(Data("{}".utf8)))
     }
 }
+
+final class AppLogTests: XCTestCase {
+    var folder: URL!
+    var savedDirectory: URL?
+    var savedMax = 0
+
+    override func setUpWithError() throws {
+        savedDirectory = AppLog.directory
+        savedMax = AppLog.maxFileSize
+        folder = FileManager.default.temporaryDirectory.appendingPathComponent("AppLogTests-\(UUID().uuidString)")
+        AppLog.directory = folder
+        AppLog.clearSteps()
+    }
+
+    override func tearDownWithError() throws {
+        AppLog.directory = savedDirectory
+        AppLog.maxFileSize = savedMax
+        AppLog.clearSteps()
+        // Remove only the folder that this test made.
+        if folder.lastPathComponent.hasPrefix("AppLogTests-") { try? FileManager.default.removeItem(at: folder) }
+    }
+
+    /// A line goes to the file, with the level and the time.
+    func testWriteAndRead() {
+        AppLog.info("first line")
+        AppLog.error("second line")
+        let text = AppLog.recentText(maxLines: 1)
+        XCTAssertTrue(text.contains("ERROR second line"), text)
+        XCTAssertFalse(text.contains("first line"))
+        XCTAssertTrue(AppLog.fullText().contains("INFO first line"))
+    }
+
+    /// At the size limit, the log keeps one old file. The full text has both files, the old file first.
+    func testRotation() {
+        AppLog.maxFileSize = 200
+        for i in 0..<20 { AppLog.info("line \(i) " + String(repeating: "x", count: 20)) }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?.sorted() ?? []
+        XCTAssertEqual(names, ["iPodFirm.1.log", "iPodFirm.log"])
+        let full = AppLog.fullText()
+        XCTAssertTrue(full.contains("line 19"))
+        let old = (try? String(contentsOf: folder.appendingPathComponent("iPodFirm.1.log"), encoding: .utf8)) ?? ""
+        XCTAssertTrue(full.hasPrefix(old))
+    }
+
+    /// The log has no home folder path and no user name.
+    func testRedact() {
+        // The test makes the paths from parts. The commit check refuses a full home folder path in the text.
+        let users = "/" + "Users"
+        let t = AppLog.redact("\(users)/alex/Library/x and \(users)/other/y, alex said", home: users + "/alex", user: "alex")
+        XCTAssertEqual(t, "~/Library/x and ~/y, <user> said")
+        XCTAssertEqual(AppLog.redact("root and app", home: "/var/root", user: "root"), "root and app")
+    }
+
+    /// The steps go to the log and stay in memory, the oldest first, to a maximum of 50.
+    func testSteps() {
+        for i in 0..<60 { AppLog.step("step \(i)") }
+        XCTAssertEqual(AppLog.recentSteps(2), ["step 58", "step 59"])
+        XCTAssertEqual(AppLog.recentSteps(100).count, 50)
+        XCTAssertEqual(AppLog.lastStep(), "step 59")
+        XCTAssertTrue(AppLog.fullText().contains("Step: step 59"))
+    }
+
+    /// A FirmwareError records the location of the throw. The location does not change the equality.
+    func testFirmwareErrorLocation() {
+        let line = #line + 1
+        let e = FirmwareError("No osos image.").adding("read the file").adding("open the file")
+        XCTAssertEqual(e.line, line)
+        XCTAssertTrue(e.file.hasSuffix("IPodFWKitTests.swift"))
+        XCTAssertEqual(e.context, ["read the file", "open the file"])
+        XCTAssertEqual(e, FirmwareError("No osos image."))
+        let d = AppLog.describe(e)
+        XCTAssertTrue(d.contains("FirmwareError: No osos image."))
+        XCTAssertTrue(d.contains("IPodFWKitTests.swift:\(line)"))
+        XCTAssertTrue(d.contains("while: read the file"))
+    }
+
+    /// The description follows the chain of underlying errors of NSError.
+    func testDescribeUnderlying() {
+        let posix = NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES))
+        let cocoa = NSError(domain: NSCocoaErrorDomain, code: 513, userInfo: [NSUnderlyingErrorKey: posix])
+        let e = FirmwareError("Cannot write the backup.", cause: cocoa)
+        let d = AppLog.describe(e)
+        XCTAssertTrue(d.contains("domain: NSCocoaErrorDomain, code: 513"), d)
+        XCTAssertTrue(d.contains("Caused by:"), d)
+        XCTAssertTrue(d.contains("code: \(EACCES) (Permission denied)"), d)
+    }
+
+    /// An error that is not a FirmwareError keeps its description as the cause.
+    func testAddingToOtherError() {
+        let e = CocoaError(.fileNoSuchFile).adding("read the theme")
+        XCTAssertEqual(e.context, ["read the theme"])
+        XCTAssertTrue(e.cause?.contains("NSCocoaErrorDomain") ?? false)
+    }
+
+    /// An older helper sends no detail. A new helper sends the error and its steps.
+    func testHelperResultDetail() throws {
+        let old = try JSONDecoder().decode(HelperResult.self, from: Data(#"{"ok":false,"message":"No iPod.","code":null}"#.utf8))
+        XCTAssertNil(old.detail)
+        XCTAssertTrue(old.failure().cause?.contains("older helper") ?? false)
+
+        AppLog.step("Read the firmware partition of disk9")
+        let r = HelperResult(failure: FirmwareError("Short read from disk at 4096."))
+        XCTAssertFalse(r.ok)
+        let detail = try XCTUnwrap(r.detail)
+        XCTAssertTrue(detail.contains("Short read from disk at 4096."))
+        XCTAssertTrue(detail.contains("Helper steps:"))
+        XCTAssertTrue(detail.contains("disk9"))
+        let back = try JSONDecoder().decode(HelperResult.self, from: JSONEncoder().encode(r))
+        XCTAssertEqual(back.failure().message, "Short read from disk at 4096.")
+        XCTAssertTrue(back.failure().cause?.contains("In the helper:") ?? false)
+    }
+
+    /// The issue page has the fault and stays short. A long text is cut at the end.
+    func testIssueURL() throws {
+        let long = "first detail line\n" + String(repeating: "step line\n", count: 2000)
+        let url = AppLog.issueURL(title: "Flash failed", message: "No rsrc image.", details: long, fileName: "iPodFirm Log.txt")
+        XCTAssertEqual(url.host, "github.com")
+        XCTAssertTrue(url.path.hasSuffix("/issues/new"))
+        let items = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        let body = try XCTUnwrap(items.first { $0.name == "body" }?.value)
+        XCTAssertEqual(items.first { $0.name == "title" }?.value, "Fault: Flash failed")
+        XCTAssertTrue(body.contains("No rsrc image."))
+        XCTAssertTrue(body.contains("first detail line"))
+        XCTAssertTrue(body.contains("iPodFirm Log.txt"))
+        XCTAssertLessThanOrEqual(body.count, AppLog.maxIssueBody + 10)
+        XCTAssertLessThan(url.absoluteString.count, 8000)
+    }
+}

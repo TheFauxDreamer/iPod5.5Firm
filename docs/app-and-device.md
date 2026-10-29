@@ -57,6 +57,30 @@ The app does not download or install an update. It only tells the user about a n
 
 If the user does not allow notifications, the app shows an alert with the same buttons and **Later**. At the launch, a network error gives no message. Help > Check for Updates… does the same check, but it ignores `skippedUpdateVersion`. It also shows an alert if the app is up to date or if the check fails. The tests `testUpdateVersionCompare` and `testUpdateReleaseParse` check the comparison and the JSON decode.
 
+#### The log and the fault report
+
+The app keeps a log. [AppLog.swift](../mac/Sources/IPodFWKit/AppLog.swift) writes each line to `~/Library/Logs/iPodFirm/iPodFirm.log` and to the unified log of macOS. Console.app shows the lines with the subsystem `com.thefauxdreamer.ipodfirm`. At 1 MB, the file becomes `iPodFirm.1.log`, and a new file starts. The app keeps only these two files.
+
+The log records these items:
+
+1. The launch: the app version, the macOS version and the Mac model.
+2. The iPods that the app finds.
+3. The steps of each operation (`AppLog.step`). Examples are each `work` label, each patch that the build applies, the helper call, and the read, write and verify of a flash.
+4. The result of each helper call. On a fault, the log also gets `HelperResult.detail`.
+5. Each fault, and each error that the app shows only as a status text.
+
+The log has no home folder path and no user name. `AppLog.redact` changes `/Users/<name>` to `~` and the short user name to `<user>`. The log has no serial number and no volume name. Only the app writes the log file. The tests and the helper write only to the unified log.
+
+Each error has more data than its message. `FirmwareError` and `PatchError` record the file, the line and the function of the throw. A `FirmwareError` can also have `context` (the steps of the callers, from `adding(_:)`) and `cause` (the full description of the error that caused it). `AppLog.describe` writes all of this data. It also writes the domain, the code and the underlying errors of an `NSError`.
+
+All faults go through `AppModel.fail`. It writes the error, the last 15 steps and the state of the app (`diagnosticSnapshot`) to the log. The state has the open file name, the iPod model and size, the patches on the iPod and in the app with their versions and options, the appearance and the helper status. The alert shows the message and the last step of the last two minutes. The alert of a fault has three buttons:
+
+- **Report on GitHub…** saves the log as a text file. Then it opens a new issue on GitHub in the browser (refer to [Network connections](#network-connections)). The user drags the file into the issue.
+- **Save Log…** saves the state of the app and the two log files as one text file, for example `iPodFirm Log 2026-10-29 1405.txt`. Finder then shows the file.
+- **OK** closes the alert.
+
+Help > Save Log… and Help > Report a Problem on GitHub… do the same with no fault. The tests in `AppLogTests` check the file, the rotation, the redaction, the steps, the error data, `HelperResult.detail` and the issue address.
+
 The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the centre of its column. In a tall column, the iPod is larger, to a maximum of 1.4 times. The settings column has a maximum width of 520 points.
 
 ## The build of the app
@@ -180,7 +204,7 @@ The XPC protocol is `HelperXPCProtocol` in [HelperXPC.swift](../mac/Sources/IPod
 | `flash` | disk, image, backup folder, reason, dry run | `HelperResult` |
 | `rescueRestore` | disk, image, backup folder, dry run | `HelperResult` |
 
-The results are JSON data. The daemon writes backups only inside `~/Library/Application Support/iPodFirm/` of the user that called it (`checkedBackupDir`). It sets the owner of each backup file to that user.
+The results are JSON data. On a fault, `HelperResult.detail` has the full error and the last steps of the helper (`AppLog.failureDetail`). The field is optional. Thus an older helper and a newer app work together, and the protocol version does not change. The helper runs as root, so it does not write the log file of the user. The daemon clears its steps at the start of each request. The daemon writes backups only inside `~/Library/Application Support/iPodFirm/` of the user that called it (`checkedBackupDir`). It sets the owner of each backup file to that user.
 
 ### Mode 2: the password prompt
 
@@ -190,7 +214,7 @@ If the daemon is not enabled or does not reply, the app runs the helper with App
 do shell script "'<app>/Contents/MacOS/ipodfw-helper' 'flash' '--disk' 'disk4' ..." with administrator privileges
 ```
 
-macOS asks for the name and the password of an administrator. A user that is not an administrator can also use this mode. The helper writes one `HelperResult` JSON object to standard output and always exits with 0. Thus AppleScript returns the output also for an error. [Privileged.swift](../mac/Sources/iPodFirm/Privileged.swift) puts each argument in single quotes.
+macOS asks for the name and the password of an administrator. A user that is not an administrator can also use this mode. The helper writes one `HelperResult` JSON object to standard output and always exits with 0. Thus AppleScript returns the output also for an error. The output also has `HelperResult.detail`. If AppleScript gives an error, the app records the AppleScript error number and the error in the log. [Privileged.swift](../mac/Sources/iPodFirm/Privileged.swift) puts each argument in single quotes.
 
 The helper commands are:
 
@@ -269,11 +293,13 @@ The Patches pane shows the result:
 | `LAContext` | Touch ID before a write. |
 | `NSAppleScript` | The password mode. |
 | `URLSession` | Download the Apple firmware. Get the number of the newest iPodFirm release from GitHub (`UpdateCheck.swift`). |
+| `os.Logger` | The unified log of macOS (`AppLog.swift`). |
+| `sysctlbyname("hw.model")` | The Mac model for the log and the fault report. |
 | `UNUserNotificationCenter` | Tell the user about a newer release (`UpdateNotifier.swift`). If the user does not allow notifications, the app shows an alert. |
 | `CryptoKit.SHA256` | Hashes of the firmware, the osos and the backups. |
 | `CGImageSource`, `CGContext` | Read and scale the cover images and the PNG files. |
 | `AVURLAsset` | Read the cover of a non-MP4 music file. |
-| `NSWorkspace` | Open Finder, System Settings and the emulator app. |
+| `NSWorkspace` | Open Finder, System Settings, the emulator app and the GitHub issue page. |
 | `NSRunningApplication` | Find out if MiMusic (`com.thefauxdreamer.MiMusic`) is open before a flash. |
 | Unix domain socket | Send commands to the emulator (`shot`, `press`, `wheel`). |
 | `UserDefaults` | The settings of the app (refer to [Settings of the app](#settings-of-the-app)). |
@@ -284,12 +310,13 @@ The Patches pane shows the result:
 |---|---|---|
 | `http://appldnld.apple.com.edgesuite.net/content.info.apple.com/iPod/SBML/osx/bundles/061-2967.20080313.Cnvkg/iPod_25.1.3.ipsw` | "Download Apple Firmware 1.3", and each action that needs the Apple file if no correct copy is cached. | SHA-256 must be `840b2480ad5b692c098cb772c3d2bf8f58bf37557788782b596ac01c27ecdc32`. Apple serves this file only over HTTP, so `Info.plist` has an App Transport Security exception for this domain. |
 | `https://api.github.com/repos/TheFauxDreamer/iPod5.5Firm/releases/latest` | At each launch if Settings > Updates > "Check for a new version at launch" is on. Help > Check for Updates…. | TLS 1.2 or later. HTTP status 200 and JSON with `tag_name` and `html_url`. The app compares `tag_name` (without the `v`) with `CFBundleShortVersionString`. If the release is newer, the notification opens `html_url` in the browser. The app does not download the update. |
+| `https://github.com/TheFauxDreamer/iPod5.5Firm/issues/new?title=…&body=…` | "Report on GitHub…" in the alert of a fault. Help > Report a Problem on GitHub…. | The app does not connect. It opens the address in the browser (`NSWorkspace.open`). The body has the fault, the full error, the last steps and the state of the app (`AppLog.issueURL`). It has a maximum of 3500 characters. The app cuts the end of a longer text. The user must sign in to GitHub and attach the saved log file. |
 | `https://github.com/TheFauxDreamer/iPod5.5Firm/issues/new?title=…&body=…` | Patches > Playback Log > "Report on GitHub…". | The app does not connect. It opens the address in the browser (`NSWorkspace.open`). The body has the app version and the information lines of the playback log: the RAM, the free memory and the patches. It has a maximum of 1500 characters. The owner of the log must sign in to GitHub and attach the text file. |
 | `https://sh.rustup.rs` | "Install Emulator", only if `~/.cargo/bin/cargo` does not exist. | TLS 1.2 or later. |
 | `https://github.com/siggifly/ipod-emulator.git` | "Install Emulator". | Git over HTTPS. |
 | crates.io (through `cargo`) | "Install Emulator". | Cargo lock file of the emulator. |
 
-The app makes no other network connections. It sends no data about the owner or the iPod. "Report on GitHub…" only opens a web page; the owner of the log decides to send it. The update check sends only a GET request with the default `User-Agent` of `URLSession`.
+The app makes no other network connections. It sends no data about the owner or the iPod. "Report on GitHub…" only opens a web page. The user decides to send it. The update check sends only a GET request with the default `User-Agent` of `URLSession`.
 
 ## Files
 
@@ -311,6 +338,8 @@ All paths are in `~/Library/Application Support/iPodFirm/`.
 | `EmulatorProfile/` | The private emulator profile (`IPOD_EMULATOR_DATA`): the drive and `settings.txt`. |
 | `emulator-src/` | The emulator source and its build. |
 | `tools/`, `re/` | Ghidra, the JDK and the Ghidra project. Only for research. The app does not use them. |
+
+The log is in `~/Library/Logs/iPodFirm/`: `iPodFirm.log` and the older `iPodFirm.1.log` (refer to [The log and the fault report](#the-log-and-the-fault-report)).
 
 Temporary files: the object file of each patch, the extracted `.ipsw` folder and the emulator screen shot are in the temporary folder. The emulator socket is `/tmp/ipodfirm-<uid>.sock`.
 

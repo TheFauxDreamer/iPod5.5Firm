@@ -24,7 +24,10 @@ enum Privileged {
                 if let error {
                     let code = error[NSAppleScript.errorNumber] as? Int
                     let msg = code == -128 ? "Cancelled." : (error[NSAppleScript.errorMessage] as? String ?? "The helper failed.")
-                    cont.resume(throwing: FirmwareError(msg))
+                    var e = FirmwareError(msg)
+                    e.cause = "AppleScript error \(code.map(String.init) ?? "none"): \(error)"
+                    AppLog.warning("Helper (password) fault: \(e.cause ?? msg)")
+                    cont.resume(throwing: e)
                     return
                 }
                 let text = output?.stringValue ?? ""
@@ -33,7 +36,8 @@ enum Privileged {
                 do {
                     cont.resume(returning: try dec.decode(HelperResult.self, from: Data(text.utf8)))
                 } catch {
-                    cont.resume(throwing: FirmwareError("Unexpected helper output: \(text.prefix(300))"))
+                    AppLog.warning("Helper (password): the output is not a result\n" + AppLog.describe(error) + "\nOutput: \(text.prefix(2000))")
+                    cont.resume(throwing: FirmwareError("Unexpected helper output: \(text.prefix(300))", cause: error))
                 }
             }
         }

@@ -9,9 +9,14 @@ import Foundation
 // to the Settings menu ("settings_items") and copies of items to other menus ("menu_items"). A patch can have options ("options"): the owner selects a
 // choice in the Patches pane, and the patcher writes its value into a variable of the patch.
 
-public struct PatchError: LocalizedError {
+public struct PatchError: LocalizedError, LocatedError {
     public let message: String
-    public init(_ message: String) { self.message = message }
+    public let file: String
+    public let line: Int
+    public let function: String
+    public init(_ message: String, file: String = #fileID, line: Int = #line, function: String = #function) {
+        self.message = message; self.file = file; self.line = line; self.function = function
+    }
     public var errorDescription: String? { message }
 }
 
@@ -513,7 +518,13 @@ public enum Patcher {
         }
         let original = originalSHA256 ?? sha256(osos)
         var out = osos
-        for p in patches { out = try apply(p, to: out, originalSHA256: original, pad: false) }
+        for p in patches {
+            let name = "\(p.spec.name) \(p.spec.version ?? "")"
+            AppLog.step("Build: apply the patch \(name) at osos size 0x\(String(out.count, radix: 16))")
+            do { out = try apply(p, to: out, originalSHA256: original, pad: false) } catch {
+                throw error.adding("apply the patch \(name)")
+            }
+        }
         if let list, !list.isEmpty, out.count > maxOSOSSize {
             let at = Int(extendedBase(out))
             guard at + list.count <= ThemeImport.ososLimit else {

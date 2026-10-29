@@ -257,6 +257,17 @@ CAUTION: A restore with Finder erases the music on the iPod.
 
 After that, you can restore a backup in iPodFirm.
 
+### Report a problem
+
+iPodFirm keeps a log in `~/Library/Logs/iPodFirm/`. The log records the steps of each operation and the full data of each error. It has no home folder path, no user name and no iPod serial number.
+
+When iPodFirm shows a fault, the alert has two more buttons:
+
+- **Report on GitHub…** saves the log as a text file and opens a new issue in the browser. Drag the file into the issue. You need a GitHub account.
+- **Save Log…** saves the log as a text file that you can share.
+
+To do this with no fault, select Help > Save Log… or Help > Report a Problem on GitHub….
+
 ### How the app protects the iPod
 
 - The app makes a backup of the firmware partition before each write or restore. It does not overwrite a backup.

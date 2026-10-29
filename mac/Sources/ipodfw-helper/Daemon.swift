@@ -27,8 +27,9 @@ final class HelperService: NSObject, HelperXPCProtocol {
     func respond(_ reply: (Data) -> Void, _ body: () throws -> HelperResult) {
         Idle.begin()
         defer { Idle.end() }
+        AppLog.clearSteps()
         do { reply(HelperJSON.encode(try body())) } catch {
-            reply(HelperJSON.encode(HelperResult(ok: false, message: error.localizedDescription, code: (error as? FirmwareError)?.code)))
+            reply(HelperJSON.encode(HelperResult(failure: error)))
         }
     }
 

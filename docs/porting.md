@@ -4,20 +4,20 @@ This document tells which parts of iPodFirm work only on macOS. It also gives a 
 
 ## 1. Languages and sizes
 
-The table gives the number of lines in the files that git tracks on `main` (commit of 2026-10-16). To measure the values again in a clean worktree, use `git ls-files "<folder>/*.<ext>" | xargs cat | wc -l`.
+The table gives the number of lines on `main` (commit `f257fcc` of 2026-10-29) with the change that adds `AppLog.swift`. To measure the values again in a clean worktree, use `git ls-files "<folder>/*.<ext>" | xargs cat | wc -l`.
 
 | Part | Folder | Language | Lines | Runs on Windows or Linux |
 |---|---|---|---|---|
-| App user interface | `mac/Sources/iPodFirm` | Swift (SwiftUI, AppKit) | 3733 | No. SwiftUI and AppKit are for Apple systems only. |
-| Privileged helper | `mac/Sources/ipodfw-helper` | Swift (XPC, launchd) | 161 | No. |
-| Core library | `mac/Sources/IPodFWKit` | Swift | 4564 | Partly. Swift runs on Windows and Linux, but the library uses Apple frameworks (section 3). |
-| Swift tests | `mac/Tests` | Swift | 1540 | Partly, the same as the core library. |
-| `ipodfw` command-line tool | `src/ipodfw` | Python | 3239 | Mostly. The device code is for macOS only (section 3). |
-| Python tests | `tests` | Python | 932 | Yes. |
-| Patches | `patches/*/*.c` | C | 4841 | Yes. The code runs on the iPod. The compiler (clang) runs on all three systems. |
-| Ghidra scripts | `re/ghidra-scripts` | Java | 523 | Yes. |
+| App user interface | `mac/Sources/iPodFirm` | Swift (SwiftUI, AppKit) | 5800 | No. SwiftUI and AppKit are for Apple systems only. |
+| Privileged helper | `mac/Sources/ipodfw-helper` | Swift (XPC, launchd) | 172 | No. |
+| Core library | `mac/Sources/IPodFWKit` | Swift | 6646 | Partly. Swift runs on Windows and Linux, but the library uses Apple frameworks (section 3). |
+| Swift tests | `mac/Tests` | Swift | 2799 | Partly, the same as the core library. |
+| `ipodfw` command-line tool | `src/ipodfw` | Python | 3892 | Mostly. The device code is for macOS only (section 3). |
+| Python tests | `tests` | Python | 1416 | Yes. |
+| Patches | `patches/*/*.c` | C | 9233 | Yes. The code runs on the iPod. The compiler (clang) runs on all three systems. |
+| Ghidra scripts | `re/ghidra-scripts` | Java | 800 | Yes. |
 
-Thus, about 8,500 lines of the app are in Swift. The UI and the helper (about 3,900 lines) must be written again for a different system. Most of the logic in the core library also has a Python version.
+Thus, about 12,600 lines of the app are in Swift. The UI and the helper (about 6,000 lines) must be written again for a different system. Most of the logic in the core library also has a Python version.
 
 ## 2. Swift modules and their Python versions
 
@@ -40,11 +40,14 @@ Thus, about 8,500 lines of the app are in Swift. The UI and the helper (about 3,
 | `FirmwareVersion.swift` | None |
 | `FirmwareManifest.swift` (the iPodFirm list and `Patcher.detect`) | None. The Python patcher does not write the list. |
 | `PatchLibrary.swift` (install and export of a `.ipodpatch` file) | None |
+| `PatchCode.swift` (the code of a user patch for the patch editor) | None |
 | `USBProbeLog.swift` | None |
 | `PlaybackLog.swift` | None |
 | `PlaylistFolders.swift` (the folder file of `playlist-folders`) | None. `re/playlist-folders/harness/folders.py` writes the same file for the emulator tests. |
 | `HelperXPC.swift` | None. The Python tool runs with `sudo`. |
 | `UpdateCheck.swift` (the newest release on GitHub) | None. Only the app checks for updates. |
+| `AppLog.swift` (the log, the error data and the GitHub fault report) | None. The Python tool writes its errors to the terminal. |
+| `Thanks.swift` (the list in Help > Thanks…) | None. Only the app shows the list. |
 
 The Python tool also has modules that the app does not have: `emucontrol.py` and `emudrive.py` for the emulator.
 
@@ -59,10 +62,11 @@ The Swift and Python versions of a module are two copies of the same logic. A ch
 | `/usr/bin/ditto`, `/usr/bin/zip` | `IPSW.swift`, `PatchLibrary.swift` | Unpack an `.ipsw` file. Unpack and make a `.ipodpatch` file. | A zip library. `ipsw.py` already uses `zipfile`. |
 | `/usr/bin/xcrun clang` | `Patcher.swift`, `PatchLibrary.swift` | Compile the C file of a patch. | `clang` from LLVM. `patcher.py` already calls `clang` without `xcrun`. An exported `.ipodpatch` file has a precompiled `patch.o`, so the user does not need a compiler for it. |
 | `/usr/bin/afconvert` | `ITunesDB.swift`, `itunesdb.py` | Make the test audio file for an emulated library. | `ffmpeg`, or a short WAV or AAC file in the repository. |
-| CoreGraphics, ImageIO, UniformTypeIdentifiers | `Pictures.swift`, `AlbumArt.swift`, `ArtworkDB.swift`, `ITunesDB.swift`, `MusicImport.swift` | Decode, resize and encode images. | Pillow. The Python modules already use it. |
+| CoreGraphics, ImageIO, UniformTypeIdentifiers | `Pictures.swift`, `AlbumArt.swift`, `ArtworkDB.swift`, `ITunesDB.swift`, `MusicImport.swift`, `PlaylistFolders.swift` | Decode, resize and encode images. | Pillow. The Python modules already use it. |
 | AVFoundation | `MusicImport.swift` | Read the cover art of an MP3 file and of other formats. | A tag library, for example `mutagen`. `mp4tags.py` reads only MP4 tags. |
 | CryptoKit | `Patcher.swift`, `Editor.swift`, `Operations.swift`, `ThemeImport.swift` | SHA-256 values. | `hashlib`. For Swift: `swift-crypto`. |
 | SwiftUI, AppKit | `mac/Sources/iPodFirm` | The full user interface. | A new UI (section 4). |
+| `os.Logger`, `~/Library/Logs`, `sysctlbyname("hw.model")` | `AppLog.swift` | The log of the app, and the Mac model in a fault report. | Linux: `$XDG_STATE_HOME` or `~/.local/state`, and `/sys/class/dmi/id/product_name`. Windows: `%LOCALAPPDATA%`, and WMI for the computer model. |
 | UserNotifications | `UpdateNotifier.swift` | The notification about a newer release. | Linux: `libnotify`. Windows: toast notifications. |
 
 ## 4. Recommended path
@@ -71,7 +75,7 @@ Use the Python package as the shared engine for Windows and Linux. It already ha
 
 Do these tasks in this sequence:
 
-1. Add the Python versions of the modules that only Swift has: `FirmwareVersion`, `PatchLibrary`, `USBProbeLog` and `PlaybackLog`.
+1. Add the Python versions of the modules that only Swift has: `FirmwareVersion`, `FirmwareManifest`, `PatchLibrary`, `PatchCode`, `PlaylistFolders`, `USBProbeLog` and `PlaybackLog`.
 2. Add cover art for MP3 files and other formats to `libimport.py`.
 3. Add device code for Linux and for Windows to `device.py`. Keep the checks in [The checks before a flash](safety.md#the-checks-before-a-flash).
 4. Write a UI that runs on the three systems, for example with PySide6 (Qt). Each feature must have a UI. A command-line tool alone is not sufficient.

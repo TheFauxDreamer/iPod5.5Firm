@@ -57,6 +57,8 @@ The helper does these checks in `Operations.flash` ([Operations.swift](../mac/So
     - aupd is the same, byte for byte.
 12. Make a list of the blocks that are different (`planWrites`). Stop if a block overlaps aupd.
 
+If a check stops the flash, the helper returns the message and `HelperResult.detail`. The detail has the file and the line of the failed check, and the last steps of the helper. The app writes the detail to its log, and a fault report contains it (refer to [app-and-device.md](app-and-device.md#the-log-and-the-fault-report)).
+
 With `--dry-run`, the helper stops here and returns the list.
 
 ## The write

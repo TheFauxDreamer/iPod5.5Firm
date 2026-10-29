@@ -61,6 +61,7 @@ final class EmulatorManager: ObservableObject {
             }
         }
         do { try p.run() } catch {
+            AppLog.warning("Cannot start the emulator installer\n" + AppLog.describe(error))
             installing = false
             append("Cannot start the installer: \(error.localizedDescription)\n")
         }

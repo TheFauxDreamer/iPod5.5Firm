@@ -185,7 +185,15 @@ final class AppModel: ObservableObject {
         var theme: ImportedTheme
     }
 
-    struct AlertInfo: Identifiable { let id = UUID(); let title: String; let message: String }
+    struct AlertInfo: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+        /// For a fault: the full error, the steps and the state of the app (`faultDetails`). Then the
+        /// alert shows Report on GitHub… and Save Log….
+        var details: String?
+        var isFault: Bool { details != nil }
+    }
     struct FlashPlan: Identifiable {
         let id = UUID()
         let ipod: IPodDisk
@@ -221,18 +229,92 @@ final class AppModel: ObservableObject {
 
     // MARK: helpers
 
+    /// Shows a fault. The log gets the full error. The alert gives Report on GitHub… and Save Log….
     func fail(_ title: String, _ error: Error) {
+        let details = faultDetails(error)
+        AppLog.error("\(title)\n" + details)
         if (error as? FirmwareError)?.code == HelperResult.fullDiskAccess {
             hasFullDiskAccess = false
             showFullDiskAccessHelp = true
             return
         }
+        var title = title
         if (error as? FirmwareError)?.code == HelperResult.unsupportedIPod, let ipod = currentIPod {
             unsupportedIPods.insert(ipod)
-            alert = AlertInfo(title: "Unsupported iPod", message: error.localizedDescription)
-            return
+            title = "Unsupported iPod"
         }
-        alert = AlertInfo(title: title, message: error.localizedDescription)
+        var message = error.localizedDescription
+        if let step = AppLog.lastStep() { message += "\n\nLast step: \(step)" }
+        alert = AlertInfo(title: title, message: message, details: details)
+    }
+
+    /// The text of a fault for the log and the GitHub report: the full error, the last steps and the
+    /// state of the app. It has no serial number, no volume name and no home folder path.
+    func faultDetails(_ error: Error) -> String {
+        let steps = AppLog.recentSteps(15).map { "  " + $0 }.joined(separator: "\n")
+        return AppLog.describe(error) + "\n\nLast steps:\n" + (steps.isEmpty ? "  none" : steps) + "\n\n" + diagnosticSnapshot()
+    }
+
+    /// The state of the app and of the iPod, for a fault report.
+    func diagnosticSnapshot() -> String {
+        var lines = ["iPodFirm \(version), \(AppLog.systemDescription)"]
+        if let editor {
+            let apple = editor.originalOSOSHash == Self.appleFirmwareSHA256 ? "Apple 1.3" : "not Apple 1.3"
+            lines.append("Open file: \(fileURL?.lastPathComponent ?? "-") (osos \(apple), \(editor.osos.count) bytes, edited: \(isDirty))")
+        } else {
+            lines.append("Open file: none")
+        }
+        if let ipod = currentIPod {
+            lines.append("iPod: \(ipod.mediaName), \(ipod.size) bytes, block size \(ipod.blockSize)" +
+                         (currentIPodIsUnsupported ? ", not supported" : ""))
+        } else {
+            lines.append("iPod: none")
+        }
+        if let state = ipodState {
+            let found = state.detections.sorted { $0.key < $1.key }.compactMap { name, d -> String? in
+                if case .installed(let v) = d { return "\(name) \(v ?? "?")" }
+                return d == .unknown ? "\(name) (unknown)" : nil
+            }
+            lines.append("Patches on the iPod: \(found.isEmpty ? "none" : found.joined(separator: ", "))")
+        }
+        let on = patches.filter { enabledPatches.contains($0.spec.name) }.map { p -> String in
+            let o = patchOptions[p.spec.name].map { $0.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ",") }
+            return "\(p.spec.name) \(p.spec.versionText)" + (o.map { " [\($0)]" } ?? "")
+        }
+        lines.append("Patches on in the app: \(on.isEmpty ? "none" : on.joined(separator: ", "))")
+        lines.append("Appearance: \(appearance.rawValue), theme: \(selectedThemeName ?? "-"), margin: \(ThemeImport.OSOSMargin.current.rawValue), test patches: \(showTestPatches)")
+        lines.append("Helper: \(helperStatus), reply: \(helperReply), Full Disk Access: \(hasFullDiskAccess), Touch ID: \(requireTouchID)")
+        return AppLog.redact(lines.joined(separator: "\n"))
+    }
+
+    /// Help > Save Log…, and Save Log… in the alert of a fault. Returns the file, or nil.
+    @discardableResult
+    func saveLog() -> URL? {
+        let s = NSSavePanel()
+        s.nameFieldStringValue = AppLog.fileName()
+        s.allowedContentTypes = [.plainText]
+        s.message = "Save the log of iPodFirm as a text file. Then attach the file to a report."
+        guard s.runModal() == .OK, let url = s.url else { return nil }
+        let text = diagnosticSnapshot() + "\n\n" + AppLog.fullText()
+        do {
+            try text.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            AppLog.error("Cannot save the log\n" + AppLog.describe(error))
+            alert = AlertInfo(title: "Cannot save the log", message: error.localizedDescription)
+            return nil
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+        return url
+    }
+
+    /// Report on GitHub… in the alert of a fault, and Help > Report a Problem on GitHub…. Saves the
+    /// log, then opens a new issue in the browser. The user drags the file into the issue.
+    func reportOnGitHub(_ fault: AlertInfo?) {
+        let file = saveLog()
+        let steps = AppLog.recentSteps(15).map { "  " + $0 }.joined(separator: "\n")
+        let details = fault?.details ?? diagnosticSnapshot() + "\n\nLast steps:\n" + (steps.isEmpty ? "  none" : steps)
+        NSWorkspace.shared.open(AppLog.issueURL(title: fault?.title ?? "Problem report", message: fault?.message ?? "",
+                                                details: details, fileName: file?.lastPathComponent))
     }
 
     /// Reading the system TCC database is only possible with Full Disk Access.
@@ -286,6 +368,7 @@ final class AppModel: ObservableObject {
             try HelperClient.register()
             helperSetupError = nil
         } catch {
+            AppLog.warning("Cannot register the helper\n" + AppLog.describe(error))
             helperSetupError = error.localizedDescription
         }
         helperStatus = HelperClient.serviceStatus
@@ -310,25 +393,42 @@ final class AppModel: ObservableObject {
 
     // Route privileged work through the daemon (Touch ID) when it replies, else the password prompt.
     private func runBackup(_ ipod: IPodDisk) async throws -> HelperResult {
-        if await helperResponds() { return try await HelperClient.backup(disk: ipod.disk, backupDir: Self.backupDir) }
-        return try await Privileged.run(helperArgs("backup", ipod))
+        if await helperResponds() {
+            AppLog.step("Helper (daemon): back up \(ipod.disk)")
+            return logged(try await HelperClient.backup(disk: ipod.disk, backupDir: Self.backupDir))
+        }
+        AppLog.step("Helper (password): back up \(ipod.disk)")
+        return logged(try await Privileged.run(helperArgs("backup", ipod)))
+    }
+
+    /// Writes the result of the helper to the log. On a fault, the log also gets the detail of the helper.
+    private func logged(_ r: HelperResult) -> HelperResult {
+        if r.ok {
+            AppLog.info("Helper result: \(r.message)")
+        } else {
+            AppLog.warning("Helper fault: \(r.message) (code \(r.code ?? "none"))\n\(r.detail ?? "No detail from the helper.")")
+        }
+        return r
     }
 
     /// reason is "flash", "restore", or "rescue" (a restore onto a damaged firmware partition).
     private func runFlash(_ ipod: IPodDisk, image: URL, reason: String, dryRun: Bool) async throws -> HelperResult {
         let rescue = reason == "rescue"
+        let what = "\(reason) of \(image.lastPathComponent) on \(ipod.disk)\(dryRun ? " (dry run)" : "")"
         if await helperResponds() {
+            AppLog.step("Helper (daemon): " + what)
             if !dryRun && requireTouchID {
                 try await HelperClient.authenticate(reason == "flash" ? "write new firmware to your iPod" : "restore a backup to your iPod")
             }
             if rescue {
-                return try await HelperClient.rescueRestore(disk: ipod.disk, image: image, backupDir: Self.backupDir, dryRun: dryRun)
+                return logged(try await HelperClient.rescueRestore(disk: ipod.disk, image: image, backupDir: Self.backupDir, dryRun: dryRun))
             }
-            return try await HelperClient.flash(disk: ipod.disk, image: image, backupDir: Self.backupDir, reason: reason, dryRun: dryRun)
+            return logged(try await HelperClient.flash(disk: ipod.disk, image: image, backupDir: Self.backupDir, reason: reason, dryRun: dryRun))
         }
+        AppLog.step("Helper (password): " + what)
         let args = rescue ? helperArgs("rescue", ipod) + ["--image", image.path]
                           : helperArgs("flash", ipod) + ["--image", image.path, "--reason", reason]
-        return try await Privileged.run(args + (dryRun ? ["--dry-run"] : []))
+        return logged(try await Privileged.run(args + (dryRun ? ["--dry-run"] : [])))
     }
 
     func openFullDiskAccessSettings() {
@@ -338,6 +438,7 @@ final class AppModel: ObservableObject {
     }
 
     func work<T>(_ label: String, _ body: @escaping () throws -> T) async throws -> T {
+        AppLog.step(label)
         busy = label
         defer { busy = nil }
         return try await Task.detached(priority: .userInitiated) { try body() }.value
@@ -695,7 +796,7 @@ final class AppModel: ObservableObject {
         section = .patches
         let library = Self.patchLibrary, existing = patches
         do {
-            pendingInstall = try await work("Examining the patch…") { try library.inspect(url, existing: existing) }
+            pendingInstall = try await work("Examining the patch \(url.lastPathComponent)…") { try library.inspect(url, existing: existing) }
         } catch { fail("Cannot open the patch", error) }
     }
 
@@ -904,8 +1005,10 @@ final class AppModel: ObservableObject {
         var osos = editor.osos
         switch appearance {
         case .dark(let theme):
+            AppLog.step("Build: apply the dark theme \(theme.name)")
             try theme.apply(to: &osos, originalSHA256: editor.originalOSOSHash)
         case .switchOnIPod(let theme, let patch):
+            AppLog.step("Build: add Dark Mode with the theme \(theme.name) and the patch \(patch.spec.name) \(patch.spec.versionText)")
             osos = try DarkMode.build(partition: editor.partition, osos: osos, theme: theme, patch: patch,
                                       originalSHA256: editor.originalOSOSHash).0
         case nil:
@@ -914,7 +1017,10 @@ final class AppModel: ObservableObject {
         if !patches.isEmpty || list != nil {
             osos = try Patcher.apply(patches, to: osos, originalSHA256: editor.originalOSOSHash, list: try list?.encoded())
         }
-        if let version { try FirmwareVersion.apply(version, to: &osos) }
+        if let version {
+            AppLog.step("Build: write the firmware version")
+            try FirmwareVersion.apply(version, to: &osos)
+        }
         return osos
     }
 
@@ -923,7 +1029,9 @@ final class AppModel: ObservableObject {
     nonisolated static func outputPartition(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?,
                                             version: FirmwareVersion?, list: FirmwareManifest? = nil) throws -> [UInt8] {
         let fw = try FirmwarePartition(data: editor.partition.data)
+        AppLog.step("Build: start with \(patches.count) patch(es): " + patches.map { "\($0.spec.name) \($0.spec.versionText)" }.joined(separator: ", "))
         let osos = try outputOSOS(editor, patches, appearance: appearance, version: version, list: list)
+        AppLog.step("Build: make room for an osos of \(osos.count) bytes, then put it in the partition")
         try fw.makeRoom(ososLength: osos.count)
         try fw.replaceImage("osos", with: osos)
         return fw.data
@@ -984,6 +1092,7 @@ final class AppModel: ObservableObject {
             for folder in report.installed { gameInstallStatus += "  \(folder)" }
             for warning in report.warnings { gameInstallStatus += "  skipped: \(warning)" }
         } catch {
+            AppLog.warning("Cannot copy the games\n" + AppLog.describe(error))
             gameInstallStatus = "The games could not be copied: \(error.localizedDescription)"
         }
     }
@@ -1065,6 +1174,7 @@ final class AppModel: ObservableObject {
             for guid in report.removed { gameRemoveStatus += "  \(guid)" }
             await readIPodGames()
         } catch {
+            AppLog.warning("Cannot remove the games\n" + AppLog.describe(error))
             gameRemoveStatus = "The games could not be removed: \(error.localizedDescription)"
         }
     }
@@ -1318,6 +1428,8 @@ final class AppModel: ObservableObject {
     func refreshIPods() async {
         do {
             ipods = try await Task.detached { try Device.findIPods() }.value
+            let found = ipods.map { "\($0.disk) \($0.mediaName) \($0.size) bytes" }
+            AppLog.info("iPods found: \(found.isEmpty ? "none" : found.joined(separator: ", "))")
             if selectedIPod == nil || !ipods.contains(where: { $0.disk == selectedIPod }) { selectedIPod = ipods.first?.disk }
             unsupportedIPods.formIntersection(ipods)
         } catch { fail("Cannot list disks", error) }
@@ -1356,7 +1468,7 @@ final class AppModel: ObservableObject {
         defer { busy = nil; refreshBackups() }
         do {
             let r = try await runBackup(ipod)
-            guard r.ok else { throw FirmwareError(r.message, code: r.code) }
+            guard r.ok else { throw r.failure() }
             alert = AlertInfo(title: "Backup saved", message: "\(r.message)\n\n\(r.backup?.file ?? "")")
         } catch { fail("Backup failed", error) }
     }
@@ -1375,7 +1487,7 @@ final class AppModel: ObservableObject {
                 reason = "rescue"
                 r = try await runFlash(ipod, image: image, reason: reason, dryRun: true)
             }
-            guard r.ok else { throw FirmwareError(r.message, code: r.code) }
+            guard r.ok else { throw r.failure() }
             if r.ranges?.isEmpty ?? true {
                 alert = AlertInfo(title: "Nothing to do", message: r.message)
             } else {
@@ -1394,6 +1506,7 @@ final class AppModel: ObservableObject {
             guard try IPodPreferences.clearAlbumMix(onVolume: volume) else { return nil }
             return "The new firmware has no Album Mix. iPodFirm changed Settings > Shuffle on the iPod from Album Mix to Albums."
         } catch {
+            AppLog.warning("Cannot change the Shuffle setting on the iPod\n" + AppLog.describe(error))
             return "The new firmware has no Album Mix, but iPodFirm cannot change the settings file of the iPod (\(error.localizedDescription)). On the iPod, set Settings > Shuffle to Off, Songs or Albums."
         }
     }
@@ -1415,7 +1528,7 @@ final class AppModel: ObservableObject {
             // The write unmounts the volume, thus change the settings file first.
             let mixNote = clearAlbumMixIfNeeded(image: plan.image)
             let r = try await runFlash(plan.ipod, image: plan.image, reason: plan.reason, dryRun: false)
-            guard r.ok else { throw FirmwareError(r.message, code: r.code) }
+            guard r.ok else { throw r.failure() }
             if plan.reason == "flash" { isDirty = false }
             recordWrittenImage(plan.image, ipod: plan.ipod)
             alert = AlertInfo(title: plan.reason == "flash" ? "Flashed" : "Restored",

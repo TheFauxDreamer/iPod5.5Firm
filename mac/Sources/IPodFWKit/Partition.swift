@@ -3,11 +3,50 @@ import Foundation
 // Swift port of src/ipodfw/partition.py: the iPod firmware partition
 // ("]ih[" directory, 40-byte entries, plain byte-sum checksums).
 
-public struct FirmwareError: LocalizedError, Equatable {
+/// An error that iPodFirm can explain. The alert shows `message`. The log and a fault report also
+/// show the source location, the steps in `context` and the `cause` (AppLog.describe).
+public struct FirmwareError: LocalizedError, Equatable, LocatedError {
     public let message: String
     public var code: String?
-    public init(_ message: String, code: String? = nil) { self.message = message; self.code = code }
+    /// The source location of the throw. The default values record it with no change at the call site.
+    public let file: String
+    public let line: Int
+    public let function: String
+    /// What the callers did, the innermost step first. Add a step with `adding(_:)`.
+    public var context: [String] = []
+    /// The full description of the error that caused this error, if there is one.
+    public var cause: String?
+
+    public init(_ message: String, code: String? = nil, cause: Error? = nil,
+                file: String = #fileID, line: Int = #line, function: String = #function) {
+        self.message = message
+        self.code = code
+        self.cause = cause.map(AppLog.describe)
+        self.file = file
+        self.line = line
+        self.function = function
+    }
+
     public var errorDescription: String? { message }
+
+    /// The same error with one more step, for example "apply patch shuffle-fixes 1.2".
+    public func adding(_ step: String) -> FirmwareError {
+        var e = self
+        e.context.append(step)
+        return e
+    }
+
+    /// Two errors are equal if they have the same message and code. The location is not important.
+    public static func == (a: FirmwareError, b: FirmwareError) -> Bool { a.message == b.message && a.code == b.code }
+}
+
+extension Error {
+    /// This error as a FirmwareError with one more step. Another error becomes the cause of a new
+    /// FirmwareError with the same message.
+    public func adding(_ step: String, file: String = #fileID, line: Int = #line, function: String = #function) -> FirmwareError {
+        if let fe = self as? FirmwareError { return fe.adding(step) }
+        return FirmwareError(localizedDescription, cause: self, file: file, line: line, function: function).adding(step)
+    }
 }
 
 @inline(__always) func le32(_ d: [UInt8], _ o: Int) -> UInt32 {

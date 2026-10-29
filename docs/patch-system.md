@@ -349,6 +349,8 @@ After the link, the patcher writes the value of the selected choice into the var
 
 After the checks, iPodFirm writes the code and the hooks. The build of several patches (`Patcher.apply` with a list, Python `apply_all`) does not round each patch: the image ends at the last byte of the code, the variables and the menus of a patch, and the next patch starts there (16-byte steps). Only the final image is extended with zeros to a multiple of 0x800 bytes. One patch alone (`apply` with one patch) is also rounded. The partition code then calculates the new length and checksum.
 
+The build of several patches records a step in the app log before each patch: the name, the version and the osos size. If a patch fails, the error gets the step "apply the patch <name> <version>". A `PatchError` also records the file and the line of the failed check. A fault report thus shows which patch and which check failed (refer to [app-and-device.md](app-and-device.md#the-log-and-the-fault-report)).
+
 ## Patches that need other patches
 
 A patch can need other patches. Put their names in `needs`. For example, `shuffle-album-mix` needs `shuffle-fixes`, because the mode has an error without it.

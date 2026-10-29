@@ -71,6 +71,9 @@ struct IPodFirmApp: App {
                 Button("Show Disclaimer") { model.showDisclaimerReview = true }
                 Button("Thanks…") { model.showThanks = true }
                 Divider()
+                Button("Save Log…") { model.saveLog() }
+                Button("Report a Problem on GitHub…") { model.reportOnGitHub(nil) }
+                Divider()
                 Button("Check for Updates…") { Task { await model.checkForUpdate(manual: true) } }
             }
         }
@@ -175,6 +178,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let info = Bundle.main.infoDictionary ?? [:]
+        AppLog.info("Launch: iPodFirm \(info["CFBundleShortVersionString"] as? String ?? "dev") (\(info["CFBundleVersion"] as? String ?? "0")), \(AppLog.systemDescription)")
         NSApp.setActivationPolicy(.regular)
         UpdateNotifier.shared.register()
         NSApp.activate(ignoringOtherApps: true)
@@ -220,8 +225,15 @@ struct ContentView: View {
         .navigationTitle(title)
         .overlay { if let busy = model.busy { BusyOverlay(text: busy) } }
         .alert(model.alert?.title ?? "", isPresented: Binding(get: { model.alert != nil }, set: { if !$0 { model.alert = nil } }),
-               presenting: model.alert) { _ in
-            Button("OK") {}
+               presenting: model.alert) { a in
+            // A fault gives two more choices: a report on GitHub, and the log as a file to share.
+            if a.isFault {
+                Button("Report on GitHub…") { model.reportOnGitHub(a) }
+                Button("Save Log…") { model.saveLog() }
+                Button("OK", role: .cancel) {}.keyboardShortcut(.defaultAction)
+            } else {
+                Button("OK") {}
+            }
         } message: { a in
             Text(a.message)
         }
