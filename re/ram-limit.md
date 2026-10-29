@@ -218,22 +218,6 @@ The owner must select one of these steps:
 3. Make a patch for option B only: a small patch with a small gain.
 4. Stop and keep the research.
 
-## A short explanation for other people
-
-This text explains the result for people outside the project, for example on Reddit.
-
-> **Why the Rockbox "fix" for the 32 MB track limit cannot go into Apple's firmware**
->
-> Rockbox does not have a special RAM trick. It has no track limit because it does not use Apple's music database (iTunesDB). Rockbox keeps its own database as files on the disk and reads each entry when it needs it.
->
-> Apple's firmware loads the full iTunesDB into RAM at each start. Each song uses about 1 KB of RAM for its object and its text (title, artist, album, path and others). On a 32 MB iPod, the RAM becomes full at about 18,000–20,000 songs. This agrees with what other people found.
->
-> To copy the Rockbox method, we would have to move the database out of RAM and onto the disk. In Apple's firmware, the lists, the player, shuffle, On-The-Go and the artwork all read the song data directly from RAM. A change to all of these parts is not practical as a patch.
->
-> We also looked for smaller savings. Apple's firmware already stores one shared copy of equal names (album, artist, genre) on 32 MB iPods. It turns this off only on 64 MB iPods. Thus that saving is already in use. Other small changes, such as not loading comments, give only a few percent more songs.
->
-> Short version: the limit is real and it comes from RAM. Rockbox avoids it with a different database design, not with a trick that we can copy into Apple's firmware.
-
 ## How to copy a 32 MB iPod in the emulator
 
 The owner has only a 64 MB iPod. To copy a 32 MB iPod, change osos at 0x13e8:
