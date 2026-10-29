@@ -84,6 +84,7 @@ struct PatchTool: View {
         case "album-thumbnails": AlbumArtSections()
         case "usb-log": USBLogSection()
         case "playlist-folders": PlaylistFoldersSection()
+        case "playback-log": PlaybackLogSection()
         default: EmptyView()
         }
     }
@@ -191,6 +192,47 @@ struct PlaylistFolderRow: View {
                 .help("Delete the folder. Its playlists go back to the Playlists list.")
                 .accessibilityLabel("Delete folder")
             }
+        }
+    }
+}
+
+// MARK: playback-log
+
+/// The log that the playback-log patch writes on the iPod: the shuffle, the playback and the memory.
+struct PlaybackLogSection: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        Section {
+            HStack {
+                Button("Show Playback Log") { model.readPlaybackLog() }.disabled(model.currentIPod == nil)
+                Spacer()
+                if let log = model.playbackLog, !log.isEmpty {
+                    Button("Copy Log") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(log, forType: .string)
+                    }
+                    Button("Save the Log to Share…") { model.savePlaybackLog() }
+                    Button("Report on GitHub…") { model.reportPlaybackLog() }
+                }
+            }
+            if let log = model.playbackLog {
+                if log.isEmpty {
+                    Text("The log is empty. Play music. Then press a button, so that the iPod writes the log. Wait 15 seconds before you connect the iPod.")
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ScrollView {
+                        Text(log)
+                            .font(.caption.monospaced()).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(minHeight: 80, maxHeight: 400)
+                }
+            }
+        } header: {
+            Text("Playback Log")
+        } footer: {
+            FormFooter("Report on GitHub saves the log as a text file and opens a new issue in the browser. Drag the file into the issue. You need a GitHub account.")
         }
     }
 }

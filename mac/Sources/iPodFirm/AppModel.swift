@@ -139,6 +139,8 @@ final class AppModel: ObservableObject {
     @Published var thumbnailStatus: String?
     /// The decoded USB log of the probe (nil: not read).
     @Published var usbProbeLog: [USBProbeLog.Entry]?
+    /// The text of the playback log (nil: not read; empty: the file has no log).
+    @Published var playbackLog: String?
     /// The playlists of the connected iPod and their thumbnails (album-art patch).
     @Published var playlistArt: [MusicImport.PlaylistArt] = []
     /// True after a change to a playlist image that is not yet in the thumbnail file on the iPod.
@@ -815,6 +817,7 @@ final class AppModel: ObservableObject {
                 try w.data.write(to: url, options: .atomic)
             }
             if action.write.contains(where: { $0.path == Self.usbProbeLogFile }) { usbProbeLog = nil }
+            if action.write.contains(where: { $0.path == Self.playbackLogFile }) { playbackLog = nil }
             patchActionStatus[patch.spec.name] = "\(action.status ?? "\(action.title): complete.") (\(Date().formatted(date: .omitted, time: .shortened)))"
         } catch { fail("Cannot write the file on the iPod", error) }
     }
@@ -1104,6 +1107,48 @@ final class AppModel: ObservableObject {
             return
         }
         usbProbeLog = USBProbeLog.parse([UInt8](data)) ?? []
+    }
+
+    /// The log of the playback-log patch. The action in its patch.json makes it empty; the patch writes it on the iPod.
+    static let playbackLogFile = "iPod_Control/iTunes/iPodFirmPlaybackLog"
+
+    func readPlaybackLog() {
+        guard let volume = ipodMusicVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            return
+        }
+        guard let data = try? Data(contentsOf: volume.appendingPathComponent(Self.playbackLogFile)) else {
+            alert = AlertInfo(title: "No playback log", message: "The iPod has no playback log. Click Clear the Playback Log. Then do the test.")
+            return
+        }
+        var letters: [String: String] = [:]
+        for p in Self.patchLibrary.list() { if let l = p.spec.version_letter { letters[p.spec.name] = l } }
+        playbackLog = PlaybackLog.text([UInt8](data), letters: letters) ?? ""
+    }
+
+    /// Save the playback log as a text file, then show the file in Finder. Returns the file, or nil.
+    @discardableResult
+    func savePlaybackLog() -> URL? {
+        guard let log = playbackLog, !log.isEmpty else { return nil }
+        let s = NSSavePanel()
+        s.nameFieldStringValue = PlaybackLog.fileName()
+        s.allowedContentTypes = [.plainText]
+        s.message = "Save the playback log as a text file. Then send the file to the developer."
+        guard s.runModal() == .OK, let url = s.url else { return nil }
+        do {
+            try ("iPodFirm on the Mac: \(version)\n" + log + "\n").write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            fail("Cannot save the playback log", error)
+            return nil
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+        return url
+    }
+
+    /// Save the playback log, then open a new issue on GitHub. The owner of the log drags the file into the issue.
+    func reportPlaybackLog() {
+        guard let log = playbackLog, let url = savePlaybackLog() else { return }
+        NSWorkspace.shared.open(PlaybackLog.issueURL(log: log, appVersion: version, fileName: url.lastPathComponent))
     }
 
     /// Read the playlists of the connected iPod and their images.

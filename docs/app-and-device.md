@@ -284,11 +284,12 @@ The Patches pane shows the result:
 |---|---|---|
 | `http://appldnld.apple.com.edgesuite.net/content.info.apple.com/iPod/SBML/osx/bundles/061-2967.20080313.Cnvkg/iPod_25.1.3.ipsw` | "Download Apple Firmware 1.3", and each action that needs the Apple file if no correct copy is cached. | SHA-256 must be `840b2480ad5b692c098cb772c3d2bf8f58bf37557788782b596ac01c27ecdc32`. Apple serves this file only over HTTP, so `Info.plist` has an App Transport Security exception for this domain. |
 | `https://api.github.com/repos/TheFauxDreamer/iPod5.5Firm/releases/latest` | At each launch if Settings > Updates > "Check for a new version at launch" is on. Help > Check for Updates…. | TLS 1.2 or later. HTTP status 200 and JSON with `tag_name` and `html_url`. The app compares `tag_name` (without the `v`) with `CFBundleShortVersionString`. If the release is newer, the notification opens `html_url` in the browser. The app does not download the update. |
+| `https://github.com/TheFauxDreamer/iPod5.5Firm/issues/new?title=…&body=…` | Patches > Playback Log > "Report on GitHub…". | The app does not connect. It opens the address in the browser (`NSWorkspace.open`). The body has the app version and the information lines of the playback log: the RAM, the free memory and the patches. It has a maximum of 1500 characters. The owner of the log must sign in to GitHub and attach the text file. |
 | `https://sh.rustup.rs` | "Install Emulator", only if `~/.cargo/bin/cargo` does not exist. | TLS 1.2 or later. |
 | `https://github.com/siggifly/ipod-emulator.git` | "Install Emulator". | Git over HTTPS. |
 | crates.io (through `cargo`) | "Install Emulator". | Cargo lock file of the emulator. |
 
-The app makes no other network connections. It sends no data about the owner or the iPod. The update check sends only a GET request with the default `User-Agent` of `URLSession`.
+The app makes no other network connections. It sends no data about the owner or the iPod. "Report on GitHub…" only opens a web page; the owner of the log decides to send it. The update check sends only a GET request with the default `User-Agent` of `URLSession`.
 
 ## Files
 
@@ -328,6 +329,7 @@ The app writes these files on the mounted iPod volume. A patch can also write fi
 | `iPod_Control/iTunes/iPodFirmDarkMode` | The `dark-mode` patch on the iPod | `dark-mode` patch |
 | `iPod_Control/iTunes/iPodFirmPlaylistFolders` | "Write Folders to iPod" in Playlist Folders. The app removes the file if there are no folders. | `playlist-folders` patch, the Playlist Folders section of the app |
 | `iPod_Control/iTunes/iPodFirmHoldSelect` | The `up-next` patch on the iPod (Settings > Hold Select) | `up-next` and `cover-flow` patches |
+| `iPod_Control/iTunes/iPodFirmPlaybackLog` | "Clear the Playback Log" (`ui.actions` of `playback-log`) | `playback-log` patch, "Show Playback Log" |
 | `iPod_Control/iTunes/iPodFirmUSBProbe`, `iPod_Control/iTunes/iPodFirmUSBLog` | "Start the Probe at the Next Restart" (`ui.actions` of `usb-host-probe`) | `usb-host-probe` patch, "Show USB Log" |
 
 The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not change them. Before a flash, the app looks for the MiMusic temporary files `iTunesDB.tmp`, `ArtworkDB.tmp` and `iPodFirmAlbumArt.tmp`.

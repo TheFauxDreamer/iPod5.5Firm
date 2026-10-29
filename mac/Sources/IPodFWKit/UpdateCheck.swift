@@ -16,6 +16,8 @@ public enum UpdateCheck {
         }
     }
 
+    /// The project on GitHub. The playback log opens a new issue here.
+    public static let repository = URL(string: "https://github.com/TheFauxDreamer/iPod5.5Firm")!
     /// GitHub gives the newest release that is not a draft and not a pre-release.
     public static let latestURL = URL(string: "https://api.github.com/repos/TheFauxDreamer/iPod5.5Firm/releases/latest")!
 

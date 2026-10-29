@@ -41,6 +41,7 @@ Thus, about 8,500 lines of the app are in Swift. The UI and the helper (about 3,
 | `FirmwareManifest.swift` (the iPodFirm list and `Patcher.detect`) | None. The Python patcher does not write the list. |
 | `PatchLibrary.swift` (install and export of a `.ipodpatch` file) | None |
 | `USBProbeLog.swift` | None |
+| `PlaybackLog.swift` | None |
 | `PlaylistFolders.swift` (the folder file of `playlist-folders`) | None. `re/playlist-folders/harness/folders.py` writes the same file for the emulator tests. |
 | `HelperXPC.swift` | None. The Python tool runs with `sudo`. |
 | `UpdateCheck.swift` (the newest release on GitHub) | None. Only the app checks for updates. |
@@ -70,7 +71,7 @@ Use the Python package as the shared engine for Windows and Linux. It already ha
 
 Do these tasks in this sequence:
 
-1. Add the Python versions of the modules that only Swift has: `FirmwareVersion`, `PatchLibrary` and `USBProbeLog`.
+1. Add the Python versions of the modules that only Swift has: `FirmwareVersion`, `PatchLibrary`, `USBProbeLog` and `PlaybackLog`.
 2. Add cover art for MP3 files and other formats to `libimport.py`.
 3. Add device code for Linux and for Windows to `device.py`. Keep the checks in [The checks before a flash](safety.md#the-checks-before-a-flash).
 4. Write a UI that runs on the three systems, for example with PySide6 (Qt). Each feature must have a UI. A command-line tool alone is not sufficient.

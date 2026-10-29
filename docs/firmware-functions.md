@@ -282,7 +282,9 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x0df0c0 | Rounds the end of the RAM region down to 1 MB and subtracts 1 MB (the MMAP window at 0x18000000). | Static |
 | 0x0d2e2c | Adds a region to the heap through 0x1ac448. A heap has a maximum of 10 regions. | Static |
 | 0x0c2e0c | Makes the heap object at 0x10870154 when the firmware first needs it (0x1aca4c, then 0x1ac944). | Static |
-| 0x0c7444 | Gives the free bytes of the heap. | Static |
+| 0x0c7444 | Gives the free bytes of the heap. The patch `playback-log` uses it. | Static, Patch |
+| 0x0c7518 | (size, alignment): an allocator. Calls 0xc2e0c, then 0x1ac324 with the heap. 0xa8180 (`mov r1, #4`) jumps to it. The patch `playback-log` hooks its first instruction. Refer to [../re/playback-log.md](../re/playback-log.md#the-memory). | Static, Patch |
+| 0x11ca20 | (size, flags): an allocator. Calls 0xc2e0c, then 0x1ac9b4 with the heap. 0x25a974 (`mov r1, #2`) and 0xa8178 (`mov r1, #4`) jump to it. The patch `playback-log` hooks its first instruction. | Static, Patch |
 | 0x0a96c0 | The block allocator of the track objects (slab at db + 0x38: element size at + 0x04, count for each chunk at + 0x08). Calls 0xa8e8c. A chunk is count × size + 0x24 bytes from 0xa8178. A track object is 272 bytes, 100 in each chunk. | Static, Emulator |
 | 0x25a944 | Allocates memory (used by 0x223420). | Static |
 | 0x25a8e4 | Frees memory to the same pool. | Patch |
@@ -310,6 +312,7 @@ RetailOS does not test the RAM. It reads the size from the SysInfo block of the 
 | 0x0013bc | The start code. Finds the SysInfo block: the tag 'SysI' (0x53797349) at 0x4001ff18, then a pointer. | Static |
 | 0x0013e8 | `ldr r3, [r0, #0xe0]` (`e0 30 90 e5`): reads the SDRAM size from SysInfo + 0xe0. `mov r3, #0x2000000` (`02 34 a0 e3`) here makes a 32 MB heap in the emulator. | Static, Emulator |
 | 0x000e6c | Converts the size to a code with the size table at 0x16d8 (0, 0x80000 … 0x8000000). | Static |
+| 0x09d9d0 | Gives the RAM size: SysInfo + 0xe0. 0x947f8 compares it with 0x3ffffff. The patch `playback-log` uses it. | Static, Patch |
 | 0x000df8 | Adds the sizes of the four banks and writes the RAM top to struct + 0x20. | Static |
 | 0x000c90 | Sets the image region (8 MB) and the data region (from 0x10800000, length 0x20e294). | Static |
 | 0x001658 | Copies the struct (0x90 bytes) from IRAM 0x40006000 to 0x14983060. | Static |
@@ -493,6 +496,10 @@ Refer to [re/play-next.md](../re/play-next.md).
 | 0x0b0d0c | (track list, field): frees the caches of the slot of one field (+ 0x174, + 0x238, + 0x2fc, + 0x3c0, + 0x494). The shuffle uses the field 0x1000 (slot 2). | Static |
 | 0x09e57c | (item, 0x33, 0): the play position of an item. | Static, Patch |
 | 0x1968c0 | (play list, song, flags): the next item in the play order. Flag 4 writes its index to + 0x14. The "next song" action 0xac4c4 calls it at the change of song. | Static |
+| 0x0ac4c4 | (player, flags): the "next song" action. The current item is player + 0x2a4. It calls 0x1968c0 (at 0xac55c), then 0xac6f4 or 0xeb610 for each item until one plays. With no next item, it calls 0xeb610 (player, 0, 0) at 0xac588 and the player stops. Refer to [../re/playback-log.md](../re/playback-log.md). | Static, Patch |
+| 0x0ac6f4 | (player, item, flags): plays an item. Calls 0xeb610 (at 0xac750), 0x10b894 (at 0xac7b4) and 0xd9b70. Returns 0 if the song plays. | Static, Patch |
+| 0x0eb610 | (player, item, flags): sets the current song. Item 0: no song. −0x32: the song cannot play. −0x6c: no memory (0xa8dc4 gives 0). | Static, Patch |
+| 0x10b894 | (player, item, flags, out, cache): probably the open of the decoder. Returns an error code. | Static, Patch |
 | 0x2aa350 | Data: the sort description of slot 2 (first key: field 0x1000, the shuffle position at item + 0x24). | Static |
 
 ### The EQ

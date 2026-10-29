@@ -27,6 +27,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | Version 0.6.7: yes (27 October 2026). Version 0.6.8: yes (28 October 2026) |
 | [up-next](#up-next) | Code patch (extended) | Patches | 1 `bl`, 1 `b` and 2 vtable words (3 with `chain`), a Settings menu | Version 0.4: yes. Version 0.5: yes (28 October 2026) |
 | [playlist-folders](#playlist-folders) | Code patch (extended) | Patches | 4 `bl`, 2 `b` and 1 vtable word (with `chain`) | Version 0.1: emulator only (29 October 2026). Not tested on the real iPod |
+| [playback-log](#playback-log) | Code patch (test, extended) | Patches | 8 `bl`, 5 `b` (all 5 with `chain`) | No. Not tested in the emulator |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
@@ -1037,6 +1038,36 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 **Limits.** The title of a folder is "Playlists". There is no slide animation: a second Playlists screen did not operate (refer to the research, experiments 4 and 5). An accessory (iPod Accessory Protocol, for example a car) does not see the folders. A playlist in a folder plays and shuffles as before.
 
 **Test status.** Emulator (29 October 2026, the owner in the emulator window, version 0.1): Folders First and Alphabetical, Select on a folder, a playlist in a folder, Menu back to the folder and to the top list, the next open of Playlists, and the colour squares with `album-art`. All passed. Real iPod (the owner, 29 October 2026), version 0.1: the folders operate. The colour squares did not show.
+
+## playback-log
+
+**User interface.** Patches pane > Playback Log, letter `g`. It is a test patch: turn on **Enable Test Patches** to see it. "Clear the Playback Log" writes an empty 32768-byte `iPod_Control/iTunes/iPodFirmPlaybackLog` on the connected iPod. The tool `playback-log` gives the section "Playback Log" with "Show Playback Log", "Copy Log", "Save the Log to Share…" and "Report on GitHub…" (`PlaybackLog` in [PlaybackLog.swift](../mac/Sources/IPodFWKit/PlaybackLog.swift), `AppModel.readPlaybackLog`, `savePlaybackLog`, `reportPlaybackLog`). "Save the Log to Share…" writes the log as a `.txt` file (default name "iPodFirm Playback Log yyyy-MM-dd HHmm.txt") and shows it in Finder. "Report on GitHub…" also saves the file, then opens a new issue in the browser with a title and a body (the app version and the information lines of the log). The user drags the file into the issue. This needs a GitHub account. Without an account, send the saved file in a different way.
+
+**Effect.** The iPod records each shuffle, each change of the song, each song that cannot play, each stop for "no next song" and each failed memory allocation. A button or wheel event writes the log to the file, at most one time each 5 seconds. The log starts with the RAM size, the free memory, the lowest free memory and the iPodFirm list of the build. The app shows the patches of the list with their letters.
+
+**Research.** Refer to [re/playback-log.md](../re/playback-log.md).
+
+**Load address.** `extended`. The code, the data and the 32 KB log buffer (`.bss`) are 38025 bytes. The buffer is in the patch, thus the log operates also when the heap is full.
+
+**Hooks.**
+
+| Kind | At | Expect | To | Original |
+|---|---|---|---|---|
+| `b` (`chain`) | 0xb40c4 | 0xe92d4038 | `hook_start` | First instruction (`push {r3-r5, lr}`) of 0xb40c4, start a shuffled play list |
+| `bl` | 0xb4128 | 0xebff80c4 | `hook_shuffle` | `bl 0x94440`, the shuffle, in 0xb40c4 |
+| `bl` | 0xbb440 | 0xebff63fe | `hook_smart_shuffle` | `bl 0x94440` in the smart playlist evaluation 0xbb28c |
+| `b` (`chain`) | 0xac4c4 | 0xe92d4ff8 | `hook_next` | First instruction (`push {r3-r11, lr}`) of 0xac4c4, the "next song" action |
+| `bl` | 0xac55c | 0xeb03a8d7 | `hook_next_item` | `bl 0x1968c0`, the next item of the play list |
+| `bl` | 0xac588 | 0xeb00fc20 | `hook_stop` | `bl 0xeb610` with no song: the stop |
+| `bl` | 0xac5d4, 0xac750 | 0xeb00fc0d, 0xeb00fbae | `hook_set` | `bl 0xeb610`, set the song |
+| `b` (`chain`) | 0xac6f4 | 0xe92d4ff0 | `hook_play` | First instruction (`push {r4-r11, lr}`) of 0xac6f4, play a song |
+| `bl` | 0xac7b4 | 0xeb017c36 | `hook_open` | `bl 0x10b894`, probably the open of the decoder |
+| `b` (`chain`) | 0xc7518, 0x11ca20 | 0xe92d4070, 0xe92d4070 | `hook_alloc`, `hook_new` | First instruction (`push {r4-r6, lr}`) of the two allocators |
+| `bl` | 0x1d8260 | 0xeb0000c2 | `hook_event` | `bl 0x1d8570` (long-push timer) in the UI event handler 0x1d81cc. The same site as `usb-host-probe` |
+
+**Caution.** Do not install this patch together with `usb-host-probe`. The two patches use the hook site 0x1d8260. `Patcher.conflicts` finds this: the app does not turn on the second patch, the Patches pane shows "Changes the same place as …", and the build fails. The test `testPlaybackLogConflicts` checks it.
+
+**Test status.** Swift and Python tests (29 October 2026): the log text, the size, each hook word and the chain wrappers. A build with the 17 patches that are not `test` or `internal` links with no conflict. Not tested in the emulator. Not tested on the real iPod.
 
 ## Storage type
 
