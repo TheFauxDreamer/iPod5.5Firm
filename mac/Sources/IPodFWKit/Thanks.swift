@@ -36,7 +36,7 @@ public enum Thanks {
         ThanksEntry(name: "osos-lab (RepriseOS)", reason: "The idea of the Album Artists menu."),
         ThanksEntry(name: "iPodWizard", reason: "The file formats of the firmware pictures and text.",
                     link: URL(string: "https://sourceforge.net/projects/ipodwizard/")),
-        ThanksEntry(name: "Rockbox ipodpatcher", reason: "The file formats of the iPod disk and the firmware partition.",
+        ThanksEntry(name: "ipodpatcher (Rockbox)", reason: "The file formats of the iPod disk and the firmware partition.",
                     link: URL(string: "https://github.com/Rockbox/rockbox/tree/master/utils/ipodpatcher")),
         ThanksEntry(name: "siggifly/ipod-emulator", reason: "The emulator that the Emulator pane uses.",
                     link: URL(string: "https://github.com/siggifly/ipod-emulator")),

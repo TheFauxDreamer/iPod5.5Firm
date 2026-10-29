@@ -2398,3 +2398,47 @@ final class StrippedThemeTests: XCTestCase {
         XCTAssertEqual(Array(out[16..<20]), [1, 2, 3, 4])
     }
 }
+
+/// The list of Help > Thanks…: the sort order and the rules of CLAUDE.md for each entry.
+final class ThanksTests: XCTestCase {
+    static let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+
+    /// The newest version comes first, with a numeric compare. The entries with no version come last, in the list order.
+    func testThanksSortNewestFirst() {
+        let list = [ThanksEntry(name: "a", reason: "r"),
+                    ThanksEntry(name: "b", reason: "r", version: "0.1.9"),
+                    ThanksEntry(name: "c", reason: "r", version: "0.1.10"),
+                    ThanksEntry(name: "d", reason: "r"),
+                    ThanksEntry(name: "e", reason: "r", version: "0.2")]
+        XCTAssertEqual(Thanks.sorted(list).map(\.name), ["e", "c", "b", "a", "d"])
+    }
+
+    /// Each entry has one name only, a reason, a valid version and a valid link. The README Credits section names each person.
+    func testThanksEntries() throws {
+        let env = try String(contentsOf: Self.repo.appendingPathComponent("mac/version.env"), encoding: .utf8)
+        let line = try XCTUnwrap(env.split(separator: "\n").first { $0.hasPrefix("MARKETING_VERSION=") })
+        var limit = line.dropFirst("MARKETING_VERSION=".count).split(separator: ".").compactMap { Int($0) }
+        // A new entry can name the next build before build-app.sh increases the version.
+        limit[limit.count - 1] += 1
+
+        let readme = try String(contentsOf: Self.repo.appendingPathComponent("README.md"), encoding: .utf8)
+        let start = try XCTUnwrap(readme.range(of: "## Credits")).upperBound
+        let credits = readme[start...].components(separatedBy: "\n## ").first ?? ""
+
+        let names = Thanks.people.map(\.name)
+        XCTAssertEqual(names.count, Set(names).count, "Each person must have only one entry in Thanks.people")
+        for p in Thanks.people {
+            XCTAssertFalse(p.reason.isEmpty, "\(p.name) has no reason")
+            if let v = p.version {
+                let parts = v.split(separator: ".", omittingEmptySubsequences: false)
+                XCTAssertTrue((1...3).contains(parts.count) && parts.count == p.versionNumbers.count,
+                              "\(p.name): the version \(v) is not valid")
+                XCTAssertFalse(limit.lexicographicallyPrecedes(p.versionNumbers),
+                               "\(p.name): the version \(v) is after the next build")
+            }
+            if let link = p.link { XCTAssertEqual(link.scheme, "https", "\(p.name): the link must use https") }
+            let key = p.name.components(separatedBy: " (").first ?? p.name
+            XCTAssertTrue(credits.contains(key), "\(p.name) is not in the Credits section of README.md")
+        }
+    }
+}
