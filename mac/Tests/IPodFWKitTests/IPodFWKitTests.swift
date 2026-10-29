@@ -2441,4 +2441,29 @@ final class ThanksTests: XCTestCase {
             XCTAssertTrue(credits.contains(key), "\(p.name) is not in the Credits section of README.md")
         }
     }
+
+}
+
+final class UpdateCheckTests: XCTestCase {
+    /// The update check compares the numbers of the versions, not the text.
+    func testUpdateVersionCompare() {
+        XCTAssertTrue(UpdateCheck.isNewer("0.1.180", than: "0.1.177"))
+        XCTAssertTrue(UpdateCheck.isNewer("0.1.10", than: "0.1.9"))
+        XCTAssertTrue(UpdateCheck.isNewer("0.2.0", than: "0.1.999"))
+        XCTAssertTrue(UpdateCheck.isNewer("0.2.1", than: "0.2"))
+        XCTAssertFalse(UpdateCheck.isNewer("0.1.177", than: "0.1.177"))
+        XCTAssertFalse(UpdateCheck.isNewer("0.2", than: "0.2.0"))
+        XCTAssertFalse(UpdateCheck.isNewer("0.1.176", than: "0.1.177"))
+        XCTAssertFalse(UpdateCheck.isNewer("0.1.180", than: "dev"))
+        XCTAssertFalse(UpdateCheck.isNewer("beta", than: "0.1.177"))
+    }
+
+    /// The reply of the GitHub API gives the version without the "v" and the release page.
+    func testUpdateReleaseParse() throws {
+        let json = #"{"tag_name":"v0.1.180","name":"v0.1.180","html_url":"https://github.com/TheFauxDreamer/iPod5.5Firm/releases/tag/v0.1.180","draft":false}"#
+        let release = try UpdateCheck.parse(Data(json.utf8))
+        XCTAssertEqual(release.version, "0.1.180")
+        XCTAssertEqual(release.url.absoluteString, "https://github.com/TheFauxDreamer/iPod5.5Firm/releases/tag/v0.1.180")
+        XCTAssertThrowsError(try UpdateCheck.parse(Data("{}".utf8)))
+    }
 }

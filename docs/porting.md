@@ -43,6 +43,7 @@ Thus, about 8,500 lines of the app are in Swift. The UI and the helper (about 3,
 | `USBProbeLog.swift` | None |
 | `PlaylistFolders.swift` (the folder file of `playlist-folders`) | None. `re/playlist-folders/harness/folders.py` writes the same file for the emulator tests. |
 | `HelperXPC.swift` | None. The Python tool runs with `sudo`. |
+| `UpdateCheck.swift` (the newest release on GitHub) | None. Only the app checks for updates. |
 
 The Python tool also has modules that the app does not have: `emucontrol.py` and `emudrive.py` for the emulator.
 
@@ -61,6 +62,7 @@ The Swift and Python versions of a module are two copies of the same logic. A ch
 | AVFoundation | `MusicImport.swift` | Read the cover art of an MP3 file and of other formats. | A tag library, for example `mutagen`. `mp4tags.py` reads only MP4 tags. |
 | CryptoKit | `Patcher.swift`, `Editor.swift`, `Operations.swift`, `ThemeImport.swift` | SHA-256 values. | `hashlib`. For Swift: `swift-crypto`. |
 | SwiftUI, AppKit | `mac/Sources/iPodFirm` | The full user interface. | A new UI (section 4). |
+| UserNotifications | `UpdateNotifier.swift` | The notification about a newer release. | Linux: `libnotify`. Windows: toast notifications. |
 
 ## 4. Recommended path
 

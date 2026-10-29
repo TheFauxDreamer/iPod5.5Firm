@@ -44,6 +44,16 @@ The app must read and write the disk of the iPod directly. Thus it needs Full Di
 
 Turn on Full Disk Access again after each update of the app. The app asks for your administrator password before it writes to the iPod.
 
+### Updates
+
+At each launch, the app asks GitHub for the number of the newest release. If a newer version is available, macOS shows a notification. Click the notification to open the release page. Then download the ZIP file and install it as above. The app does not download or install the update.
+
+- To check at a different time, select Help > Check for Updates….
+- To stop the check at launch, open iPodFirm > Settings > Updates. Then turn off "Check for a new version at launch".
+- To ignore one version, click **Skip This Version** in the notification.
+
+The check sends no data about you or your iPod.
+
 ## Change your iPod
 
 1. Connect the iPod to the Mac.
