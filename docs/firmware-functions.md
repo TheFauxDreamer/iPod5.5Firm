@@ -277,6 +277,13 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 |---|---|---|
 | 0x25a974 | Allocates memory from the heap object at *(0x1081da00): calls 0x1ac4ec with flag 2. | Static, Patch |
 | 0x1ac4ec | (heap, size, clear, flag, old block, copy, quiet): the allocator of the heap. A block has a header word (size, bits 0–1 and 30–31 are flags). It subtracts merged free blocks from heap + 0x00 and adds 1 to heap + 0x08. | Static, Emulator |
+| 0x0a07b4 | Calculates the heap region: start = struct + 0x28 AND 0xfbffffff, size = (struct + 0x20 − struct + 0x24) AND 0x3ffffff. Writes them to 0x10883614 + 0x1b4 and + 0x1b8. 0xc2bbc calls it. | Static |
+| 0x10b190 | Adds the RAM to the heap: calls 0xdf0c0, then 0xd2e2c. | Static |
+| 0x0df0c0 | Rounds the end of the RAM region down to 1 MB and subtracts 1 MB (the MMAP window at 0x18000000). | Static |
+| 0x0d2e2c | Adds a region to the heap through 0x1ac448. A heap has a maximum of 10 regions. | Static |
+| 0x0c2e0c | Makes the heap object at 0x10870154 when the firmware first needs it (0x1aca4c, then 0x1ac944). | Static |
+| 0x0c7444 | Gives the free bytes of the heap. | Static |
+| 0x0a96c0 | The block allocator of the track objects (slab at db + 0x38: element size at + 0x04, count for each chunk at + 0x08). Calls 0xa8e8c. A chunk is count × size + 0x24 bytes from 0xa8178. A track object is 272 bytes, 100 in each chunk. | Static, Emulator |
 | 0x25a944 | Allocates memory (used by 0x223420). | Static |
 | 0x25a8e4 | Frees memory to the same pool. | Patch |
 | 0x07ccd0 | Fills memory with zeros (pointer, size). | Patch |
@@ -288,11 +295,24 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x08f5c4 | Sets the file position. The 64-bit position is in r2:r3. | Patch |
 | 0x08f184 | Closes a file. Writes the buffer to the disk. | Patch |
 | 0x0e468c | (path record, type, folder, name): joins the folder and the name into the path record (0xc6994), deletes an old file (0xa4770) and makes an empty file (0xa449c with mode 2, then 0xa4400). The firmware uses it for `OTGPlaylistInfo` (type `'itun'`). The `up-next` patch uses it for its file; after a restart in the emulator, the value was still there. | Static, Emulator, Patch |
-| 0xb4a64 | Loads the music database from `iPod_Control\iTunes\iTunesDB`. Runs at the start and after each USB session. At 0xb4ad4 it adds the usage-log event 0xf ("Exit Disk Mode"). | Static, Patch (`album-art`) |
+| 0xb4a64 | Loads the music database from `iPod_Control\iTunes\iTunesDB`. Runs at the start and after each USB session. At 0xb4ad4 it adds the usage-log event 0xf ("Exit Disk Mode"). It measures the free heap before and after each load and writes the events 0x16 "Music Database Size", 0x17 "Photo Database Size" and 0x18 "Artwork Database Size". If the load fails, it tries `System\Control\iTunes\iTunesDB`, then makes an empty database (0xa9348). Refer to [../re/ram-limit.md](../re/ram-limit.md). | Static, Patch (`album-art`) |
 | 0xa2310 | Makes the music database object and calls 0xb4a64 (at 0xa23fc). | Static |
 | 0x1edb9c | Loads the music database again (`blne 0xb4a64` at 0x1ed2d0) if the flag at +0x489 is 0. | Static |
 | 0x213c5c | Adds an event to the usage log (log, event, value). | Static, Patch |
 | 0x213cd4 | Gives the name of a usage-log event. 0xe is "Enter Disk Mode", 0xf is "Exit Disk Mode". Only 0xb4ff8 (in the database reload 0xb4fe4) writes the event 0xe, and only 0xb4ad4 (in the first load 0xb4a64) writes the event 0xf. This comes from a scan of all `bl` to 0x213c5c with `mov r1, #0xe` or `#0xf` before them (27 October 2026). | Static |
+
+### The start and the RAM size
+
+RetailOS does not test the RAM. It reads the size from the SysInfo block of the boot loader. Refer to [../re/ram-limit.md](../re/ram-limit.md).
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x0013bc | The start code. Finds the SysInfo block: the tag 'SysI' (0x53797349) at 0x4001ff18, then a pointer. | Static |
+| 0x0013e8 | `ldr r3, [r0, #0xe0]` (`e0 30 90 e5`): reads the SDRAM size from SysInfo + 0xe0. `mov r3, #0x2000000` (`02 34 a0 e3`) here makes a 32 MB heap in the emulator. | Static, Emulator |
+| 0x000e6c | Converts the size to a code with the size table at 0x16d8 (0, 0x80000 … 0x8000000). | Static |
+| 0x000df8 | Adds the sizes of the four banks and writes the RAM top to struct + 0x20. | Static |
+| 0x000c90 | Sets the image region (8 MB) and the data region (from 0x10800000, length 0x20e294). | Static |
+| 0x001658 | Copies the struct (0x90 bytes) from IRAM 0x40006000 to 0x14983060. | Static |
 
 ### Settings, sleep and restart
 
@@ -410,7 +430,7 @@ Refer to [re/album-artist.md](../re/album-artist.md). The `album-artists` patch 
 | Address | Function | Evidence |
 |---|---|---|
 | 0x0af930 | Loads iTunesDB. Calls 0xd7888 for the tracks and 0xd6de8 for the playlists. | Static |
-| 0x0d7888 | Reads the tracks (mhit) and their strings (mhod). The loader calls it one time for each load (`bl` at 0xafc8c). | Static, Emulator, Patch |
+| 0x0d7888 | Reads the tracks (mhit) and their strings (mhod). The loader calls it one time for each load (`bl` at 0xafc8c). If the allocation of a track object fails, it returns −0x6c (−108, memFullErr). | Static, Emulator, Patch |
 | 0x0d7e40 | The jump on the mhod type. The table of `b` instructions is at 0xd7e48 + 4 × type (types 0 to 31). Type 22 (Album Artist) goes to the skip code 0xd81ec. | Static, Emulator |
 | 0x0d7f58 | The code for mhod type 4 (Artist). | Static, Emulator |
 | 0x0d821c | The end of the mhod loop body. It examines the result in r5. | Static, Emulator |
@@ -421,6 +441,10 @@ Refer to [re/album-artist.md](../re/album-artist.md). The `album-artists` patch 
 | 0x0907f4 | Updates the artist data of a track. Calls 0x1114dc. | Static, Emulator |
 | 0x1114dc | Makes the artist sort key of a track (pool db + 0x10c). | Static |
 | 0x0dc6a8 | Skips bytes in the file. | Static |
+
+The mhod types that 0xd7888 keeps, with the pool of each type: 1 title (db + 0xb4), 2 path (0x1179bc), 3 album (+ 0x138), 4 artist (+ 0xe0), 5 genre (+ 0x190), 6 file type (+ 0x1bc), 7 EQ (+ 0x1e8), 8 comment (+ 0x214), 9 category (+ 0x240), 12 composer (+ 0xe0), 13 grouping (+ 0x164), 14 description (+ 0x424), 16 and 17 podcast data, 19 (+ 0x47c), 20 (+ 0x4a8). 0xd81ec skips the types 10, 15, 18, 21, 22, 24, 25 and 27 to 31. Static. Refer to [../re/ram-limit.md](../re/ram-limit.md).
+
+A string pool: + 0x04 flags (bit 0 = search for an equal string before the add; off for the track pools), + 0x08 index handle (8 bytes for each entry: offset and length), + 0x0c reference count handle, + 0x10 text handle, + 0x14 count. The other pool functions are 0xa71d8 (lock), 0xb9ef4 (unlock), 0xe1cc8, 0x95a80, 0x95ad0, 0x10a650, 0x10ed14 and 0xb3e0c. 0x9eff8 has 6 calls in 4 functions (0x9f0c4, 0xb5828, 0x9c288, 0x21c1e0). Static. With 5,000 test tracks, the pools used 1,047,936 bytes (about 210 bytes for each track). Emulator.
 
 ### Shuffle
 
@@ -1186,6 +1210,9 @@ The physical address is 0x10000000 + the CPU address.
 | 0x1081da18 | Pointer to the application object. |
 | 0x1081da00 | The address of the heap object of the general allocator (`fw_alloc`). Heap object + 0x00: the free bytes; + 0x04: the used bytes; + 0x08: the count of allocations. Emulator (27 October 2026): 52.9 MB in total, 2.67 MB free with the Albums list. Refer to [../re/cover-flow.md](../re/cover-flow.md). |
 | 0x1086bedc | Keep-awake slot flags (45 bytes). |
+| 0x10870154 | The heap object of the general allocator. Emulator: the heap total is 55,519,024 bytes on 64 MB and 21,964,832 bytes on 32 MB (test patch at 0x13e8). About 3 MB stays free for all library sizes. |
+| 0x10883614 | + 0x1b4: the start of the heap region; + 0x1b8: its size (0xa07b4). |
+| 0x14983060 | The copy of the start struct (0x90 bytes). + 0x20: the RAM top. |
 | 0x1086bf0c | Keep-awake time left in ms (45 words). 0xffffffff = always on. |
 | 0x1081ff2c, 0x1081ff30, 0x1081ff34 | Power pin monitor objects (byte +6 is the saved pin state). |
 | 0x108234ec | State of the USB audio streaming object. |
