@@ -5,14 +5,14 @@
   "symbol": "shuffle",
   "category": "playback",
   "version_letter": "f",
-  "version": "2.1",
+  "version": "2.2",
   "size": 64,
   "description": "The shuffle of the iPod has four errors. The most important error occurs with more than 32767 songs: the shuffle writes outside the list, and the order is wrong. This patch corrects the four errors.",
   "details": [
     "Shuffle Songs and Shuffle Albums operate correctly with more than 32767 songs.",
     "The shuffle does not use the position after the end of the list. Without the patch, this rare error can occur in approximately 1 of 700 shuffles of 50000 songs.",
     "Three rare start values of the random numbers do not stop the shuffle.",
-    "The shuffle of the songs in each album uses the correct positions. The Settings menu does not switch on this mode.",
+    "The shuffle of the songs in each album uses the correct positions. The patch Album Mix Shuffle switches on this mode.",
     "Shuffle behaviour is unchanged other than the above fixes. The same start value gives the same order of songs as before."
   ],
   "notes": [
@@ -44,7 +44,9 @@
       "Flash a firmware with this patch.",
       "On the iPod, select Shuffle Songs.",
       "Make sure that Now Playing shows \"1 of\" and the full count of songs.",
-      "Push Next many times. Each song must play."
+      "Push Next many times. Each song must play.",
+      "Select Shuffle Songs again. Do not push Next.",
+      "Let the first song play to its end. The second song must start."
     ]
   }
 }

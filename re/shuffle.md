@@ -183,7 +183,7 @@ for k = end down to start + 1:
     swap work[k], work[j]          ; j is not offset by start
 ```
 
-`j` must be `start + j`. Thus a track can change places with a track of the first groups of the source list. The code copies each group when it gets to it. Thus a track can occur two times in the result, and another track can be lost. The Settings menu does not set `+0x93`, so this bug is not visible in normal use.
+`j` must be `start + j`. Thus a track can change places with a track of the first groups of the source list. The code copies each group when it gets to it. Thus a track can occur two times in the result, and another track can be lost. The stock Settings menu does not set `+0x93`, so this bug is not visible on a stock iPod. The patch [shuffle-album-mix](#the-patch-shuffle-album-mix) sets `+0x93`, thus it needs `shuffle-fixes`.
 
 ### Bug 4: lists with more than 32767 tracks
 
@@ -479,6 +479,46 @@ In run 1, the row had no name, because the patch used the string 0x6057. Run 2 u
 
 Real iPod 5.5G (owner, 28 October 2026): version 1.2 operates.
 
+## Checks of the shuffle patches with a large library
+
+The aim: to find a fault in the shuffle patches with a large library below 32767 songs, at the end of a song.
+
+### Static checks of the shuffle patches
+
+The checks used the decompiled osos 1.3 and a scan of all `b` and `bl` instructions of osos 1.3 (29 October 2026).
+
+| Target | Calls (at) | Result |
+|---|---|---|
+| 0xe5978, the random index | 0x9460c, 0x946d8, 0x94758 | All 3 calls are in 0x94440. Thus the 4 changed words of `shuffle-fixes` do not change other code. |
+| 0xaf4b4, the generator | 0xe59c0 (`b`), 0x12d4e0 | The music shuffle and the card game (n ≤ 52). |
+| 0x94440, the shuffle | 0xb4128, 0xbb440 | 0xb40c4 and the smart playlist evaluation. |
+| 0xb40c4, start a shuffled play list | 0x9dd1c, 0x9e7ec, 0xb0d88, 0xb3748 | The 4 callers of the open question below. |
+| 0xa501c, the jump to the seed | 0xe59a0, 0xae080, 0x12d4bc, 0x16b124 | Only 0xe59a0 has the hook of `shuffle-fixes`. |
+
+| Item | Result |
+|---|---|
+| Counts, indexes and positions in 0x94440 and 0xb40c4 | 32-bit. 0xb40c4 writes the position to `item + 0x24` with a 32-bit store. |
+| The track count of the list | The halfword at root `+0x32`. The maximum is 65535. |
+| `shuffle-fixes` with n ≤ 32767 | The order is the stock order (refer to [Bugs 1 and 4](#bugs-1-and-4-4-changed-words)). |
+| The hook of Bug 3 (0x946d8) | It runs only with `+0x93` (Album Mix). Shuffle Songs does not use it. |
+| `up-next` | It changes the play list only in `hook_add`, at a hold of Select. Its other hooks give texts and the Settings item. It does nothing at the end of a song. Its count is a halfword and its positions are 32-bit. |
+| `shuffle-album-mix` | It changes only the Settings item, the main menu item and `+0x93`. It does nothing at the end of a song. |
+
+Result: the static checks found no fault in the shuffle patches for a library below 32767 songs.
+
+### A possible cause of a stop at the end of a song: the RAM
+
+- A 32 MB iPod (30 GB model) reaches its track limit at about 17,000 to 20,000 tracks (refer to [ram-limit.md](ram-limit.md)). A library of more than 15,000 tracks is near this limit.
+- The free heap stays at about 3 MB for all library sizes. A large buffer becomes smaller when the library becomes larger. It is probably the music buffer.
+- At the end of a song, the player loads the next song. If the load fails, playback stops.
+- A shuffle also uses heap: a copy of the list (4 bytes for each track) and the sorted arrays of slot 2. Patches such as `album-artists`, `album-art` and `cover-flow` also use heap.
+
+This cause is not proved. If a stop occurs, a test with the stock firmware on the same iPod must find if a patch is the cause.
+
+### A gap in the tests
+
+The real iPod test of `shuffle-fixes` 2.1 (28 October 2026, 50000 songs) used Next. The test steps in `patch.json` also used Next. No test let a song play to its end with a large library and shuffle on. Version 2.2 of `patch.json` adds this step.
+
 ## How to copy the algorithm exactly
 
 1. Use a 32-bit state and the Schrage form above. Use signed division that truncates toward zero.
@@ -529,6 +569,8 @@ The differences from the firmware:
 - Does the list of slot 1 contain the tracks with "skip when shuffling" (mhit byte 0xa5)? No code was found that reads this byte from the track data.
 - With Repeat All, does the firmware shuffle again at the end of the list? Real iPod (20 October 2026): one album with Album Mix and Repeat All plays with no end, and the songs stay shuffled. Not known: does each pass have a new order or the same order?
 - When Shuffle changes during playback, which caller of 0xb40c4 runs (0xb36b8, 0x9dc54, 0x9e710 or 0xb0d40)?
+- Does a 32 MB iPod near its track limit stop playback at the end of a song with shuffle on? Refer to [Checks of the shuffle patches with a large library](#checks-of-the-shuffle-patches-with-a-large-library).
+- A test on the real iPod with a large library: let a song play to its end with Shuffle Songs. Does the second song start?
 - The sort of 0xddf94 for slot 6 when the database has no album index (0x1174b4 gives the compare).
 - A test on the real iPod: the same library on two starts must give two different orders.
 - Done: a Shuffle value that sets `+0x93` (shuffle the songs in each album too). The patch [shuffle-album-mix](#the-patch-shuffle-album-mix) adds the value "Album Mix". The notes below are the research before the patch.

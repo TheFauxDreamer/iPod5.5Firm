@@ -724,7 +724,7 @@ Thus the click always takes the path without the headphones bit. The size on the
 
 With 32767 songs or fewer, the order for a given seed is the same as without the patch, except in the rare case of Bug 1.
 
-The fix of Bug 3 is only half of the work. The Settings menu has no item that sets `+0x93`. The patch [shuffle-album-mix](#shuffle-album-mix) adds this item.
+The stock Settings menu has no item that sets `+0x93`. The patch [shuffle-album-mix](#shuffle-album-mix) adds this item.
 
 **Research.** Refer to [re/shuffle.md](../re/shuffle.md#the-patch-shuffle-fixes).
 
@@ -751,7 +751,7 @@ The `bytes` key changes 4 instruction words:
 
 The card game deck shuffle `0x12d494` also uses `0xaf4b4` and `0x55c`. It cuts its own n to 16 bits, n is a maximum of 52, and it has its own call of `0x55c`. Thus the card game does not change.
 
-**Test status.** Emulator (20 October 2026). Version 1.0: with 60 tracks, the order is the same as the stock firmware; with 40000 tracks, the shuffle completes and the state agrees with the model. Version 2.0, 60 tracks: the seed 0 of the emulator becomes 1; a fixed seed gives the stock order; the inner album shuffle (a test firmware sets `+0x93`) gives the first tracks of the model. The emulator has no audio, thus it cannot play the songs. Real iPod 5.5G (owner, 28 October 2026, version 2.1): the patch operates.
+**Test status.** Emulator (20 October 2026). Version 1.0: with 60 tracks, the order is the same as the stock firmware; with 40000 tracks, the shuffle completes and the state agrees with the model. Version 2.0, 60 tracks: the seed 0 of the emulator becomes 1; a fixed seed gives the stock order; the inner album shuffle (a test firmware sets `+0x93`) gives the first tracks of the model. The emulator has no audio, thus it cannot play the songs. Real iPod 5.5G (owner, 28 October 2026, version 2.1): the patch operates. That test used Next. A song that plays to its end with a large library is not tested. Static checks with a large library found no fault (refer to [re/shuffle.md](../re/shuffle.md#checks-of-the-shuffle-patches-with-a-large-library)).
 
 ## shuffle-album-mix
 
