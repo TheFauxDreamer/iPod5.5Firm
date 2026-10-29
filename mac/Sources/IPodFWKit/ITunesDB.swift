@@ -251,6 +251,22 @@ public enum ITunesDB {
     /// Read the name and the track IDs of each playlist in an iTunesDB, in the order of the
     /// database. The master playlist (the whole library) is not included.
     public static func readPlaylists(_ db: [UInt8]) -> [(name: String, trackIDs: [UInt32])] {
+        readPlaylistEntries(db).map { ($0.name, $0.trackIDs) }
+    }
+
+    /// A playlist of an iTunesDB.
+    public struct PlaylistEntry: Identifiable, Equatable {
+        public var name: String
+        /// The persistent ID (mhyp +0x1c). The firmware keeps it at playlist + 0x18.
+        public var persistentID: UInt64
+        public var trackIDs: [UInt32]
+        /// A podcast playlist (mhyp +0x2a). The Playlists list of the iPod does not show it.
+        public var isPodcast: Bool
+        public var id: UInt64 { persistentID }
+    }
+
+    /// The playlists of an iTunesDB, in the order of the database, without the master playlist.
+    public static func readPlaylistEntries(_ db: [UInt8]) -> [PlaylistEntry] {
         guard db.count > 12, Array(db[0..<4]) == Array("mhbd".utf8) else { return [] }
         var p = Int(le32(db, 4))
         while p + 16 <= db.count, String(decoding: db[p..<p + 4], as: UTF8.self) == "mhsd" {
@@ -264,9 +280,9 @@ public enum ITunesDB {
         return []
     }
 
-    static func readPlaylistList(_ db: [UInt8], from start: Int, to end: Int) -> [(name: String, trackIDs: [UInt32])] {
+    static func readPlaylistList(_ db: [UInt8], from start: Int, to end: Int) -> [PlaylistEntry] {
         guard start + 12 <= end, String(decoding: db[start..<start + 4], as: UTF8.self) == "mhlp" else { return [] }
-        var out: [(String, [UInt32])] = []
+        var out: [PlaylistEntry] = []
         var p = start + Int(le32(db, start + 4))
         for _ in 0..<Int(le32(db, start + 8)) {
             guard p + 21 <= end, String(decoding: db[p..<p + 4], as: UTF8.self) == "mhyp" else { break }
@@ -282,7 +298,11 @@ public enum ITunesDB {
                 if tag == "mhip", q + 28 <= end { ids.append(le32(db, q + 24)) }
                 q += len
             }
-            if !hidden { out.append((name, ids)) }
+            if !hidden {
+                let pid = hlen >= 0x24 ? UInt64(le32(db, p + 0x1c)) | UInt64(le32(db, p + 0x20)) << 32 : 0
+                let podcast = hlen >= 0x2c && (UInt16(db[p + 0x2a]) | UInt16(db[p + 0x2b]) << 8) != 0
+                out.append(PlaylistEntry(name: name, persistentID: pid, trackIDs: ids, isPodcast: podcast))
+            }
             p += total
         }
         return out

@@ -308,6 +308,7 @@ The app writes these files on the mounted iPod volume. A patch can also write fi
 | `iPod_Control/Device/Preferences` (only byte 0x8b) | A flash or restore of a firmware without `shuffle-album-mix`: Album Mix off. Refer to [safety.md](safety.md). | The iPod firmware (its settings) |
 | `iPod_Control/iTunes/iPodFirmPlaylistArt/*.png` | "Choose Image…" in Playlist Artwork | iPodFirm (the next thumbnail file) |
 | `iPod_Control/iTunes/iPodFirmDarkMode` | The `dark-mode` patch on the iPod | `dark-mode` patch |
+| `iPod_Control/iTunes/iPodFirmPlaylistFolders` | "Write Folders to iPod" in Playlist Folders. The app removes the file if there are no folders. | `playlist-folders` patch, the Playlist Folders section of the app |
 | `iPod_Control/iTunes/iPodFirmHoldSelect` | The `up-next` patch on the iPod (Settings > Hold Select) | `up-next` and `cover-flow` patches |
 | `iPod_Control/iTunes/iPodFirmUSBProbe`, `iPod_Control/iTunes/iPodFirmUSBLog` | "Start the Probe at the Next Restart" (`ui.actions` of `usb-host-probe`) | `usb-host-probe` patch, "Show USB Log" |
 

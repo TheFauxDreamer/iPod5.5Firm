@@ -1,0 +1,56 @@
+{
+  "name": "playlist-folders",
+  "title": "Playlist Folders",
+  "summary": "Puts playlists into folders in the Playlists list.",
+  "symbol": "folder",
+  "category": "display",
+  "version_letter": "o",
+  "version": "0.2",
+  "size": 5444,
+  "description": "The Playlists list shows folders and the playlists that are not in a folder. Select a folder to see its playlists. Make the folders in the app.",
+  "details": [
+    "Make, rename and delete folders in the Playlist Folders section of this patch.",
+    "Put each playlist into one folder, or into no folder.",
+    "Select the position of the folders: at the top of the list or in alphabetical order with the playlists.",
+    "On the iPod, select a folder to see its playlists. Push Menu to go back to the Playlists list.",
+    "A folder cannot contain a folder."
+  ],
+  "notes": [
+    "This is a test version.",
+    "The app writes the folders into the file iPod_Control/iTunes/iPodFirmPlaylistFolders. The iTunes database does not change.",
+    "A folder opens on the same screen, without the slide animation. The title stays \"Playlists\".",
+    "A folder without playlists on the iPod does not show."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "count_original": "0x9e008",
+    "name_original": "0x9cf90",
+    "select_original": "0xb29b0",
+    "otg_original": "0xa39c4",
+    "browser_main": "0x9bc6c",
+    "view_invalidate": "0x21ac04",
+    "fw_alloc": "0x25a974",
+    "fw_free": "0x25a8e4",
+    "fw_memset0": "0x7ccd0",
+    "fw_strcpy": "0x7cd6c",
+    "file_open": "0x8f38c",
+    "file_read": "0x8f464",
+    "file_close": "0x8f184",
+    "vmax_continue": "0x1ea664",
+    "ui_continue": "0x1d81d0"
+  },
+  "hooks": [
+    { "kind": "bl", "at": "0x1ea66c", "expect": "0xebface65", "to": "hook_count" },
+    { "kind": "bl", "at": "0x1ec914", "expect": "0xebfac19d", "to": "hook_name" },
+    { "kind": "bl", "at": "0x1e7e7c", "expect": "0xebfb2acb", "to": "hook_select" },
+    { "kind": "bl", "at": "0x254cc4", "expect": "0xebf93b3e", "to": "hook_otg" },
+    { "kind": "b", "at": "0x1ea660", "expect": "0xe92d4010", "to": "hook_vmax" },
+    { "kind": "word", "at": "0x6772c0", "expect": "0x0023b704", "to": "hook_list_event", "chain": "list_event" },
+    { "kind": "b", "at": "0x1d81cc", "expect": "0xe92d41f0", "to": "hook_ui_event" }
+  ],
+  "ui": { "tools": ["playlist-folders"] }
+}

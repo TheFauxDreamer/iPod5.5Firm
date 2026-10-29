@@ -141,6 +141,12 @@ final class AppModel: ObservableObject {
     @Published var playlistArt: [MusicImport.PlaylistArt] = []
     /// True after a change to a playlist image that is not yet in the thumbnail file on the iPod.
     @Published var playlistArtChanged = false
+    /// The playlists of the connected iPod that can go into a folder (playlist-folders patch).
+    @Published var folderPlaylists: [ITunesDB.PlaylistEntry] = []
+    /// The folders in the editor, and the folders in the file on the iPod.
+    @Published var playlistFolders = PlaylistFolders()
+    @Published var savedPlaylistFolders = PlaylistFolders()
+    @Published var playlistFoldersStatus: String?
     @Published var helperSetupError: String?
     @AppStorage("requireTouchID") var requireTouchID = true
     @Published var showFullDiskAccessHelp = false
@@ -1093,6 +1099,56 @@ final class AppModel: ObservableObject {
             playlistArtChanged = true
             await loadPlaylists()
         } catch { fail("Cannot remove the playlist image", error) }
+    }
+
+    // MARK: playlist folders
+
+    /// Read the playlists and the folder file of the connected iPod.
+    func loadPlaylistFolders() async {
+        guard let volume = ipodMusicVolume() else {
+            folderPlaylists = []
+            playlistFolders = PlaylistFolders()
+            savedPlaylistFolders = PlaylistFolders()
+            return
+        }
+        let r = await Task.detached(priority: .userInitiated) { () -> ([ITunesDB.PlaylistEntry], PlaylistFolders) in
+            let db = (try? Data(contentsOf: volume.appendingPathComponent("iPod_Control/iTunes/iTunesDB"))).map { [UInt8]($0) } ?? []
+            return (ITunesDB.readPlaylistEntries(db).filter { !$0.isPodcast }, PlaylistFolders.read(volume: volume))
+        }.value
+        folderPlaylists = r.0
+        var folders = r.1
+        folders.removeMissing(Set(r.0.map(\.persistentID)))
+        savedPlaylistFolders = r.1
+        playlistFolders = folders
+        playlistFoldersStatus = nil
+    }
+
+    /// The problems that stop a write of the folders.
+    var playlistFolderProblems: [String] {
+        playlistFolders.problems(playlistNames: folderPlaylists.map(\.name))
+    }
+
+    /// Write the folder file to the iPod.
+    func writePlaylistFolders() async {
+        guard let volume = ipodMusicVolume() else {
+            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            return
+        }
+        let folders = playlistFolders
+        // Saved for later: the folder colours. The app wrote the thumbnail file again, so that
+        // the folders got their colour squares. The squares did not show on the real iPod.
+        // Refer to re/playlist-folders.md, "Folder colours".
+        // let art = volume.appendingPathComponent("iPod_Control/iTunes/\(AlbumArt.fileName)")
+        // let hasArt = FileManager.default.fileExists(atPath: art.path)
+        do {
+            try await work("Writing the playlist folders to the iPod…") {
+                try folders.write(volume: volume)
+                // if hasArt { _ = try MusicImport.writeThumbnails(volume: volume) }
+            }
+            savedPlaylistFolders = folders
+            let time = Date().formatted(date: .abbreviated, time: .shortened)
+            playlistFoldersStatus = "The iPod has \(folders.folders.count) folder(s) (\(time)). Eject the iPod to see the change."
+        } catch { fail("Cannot write the playlist folders", error) }
     }
 
     // MARK: pictures
