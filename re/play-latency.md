@@ -200,4 +200,4 @@ Before this change, the time was fixed. The sections above describe the fixed ti
 - The check gap of `flash-wake-on-input` is `wake_ms * 1000`. The maximum, 3,600,000,000 µs, is less than 2^32.
 - With a short time, the first song after a pause can start late again. The storage must then start, which takes 3–6 s.
 
-Test: the firmware builds and the patcher tests pass. No test on a real iPod yet.
+Test: the firmware builds and the patcher tests pass. Real iPod 5.5G (30 October 2026, app 0.1.189): the iPod starts and plays with the patch at 0x736480. The iPodFirm list has no `time` value, thus the build used the default of 30 minutes. A short time and Sleep are not tested.

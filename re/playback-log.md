@@ -104,7 +104,7 @@ The patch keeps the text of the magic with each byte XOR 0x55. Thus the search d
 | Value | Source | Result |
 |---|---|---|
 | Shuffle | `0x9edb0(app)`, and `+0x93` for Album Mix | Off, Songs, Albums, Album Mix |
-| Repeat | `0x9e96c(app)`: settings `+0x1c`, 1 → 2 and 2 → 1 | 0, 1 or 2. The controller keeps it at `+0x1d`, next to Shuffle. The text Off, One, All is not proved yet: a real iPod must confirm it. |
+| Repeat | `0x9e96c(app)`: settings `+0x1c`, 1 → 2 and 2 → 1 | 0, 1 or 2. The controller keeps it at `+0x1d`, next to Shuffle. Off and All are proved on a real iPod (fourth log). One is not proved yet. |
 | Hold Select | The first character of `iPod_Control\iTunes\iPodFirmHoldSelect` | On-The-Go, Play Next, Play Last, Cover Flow. No file: "not known". |
 
 The app is `settings_object() + 0x98`, the method of `shuffle-album-mix`. Only the UI task reads the settings. Shuffle and Repeat come from RAM at a button or wheel event, at most one time each 5 s. The patch reads the file of `up-next` only before a file write, so that a wheel event does not start the disk. A changed value gives a line `settings ...`. Thus the time of a change in Hold Select is the time of the next file write, not the time of the change.
@@ -151,7 +151,7 @@ The owner ran a build of version 1.1 on the same iPod on 30 October 2026 (app 0.
 
 | Item | Result |
 |---|---|
-| The settings | Shuffle and Hold Select show correctly, and a change gives a timed line. Only `repeat=Off` occurred, so One and All are still not proved. |
+| The settings | Shuffle and Hold Select show correctly, and a change gives a timed line. Only `repeat=Off` occurred. |
 | The end of a song | 3 more ends, all with `play end result=0`: Album Mix, Songs and Songs. |
 | The first shuffle with Album Mix after a start | 2735 ms. Songs took 28 ms and 30 ms. |
 | The lowest free heap | 1,935,588 bytes. No failed allocation. |
@@ -163,6 +163,21 @@ The patch does not record the Previous button. In the log, the position goes bac
 ### The third log
 
 Version 1.2 on the same iPod, 30 October 2026 (app 0.1.187). The music did not stop. 2 more ends of a song gave `play end result=0`. Each `song=` was 0. Version 1.3 corrects this (refer to [The song](#the-song-version-11)).
+
+### The fourth log
+
+Version 1.3 on the same iPod, 30 October 2026 (app 0.1.189, 17 patches, with `flash-keep-awake` 1.2 and `flash-wake-on-input` 1.3). The music did not stop. The log had 48 lines, no dropped line and no failed allocation.
+
+| Item | Result |
+|---|---|
+| `song=` | The values are correct. Each value agrees with a track of the iTunesDB, thus version 1.3 corrects the fault of the third log. |
+| Shuffle Songs, 5202 songs | 28 ms, `empty=0 repeated=0`. |
+| The lowest free heap | 2,019,040 bytes. |
+| `repeat=All` | The owner confirmed that the iPod had Repeat All. |
+| The first end of a song (position 2) | `next from=ac22c` 296.4 s after `play`. The file is 296.35 s. This is a correct end of a song. |
+| Two other ends (positions 1 and 8) | `next from=ac22c` 33.4 s and 20.9 s after `play`. The files are 165.4 s and 198.6 s. |
+
+The owner fast-forwarded some songs to the end to test the change to the next song. This explains the two short times, and it shows that a fast-forward to the end uses the path of the end of a song. The patch does not record a seek. Thus the log cannot show which songs the owner fast-forwarded.
 
 ### A fault in the log
 

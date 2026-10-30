@@ -291,7 +291,7 @@ The large artwork in Now Playing does not come from the patch. RetailOS reads `i
 
 Outside a forced sleep, `hook_power_test` calls the Apple test 0x1ecc8c.
 
-**Test status.** In the emulator, the hook ran and the firmware wrote the cache to the disk (ATA 0xCA). Then 0xb43dc turned the display off. The emulator does not model the hardware sleep, so the test stops there. The settings were kept after a restart. Real iPod 5.5G (owner, 28 October 2026, version 1.2): the patch operates. Version 1.3 (selected time): not tested on a real iPod.
+**Test status.** In the emulator, the hook ran and the firmware wrote the cache to the disk (ATA 0xCA). Then 0xb43dc turned the display off. The emulator does not model the hardware sleep, so the test stops there. The settings were kept after a restart. Real iPod 5.5G (owner, 28 October 2026, version 1.2): the patch operates. Version 1.3 (selected time), real iPod 5.5G (30 October 2026, app 0.1.189): the iPod starts and plays. The build used the default time. A short time is not tested.
 
 ## flash-keep-awake
 
@@ -341,7 +341,7 @@ The fix has two parts: hook 1 does not change 0, 1 or 0xffffffff, and hook 3 ign
 - The emulator cannot sleep. Thus hook 2 and hook 3 have no full test in the emulator.
 - The owner reported slower scroll in lists with this patch. The emulator showed that the patch code does not run during a scroll. The cause is not known.
 
-**Test status.** The 2-minute version of hook 1 was tested on a real iPod (2 October 2026). Real iPod 5.5G (owner, 28 October 2026, version 1.1, with hooks 2, 3 and 5): the patch operates. Version 1.2 (selected time, new load address): not tested on a real iPod.
+**Test status.** The 2-minute version of hook 1 was tested on a real iPod (2 October 2026). Real iPod 5.5G (owner, 28 October 2026, version 1.1, with hooks 2, 3 and 5): the patch operates. Version 1.2 (selected time, new load address), real iPod 5.5G (30 October 2026, app 0.1.189, with 17 patches): the iPod starts and plays. The build used the default time. A short time and Sleep are not tested.
 
 ## flash-wake-on-input
 
@@ -371,7 +371,7 @@ The fix has two parts: hook 1 does not change 0, 1 or 0xffffffff, and hook 3 ign
 
 The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 minutes).
 
-**Test status.** Emulator: one button push turned on the storage power 0.05 ms later. 60 wheel steps did not run the hook. Real iPod 5.5G (owner, 28 October 2026, version 1.2): the patch operates. Version 1.3 (selected time): not tested on a real iPod.
+**Test status.** Emulator: one button push turned on the storage power 0.05 ms later. 60 wheel steps did not run the hook. Real iPod 5.5G (owner, 28 October 2026, version 1.2): the patch operates. Version 1.3 (selected time), real iPod 5.5G (30 October 2026, app 0.1.189): the iPod starts and plays. The build used the default time. A short time is not tested.
 
 ## cover-flow
 
