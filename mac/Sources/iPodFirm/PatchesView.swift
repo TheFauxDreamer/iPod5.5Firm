@@ -49,7 +49,7 @@ struct SpaceUseRow: View {
                         Text("Space for the theme and the patches: \(kb(s.used)) of \(kb(s.total)) used, \(kb(s.total - s.used)) free.")
                     } else {
                         Label("The firmware is too large by \(kb(s.end - Patcher.SpaceUse.limit)). Switch off a patch, or choose Light.", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
+                            .labelStyle(StatusLabelStyle(tint: .red))
                     }
                 }
             } else if model.editor != nil {
@@ -465,7 +465,7 @@ struct PatchDetail: View {
                 if patch.spec.isTest { TestPatchWarning() }
                 if let caution = patch.spec.caution {
                     Label(caution, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                        .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
                 }
                 PatchSwitch(patch: patch, label: "Include in Firmware")
                     .help("iPodFirm includes the turned-on patches when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.")
@@ -483,7 +483,7 @@ struct PatchDetail: View {
                 ForEach(model.conflicts(patch), id: \.0.id) { other, place in
                     Label("Changes the same place as \"\(other.spec.displayTitle)\" (\(place)). You cannot turn on the two patches together.",
                           systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                        .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
                 }
                 LabeledContent("Version", value: patch.spec.versionText)
                 LabeledContent("Size on iPod", value: patch.spec.sizeText)
@@ -521,7 +521,7 @@ struct IPodMarkLabel: View {
     var body: some View {
         Label(long ? mark.help : mark.title, systemImage: symbol)
             .font(long ? .callout : .caption)
-            .foregroundStyle(color)
+            .labelStyle(StatusLabelStyle(tint: color))
             .fixedSize(horizontal: false, vertical: true)
             .help(mark.help)
     }
@@ -556,15 +556,15 @@ struct IPodSyncBanner: View {
                     let diff = model.ipodDifferences
                     if diff.isEmpty && !model.ipodAppearanceDiffers {
                         Label("The switches agree with the iPod.", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                            .labelStyle(StatusLabelStyle(tint: .green))
                     } else {
                         Label(differenceText(diff), systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
+                            .labelStyle(StatusLabelStyle(tint: .orange))
                         HStack {
                             Button("Match iPod") { model.matchIPod() }
                                 .help("Set the switches to the patches on the iPod.")
-                            Button("Flash…") { model.section = .ipod; Task { await model.flashEdited() } }
-                                .disabled(model.editor == nil)
+                            Button("Flash to iPod…") { model.section = .ipod; Task { await model.flashEdited() } }
+                                .disabled(!model.canFlash)
                                 .help(model.editor == nil ? "Open a firmware first." : "Write the firmware with the current switches to the iPod.")
                         }
                         .controlSize(.small)
@@ -626,7 +626,7 @@ struct PatchOptions: View {
                     }
                     if let caution = c.caution {
                         Label(caution, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                            .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Text("iPodFirm uses this choice when you save, flash, export an .ipsw or run the emulator. To change the iPod, flash it again.")
@@ -693,6 +693,15 @@ struct FormFooter: View {
     }
 }
 
+/// A status: the symbol has the color, and the text stays primary so that it is easy to read.
+struct StatusLabelStyle: LabelStyle {
+    let tint: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        Label { configuration.title } icon: { configuration.icon.foregroundStyle(tint) }
+    }
+}
+
 /// The firmware and storage checks of a patch.
 struct PatchCompatibility: View {
     @EnvironmentObject var model: AppModel
@@ -704,21 +713,21 @@ struct PatchCompatibility: View {
             Label("Open a firmware to examine this patch.", systemImage: "info.circle").foregroundStyle(.secondary)
         } else if model.isCompatible(patch) {
             Label("Agrees with the open firmware.", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .labelStyle(StatusLabelStyle(tint: .green))
         } else {
             Label("Does not agree with the open firmware. The patch is only for the original Apple firmware of its target. iPodFirm does not apply it.",
                   systemImage: "xmark.octagon.fill")
-                .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
         }
         if let warning = patch.spec.hdd_warning {
             if let gb = model.currentIPod?.likelyOriginalHDD {
                 Label("The connected iPod has approximately \(gb) GB. This is the size of an original hard drive. \(warning)",
                       systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                    .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
             } else if let ipod = model.currentIPod {
                 Label("The connected iPod has \(ByteCountFormatter.string(fromByteCount: ipod.size, countStyle: .decimal)). No original iPod drive has this size, thus the storage is flash.",
                       systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green).fixedSize(horizontal: false, vertical: true)
+                    .labelStyle(StatusLabelStyle(tint: .green)).fixedSize(horizontal: false, vertical: true)
             } else {
                 Label("Connect the iPod to examine its storage.", systemImage: "info.circle").foregroundStyle(.secondary)
             }
@@ -784,10 +793,10 @@ struct AppearanceDetail: View {
                     if model.editor != nil {
                         if model.isCompatible(current.theme) {
                             Label("Agrees with the open firmware (iPod Video 1.3).", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
+                                .labelStyle(StatusLabelStyle(tint: .green))
                         } else {
                             Label("Does not agree with the open firmware. The theme is only for the original Apple firmware 1.3.",
-                                  systemImage: "xmark.octagon.fill").foregroundStyle(.orange)
+                                  systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .orange))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -844,7 +853,7 @@ struct VersionDetail: View {
                     TextField("Version", text: $model.customVersion, prompt: Text("1.3.1"))
                     if FirmwareVersion(model.customVersion) == nil {
                         Label("This version is not valid. Use the format 1.3 or 1.3.1. The first number is 0–255. The other numbers are 0–15. The firmware keeps version 1.3.",
-                              systemImage: "xmark.octagon.fill").foregroundStyle(.orange)
+                              systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .orange))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -852,7 +861,7 @@ struct VersionDetail: View {
                 LabeledContent("About screen", value: model.activeVersion?.description ?? "1.3")
                 if let v = model.activeVersion, v.description.count > FirmwareVersion.maxTextLength {
                     Label("This version has more than \(FirmwareVersion.maxTextLength) characters. The About screen cannot show it. Switch off some patches or the letters.",
-                          systemImage: "xmark.octagon.fill").foregroundStyle(.orange)
+                          systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .orange))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } header: {

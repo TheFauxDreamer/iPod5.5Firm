@@ -51,11 +51,19 @@ struct StringsView: View {
                 TableColumn("ID") { row in Text(row.key).monospacedDigit().foregroundStyle(.secondary) }
                     .width(min: 50, ideal: 60, max: 80)
                 TableColumn("Text") { row in
-                    TextField("", text: Binding(
-                        get: { draft[row.key] ?? row.original },
-                        set: { draft[row.key] = $0 }))
-                    .textFieldStyle(.plain)
-                    .foregroundStyle((draft[row.key] ?? row.original) != row.original ? Color.accentColor : .primary)
+                    let changed = (draft[row.key] ?? row.original) != row.original
+                    HStack {
+                        TextField("", text: Binding(
+                            get: { draft[row.key] ?? row.original },
+                            set: { draft[row.key] = $0 }))
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(changed ? Color.accentColor : .primary)
+                        .accessibilityLabel("Text \(row.key)")
+                        if changed {
+                            Image(systemName: "pencil").foregroundStyle(.secondary)
+                                .help("Changed").accessibilityLabel("Changed")
+                        }
+                    }
                 }
             }
             Divider()
@@ -77,6 +85,8 @@ struct StringsView: View {
         }
         .onChange(of: blockIndex) { _, _ in reload() }
         .onChange(of: model.revision) { _, _ in reload() }
+        .onChange(of: changes.count) { _, count in model.pendingStringChanges = count }
+        .onDisappear { model.pendingStringChanges = 0 }
     }
 
     func reload() {
@@ -101,6 +111,8 @@ struct BudgetGauge: View {
                 .gaugeStyle(.accessoryLinearCapacity)
                 .tint(over ? .red : .accentColor)
                 .frame(width: 120)
+                .accessibilityLabel("Space used")
+                .accessibilityValue("\(used) of \(available) bytes")
             Text(over ? "\(used - available) bytes over" : "\(available - used) bytes free")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(over ? .red : .secondary)

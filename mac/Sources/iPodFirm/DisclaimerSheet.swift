@@ -39,7 +39,7 @@ struct DisclaimerSheet: View {
                     Button("Close") { dismiss() }
                         .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
                 } else {
-                    Button("Quit") { quit() }.keyboardShortcut(.cancelAction)
+                    Button("Quit") { quit() }
                     Button("Agree") {
                         acceptedVersion = Disclaimer.version
                         dismiss()

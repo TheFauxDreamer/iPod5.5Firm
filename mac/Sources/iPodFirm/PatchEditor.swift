@@ -99,7 +99,7 @@ struct PatchEditorSheet: View {
             .formStyle(.grouped)
             .frame(height: 470)
             ForEach(problems, id: \.self) { p in
-                Label(p, systemImage: "xmark.octagon.fill").foregroundStyle(.red).font(.callout)
+                Label(p, systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .red)).font(.callout)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack {

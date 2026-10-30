@@ -41,7 +41,7 @@ extension AppModel {
                 alert = AlertInfo(title: "Patch Saved",
                                   message: "The patch is now version \(version). Flash the iPod again to put the new code on it.")
             }
-        } catch { fail("Cannot save the patch", error) }
+        } catch { fail("Cannot Save the Patch", error) }
     }
 
     func revertCode(_ patch: PatchInfo) {
@@ -133,6 +133,7 @@ struct PatchCodeSections: View {
                     .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                     .disabled((check?.functions ?? []).isEmpty)
                     .help("Select a function of the code. Click Check Code first.")
+                    .accessibilityLabel("Select Function")
                     RemoveButton { code.wrappedValue.hooks.remove(at: i) }
                 }
                 .labelsHidden()
@@ -179,11 +180,11 @@ struct PatchCodeSections: View {
             if let check {
                 if check.isOK {
                     Label("The code is correct. Size on iPod: \(PatchSpec.byteText(check.size ?? 0)).", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                        .labelStyle(StatusLabelStyle(tint: .green))
                 }
                 ForEach(check.errors, id: \.self) { e in
                     Label { Text(e).monospaced(e.contains("\n")).textSelection(.enabled) } icon: { Image(systemName: "xmark.octagon.fill") }
-                        .foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                        .labelStyle(StatusLabelStyle(tint: .red)).fixedSize(horizontal: false, vertical: true)
                 }
             }
             HStack {
@@ -201,7 +202,7 @@ struct PatchCodeSections: View {
 private struct RemoveButton: View {
     let action: () -> Void
     var body: some View {
-        Button(action: action) { Image(systemName: "minus.circle") }.buttonStyle(.borderless).help("Remove")
+        Button(action: action) { Image(systemName: "minus.circle") }.buttonStyle(.borderless).help("Remove").accessibilityLabel("Remove")
     }
 }
 
@@ -211,6 +212,7 @@ private struct ReadButton: View {
     var body: some View {
         Button(action: action) { Image(systemName: "wand.and.stars") }.buttonStyle(.borderless)
             .disabled(!enabled).help("Read \"expect\" from the open firmware")
+            .accessibilityLabel("Read Expect from Firmware")
     }
 }
 

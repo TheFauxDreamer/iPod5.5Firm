@@ -39,6 +39,8 @@ struct IPodFirmApp: App {
                 Button("Download Apple Firmware 1.3") { Task { await model.downloadAppleFirmware() } }
             }
             CommandGroup(replacing: .saveItem) {
+                Button("Save Firmware") { model.save() }.keyboardShortcut("s")
+                    .disabled(model.editor == nil)
                 Button("Save Firmware As…") { model.saveAs() }.keyboardShortcut("s", modifiers: [.command, .shift])
                     .disabled(model.editor == nil)
                 Button("Export as .ipsw…") { model.exportIPSW() }
@@ -56,25 +58,37 @@ struct IPodFirmApp: App {
             CommandMenu("iPod") {
                 Button("Flash to iPod…") { model.section = .ipod; Task { await model.flashEdited() } }
                     .keyboardShortcut("f", modifiers: [.command, .shift])
-                    .disabled(model.editor == nil)
+                    .disabled(!model.canFlash)
                 Button("Back Up iPod") { model.section = .ipod; Task { await model.backupNow() } }
-                    .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported)
+                    .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported || model.busy != nil)
                 Button("Eject iPod") { Task { await model.ejectIPod() } }
                     .keyboardShortcut("e")
-                    .disabled(model.currentIPod == nil)
+                    .disabled(model.currentIPod == nil || model.busy != nil)
                 Divider()
                 Button("Run in Emulator") { model.section = .emulator; model.runInEmulator(emulator, session) }
                     .keyboardShortcut("r")
                     .disabled(model.editor == nil || !emulator.toolsReady)
             }
-            CommandGroup(after: .help) {
+            SidebarCommands()
+            CommandGroup(after: .sidebar) {
+                Divider()
+                ForEach(Array(([Pane.ipod] + Pane.tools).enumerated()), id: \.element) { i, pane in
+                    Button(pane.rawValue) { model.section = pane }
+                        .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")))
+                }
+            }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Task { await model.checkForUpdate(manual: true) } }
+            }
+            // The app has no help book. The default Help item only gives an error.
+            CommandGroup(replacing: .help) {
+                Button("iPodFirm Documentation") { NSWorkspace.shared.open(UpdateCheck.repository) }
+                Divider()
                 Button("Show Disclaimer") { model.showDisclaimerReview = true }
                 Button("Thanks…") { model.showThanks = true }
                 Divider()
                 Button("Save Log…") { model.saveLog() }
                 Button("Report a Problem on GitHub…") { model.reportOnGitHub(nil) }
-                Divider()
-                Button("Check for Updates…") { Task { await model.checkForUpdate(manual: true) } }
             }
         }
         Settings {
@@ -139,7 +153,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     Toggle("Check for a new version at launch", isOn: $model.checkForUpdates)
-                    Text("iPodFirm asks GitHub for the number of the newest release. It sends no data about you or your iPod. If GitHub has a newer version, a notification opens the release page. iPodFirm does not download the update. To check now, select Help > Check for Updates….")
+                    Text("iPodFirm asks GitHub for the number of the newest release. It sends no data about you or your iPod. If GitHub has a newer version, a notification opens the release page. iPodFirm does not download the update. To check now, select iPodFirm > Check for Updates….")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 } header: {
@@ -149,7 +163,7 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
         }
-        .frame(width: 560, height: 300)
+        .frame(width: 560, height: 380)
         .onAppear { model.recheckFullDiskAccess() }
         .sheet(isPresented: $showHelp) { FullDiskAccessSheet().environmentObject(model) }
     }
@@ -185,6 +199,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        model?.confirmQuit() == false ? .terminateCancel : .terminateNow
+    }
+}
+
+/// Connects the window to the unsaved work. The close button shows the dot of an edited document, and
+/// a close of the window asks before it loses work. SwiftUI owns the delegate of the window. Thus this
+/// delegate gets only windowShouldClose and sends all other calls to the delegate of SwiftUI.
+struct WindowGuard: NSViewRepresentable {
+    let edited: Bool
+    let shouldClose: () -> Bool
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        context.coordinator.shouldClose = shouldClose
+        let edited = edited
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.isDocumentEdited = edited
+            context.coordinator.attach(to: window)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(shouldClose: shouldClose) }
+
+    final class Coordinator: NSObject, NSWindowDelegate {
+        var shouldClose: () -> Bool
+        private var original: NSWindowDelegate?
+
+        init(shouldClose: @escaping () -> Bool) { self.shouldClose = shouldClose }
+
+        func attach(to window: NSWindow) {
+            guard window.delegate !== self else { return }
+            original = window.delegate
+            window.delegate = self
+        }
+
+        func windowShouldClose(_ sender: NSWindow) -> Bool {
+            guard shouldClose() else { return false }
+            return original?.windowShouldClose?(sender) ?? true
+        }
+
+        override func responds(to selector: Selector!) -> Bool {
+            super.responds(to: selector) || original?.responds(to: selector) == true
+        }
+
+        override func forwardingTarget(for selector: Selector!) -> Any? {
+            original?.responds(to: selector) == true ? original : nil
+        }
+    }
 }
 
 struct ContentView: View {
@@ -224,14 +290,19 @@ struct ContentView: View {
                     Button { model.saveAs() } label: { Label("Save As", systemImage: "square.and.arrow.down") }
                         .disabled(model.editor == nil).help("Save the changed firmware image")
                     Button { model.section = .ipod; Task { await model.flashEdited() } } label: {
-                        Label("Flash to iPod", systemImage: "bolt.horizontal.circle")
+                        Label("Flash to iPod…", systemImage: "bolt.horizontal.circle")
                     }
-                    .disabled(model.editor == nil).help("Make a backup of the iPod, then write this firmware to the iPod")
+                    .disabled(!model.canFlash).help("Make a backup of the iPod, then write this firmware to the iPod")
                 }
             }
         }
         .navigationTitle(title)
-        .overlay { if let busy = model.busy { BusyOverlay(text: busy) } }
+        .background(WindowGuard(edited: model.hasUnsavedWork) { model.confirmQuit() })
+        .overlay {
+            if let busy = model.busy {
+                BusyOverlay(text: busy, progress: model.downloadProgress, cancel: model.downloadTask.map { task in { task.cancel() } })
+            }
+        }
         .alert(model.alert?.title ?? "", isPresented: Binding(get: { model.alert != nil }, set: { if !$0 { model.alert = nil } }),
                presenting: model.alert) { a in
             // A fault gives two more choices: a report on GitHub, and the log as a file to share.
@@ -314,12 +385,22 @@ struct SidebarFooter: View {
 
 struct BusyOverlay: View {
     let text: String
+    /// The fraction that is complete, if the operation knows it.
+    var progress: Double?
+    /// The action of the Cancel button. A flash has no Cancel: a stop in the write damages the firmware.
+    var cancel: (() -> Void)?
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.25).ignoresSafeArea()
             VStack(spacing: 14) {
-                ProgressView()
+                if let progress {
+                    ProgressView(value: progress).frame(width: 220)
+                } else {
+                    ProgressView()
+                }
                 Text(text).multilineTextAlignment(.center)
+                if let cancel { Button("Cancel", action: cancel) }
             }
             .padding(28)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
@@ -339,7 +420,7 @@ struct WelcomeView: View {
                 Button("Open Firmware…") { model.openPanel() }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
                 Button("Download Apple Firmware 1.3") { Task { await model.downloadAppleFirmware() } }
-                Button("Back Up My iPod…") { model.section = .ipod }
+                Button("Go to iPod") { model.section = .ipod }
             }
             .controlSize(.large)
         }

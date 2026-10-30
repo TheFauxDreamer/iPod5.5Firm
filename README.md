@@ -48,7 +48,7 @@ Turn on Full Disk Access again after each update of the app. The app asks for yo
 
 At each launch, the app asks GitHub for the number of the newest release. If a newer version is available, macOS shows a notification. Click the notification to open the release page. Then download the ZIP file and install it as above. The app does not download or install the update.
 
-- To check at a different time, select Help > Check for Updates….
+- To check at a different time, select iPodFirm > Check for Updates….
 - To stop the check at launch, open iPodFirm > Settings > Updates. Then turn off "Check for a new version at launch".
 - To ignore one version, click **Skip This Version** in the notification.
 
@@ -58,14 +58,14 @@ The check sends no data about you or your iPod.
 
 1. Connect the iPod to the Mac.
 2. In iPodFirm, open the **iPod** pane. The app finds the iPod.
-3. Click **Back Up Now**. The app keeps the first backup as "Original (first backup)".
+3. Click **Back Up iPod**. The app keeps the first backup as "Original (first backup)".
 4. Open the Apple firmware. Select File > Download Apple Firmware 1.3, or click **Edit a Copy** on a backup.
 5. Open the **Patches** pane.
 6. Switch on the patches that you want.
 7. Open the **iPod** pane.
-8. Click **Flash Edited Firmware…**.
+8. Click **Flash to iPod…**.
 9. Read the list of changes. Then confirm.
-10. Click **Eject**. Then disconnect the iPod.
+10. Click **Eject iPod**. Then disconnect the iPod.
 
 To remove the changes, switch off all the patches. Then flash the firmware again.
 
@@ -285,7 +285,7 @@ The research of the games is in [re/games.md](re/games.md). This project does no
 
 The app does not come with the game files and does not download them. The games are not in the app and are not in the firmware of the iPod. The game files come from the iPod that bought them: iTunes or the Finder on a Mac puts purchased games on the iPod. To copy the games, keep the game folders in a folder on your Mac, or use a backup of the folder `iPod_Control` of an iPod that has the games.
 
-To put the games on an iPod, open the **Games** pane. Go to the section **Install Games**. Click **Select Games Folder...** and choose the folder with the games, or the folder `iPod_Control` of an iPod. The app accepts the name `games_RO` and the name `Games_RO` for the folder of the games. Thus the app works with a Windows iPod and with a macOS iPod. The pane shows each game with a switch. Click **Select All** or **Select None**, or click the switches of the games that you want. Then click **Install Games**. The app copies the selected games to the folder `games_RO` of the connected iPod. The app checks the size of each file of the manifest before the copy. The app skips a game that is not complete. The app never removes a file of the iPod during the copy.
+To put the games on an iPod, open the **Games** pane. Go to the section **Install Games**. Click **Select Games Folder...** and choose the folder with the games, or the folder `iPod_Control` of an iPod. The app accepts the name `games_RO` and the name `Games_RO` for the folder of the games. Thus the app works with a Windows iPod and with a macOS iPod. The pane shows each game with a switch. All games are selected at the start. Click **Select All** or **Select None**, or click the switches of the games that you want. Then click **Install Games**. The button is off when no game is selected. The app copies the selected games to the folder `games_RO` of the connected iPod. The app checks the size of each file of the manifest before the copy. The app skips a game that is not complete. The app never removes a file of the iPod during the copy.
 
 To remove games from an iPod, open the section **Remove Games** in the same pane. Click **Read the Games on the iPod**. The pane lists the GUID of each game in the folder `games_RO`. Select the games and click **Remove Selected Games…**. A sheet asks you to confirm. The removal deletes only the folder of each selected game in `games_RO`. The folders `gamedata_RW` and `gamestats_WO` hold the saves and the scores of the games. The removal does not touch them.
 
