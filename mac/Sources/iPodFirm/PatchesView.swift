@@ -563,7 +563,7 @@ struct IPodSyncBanner: View {
                         HStack {
                             Button("Match iPod") { model.matchIPod() }
                                 .help("Set the switches to the patches on the iPod.")
-                            Button("Flash…") { model.section = .ipod; Task { await model.flashEdited() } }
+                            Button("Flash to iPod…") { model.section = .ipod; Task { await model.flashEdited() } }
                                 .disabled(!model.canFlash)
                                 .help(model.editor == nil ? "Open a firmware first." : "Write the firmware with the current switches to the iPod.")
                         }

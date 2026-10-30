@@ -39,6 +39,8 @@ struct IPodFirmApp: App {
                 Button("Download Apple Firmware 1.3") { Task { await model.downloadAppleFirmware() } }
             }
             CommandGroup(replacing: .saveItem) {
+                Button("Save Firmware") { model.save() }.keyboardShortcut("s")
+                    .disabled(model.editor == nil)
                 Button("Save Firmware As…") { model.saveAs() }.keyboardShortcut("s", modifiers: [.command, .shift])
                     .disabled(model.editor == nil)
                 Button("Export as .ipsw…") { model.exportIPSW() }
@@ -67,14 +69,26 @@ struct IPodFirmApp: App {
                     .keyboardShortcut("r")
                     .disabled(model.editor == nil || !emulator.toolsReady)
             }
-            CommandGroup(after: .help) {
+            SidebarCommands()
+            CommandGroup(after: .sidebar) {
+                Divider()
+                ForEach(Array(([Pane.ipod] + Pane.tools).enumerated()), id: \.element) { i, pane in
+                    Button(pane.rawValue) { model.section = pane }
+                        .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")))
+                }
+            }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Task { await model.checkForUpdate(manual: true) } }
+            }
+            // The app has no help book. The default Help item only gives an error.
+            CommandGroup(replacing: .help) {
+                Button("iPodFirm Documentation") { NSWorkspace.shared.open(UpdateCheck.repository) }
+                Divider()
                 Button("Show Disclaimer") { model.showDisclaimerReview = true }
                 Button("Thanks…") { model.showThanks = true }
                 Divider()
                 Button("Save Log…") { model.saveLog() }
                 Button("Report a Problem on GitHub…") { model.reportOnGitHub(nil) }
-                Divider()
-                Button("Check for Updates…") { Task { await model.checkForUpdate(manual: true) } }
             }
         }
         Settings {
@@ -139,7 +153,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     Toggle("Check for a new version at launch", isOn: $model.checkForUpdates)
-                    Text("iPodFirm asks GitHub for the number of the newest release. It sends no data about you or your iPod. If GitHub has a newer version, a notification opens the release page. iPodFirm does not download the update. To check now, select Help > Check for Updates….")
+                    Text("iPodFirm asks GitHub for the number of the newest release. It sends no data about you or your iPod. If GitHub has a newer version, a notification opens the release page. iPodFirm does not download the update. To check now, select iPodFirm > Check for Updates….")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 } header: {
@@ -276,7 +290,7 @@ struct ContentView: View {
                     Button { model.saveAs() } label: { Label("Save As", systemImage: "square.and.arrow.down") }
                         .disabled(model.editor == nil).help("Save the changed firmware image")
                     Button { model.section = .ipod; Task { await model.flashEdited() } } label: {
-                        Label("Flash to iPod", systemImage: "bolt.horizontal.circle")
+                        Label("Flash to iPod…", systemImage: "bolt.horizontal.circle")
                     }
                     .disabled(!model.canFlash).help("Make a backup of the iPod, then write this firmware to the iPod")
                 }
@@ -392,7 +406,7 @@ struct WelcomeView: View {
                 Button("Open Firmware…") { model.openPanel() }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
                 Button("Download Apple Firmware 1.3") { Task { await model.downloadAppleFirmware() } }
-                Button("Back Up My iPod…") { model.section = .ipod }
+                Button("Go to iPod") { model.section = .ipod }
             }
             .controlSize(.large)
         }

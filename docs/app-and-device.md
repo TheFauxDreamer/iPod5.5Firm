@@ -39,9 +39,12 @@ The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
 | Menu | Commands |
 |---|---|
-| File | Open Firmware… (⌘O), Download Apple Firmware 1.3, Save Firmware As… (⇧⌘S), Export as .ipsw…, Export Pictures & Text…, Import Pictures & Text…, Import iPodWizard Theme…, New Patch…, Install Patch… |
+| File | Open Firmware… (⌘O), Download Apple Firmware 1.3, Save Firmware (⌘S), Save Firmware As… (⇧⌘S), Export as .ipsw…, Export Pictures & Text…, Import Pictures & Text…, Import iPodWizard Theme…, New Patch…, Install Patch… |
 | iPod | Flash to iPod… (⇧⌘F), Back Up iPod, Eject iPod (⌘E), Run in Emulator (⌘R) |
-| Help | Show Disclaimer, Thanks…, Check for Updates… |
+| View | Show Sidebar, and a command for each pane: iPod (⌘1), Firmware (⌘2), Pictures (⌘3), Text (⌘4), Patches (⌘5), Games (⌘6), Emulator (⌘7) |
+| Help | iPodFirm Documentation, Show Disclaimer, Thanks…, Save Log…, Report a Problem on GitHub… |
+
+The app menu has Check for Updates…. Save Firmware writes to the file of the last Save As. The first save shows the panel, because the app never overwrites the file that it opened.
 
 At the first launch, the app shows the disclaimer sheet (`DisclaimerSheet` in [DisclaimerSheet.swift](../mac/Sources/iPodFirm/DisclaimerSheet.swift)). The sheet gives the risk of a flash, the absence of a warranty and the Apple trademark notice. The user cannot close the sheet with Esc. The **Agree** button is available only after the user turns on the checkbox. **Agree** records `Disclaimer.version` in `acceptedDisclaimerVersion`. **Quit** stops the app. A `.ipodpatch` file that Finder opens waits until the user accepts the disclaimer. After a large change to the text, increase `Disclaimer.version`. Then each user must accept the disclaimer again. Help > Show Disclaimer shows the sheet again with only a **Close** button.
 
@@ -57,7 +60,7 @@ The app does not download or install an update. It only tells the user about a n
 4. If the release is newer and it is not `skippedUpdateVersion`, the app posts a macOS notification. macOS asks the user one time to allow notifications.
 5. A click on the notification or on **Open GitHub** opens the release page in the browser. **Skip This Version** writes the version into `skippedUpdateVersion`.
 
-If the user does not allow notifications, the app shows an alert with the same buttons and **Later**. At the launch, a network error gives no message. Help > Check for Updates… does the same check, but it ignores `skippedUpdateVersion`. It also shows an alert if the app is up to date or if the check fails. The tests `testUpdateVersionCompare` and `testUpdateReleaseParse` check the comparison and the JSON decode.
+If the user does not allow notifications, the app shows an alert with the same buttons and **Later**. At the launch, a network error gives no message. iPodFirm > Check for Updates… does the same check, but it ignores `skippedUpdateVersion`. It also shows an alert if the app is up to date or if the check fails. The tests `testUpdateVersionCompare` and `testUpdateReleaseParse` check the comparison and the JSON decode.
 
 #### The log and the fault report
 
@@ -237,7 +240,7 @@ macOS blocks raw disk access without Full Disk Access. The app tests the permiss
 
 ## The flash sequence
 
-1. "Flash Edited Firmware…" builds the partition (refer to [modifications.md](modifications.md#the-build-sequence)) and writes it to `~/Library/Application Support/iPodFirm/Staging/flash.bin`.
+1. "Flash to iPod…" builds the partition (refer to [modifications.md](modifications.md#the-build-sequence)) and writes it to `~/Library/Application Support/iPodFirm/Staging/flash.bin`.
 2. The app makes sure that MiMusic does not write to the iPod (refer to [safety.md](safety.md#the-checks-before-a-flash)).
 3. The app runs the helper with `--dry-run`. The helper does all the checks and returns the block ranges that it will write. It writes nothing.
 4. If the iPod firmware is damaged and the action is a restore, the app tries the rescue restore with `--dry-run`.
@@ -311,7 +314,7 @@ The Patches pane shows the result:
 | URL | When | Check |
 |---|---|---|
 | `http://appldnld.apple.com.edgesuite.net/content.info.apple.com/iPod/SBML/osx/bundles/061-2967.20080313.Cnvkg/iPod_25.1.3.ipsw` | "Download Apple Firmware 1.3", and each action that needs the Apple file if no correct copy is cached. | SHA-256 must be `840b2480ad5b692c098cb772c3d2bf8f58bf37557788782b596ac01c27ecdc32`. Apple serves this file only over HTTP, so `Info.plist` has an App Transport Security exception for this domain. |
-| `https://api.github.com/repos/TheFauxDreamer/iPod5.5Firm/releases/latest` | At each launch if Settings > Updates > "Check for a new version at launch" is on. Help > Check for Updates…. | TLS 1.2 or later. HTTP status 200 and JSON with `tag_name` and `html_url`. The app compares `tag_name` (without the `v`) with `CFBundleShortVersionString`. If the release is newer, the notification opens `html_url` in the browser. The app does not download the update. |
+| `https://api.github.com/repos/TheFauxDreamer/iPod5.5Firm/releases/latest` | At each launch if Settings > Updates > "Check for a new version at launch" is on. iPodFirm > Check for Updates…. | TLS 1.2 or later. HTTP status 200 and JSON with `tag_name` and `html_url`. The app compares `tag_name` (without the `v`) with `CFBundleShortVersionString`. If the release is newer, the notification opens `html_url` in the browser. The app does not download the update. |
 | `https://github.com/TheFauxDreamer/iPod5.5Firm/issues/new?title=…&body=…` | "Report on GitHub…" in the alert of a fault. Help > Report a Problem on GitHub…. | The app does not connect. It opens the address in the browser (`NSWorkspace.open`). The body has the fault, the full error, the last steps and the state of the app (`AppLog.issueURL`). It has a maximum of 3500 characters. The app cuts the end of a longer text. The user must sign in to GitHub and attach the saved log file. |
 | `https://github.com/TheFauxDreamer/iPod5.5Firm/issues/new?title=…&body=…` | Patches > Playback Log > "Report on GitHub…". | The app does not connect. It opens the address in the browser (`NSWorkspace.open`). The body has the app version and the information lines of the playback log: the RAM, the free memory and the patches. It has a maximum of 1500 characters. The owner of the log must sign in to GitHub and attach the text file. |
 | `https://sh.rustup.rs` | "Install Emulator", only if `~/.cargo/bin/cargo` does not exist. | TLS 1.2 or later. |
@@ -380,7 +383,7 @@ The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not ch
 | `versionLettersOn` | The patch letters on the About screen. |
 | `requireTouchID` | Touch ID before a write (daemon mode). |
 | `checkForUpdates` | Settings > Updates > "Check for a new version at launch". The default is true. |
-| `skippedUpdateVersion` | The release version that the user skipped with **Skip This Version**. The check at launch shows no notification for this version. Help > Check for Updates… ignores it. |
+| `skippedUpdateVersion` | The release version that the user skipped with **Skip This Version**. The check at launch shows no notification for this version. iPodFirm > Check for Updates… ignores it. |
 | `ososMargin` | The empty margin below 8 MB: `current` (32 KB, limit 0x7F8000), `compact` (16 KB, limit 0x7FC000) or `previous` (64 KB, limit 0x7F0000). |
 | `emulatorLibrary`, `emulatorMusicFolder`, `emulatorSongCount` | The music library on the emulator drive. |
 

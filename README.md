@@ -48,7 +48,7 @@ Turn on Full Disk Access again after each update of the app. The app asks for yo
 
 At each launch, the app asks GitHub for the number of the newest release. If a newer version is available, macOS shows a notification. Click the notification to open the release page. Then download the ZIP file and install it as above. The app does not download or install the update.
 
-- To check at a different time, select Help > Check for Updates….
+- To check at a different time, select iPodFirm > Check for Updates….
 - To stop the check at launch, open iPodFirm > Settings > Updates. Then turn off "Check for a new version at launch".
 - To ignore one version, click **Skip This Version** in the notification.
 
@@ -58,14 +58,14 @@ The check sends no data about you or your iPod.
 
 1. Connect the iPod to the Mac.
 2. In iPodFirm, open the **iPod** pane. The app finds the iPod.
-3. Click **Back Up Now**. The app keeps the first backup as "Original (first backup)".
+3. Click **Back Up iPod**. The app keeps the first backup as "Original (first backup)".
 4. Open the Apple firmware. Select File > Download Apple Firmware 1.3, or click **Edit a Copy** on a backup.
 5. Open the **Patches** pane.
 6. Switch on the patches that you want.
 7. Open the **iPod** pane.
-8. Click **Flash Edited Firmware…**.
+8. Click **Flash to iPod…**.
 9. Read the list of changes. Then confirm.
-10. Click **Eject**. Then disconnect the iPod.
+10. Click **Eject iPod**. Then disconnect the iPod.
 
 To remove the changes, switch off all the patches. Then flash the firmware again.
 

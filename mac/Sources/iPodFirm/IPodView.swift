@@ -30,13 +30,13 @@ struct IPodView: View {
                 }
                 HStack {
                     Button("Refresh") { Task { await model.refreshIPods() } }
-                    Button("Eject") { Task { await model.ejectIPod() } }
+                    Button("Eject iPod") { Task { await model.ejectIPod() } }
                         .disabled(model.currentIPod == nil)
                         .help("Unmount the iPod so that you can disconnect it")
                     Spacer()
-                    Button("Back Up Now") { Task { await model.backupNow() } }
+                    Button("Back Up iPod") { Task { await model.backupNow() } }
                         .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported)
-                    Button("Flash Edited Firmware…") { Task { await model.flashEdited() } }
+                    Button("Flash to iPod…") { Task { await model.flashEdited() } }
                         .disabled(!model.canFlash)
                         .buttonStyle(.borderedProminent)
                 }
@@ -50,7 +50,7 @@ struct IPodView: View {
 
             Section {
                 if model.backups.isEmpty {
-                    Text("There are no backups. iPodFirm makes a backup before each flash. You can also click Back Up Now.")
+                    Text("There are no backups. iPodFirm makes a backup before each flash. You can also click Back Up iPod.")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(model.backups) { b in BackupRow(backup: b) }

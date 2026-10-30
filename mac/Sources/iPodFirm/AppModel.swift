@@ -29,6 +29,8 @@ final class AppModel: ObservableObject {
     @Published var section: Pane = .overview
     @Published var editor: FirmwareEditor?
     @Published var fileURL: URL?
+    /// The file of the last Save As. Save writes to this file.
+    var saveURL: URL?
     @Published var sourceIPSW: URL?
     @Published var openedFromBackup = false
     @Published var isDirty = false
@@ -505,6 +507,7 @@ final class AppModel: ObservableObject {
             fileURL = url
             if isIPSW { sourceIPSW = url }
             openedFromBackup = fromBackup
+            saveURL = nil
             isDirty = false
             revision += 1
             section = .overview
@@ -515,15 +518,20 @@ final class AppModel: ObservableObject {
 
     func openPanel() {
         let p = NSOpenPanel()
-        p.allowedContentTypes = []
-        p.allowsOtherFileTypes = true
+        p.allowedContentTypes = ["ipsw", "bin"].compactMap { UTType(filenameExtension: $0) }
         p.message = "Choose an Apple .ipsw, a firmware .bin, or an iPod backup"
         p.directoryURL = Self.backupDir
         if p.runModal() == .OK, let url = p.url { Task { await open(url) } }
     }
 
+    /// Writes to the file of the last Save As. The first save shows the panel, because the app never
+    /// overwrites the file that it opened.
+    func save() {
+        if let saveURL { write(to: saveURL) } else { saveAs() }
+    }
+
     func saveAs() {
-        guard let editor else { return }
+        guard editor != nil else { return }
         let p = NSSavePanel()
         p.nameFieldStringValue = "custom-firmware.bin"
         p.message = "Save the customised firmware partition image"
@@ -532,9 +540,16 @@ final class AppModel: ObservableObject {
             alert = AlertInfo(title: "Not saved", message: "Backups are never overwritten. Choose a location outside the Backups folder.")
             return
         }
+        write(to: url)
+    }
+
+    private func write(to url: URL) {
+        guard let editor else { return }
         do {
             try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion, list: activeList)).write(to: url, options: .atomic)
             isDirty = false
+            saveURL = url
+            fileURL = url
         } catch { fail("Cannot save", error) }
     }
 
