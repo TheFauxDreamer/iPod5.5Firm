@@ -247,6 +247,9 @@ final class AppModel: ObservableObject {
     var currentIPodIsUnsupported: Bool { currentIPod.map { unsupportedIPods.contains($0) } ?? false }
 
     /// The state of the iPod in the sidebar.
+    /// The name of the connected iPod: the name in its music database, or else the name of its volume.
+    var currentIPodName: String? { currentIPod.map { ipodLibraryName ?? $0.volumeName ?? $0.mediaName } }
+
     var currentIPodStatus: String {
         guard let ipod = currentIPod else { return "Not Connected" }
         return currentIPodIsUnsupported ? "Not Supported" : ipodLibraryName ?? ipod.volumeName ?? ipod.mediaName

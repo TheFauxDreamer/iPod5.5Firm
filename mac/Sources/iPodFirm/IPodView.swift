@@ -20,12 +20,19 @@ struct IPodView: View {
     /// The connected iPod: its state, its patches and its logs.
     var deviceColumn: some View {
         Form {
+            if let name = model.currentIPodName, let ipod = model.currentIPod {
+                Section {
+                    DetailHeader(title: name,
+                                 subtitle: "\(ByteCountFormatter.string(fromByteCount: ipod.size, countStyle: .file)) · /dev/\(ipod.disk)",
+                                 symbol: Pane.ipod.symbol, tint: model.currentIPodIsUnsupported ? .gray : .blue)
+                }
+            }
             Section {
                 PermissionSummaryRow()
                 if model.ipods.isEmpty {
                     Label("No iPod is connected. Connect the iPod. If the Mac does not find it, put it in disk mode: hold Menu and Select to reset it, then hold Select and Play.",
                           systemImage: "cable.connector.slash").foregroundStyle(.secondary)
-                } else {
+                } else if model.ipods.count > 1 {
                     Picker("iPod", selection: $model.selectedIPod) {
                         ForEach(model.ipods) { i in
                             Text("\(i.volumeName ?? i.mediaName) — \(ByteCountFormatter.string(fromByteCount: i.size, countStyle: .file)) (/dev/\(i.disk))")
