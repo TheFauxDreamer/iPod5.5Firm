@@ -34,7 +34,7 @@ struct GamesView: View {
                         Button("Select All") { model.selectAllGames(true) }
                         Button("Select None") { model.selectAllGames(false) }
                         Spacer()
-                        Text("\(model.selectedGameFolders.isEmpty ? model.gamesLibrary.count : model.selectedGameFolders.count) of \(model.gamesLibrary.count)")
+                        Text("\(model.selectedGameFolders.count) of \(model.gamesLibrary.count)")
                             .foregroundStyle(.secondary)
                     }
                     ForEach(model.gamesLibrary, id: \.folder) { game in
@@ -63,7 +63,7 @@ struct GamesView: View {
                     .font(.callout).foregroundStyle(.secondary)
                 HStack {
                     Button("Install Games") { Task { await model.installGames() } }
-                        .disabled(model.currentIPod == nil || model.gamesLibrary.isEmpty)
+                        .disabled(model.currentIPod == nil || model.selectedGameFolders.isEmpty)
                         .help("Copy the selected games to the folder games_RO of the connected iPod, and the key file if you chose one")
                     Spacer()
                 }
@@ -120,36 +120,16 @@ struct GamesView: View {
             } header: { Text("Remove Games") }
         }
         .formStyle(.grouped)
-        .sheet(isPresented: $model.showRemoveGamesSheet) { RemoveGamesSheet() }
-    }
-}
-
-/// The confirmation of the removal of the games. The removal deletes files on
-/// the iPod, thus the owner must confirm each removal.
-struct RemoveGamesSheet: View {
-    @EnvironmentObject var model: AppModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("Remove \(model.selectedIPodGames.count) game(s) from the iPod?")
-                .font(.title3).bold()
-            Text("The removal deletes the folder of each selected game in the folder games_RO. The removal does not touch the saves and the scores of the games. The iPod does not show the games again after the removal.")
-                .font(.callout).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-            HStack {
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Remove") {
-                    let wanted = model.selectedIPodGames
-                    dismiss()
-                    Task { await model.removeGames(wanted) }
-                }
-                .keyboardShortcut(.defaultAction)
+        // The removal deletes files on the iPod. Cancel is the default button.
+        .confirmationDialog("Remove \(model.selectedIPodGames.count) game(s) from the iPod?", isPresented: $model.showRemoveGamesSheet) {
+            Button("Remove", role: .destructive) {
+                let wanted = model.selectedIPodGames
+                Task { await model.removeGames(wanted) }
             }
+            Button("Cancel", role: .cancel) {}.keyboardShortcut(.defaultAction)
+        } message: {
+            Text("The removal deletes the folder of each selected game in the folder games_RO. The removal does not touch the saves and the scores of the games. The iPod does not show the games again after the removal.")
         }
-        .padding()
-        .frame(minWidth: 380)
     }
 }
 

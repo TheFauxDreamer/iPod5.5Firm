@@ -32,6 +32,11 @@ final class AppModel: ObservableObject {
     @Published var sourceIPSW: URL?
     @Published var openedFromBackup = false
     @Published var isDirty = false
+    /// The count of changes in the Text pane that the user did not apply.
+    @Published var pendingStringChanges = 0
+    /// true: the user agreed to discard the unsaved work. A close of the last window also quits the
+    /// app, so the app asks only one time.
+    var discardConfirmed = false
     @Published var revision = 0
     @Published var busy: String?
     @Published var alert: AlertInfo?
@@ -461,14 +466,31 @@ final class AppModel: ObservableObject {
 
     // MARK: opening & saving
 
+    /// true: a quit loses work: the firmware, text that is not applied, patch code or playlist folders.
+    var hasUnsavedWork: Bool {
+        isDirty || pendingStringChanges > 0 || !codeDrafts.isEmpty || playlistFolders != savedPlaylistFolders
+    }
+
     func confirmDiscard() -> Bool {
         guard isDirty else { return true }
+        return askDiscard("The firmware that you edit has changes that you did not save or flash.")
+    }
+
+    /// Asks before a quit or a close of the window.
+    func confirmQuit() -> Bool {
+        guard hasUnsavedWork, !discardConfirmed else { return true }
+        discardConfirmed = askDiscard("iPodFirm has changes that you did not save, apply, flash or write to the iPod.")
+        return discardConfirmed
+    }
+
+    /// Cancel is the default button: Return must not discard the work.
+    private func askDiscard(_ text: String) -> Bool {
         let a = NSAlert()
-        a.messageText = "Discard your unsaved changes?"
-        a.informativeText = "The firmware you are editing has changes that have not been saved or flashed."
-        a.addButton(withTitle: "Discard")
+        a.messageText = "Discard Your Unsaved Changes?"
+        a.informativeText = text
         a.addButton(withTitle: "Cancel")
-        return a.runModal() == .alertFirstButtonReturn
+        a.addButton(withTitle: "Discard").hasDestructiveAction = true
+        return a.runModal() == .alertSecondButtonReturn
     }
 
     func open(_ url: URL, fromBackup: Bool = false) async {
@@ -1085,10 +1107,9 @@ final class AppModel: ObservableObject {
             alert = AlertInfo(title: "No game found", message: "The folder \(gamesDir.lastPathComponent) has no game with a file Manifest.plist.")
             return
         }
-        // An empty selection means that the user wants all the games.
-        let wanted = selectedGameFolders.isEmpty ? library : library.filter { selectedGameFolders.contains($0.folder) }
+        let wanted = library.filter { selectedGameFolders.contains($0.folder) }
         guard !wanted.isEmpty else {
-            alert = AlertInfo(title: "No game selected", message: "Select at least one game, or select all the games.")
+            alert = AlertInfo(title: "No game selected", message: "Select at least one game.")
             return
         }
         let root = volume.appendingPathComponent("iPod_Control")
@@ -1120,7 +1141,7 @@ final class AppModel: ObservableObject {
         gameInstallStatus = ""
         let gamesDir = AppModel.gamesDirectory(at: folder) ?? folder
         gamesLibrary = GameLibrary.load(gamesDir.path)
-        selectedGameFolders = []
+        selectedGameFolders = Set(gamesLibrary.map { $0.folder })
     }
 
     /// Let the owner choose their own key file IC-Info.sidb. The app checks the name and the
@@ -1466,7 +1487,7 @@ final class AppModel: ObservableObject {
     }
 
     func ejectIPod() async {
-        guard let ipod = currentIPod else { return }
+        guard busy == nil, let ipod = currentIPod else { return }
         do {
             try await work("Ejecting \(ipod.volumeName ?? ipod.mediaName)…") { try Device.eject(ipod) }
             thumbnailStatus = nil
@@ -1485,7 +1506,7 @@ final class AppModel: ObservableObject {
     }
 
     func backupNow() async {
-        guard let ipod = currentIPod else { return }
+        guard busy == nil, let ipod = currentIPod else { return }
         busy = "Backing up the iPod's firmware partition…"
         defer { busy = nil; refreshBackups() }
         do {
@@ -1497,7 +1518,11 @@ final class AppModel: ObservableObject {
 
     /// Step 1 of flashing: dry run (no writes) to show exactly what would change.
     func prepareFlash(image: URL, reason: String) async {
-        guard let ipod = currentIPod else { return }
+        guard busy == nil else { return }
+        guard let ipod = currentIPod else {
+            alert = AlertInfo(title: "No iPod Is Connected", message: "Connect the iPod. Then try again.")
+            return
+        }
         busy = "Checking the iPod (nothing is written yet)…"
         defer { busy = nil }
         do {
@@ -1558,8 +1583,11 @@ final class AppModel: ObservableObject {
         } catch { fail("Flash failed", error) }
     }
 
+    /// true: the app can start a flash of the open firmware.
+    var canFlash: Bool { editor != nil && currentIPod != nil && !currentIPodIsUnsupported && busy == nil }
+
     func flashEdited() async {
-        guard let editor else { return }
+        guard busy == nil, let editor else { return }
         let staging = Self.supportDir.appendingPathComponent("Staging/flash.bin")
         do {
             try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)

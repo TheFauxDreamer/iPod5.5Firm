@@ -564,7 +564,7 @@ struct IPodSyncBanner: View {
                             Button("Match iPod") { model.matchIPod() }
                                 .help("Set the switches to the patches on the iPod.")
                             Button("Flash…") { model.section = .ipod; Task { await model.flashEdited() } }
-                                .disabled(model.editor == nil)
+                                .disabled(!model.canFlash)
                                 .help(model.editor == nil ? "Open a firmware first." : "Write the firmware with the current switches to the iPod.")
                         }
                         .controlSize(.small)

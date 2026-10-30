@@ -77,6 +77,8 @@ struct StringsView: View {
         }
         .onChange(of: blockIndex) { _, _ in reload() }
         .onChange(of: model.revision) { _, _ in reload() }
+        .onChange(of: changes.count) { _, count in model.pendingStringChanges = count }
+        .onDisappear { model.pendingStringChanges = 0 }
     }
 
     func reload() {

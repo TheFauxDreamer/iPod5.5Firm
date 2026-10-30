@@ -37,7 +37,7 @@ struct IPodView: View {
                     Button("Back Up Now") { Task { await model.backupNow() } }
                         .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported)
                     Button("Flash Edited Firmware…") { Task { await model.flashEdited() } }
-                        .disabled(model.currentIPod == nil || model.editor == nil || model.currentIPodIsUnsupported)
+                        .disabled(!model.canFlash)
                         .buttonStyle(.borderedProminent)
                 }
             } header: { Text("Connected iPod") }

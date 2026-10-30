@@ -56,12 +56,12 @@ struct IPodFirmApp: App {
             CommandMenu("iPod") {
                 Button("Flash to iPod…") { model.section = .ipod; Task { await model.flashEdited() } }
                     .keyboardShortcut("f", modifiers: [.command, .shift])
-                    .disabled(model.editor == nil)
+                    .disabled(!model.canFlash)
                 Button("Back Up iPod") { model.section = .ipod; Task { await model.backupNow() } }
-                    .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported)
+                    .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported || model.busy != nil)
                 Button("Eject iPod") { Task { await model.ejectIPod() } }
                     .keyboardShortcut("e")
-                    .disabled(model.currentIPod == nil)
+                    .disabled(model.currentIPod == nil || model.busy != nil)
                 Divider()
                 Button("Run in Emulator") { model.section = .emulator; model.runInEmulator(emulator, session) }
                     .keyboardShortcut("r")
@@ -185,6 +185,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        model?.confirmQuit() == false ? .terminateCancel : .terminateNow
+    }
+}
+
+/// Connects the window to the unsaved work. The close button shows the dot of an edited document, and
+/// a close of the window asks before it loses work. SwiftUI owns the delegate of the window. Thus this
+/// delegate gets only windowShouldClose and sends all other calls to the delegate of SwiftUI.
+struct WindowGuard: NSViewRepresentable {
+    let edited: Bool
+    let shouldClose: () -> Bool
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        context.coordinator.shouldClose = shouldClose
+        let edited = edited
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.isDocumentEdited = edited
+            context.coordinator.attach(to: window)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(shouldClose: shouldClose) }
+
+    final class Coordinator: NSObject, NSWindowDelegate {
+        var shouldClose: () -> Bool
+        private var original: NSWindowDelegate?
+
+        init(shouldClose: @escaping () -> Bool) { self.shouldClose = shouldClose }
+
+        func attach(to window: NSWindow) {
+            guard window.delegate !== self else { return }
+            original = window.delegate
+            window.delegate = self
+        }
+
+        func windowShouldClose(_ sender: NSWindow) -> Bool {
+            guard shouldClose() else { return false }
+            return original?.windowShouldClose?(sender) ?? true
+        }
+
+        override func responds(to selector: Selector!) -> Bool {
+            super.responds(to: selector) || original?.responds(to: selector) == true
+        }
+
+        override func forwardingTarget(for selector: Selector!) -> Any? {
+            original?.responds(to: selector) == true ? original : nil
+        }
+    }
 }
 
 struct ContentView: View {
@@ -226,11 +278,12 @@ struct ContentView: View {
                     Button { model.section = .ipod; Task { await model.flashEdited() } } label: {
                         Label("Flash to iPod", systemImage: "bolt.horizontal.circle")
                     }
-                    .disabled(model.editor == nil).help("Make a backup of the iPod, then write this firmware to the iPod")
+                    .disabled(!model.canFlash).help("Make a backup of the iPod, then write this firmware to the iPod")
                 }
             }
         }
         .navigationTitle(title)
+        .background(WindowGuard(edited: model.hasUnsavedWork) { model.confirmQuit() })
         .overlay { if let busy = model.busy { BusyOverlay(text: busy) } }
         .alert(model.alert?.title ?? "", isPresented: Binding(get: { model.alert != nil }, set: { if !$0 { model.alert = nil } }),
                presenting: model.alert) { a in
