@@ -26,7 +26,7 @@ struct IPodView: View {
                 }
                 if model.currentIPodIsUnsupported {
                     Label("Unsupported iPod. This iPod is not an iPod Video (5G/5.5G). iPodFirm does not back up, flash or restore it.",
-                          systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+                          systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .red))
                 }
                 HStack {
                     Button("Refresh") { Task { await model.refreshIPods() } }
@@ -65,7 +65,7 @@ struct IPodView: View {
 
             Section {
                 Label("Charge the iPod before a recovery. An iPod with an empty battery does not show disk mode.",
-                      systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                      systemImage: "exclamationmark.triangle.fill").labelStyle(StatusLabelStyle(tint: .orange))
                 VStack(alignment: .leading, spacing: 6) {
                     Step(n: 1, text: "Push and hold Menu and Select until the iPod restarts.")
                     Step(n: 2, text: "When the Apple logo shows, push and hold Select and Play until disk mode shows.")
@@ -199,21 +199,21 @@ struct FlashConfirmSheet: View {
             if plan.reason == "rescue" {
                 Label("The firmware on the iPod is damaged. iPodFirm cannot compare the backup with it. iPodFirm compares the backup with the original backup, then writes the full backup.",
                       systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+                    .labelStyle(StatusLabelStyle(tint: .red))
                     .fixedSize(horizontal: false, vertical: true)
             }
             if plan.reason == "flash", let gb = plan.ipod.likelyOriginalHDD {
                 ForEach(model.activePatches.filter { $0.spec.hdd_warning != nil }) { p in
                     Label("The iPod has approximately \(gb) GB, the size of an original hard drive. The patch \"\(p.spec.name)\" is on. \(p.spec.hdd_warning ?? "")",
                           systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                        .labelStyle(StatusLabelStyle(tint: .orange))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if plan.musicAppRunning {
                 Label("MiMusic is open. iPodFirm disconnects the iPod volume during the write. Let each MiMusic sync finish, or quit MiMusic, before you continue.",
                       systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .labelStyle(StatusLabelStyle(tint: .orange))
                     .fixedSize(horizontal: false, vertical: true)
             }
             VStack(alignment: .leading, spacing: 6) {
@@ -248,7 +248,7 @@ struct FinderRestoreSheet: View {
             Label("Restore the Apple Firmware with Finder", systemImage: "lifepreserver").font(.title3.bold())
             Label("Finder erases all the music and data on the iPod. Your backups in iPodFirm stay on the Mac.",
                   systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .labelStyle(StatusLabelStyle(tint: .orange))
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 6) {
                 Step(n: 1, text: "Put the iPod in disk mode and connect it to the Mac.")
@@ -277,10 +277,10 @@ struct FullDiskAccessRow: View {
         HStack {
             if model.hasFullDiskAccess {
                 Label("Full Disk Access is on. iPodFirm can read and write the firmware partition of the iPod.", systemImage: "checkmark.shield.fill")
-                    .foregroundStyle(.green)
+                    .labelStyle(StatusLabelStyle(tint: .green))
             } else {
                 Label("Full Disk Access is necessary for backups and flashes.", systemImage: "exclamationmark.shield.fill")
-                    .foregroundStyle(.orange)
+                    .labelStyle(StatusLabelStyle(tint: .orange))
                 Spacer()
                 Button("How to Allow…") { showHelp() }
             }
@@ -296,10 +296,10 @@ struct PermissionSummaryRow: View {
             if model.hasFullDiskAccess {
                 Label(model.helperWorks ? "Full Disk Access and Touch ID are on." : "Full Disk Access is on.",
                       systemImage: "checkmark.shield.fill")
-                    .foregroundStyle(.green)
+                    .labelStyle(StatusLabelStyle(tint: .green))
             } else {
                 Label("Full Disk Access is necessary for backups and flashes.", systemImage: "exclamationmark.shield.fill")
-                    .foregroundStyle(.orange)
+                    .labelStyle(StatusLabelStyle(tint: .orange))
             }
             Spacer()
             if !model.hasFullDiskAccess {
@@ -354,7 +354,7 @@ struct HelperRow: View {
                 case .replied(let version):
                     VStack(alignment: .leading, spacing: 2) {
                         Label("The Touch ID helper is on. macOS does not ask for your password.", systemImage: "touchid")
-                            .foregroundStyle(.green)
+                            .labelStyle(StatusLabelStyle(tint: .green))
                         Text("The helper replied (protocol version \(version)).").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -363,7 +363,7 @@ struct HelperRow: View {
                 case .noReply:
                     VStack(alignment: .leading, spacing: 2) {
                         Label("The Touch ID helper does not reply.", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
+                            .labelStyle(StatusLabelStyle(tint: .orange))
                         Text("macOS shows the helper as on, but cannot start it. iPodFirm asks for your administrator password. Click Repair to register the helper again.")
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         if let err = model.helperSetupError { Text(err).font(.caption).foregroundStyle(.red) }
@@ -378,7 +378,7 @@ struct HelperRow: View {
                 }
             case .requiresApproval:
                 Label("Approve “iPodFirm” in System Settings → General → Login Items (Allow in the Background).", systemImage: "touchid")
-                    .foregroundStyle(.orange)
+                    .labelStyle(StatusLabelStyle(tint: .orange))
                 Spacer()
                 Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() }
                 Button("Check Again") { model.recheckFullDiskAccess() }

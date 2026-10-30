@@ -42,14 +42,18 @@ struct PicturesView: View {
                 .padding(10)
                 if model.picturesDark && model.darkPictures == nil {
                     Label("The selected dark theme does not agree with the open firmware.", systemImage: "xmark.octagon.fill")
-                        .font(.caption).foregroundStyle(.orange).padding(.bottom, 8)
+                        .font(.caption).labelStyle(StatusLabelStyle(tint: .orange)).padding(.bottom, 8)
                 }
                 Divider()
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 10)], spacing: 10) {
                         ForEach(items) { item in
-                            Thumb(item: item, selected: selection == item.index)
-                                .onTapGesture { selection = item.index }
+                            Button { selection = item.index } label: {
+                                Thumb(item: item, selected: selection == item.index)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Picture \(item.index), \(item.picture.width) by \(item.picture.height)")
+                            .accessibilityAddTraits(selection == item.index ? .isSelected : [])
                         }
                     }
                     .padding(12)

@@ -121,11 +121,11 @@ struct PlaylistFoldersSection: View {
                         .disabled(!model.playlistFolderProblems.isEmpty || model.playlistFolders == model.savedPlaylistFolders)
                 }
                 ForEach(model.playlistFolderProblems, id: \.self) { p in
-                    Label(p, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                    Label(p, systemImage: "exclamationmark.triangle").labelStyle(StatusLabelStyle(tint: .orange))
                 }
                 if model.playlistFolders != model.savedPlaylistFolders {
                     Label("Click Write Folders to iPod to send the changes to the iPod.", systemImage: "exclamationmark.circle")
-                        .foregroundStyle(.orange)
+                        .labelStyle(StatusLabelStyle(tint: .orange))
                 }
                 if let s = model.playlistFoldersStatus { Label(s, systemImage: "checkmark.circle").font(.callout) }
             }
@@ -299,7 +299,7 @@ struct AlbumArtSections: View {
             Section {
                 if model.playlistArtChanged {
                     Label("Click Write Thumbnails to iPod to send the changes to the iPod.", systemImage: "exclamationmark.circle")
-                        .foregroundStyle(.orange)
+                        .labelStyle(StatusLabelStyle(tint: .orange))
                 }
                 ForEach(model.playlistArt) { p in PlaylistArtRow(playlist: p) }
             } header: {
@@ -399,7 +399,7 @@ struct InstallPatchSheet: View {
                     VStack(alignment: .leading, spacing: 10) {
                         if let caution = spec.caution {
                             Label(caution, systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                                .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
                         }
                         if let d = spec.description { Text(d).fixedSize(horizontal: false, vertical: true) }
                         ForEach(spec.details ?? [], id: \.self) { BulletRow(text: $0) }
@@ -415,7 +415,7 @@ struct InstallPatchSheet: View {
                         }
                         .font(.callout)
                         ForEach(candidate.errors, id: \.self) { e in
-                            Label(e, systemImage: "xmark.octagon.fill").foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                            Label(e, systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .red)).fixedSize(horizontal: false, vertical: true)
                         }
                         ForEach(candidate.notes, id: \.self) { n in
                             Label(n, systemImage: "info.circle").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -430,12 +430,12 @@ struct InstallPatchSheet: View {
             }
             if candidate.canInstall, let caution {
                 Label(caution, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange).font(.callout).fixedSize(horizontal: false, vertical: true)
+                    .labelStyle(StatusLabelStyle(tint: .orange)).font(.callout).fixedSize(horizontal: false, vertical: true)
             }
             if candidate.canInstall {
                 Label("A patch puts new code on your iPod. Install only patches from people that you trust. iPodFirm makes a backup before each flash.",
                       systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange).font(.callout).fixedSize(horizontal: false, vertical: true)
+                    .labelStyle(StatusLabelStyle(tint: .orange)).font(.callout).fixedSize(horizontal: false, vertical: true)
             }
             HStack {
                 Spacer()

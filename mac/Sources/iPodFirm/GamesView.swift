@@ -88,22 +88,13 @@ struct GamesView: View {
                         }
                     }
                     ForEach(model.ipodGames, id: \.self) { guid in
-                        HStack {
-                            Button {
-                                if model.selectedIPodGames.contains(guid) {
-                                    model.selectedIPodGames.remove(guid)
-                                } else {
-                                    model.selectedIPodGames.insert(guid)
-                                }
-                            } label: {
-                                Image(systemName: model.selectedIPodGames.contains(guid) ? "checkmark.square.fill" : "square")
-                                    .foregroundStyle(model.selectedIPodGames.contains(guid) ? Color.accentColor : Color.secondary)
-                            }
-                            .buttonStyle(.plain)
+                        Toggle(guid, isOn: Binding(
+                            get: { model.selectedIPodGames.contains(guid) },
+                            set: { on in
+                                if on { model.selectedIPodGames.insert(guid) } else { model.selectedIPodGames.remove(guid) }
+                            }))
+                            .toggleStyle(.checkbox)
                             .help("Select this game for the removal")
-                            Text(guid)
-                            Spacer()
-                        }
                     }
                     HStack {
                         Button("Remove Selected Games…") { model.showRemoveGamesSheet = true }
@@ -140,19 +131,14 @@ struct GamePickerRow: View {
     var toggle: () -> Void
 
     var body: some View {
-        HStack {
-            Button(action: toggle) {
-                Image(systemName: selected ? "checkmark.square.fill" : "square")
-                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
-            }
-            .buttonStyle(.plain)
-            .help(selected ? "Do not copy this game" : "Copy this game")
+        Toggle(isOn: Binding(get: { selected }, set: { _ in toggle() })) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(game.name)
                 Text("\(game.folder)  •  platform \(game.manifest.platformID)  •  \(game.manifest.totalSize) bytes")
                     .font(.callout).foregroundStyle(.secondary)
             }
-            Spacer()
         }
+        .toggleStyle(.checkbox)
+        .help(selected ? "Do not copy this game" : "Copy this game")
     }
 }

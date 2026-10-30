@@ -50,9 +50,9 @@ struct OverviewView: View {
         } else if name == "hibe" {
             Label("not checked", systemImage: "moon.zzz.fill").foregroundStyle(.secondary)
         } else if fw.checksumOK(name) {
-            Label("OK", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+            Label("OK", systemImage: "checkmark.seal.fill").labelStyle(StatusLabelStyle(tint: .green))
         } else {
-            Label("BAD", systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+            Label("BAD", systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .red))
         }
     }
 

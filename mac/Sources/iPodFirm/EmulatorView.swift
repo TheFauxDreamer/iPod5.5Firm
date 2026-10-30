@@ -81,9 +81,9 @@ struct EmulatorView: View {
                 Section {
                     HStack {
                         if let v = emu.installedVersion {
-                            Label("ipod-emulator \(v)", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                            Label("ipod-emulator \(v)", systemImage: "checkmark.circle.fill").labelStyle(StatusLabelStyle(tint: .green))
                         } else {
-                            Label("The emulator is not installed", systemImage: "exclamationmark.circle").foregroundStyle(.orange)
+                            Label("The emulator is not installed", systemImage: "exclamationmark.circle").labelStyle(StatusLabelStyle(tint: .orange))
                         }
                         Spacer()
                         Button(emu.installedVersion == nil ? "Install Emulator" : "Update Emulator") { emu.install() }
@@ -129,7 +129,6 @@ struct PreviewPanel: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .contentShape(Rectangle())
         .focusable()
-        .focusEffectDisabled()
         .focused($focused)
         .onAppear { focused = true }
         .onTapGesture { focused = true }
