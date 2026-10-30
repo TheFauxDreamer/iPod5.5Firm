@@ -683,6 +683,13 @@ final class PatchAndArtTests: XCTestCase {
     }
 
     /// The Patches pane needs a title, a summary, a category and an SF Symbol for each patch.
+    /// A row of the Patches pane has one line for the summary.
+    func testPatchSummaryLength() {
+        for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) where p.spec.internal != true {
+            XCTAssertLessThanOrEqual(p.spec.summary?.count ?? 0, 50, "\(p.spec.name): the summary is too long")
+        }
+    }
+
     func testPatchMetadata() {
         for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) where p.spec.internal != true {
             XCTAssertNotNil(p.spec.title, "\(p.spec.name) has no title in patch.json")

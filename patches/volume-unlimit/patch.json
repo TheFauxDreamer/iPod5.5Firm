@@ -5,12 +5,19 @@
   "symbol": "speaker.wave.3",
   "category": "audio",
   "version_letter": "v",
-  "version": "1.1",
+  "version": "1.2",
   "size": 0,
-  "description": "iPods for the EU have a volume limit in the firmware. This patch removes the limit. The maximum volume becomes the same as on other iPods. The patch makes the same change as goPod and iPodWizard.",
+  "description": "Without the patch, an iPod for the EU gives only 84% of the full volume.",
   "caution": "High volume can cause permanent damage to your hearing. Do not listen at high volume for a long time.",
-  "details": ["At the maximum position of the volume control, the volume is the full volume of the iPod.", "Without the patch, an iPod for the EU gives only 84% of the full volume."],
-  "notes": ["On an iPod that is not for the EU, the patch does not change the volume.", "The Volume Limit setting in Settings continues to operate.", "Accessories that ask the iPod about the volume limit get the answer \"no limit\"."],
+  "details": [
+    "The maximum volume becomes the same as on other iPods.",
+    "The Volume Limit setting in Settings continues to operate."
+  ],
+  "notes": [
+    "On an iPod that is not for the EU, the patch does not change the volume.",
+    "Accessories that ask about the volume limit get the answer \"no limit\".",
+    "The patch makes the same change as goPod and iPodWizard."
+  ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }

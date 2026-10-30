@@ -1,21 +1,20 @@
 {
   "name": "instant-save",
   "title": "Instant Save",
-  "summary": "Saves each change in Settings > Main Menu straight away..",
+  "summary": "Saves Settings > Main Menu changes at once.",
   "symbol": "square.and.arrow.down",
   "category": "power",
   "version_letter": "i",
-  "version": "1.0",
+  "version": "1.1",
   "size": 36,
-  "description": "The iPod saves its settings at once when you change a row in Settings > Main Menu. Without this patch, the iPod saves them only when it sleeps or connects to a computer. A restart with Menu+Select before that removes the change.",
+  "description": "Without this patch, the iPod saves only when it sleeps or connects to a computer. A restart with Menu+Select loses the change.",
   "details": [
     "A change in Settings > Main Menu stays after a restart with Menu+Select.",
-    "This includes the Album Artists row of the Album Artists patch."
+    "This includes the Album Artists row."
   ],
   "notes": [
     "Each change writes the settings file. On an iPod with a hard drive, the drive can start.",
-    "The other settings (for example Shuffle and Repeat) still save only at a sleep.",
-    "Without this patch: put the iPod to sleep (hold Play) before a restart to keep a change."
+    "Other settings, for example Shuffle and Repeat, still save only at a sleep."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [

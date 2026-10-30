@@ -128,7 +128,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 ## album-art
 
-**User interface.** Patches pane > Album Artwork, letter `a`, version 3.2. The patch has no option. Version 2.8 removed the option `source` ("Album Thumbnail Source"). `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
+**User interface.** Patches pane > Album Artwork, letter `a`, version 3.3. The patch has no option. Version 2.8 removed the option `source` ("Album Thumbnail Source"). `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
 
 - "Thumbnails": "Write Thumbnails to iPod" writes the thumbnail file for the playlists. The albums do not need this file. "Eject iPod" ejects the iPod.
 - "Playlist Artwork" sets a custom image for each playlist ("Choose Image…", "Use Automatic", or drag an image).
@@ -375,7 +375,7 @@ The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 min
 
 ## cover-flow
 
-**User interface.** Patches pane > Cover Flow, letter `c`, version 0.6.8. The patch needs no file of iPodFirm: it uses the albums, the names and the artwork that the iPod already has. The research is in [../re/cover-flow.md](../re/cover-flow.md).
+**User interface.** Patches pane > Cover Flow, letter `c`, version 0.6.9. The patch needs no file of iPodFirm: it uses the albums, the names and the artwork that the iPod already has. The research is in [../re/cover-flow.md](../re/cover-flow.md).
 
 **Effect.**
 
@@ -676,7 +676,7 @@ Thus `0xa0348` always returns 0. The other match of the iPodWizard pattern, at 0
 
 ## search-5g
 
-**User interface.** Patches pane > Display > Search on the 5G, letter `e`, version 1.0.
+**User interface.** Patches pane > Display > Search on the 5G, letter `e`, version 1.1.
 
 **Effect.** On a 5G, Music > Search is the last item of the Music menu, and Settings > Main Menu has a Search item. On a 5.5G, the patch changes nothing, because the 5.5G already shows Search.
 
@@ -697,7 +697,7 @@ Thus `0x130b30` always returns 1. The size on the iPod is 0 bytes. The pane show
 
 ## click-speaker-only
 
-**User interface.** Patches pane > Sound > Click Only on the Speaker, letter `p`, version 1.0.
+**User interface.** Patches pane > Sound > Click Only on the Speaker, letter `p`, version 1.1.
 
 **Effect.** The click of the click wheel plays only from the piezo speaker. It does not play in the headphones. Settings > Clicker continues to turn the click on and off. The other sounds of the iPod do not change.
 
@@ -949,7 +949,7 @@ Real iPod 5.5G (owner, 28 October 2026), version 1.3: the patch operates.
 
 ## up-next
 
-**User interface.** Patches pane > Playback > Up Next, letter `n`, version 0.5. The option "Hold Select" gives the value that the iPod uses before the first change in Settings: Cover Flow (default), Play Next, Play Last or On-The-Go. Without the Cover Flow patch, the value Cover Flow acts as Play Next. On the iPod: Settings > Hold Select, after Clicker. Each push of Select moves to the next value. The research is in [../re/play-next.md](../re/play-next.md).
+**User interface.** Patches pane > Playback > Up Next, letter `n`, version 0.6. The option "Hold Select" gives the value that the iPod uses before the first change in Settings: Cover Flow (default), Play Next, Play Last or On-The-Go. Without the Cover Flow patch, the value Cover Flow acts as Play Next. On the iPod: Settings > Hold Select, after Clicker. Each push of Select moves to the next value. The research is in [../re/play-next.md](../re/play-next.md).
 
 **Effect.** Hold Select on a song, an album or an artist while music plays:
 
@@ -992,7 +992,7 @@ The Settings item has the key 0x60007e0f and the label 0x7e0b (`settings_items`,
 
 ## playlist-folders
 
-**User interface.** Patches pane > Display > Playlist Folders, letter `o`, version 0.2. The section "Playlist Folders" of the patch is the editor (`ui.tools`: `playlist-folders`, `PlaylistFoldersSection` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)). It has these controls:
+**User interface.** Patches pane > Display > Playlist Folders, letter `o`, version 0.3. The section "Playlist Folders" of the patch is the editor (`ui.tools`: `playlist-folders`, `PlaylistFoldersSection` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)). It has these controls:
 
 - "Folder position": Folders First or Alphabetical.
 - One row for each folder: the name, the count of playlists and a delete button. Open the row to put playlists into the folder. A playlist is in one folder only.

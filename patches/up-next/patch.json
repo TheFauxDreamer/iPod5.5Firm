@@ -1,26 +1,23 @@
 {
   "name": "up-next",
   "title": "Up Next",
-  "summary": "Hold Select to play a song, an album or an artist next or last.",
+  "summary": "Hold Select to play items next or last.",
   "symbol": "text.line.first.and.arrowtriangle.forward",
   "category": "playback",
   "version_letter": "n",
-  "version": "0.5",
+  "version": "0.6",
   "size": 1807,
-  "description": "Hold Select on a song, an album or an artist while music plays. Settings > Hold Select selects what the hold does: Play Next, Play Last, On-The-Go or Cover Flow.",
+  "description": "Hold Select on a song, an album or an artist while music plays. Settings > Hold Select selects what the hold does.",
   "details": [
-    "Play Next: the songs play directly after the current song.",
-    "Play Last: the songs play after the last song of the list that plays now.",
-    "On-The-Go: the songs go into the On-The-Go playlist, as without the patch.",
-    "Cover Flow (only with the Cover Flow patch): in the Albums list, the hold opens Cover Flow. In the other lists, the hold does Play Next.",
-    "Settings > Hold Select changes the value. Each push of Select moves to the next value.",
-    "With Shuffle on, Play Next and Play Last also put the songs in the correct position.",
-    "When no music plays, a hold of Select adds the songs to On-The-Go."
+    "Play Next: after the current song.",
+    "Play Last: after the last song of the list.",
+    "On-The-Go: into the On-The-Go playlist, as without the patch.",
+    "Cover Flow: opens Cover Flow in the Albums list, and does Play Next in other lists. This value needs the Cover Flow patch."
   ],
   "notes": [
     "This is a test version.",
-    "The iPod keeps the value in the file iPod_Control/iTunes/iPodFirmHoldSelect. At the first start without the file, the patch writes the value of the option.",
-    "The Cover Flow patch reads the same file. Without the Up Next patch, a hold in the Albums list always opens Cover Flow."
+    "When no music plays, a hold of Select adds the songs to On-The-Go.",
+    "With Shuffle on, Play Next and Play Last also put the songs in the correct position."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [

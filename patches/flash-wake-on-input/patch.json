@@ -1,16 +1,21 @@
 {
   "name": "flash-wake-on-input",
   "title": "Wake Storage on Input",
-  "summary": "A button press starts the flash storage immediately.",
+  "summary": "A button press starts the flash storage.",
   "symbol": "hand.point.up.left",
   "category": "power",
   "version_letter": "w",
-  "version": "1.3",
+  "version": "1.4",
   "size": 144,
-  "description": "Starts the flash storage when you press a button, so that the first song starts sooner.",
-  "details": ["After a long pause, a button press starts the storage immediately.", "Thus the storage is ready when you choose a song.", "After a start, the storage stays on for the time that you select. The iPod does not examine the storage again during this time.", "A turn of the click wheel does not start the storage."],
+  "details": [
+    "After a long pause, the storage is ready when you choose a song.",
+    "The storage stays on for the time that you select.",
+    "A turn of the click wheel does not start the storage."
+  ],
   "requires": ["Flash storage, for example an iFlash, CompactFlash or SSD adapter. Do not use this patch with the original hard drive."],
-  "notes": ["Use this patch together with SSD Mode if the first song after a long pause starts late. Set the same Storage Time in the two patches."],
+  "notes": [
+    "Use this patch with SSD Mode. Set the same Storage Time in the two patches."
+  ],
   "hdd_warning": "This patch is for flash storage. On the original hard drive, each button press after a long pause starts the disk, and the disk turns for the selected time. This uses more battery and causes more wear.",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
