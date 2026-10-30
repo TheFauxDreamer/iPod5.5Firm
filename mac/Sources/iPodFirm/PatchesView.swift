@@ -568,9 +568,10 @@ struct IPodSyncBanner: View {
                                 .help("Set the switches to the patches on the iPod.")
                             Button("Flash to iPod…") { model.section = .ipod; Task { await model.flashEdited() } }
                                 .disabled(!model.canFlash)
-                                .help(model.editor == nil ? "Open a firmware first." : "Write the firmware with the current switches to the iPod.")
+                                .help(model.flashBlockReason ?? "Write the firmware with the current switches to the iPod.")
                         }
                         .controlSize(.small)
+                        FlashHint()
                     }
                     let unknown = state.unknownNames(known: Set(model.patches.map(\.spec.name)))
                     if !unknown.isEmpty {
@@ -912,6 +913,26 @@ struct VersionDetail: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// Tells the user why the flash buttons are off. If the only missing item is a firmware, it gives
+/// the commands to open one. The pane does not change, so that the user can continue the work.
+struct FlashHint: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        if let reason = model.flashBlockReason, model.busy == nil {
+            Label(reason, systemImage: "info.circle")
+                .fixedSize(horizontal: false, vertical: true)
+            if model.editor == nil && model.currentIPod != nil && !model.currentIPodIsUnsupported {
+                HStack {
+                    Button("Download Apple Firmware 1.3") { Task { await model.downloadAppleFirmware(stay: true) } }
+                    Button("Open Firmware…") { model.openPanel(stay: true) }
+                }
+                .controlSize(.small)
+            }
+        }
     }
 }
 

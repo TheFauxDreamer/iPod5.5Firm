@@ -292,7 +292,7 @@ struct ContentView: View {
                     Button { model.section = .ipod; Task { await model.flashEdited() } } label: {
                         Label("Flash to iPod…", systemImage: "bolt.horizontal.circle")
                     }
-                    .disabled(!model.canFlash).help("Make a backup of the iPod, then write this firmware to the iPod")
+                    .disabled(!model.canFlash).help(model.flashBlockReason ?? "Make a backup of the iPod, then write this firmware to the iPod")
                 }
             }
         }

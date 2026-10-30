@@ -508,7 +508,8 @@ final class AppModel: ObservableObject {
         return a.runModal() == .alertSecondButtonReturn
     }
 
-    func open(_ url: URL, fromBackup: Bool = false) async {
+    /// `stay`: keep the current pane. The user opened the firmware from a pane to continue the work there.
+    func open(_ url: URL, fromBackup: Bool = false, stay: Bool = false) async {
         guard confirmDiscard() else { return }
         do {
             let isIPSW = url.pathExtension.lowercased() == "ipsw"
@@ -523,18 +524,18 @@ final class AppModel: ObservableObject {
             saveURL = nil
             isDirty = false
             revision += 1
-            section = .overview
+            if !stay { section = .overview }
         } catch {
             fail("Cannot Open \(url.lastPathComponent)", error)
         }
     }
 
-    func openPanel() {
+    func openPanel(stay: Bool = false) {
         let p = NSOpenPanel()
         p.allowedContentTypes = ["ipsw", "bin"].compactMap { UTType(filenameExtension: $0) }
         p.message = "Choose an Apple .ipsw, a firmware .bin, or an iPod backup"
         p.directoryURL = Self.backupDir
-        if p.runModal() == .OK, let url = p.url { Task { await open(url) } }
+        if p.runModal() == .OK, let url = p.url { Task { await open(url, stay: stay) } }
     }
 
     /// Writes to the file of the last Save As. The first save shows the panel, because the app never
@@ -573,8 +574,8 @@ final class AppModel: ObservableObject {
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    func downloadAppleFirmware() async {
-        do { await open(try await ensureAppleIPSW()) } catch { fail("Download Failed", error) }
+    func downloadAppleFirmware(stay: Bool = false) async {
+        do { await open(try await ensureAppleIPSW(), stay: stay) } catch { fail("Download Failed", error) }
     }
 
     static func isCancellation(_ error: Error) -> Bool {
@@ -1637,7 +1638,16 @@ final class AppModel: ObservableObject {
     }
 
     /// true: the app can start a flash of the open firmware.
-    var canFlash: Bool { editor != nil && currentIPod != nil && !currentIPodIsUnsupported && busy == nil }
+    var canFlash: Bool { flashBlockReason == nil }
+
+    /// Why the app cannot start a flash, in words for the user. nil: the app can start a flash.
+    var flashBlockReason: String? {
+        if currentIPod == nil { return "Connect the iPod to flash it." }
+        if currentIPodIsUnsupported { return "iPodFirm cannot flash this iPod." }
+        if editor == nil { return "Open a firmware to flash the iPod. Your patch switches do not change." }
+        if busy != nil { return "Wait until the current operation is complete." }
+        return nil
+    }
 
     func flashEdited() async {
         guard busy == nil, let editor else { return }
