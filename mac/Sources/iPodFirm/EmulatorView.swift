@@ -61,7 +61,7 @@ struct EmulatorView: View {
                             do {
                                 if emu.lastRun == nil { throw FirmwareError("Click Run in Emulator first. This makes the test drive.") }
                                 try await emu.openWindow()
-                            } catch { model.fail("Cannot open the emulator", error) }
+                            } catch { model.fail("Cannot Open the Emulator", error) }
                         }
                     }
                     .disabled(emu.installedVersion == nil)

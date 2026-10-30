@@ -66,7 +66,7 @@ struct PicturesView: View {
                 if let index = selection, let item = model.shownPictures?.items.first(where: { $0.index == index }) {
                     PictureDetail(item: item)
                 } else {
-                    Text("Select a picture").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ContentUnavailableView("No Picture Selected", systemImage: "photo", description: Text("Select a picture in the grid."))
                 }
             }
             .frame(minWidth: 300, idealWidth: 340, maxWidth: 460)

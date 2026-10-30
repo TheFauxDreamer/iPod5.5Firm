@@ -44,7 +44,7 @@ The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 | View | Show Sidebar, and a command for each pane: iPod (⌘1), Firmware (⌘2), Pictures (⌘3), Text (⌘4), Patches (⌘5), Games (⌘6), Emulator (⌘7) |
 | Help | iPodFirm Documentation, Show Disclaimer, Thanks…, Save Log…, Report a Problem on GitHub… |
 
-The app menu has Check for Updates…. Save Firmware writes to the file of the last Save As. The first save shows the panel, because the app never overwrites the file that it opened.
+While the app downloads the Apple firmware, the busy overlay shows a progress bar and a Cancel button. A flash has no Cancel button. The app menu has Check for Updates…. Save Firmware writes to the file of the last Save As. The first save shows the panel, because the app never overwrites the file that it opened.
 
 At the first launch, the app shows the disclaimer sheet (`DisclaimerSheet` in [DisclaimerSheet.swift](../mac/Sources/iPodFirm/DisclaimerSheet.swift)). The sheet gives the risk of a flash, the absence of a warranty and the Apple trademark notice. The user cannot close the sheet with Esc. The **Agree** button is available only after the user turns on the checkbox. **Agree** records `Disclaimer.version` in `acceptedDisclaimerVersion`. **Quit** stops the app. A `.ipodpatch` file that Finder opens waits until the user accepts the disclaimer. After a large change to the text, increase `Disclaimer.version`. Then each user must accept the disclaimer again. Help > Show Disclaimer shows the sheet again with only a **Close** button.
 

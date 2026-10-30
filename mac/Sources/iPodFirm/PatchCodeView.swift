@@ -41,7 +41,7 @@ extension AppModel {
                 alert = AlertInfo(title: "Patch Saved",
                                   message: "The patch is now version \(version). Flash the iPod again to put the new code on it.")
             }
-        } catch { fail("Cannot save the patch", error) }
+        } catch { fail("Cannot Save the Patch", error) }
     }
 
     func revertCode(_ patch: PatchInfo) {

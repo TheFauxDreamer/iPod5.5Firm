@@ -163,7 +163,7 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
         }
-        .frame(width: 560, height: 300)
+        .frame(width: 560, height: 380)
         .onAppear { model.recheckFullDiskAccess() }
         .sheet(isPresented: $showHelp) { FullDiskAccessSheet().environmentObject(model) }
     }
@@ -298,7 +298,11 @@ struct ContentView: View {
         }
         .navigationTitle(title)
         .background(WindowGuard(edited: model.hasUnsavedWork) { model.confirmQuit() })
-        .overlay { if let busy = model.busy { BusyOverlay(text: busy) } }
+        .overlay {
+            if let busy = model.busy {
+                BusyOverlay(text: busy, progress: model.downloadProgress, cancel: model.downloadTask.map { task in { task.cancel() } })
+            }
+        }
         .alert(model.alert?.title ?? "", isPresented: Binding(get: { model.alert != nil }, set: { if !$0 { model.alert = nil } }),
                presenting: model.alert) { a in
             // A fault gives two more choices: a report on GitHub, and the log as a file to share.
@@ -381,12 +385,22 @@ struct SidebarFooter: View {
 
 struct BusyOverlay: View {
     let text: String
+    /// The fraction that is complete, if the operation knows it.
+    var progress: Double?
+    /// The action of the Cancel button. A flash has no Cancel: a stop in the write damages the firmware.
+    var cancel: (() -> Void)?
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.25).ignoresSafeArea()
             VStack(spacing: 14) {
-                ProgressView()
+                if let progress {
+                    ProgressView(value: progress).frame(width: 220)
+                } else {
+                    ProgressView()
+                }
                 Text(text).multilineTextAlignment(.center)
+                if let cancel { Button("Cancel", action: cancel) }
             }
             .padding(28)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))

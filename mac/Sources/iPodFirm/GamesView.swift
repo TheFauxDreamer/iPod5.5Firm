@@ -12,13 +12,7 @@ struct GamesView: View {
     var body: some View {
         Form {
             Section {
-                Label("The app does not come with the game files and does not download them. The games come from the iPod that bought them: use iTunes or the Finder on a Mac to put purchased games on the iPod. The app copies the game folders from a folder on your Mac to the iPod.",
-                      systemImage: "info.circle")
-                    .font(.callout).foregroundStyle(.secondary)
-            } header: { Text("About the Game Files") }
-
-            Section {
-                Label("The games are not in the app. The games are not in the firmware of the iPod. You must get the game files from another place: for example a backup of the folder iPod_Control of an iPod that has the games, or a folder that you keep on your Mac. Each game is a folder with the GUID of the game, for example 11002.",
+                Label("iPodFirm and the iPod firmware do not contain the games. iPodFirm does not download them. Get the game files from an iPod that bought them, for example a backup of the folder iPod_Control. Each game is a folder with the GUID of the game, for example 11002.",
                       systemImage: "gamecontroller")
                     .font(.callout).foregroundStyle(.secondary)
                 HStack {
@@ -59,7 +53,7 @@ struct GamesView: View {
                         Text("No key file").foregroundStyle(.secondary)
                     }
                 }
-                Text("Optional. A game plays only on the iPod that bought it, and only if that iPod has the key file IC-Info.sidb of the account that bought the game. A restore removes this file. Choose your own file, for example from a backup of the folder iPod_Control/iTunes of this iPod. The app copies the file to iPod_Control/iTunes as it is. The app does not read, change or make a key file.")
+                Text("Optional. A game plays only on the iPod that bought it, and only if that iPod has the key file IC-Info.sidb of the account that bought the game. A restore removes this file. Choose your own file, for example from a backup of the folder iPod_Control/iTunes of this iPod. iPodFirm copies the file to iPod_Control/iTunes as it is. iPodFirm does not read, change or make a key file.")
                     .font(.callout).foregroundStyle(.secondary)
                 HStack {
                     Button("Install Games") { Task { await model.installGames() } }
@@ -70,7 +64,7 @@ struct GamesView: View {
                 if !model.gameInstallStatus.isEmpty {
                     Text(model.gameInstallStatus).foregroundStyle(.secondary)
                 }
-                Text("The app copies the selected games to the folder games_RO of the iPod. The app writes the name of the folder with small letters. The app never changes the file Manifest.plist or the file Manifest.plist.p7b.")
+                Text("iPodFirm copies the selected games to the folder games_RO of the iPod. iPodFirm writes the name of the folder with small letters. iPodFirm never changes the file Manifest.plist or the file Manifest.plist.p7b.")
                     .font(.callout).foregroundStyle(.secondary)
             } header: { Text("Install Games") }
 
@@ -84,7 +78,7 @@ struct GamesView: View {
                             .help("Read the folder games_RO of the connected iPod and list its games")
                         Spacer()
                         if !model.ipodGames.isEmpty {
-                            Text("\(model.ipodGames.count) game(s)").foregroundStyle(.secondary)
+                            Text(counted(model.ipodGames.count, "game")).foregroundStyle(.secondary)
                         }
                     }
                     ForEach(model.ipodGames, id: \.self) { guid in
@@ -112,7 +106,7 @@ struct GamesView: View {
         }
         .formStyle(.grouped)
         // The removal deletes files on the iPod. Cancel is the default button.
-        .confirmationDialog("Remove \(model.selectedIPodGames.count) game(s) from the iPod?", isPresented: $model.showRemoveGamesSheet) {
+        .confirmationDialog("Remove \(counted(model.selectedIPodGames.count, "game")) from the iPod?", isPresented: $model.showRemoveGamesSheet) {
             Button("Remove", role: .destructive) {
                 let wanted = model.selectedIPodGames
                 Task { await model.removeGames(wanted) }

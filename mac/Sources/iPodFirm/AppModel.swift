@@ -41,6 +41,10 @@ final class AppModel: ObservableObject {
     var discardConfirmed = false
     @Published var revision = 0
     @Published var busy: String?
+    /// The fraction of the firmware download that is complete.
+    @Published var downloadProgress: Double?
+    /// The firmware download. The busy overlay can cancel it.
+    @Published var downloadTask: Task<(URL, URLResponse), Error>?
     @Published var alert: AlertInfo?
     @Published var ipods: [IPodDisk] = []
     @Published var selectedIPod: String?
@@ -248,6 +252,8 @@ final class AppModel: ObservableObject {
 
     /// Shows a fault. The log gets the full error. The alert gives Report on GitHub… and Save Log….
     func fail(_ title: String, _ error: Error) {
+        // The Cancel button of the download is not a fault.
+        guard !Self.isCancellation(error) else { return }
         let details = faultDetails(error)
         AppLog.error("\(title)\n" + details)
         if (error as? FirmwareError)?.code == HelperResult.fullDiskAccess {
@@ -317,7 +323,7 @@ final class AppModel: ObservableObject {
             try text.write(to: url, atomically: true, encoding: .utf8)
         } catch {
             AppLog.error("Cannot save the log\n" + AppLog.describe(error))
-            alert = AlertInfo(title: "Cannot save the log", message: error.localizedDescription)
+            alert = AlertInfo(title: "Cannot Save the Log", message: error.localizedDescription)
             return nil
         }
         NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -512,7 +518,7 @@ final class AppModel: ObservableObject {
             revision += 1
             section = .overview
         } catch {
-            fail("Cannot open \(url.lastPathComponent)", error)
+            fail("Cannot Open \(url.lastPathComponent)", error)
         }
     }
 
@@ -537,7 +543,7 @@ final class AppModel: ObservableObject {
         p.message = "Save the customised firmware partition image"
         guard p.runModal() == .OK, let url = p.url else { return }
         guard !url.path.hasPrefix(Self.backupDir.path) else {
-            alert = AlertInfo(title: "Not saved", message: "Backups are never overwritten. Choose a location outside the Backups folder.")
+            alert = AlertInfo(title: "Not Saved", message: "Backups are never overwritten. Choose a location outside the Backups folder.")
             return
         }
         write(to: url)
@@ -550,7 +556,7 @@ final class AppModel: ObservableObject {
             isDirty = false
             saveURL = url
             fileURL = url
-        } catch { fail("Cannot save", error) }
+        } catch { fail("Cannot Save", error) }
     }
 
     static let cachedAppleIPSW = supportDir.appendingPathComponent("Firmware/iPod_25.1.3.ipsw")
@@ -561,7 +567,11 @@ final class AppModel: ObservableObject {
     }
 
     func downloadAppleFirmware() async {
-        do { await open(try await ensureAppleIPSW()) } catch { fail("Download failed", error) }
+        do { await open(try await ensureAppleIPSW()) } catch { fail("Download Failed", error) }
+    }
+
+    static func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
     }
 
     /// Apple's 1.3 .ipsw: the one this firmware came from, else a verified cached download.
@@ -576,7 +586,14 @@ final class AppModel: ObservableObject {
             if !FileManager.default.fileExists(atPath: dest.path) {
                 busy = "Downloading Apple firmware 1.3…"
                 defer { busy = nil }
-                let (tmp, _) = try await URLSession.shared.download(from: IPSW.videoFirmware13)
+                let watcher = DownloadWatcher { [weak self] fraction in
+                    Task { @MainActor in if self?.downloadTask != nil { self?.downloadProgress = fraction } }
+                }
+                let task = Task { try await URLSession.shared.download(from: IPSW.videoFirmware13, delegate: watcher) }
+                downloadTask = task
+                downloadProgress = 0
+                defer { downloadTask = nil; downloadProgress = nil }
+                let (tmp, _) = try await task.value
                 let data = try Data(contentsOf: tmp)
                 let sha = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
                 guard sha == Self.appleFirmwareSHA256 else { throw FirmwareError("The download did not match Apple's published file (SHA-256 mismatch).") }
@@ -700,7 +717,7 @@ final class AppModel: ObservableObject {
         guard let file = selectedTheme else { return }
         var theme = file.theme
         theme.removeEdit(offset: item.picture.dataPos)
-        do { try saveTheme(theme, to: file.url) } catch { fail("Cannot save the theme", error) }
+        do { try saveTheme(theme, to: file.url) } catch { fail("Cannot Save the Theme", error) }
     }
 
     private func saveTheme(_ theme: ImportedTheme, to url: URL) throws {
@@ -742,7 +759,7 @@ final class AppModel: ObservableObject {
                 themes = Self.loadThemes()
                 selectedThemeName = file.name
                 themeReport = file.theme
-            } catch { fail("Cannot import the theme", error) }
+            } catch { fail("Cannot Import the Theme", error) }
         }
     }
 
@@ -759,7 +776,7 @@ final class AppModel: ObservableObject {
 
     /// Ask GitHub for the newest release. A newer release gives a macOS notification.
     /// At the launch (`manual` false), an error gives no alert, and a skipped version gives no notification.
-    /// Help > Check for Updates… (`manual` true) shows each result.
+    /// iPodFirm > Check for Updates… (`manual` true) shows each result.
     func checkForUpdate(manual: Bool) async {
         if !manual { guard checkForUpdates, Disclaimer.accepted else { return } }
         let release: UpdateCheck.Release
@@ -821,7 +838,7 @@ final class AppModel: ObservableObject {
             add.append(p)
             for name in p.spec.needs ?? [] {
                 guard let needed = patches.first(where: { $0.spec.name == name }) else {
-                    alert = AlertInfo(title: "\(patch.spec.displayTitle) cannot be turned on",
+                    alert = AlertInfo(title: "\(patch.spec.displayTitle) Cannot Be Turned On",
                                       message: "The patch needs the patch \"\(name)\". Install it first.")
                     return
                 }
@@ -830,7 +847,7 @@ final class AppModel: ObservableObject {
         }
         for p in add {
             if let (other, place) = conflicts(p).first {
-                alert = AlertInfo(title: "\(patch.spec.displayTitle) cannot be turned on",
+                alert = AlertInfo(title: "\(patch.spec.displayTitle) Cannot Be Turned On",
                                   message: "\"\(p.spec.displayTitle)\" changes the same place as \"\(other.spec.displayTitle)\" (\(place)). Turn off \"\(other.spec.displayTitle)\" first.")
                 return
             }
@@ -844,7 +861,7 @@ final class AppModel: ObservableObject {
         let library = Self.patchLibrary, existing = patches
         do {
             pendingInstall = try await work("Examining the patch \(url.lastPathComponent)…") { try library.inspect(url, existing: existing) }
-        } catch { fail("Cannot open the patch", error) }
+        } catch { fail("Cannot Open the Patch", error) }
     }
 
     func choosePatchToInstall() {
@@ -867,7 +884,7 @@ final class AppModel: ObservableObject {
                                       message: "The iPod has the old version of this patch. Flash the iPod again to put version \(c.spec?.versionText ?? "–") on it.")
                 }
             }
-        } catch { fail("Cannot install the patch", error) }
+        } catch { fail("Cannot Install the Patch", error) }
     }
 
     func cancelInstall(_ c: PatchCandidate) {
@@ -901,7 +918,7 @@ final class AppModel: ObservableObject {
                     alert = AlertInfo(title: "Patch Saved",
                                       message: "The patch is now version \(version). Flash the iPod again to put the new text on it.")
                 }
-            } catch { fail("Cannot save the patch", error) }
+            } catch { fail("Cannot Save the Patch", error) }
             return
         }
         Task {
@@ -921,7 +938,7 @@ final class AppModel: ObservableObject {
                 alert = AlertInfo(title: "Patch Made",
                                   message: steps.joined(separator: "\n")
                                     + "\n\ndocs/patch-system.md in the iPodFirm source code tells how to write a patch.")
-            } catch { fail("Cannot make the patch", error) }
+            } catch { fail("Cannot Make the Patch", error) }
         }
     }
 
@@ -930,7 +947,7 @@ final class AppModel: ObservableObject {
             try Self.patchLibrary.remove(patch)
             enabledPatches.remove(patch.spec.name)
             reloadPatches()
-        } catch { fail("Cannot remove the patch", error) }
+        } catch { fail("Cannot Remove the Patch", error) }
     }
 
     func exportPatch(_ patch: PatchInfo) {
@@ -943,7 +960,7 @@ final class AppModel: ObservableObject {
             do {
                 try await work("Exporting the patch…") { try library.export(patch, to: url) }
                 NSWorkspace.shared.activateFileViewerSelecting([url])
-            } catch { fail("Cannot export the patch", error) }
+            } catch { fail("Cannot Export the Patch", error) }
         }
     }
 
@@ -955,7 +972,7 @@ final class AppModel: ObservableObject {
     /// Write the files of an action (patch.json "ui") on the mounted iPod.
     func runPatchAction(_ patch: PatchInfo, _ action: PatchUI.Action) {
         guard let volume = ipodMusicVolume() else {
-            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
             return
         }
         do {
@@ -967,7 +984,7 @@ final class AppModel: ObservableObject {
             if action.write.contains(where: { $0.path == Self.usbProbeLogFile }) { usbProbeLog = nil }
             if action.write.contains(where: { $0.path == Self.playbackLogFile }) { playbackLog = nil }
             patchActionStatus[patch.spec.name] = "\(action.status ?? "\(action.title): complete.") (\(Date().formatted(date: .omitted, time: .shortened)))"
-        } catch { fail("Cannot write the file on the iPod", error) }
+        } catch { fail("Cannot Write the File on the iPod", error) }
     }
 
     /// Read the switches of a patch (patch.json "ui") from the mounted iPod.
@@ -986,7 +1003,7 @@ final class AppModel: ObservableObject {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data((on ? t.on : t.off).utf8).write(to: url, options: .atomic)
             patchToggleStates[t.path] = on
-        } catch { fail("Cannot write the file on the iPod", error) }
+        } catch { fail("Cannot Write the File on the iPod", error) }
     }
 
     /// The space after Apple's image for the switched-on patches and the appearance (nil: not known).
@@ -1105,35 +1122,35 @@ final class AppModel: ObservableObject {
     /// Copy the games to the connected iPod. The pane of the games shows the result.
     func installGames() async {
         guard currentIPod != nil else {
-            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The pane of the games copies the games to the iPod.")
+            alert = AlertInfo(title: "No iPod Is Connected", message: "Connect the iPod. The pane of the games copies the games to the iPod.")
             return
         }
         guard let volume = ipodVolume() else {
-            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
             return
         }
         guard let source = gamesSourceFolder else {
-            alert = AlertInfo(title: "No folder of games", message: "Choose the folder with the games first.")
+            alert = AlertInfo(title: "No Folder of Games", message: "Choose the folder with the games first.")
             return
         }
         let gamesDir = AppModel.gamesDirectory(at: source) ?? source
         let library = GameLibrary.load(gamesDir.path)
         guard !library.isEmpty else {
-            alert = AlertInfo(title: "No game found", message: "The folder \(gamesDir.lastPathComponent) has no game with a file Manifest.plist.")
+            alert = AlertInfo(title: "No Game Found", message: "The folder \(gamesDir.lastPathComponent) has no game with a file Manifest.plist.")
             return
         }
         let wanted = library.filter { selectedGameFolders.contains($0.folder) }
         guard !wanted.isEmpty else {
-            alert = AlertInfo(title: "No game selected", message: "Select at least one game.")
+            alert = AlertInfo(title: "No Game Selected", message: "Select at least one game.")
             return
         }
         let root = volume.appendingPathComponent("iPod_Control")
         do {
             let key = gameKeyFile
-            let report = try await work("Copying \(wanted.count) game(s) to the iPod…") {
+            let report = try await work("Copying \(counted(wanted.count, "game")) to the iPod…") {
                 GameInstaller.install(wanted, to: root, copyKeyFile: key != nil, keyFileSource: key)
             }
-            gameInstallStatus = "\(report.installed.count) game(s), \(report.bytesCopied) bytes"
+            gameInstallStatus = "\(counted(report.installed.count, "game")), \(report.bytesCopied) bytes"
             if report.keyFileCopied { gameInstallStatus += ", key file copied" }
             for folder in report.installed { gameInstallStatus += "  \(folder)" }
             for warning in report.warnings { gameInstallStatus += "  skipped: \(warning)" }
@@ -1170,7 +1187,7 @@ final class AppModel: ObservableObject {
         panel.message = "Choose your key file IC-Info.sidb, for example from a backup of the folder iPod_Control/iTunes of this iPod."
         guard panel.runModal() == .OK, let file = panel.url else { return }
         if let problem = GameInstaller.checkKeyFile(file) {
-            alert = AlertInfo(title: "This is not a key file", message: problem)
+            alert = AlertInfo(title: "This Is Not a Key File", message: problem)
             return
         }
         gameKeyFile = file
@@ -1186,11 +1203,11 @@ final class AppModel: ObservableObject {
     /// The pane of the games shows the list for the removal.
     func readIPodGames() async {
         guard currentIPod != nil else {
-            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The pane of the games reads the games of the iPod.")
+            alert = AlertInfo(title: "No iPod Is Connected", message: "Connect the iPod. The pane of the games reads the games of the iPod.")
             return
         }
         guard let volume = ipodVolume() else {
-            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
             return
         }
         let root = volume.appendingPathComponent("iPod_Control").path
@@ -1204,19 +1221,19 @@ final class AppModel: ObservableObject {
     /// the removal first. The removal deletes the folder of the game only.
     func removeGames(_ guids: Set<String>) async {
         guard currentIPod != nil else {
-            alert = AlertInfo(title: "No iPod is connected", message: "Connect the iPod. The pane of the games removes the games from the iPod.")
+            alert = AlertInfo(title: "No iPod Is Connected", message: "Connect the iPod. The pane of the games removes the games from the iPod.")
             return
         }
         guard let volume = ipodVolume() else {
-            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
             return
         }
         let root = volume.appendingPathComponent("iPod_Control").path
         do {
-            let report = try await work("Removing \(guids.count) game(s) from the iPod…") {
+            let report = try await work("Removing \(counted(guids.count, "game")) from the iPod…") {
                 try GameRemover.remove(root, Array(guids))
             }
-            gameRemoveStatus = "Removed \(report.removed.count) game(s)."
+            gameRemoveStatus = "Removed \(counted(report.removed.count, "game"))."
             for guid in report.removed { gameRemoveStatus += "  \(guid)" }
             await readIPodGames()
         } catch {
@@ -1239,14 +1256,14 @@ final class AppModel: ObservableObject {
     func writeThumbnails() async {
         guard currentIPod != nil else { return }
         guard let volume = ipodMusicVolume() else {
-            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder, then try again.")
+            alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder, then try again.")
             return
         }
         do {
             let r = try await work("Making album and playlist thumbnails from the music on the iPod…") { try MusicImport.writeThumbnails(volume: volume) }
             thumbnailStatus = "\(r.covers) of \(r.albums) albums and \(r.playlistArt) of \(r.playlists) playlists have a thumbnail (\(Date().formatted(date: .abbreviated, time: .shortened)))."
             playlistArtChanged = false
-        } catch { fail("Cannot write the thumbnails", error) }
+        } catch { fail("Cannot Write the Thumbnails", error) }
     }
 
     /// The log of the usb-host-probe patch. The action in its patch.json makes it empty and writes the
@@ -1255,11 +1272,11 @@ final class AppModel: ObservableObject {
 
     func readUSBProbeLog() {
         guard let volume = ipodMusicVolume() else {
-            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder, then try again.")
+            alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder, then try again.")
             return
         }
         guard let data = try? Data(contentsOf: volume.appendingPathComponent(Self.usbProbeLogFile)) else {
-            alert = AlertInfo(title: "No USB log", message: "The iPod has no USB log. Click Start the Probe at the Next Restart. Then do the test.")
+            alert = AlertInfo(title: "No USB Log", message: "The iPod has no USB log. Click Start the Probe at the Next Restart. Then do the test.")
             return
         }
         usbProbeLog = USBProbeLog.parse([UInt8](data)) ?? []
@@ -1270,11 +1287,11 @@ final class AppModel: ObservableObject {
 
     func readPlaybackLog() {
         guard let volume = ipodMusicVolume() else {
-            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
             return
         }
         guard let data = try? Data(contentsOf: volume.appendingPathComponent(Self.playbackLogFile)) else {
-            alert = AlertInfo(title: "No playback log", message: "The iPod has no playback log. Click Clear the Playback Log. Then do the test.")
+            alert = AlertInfo(title: "No Playback Log", message: "The iPod has no playback log. Click Clear the Playback Log. Then do the test.")
             return
         }
         var letters: [String: String] = [:]
@@ -1295,7 +1312,7 @@ final class AppModel: ObservableObject {
         do {
             try ("iPodFirm on the Mac: \(version)\n" + log + "\n").write(to: url, atomically: true, encoding: .utf8)
         } catch {
-            fail("Cannot save the playback log", error)
+            fail("Cannot Save the Playback Log", error)
             return nil
         }
         NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -1327,7 +1344,7 @@ final class AppModel: ObservableObject {
             try await work("Saving the image for “\(name)” on the iPod…") { try MusicImport.setPlaylistArt(volume: volume, name: name, image: url) }
             playlistArtChanged = true
             await loadPlaylists()
-        } catch { fail("Cannot save the playlist image", error) }
+        } catch { fail("Cannot Save the Playlist Image", error) }
     }
 
     func resetPlaylistArt(_ name: String) async {
@@ -1336,7 +1353,7 @@ final class AppModel: ObservableObject {
             try MusicImport.removePlaylistArt(volume: volume, name: name)
             playlistArtChanged = true
             await loadPlaylists()
-        } catch { fail("Cannot remove the playlist image", error) }
+        } catch { fail("Cannot Remove the Playlist Image", error) }
     }
 
     // MARK: playlist folders
@@ -1369,7 +1386,7 @@ final class AppModel: ObservableObject {
     /// Write the folder file to the iPod.
     func writePlaylistFolders() async {
         guard let volume = ipodMusicVolume() else {
-            alert = AlertInfo(title: "iPod volume not found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
             return
         }
         let folders = playlistFolders
@@ -1385,8 +1402,8 @@ final class AppModel: ObservableObject {
             }
             savedPlaylistFolders = folders
             let time = Date().formatted(date: .abbreviated, time: .shortened)
-            playlistFoldersStatus = "The iPod has \(folders.folders.count) folder(s) (\(time)). Eject the iPod to see the change."
-        } catch { fail("Cannot write the playlist folders", error) }
+            playlistFoldersStatus = "The iPod has \(counted(folders.folders.count, "folder")) (\(time)). Eject the iPod to see the change."
+        } catch { fail("Cannot Write the Playlist Folders", error) }
     }
 
     // MARK: pictures
@@ -1397,7 +1414,7 @@ final class AppModel: ObservableObject {
         p.allowedContentTypes = [.png]
         p.nameFieldStringValue = String(format: picturesDark ? "%04d_%d_dark.png" : "%04d_%d.png", item.index, item.resourceID)
         if p.runModal() == .OK, let url = p.url {
-            do { try data.write(to: url) } catch { fail("Cannot export", error) }
+            do { try data.write(to: url) } catch { fail("Cannot Export", error) }
         }
     }
 
@@ -1413,7 +1430,7 @@ final class AppModel: ObservableObject {
             } else if try editor.replacePicture(item, rgba: ImageCodec.rgba(img)) {
                 edited()
             }
-        } catch { fail("Cannot replace the picture", error) }
+        } catch { fail("Cannot Replace the Picture", error) }
     }
 
     func chooseReplacement(for item: PictureItem) {
@@ -1436,7 +1453,7 @@ final class AppModel: ObservableObject {
             do {
                 try await work("Exporting…") { try editor.exportFolder(to: url) }
                 NSWorkspace.shared.activateFileViewerSelecting([url])
-            } catch { fail("Export failed", error) }
+            } catch { fail("Export Failed", error) }
         }
     }
 
@@ -1452,8 +1469,8 @@ final class AppModel: ObservableObject {
             do {
                 let changed = try await work("Importing…") { try editor.importFolder(from: url) }
                 if !changed.isEmpty { edited() }
-                alert = AlertInfo(title: "Import finished", message: changed.isEmpty ? "No changes found." : "\(changed.count) file(s) applied.")
-            } catch { fail("Import failed", error) }
+                alert = AlertInfo(title: "Import Finished", message: changed.isEmpty ? "No changes found." : "\(changed.count) file(s) applied.")
+            } catch { fail("Import Failed", error) }
         }
     }
 
@@ -1465,7 +1482,7 @@ final class AppModel: ObservableObject {
             if try editor.setStrings(blockIndex: blockIndex, values) { edited() }
             return true
         } catch {
-            fail("Cannot apply the text", error)
+            fail("Cannot Apply the Text", error)
             return false
         }
     }
@@ -1479,7 +1496,7 @@ final class AppModel: ObservableObject {
             AppLog.info("iPods found: \(found.isEmpty ? "none" : found.joined(separator: ", "))")
             if selectedIPod == nil || !ipods.contains(where: { $0.disk == selectedIPod }) { selectedIPod = ipods.first?.disk }
             unsupportedIPods.formIntersection(ipods)
-        } catch { fail("Cannot list disks", error) }
+        } catch { fail("Cannot List Disks", error) }
         refreshBackups()
         await readIPodLibraryName()
         // A different iPod (or none): the old state is not valid. Read the new iPod.
@@ -1509,7 +1526,7 @@ final class AppModel: ObservableObject {
             playlistArt = []
             playlistArtChanged = false
             await refreshIPods()
-        } catch { fail("The iPod did not eject", error) }
+        } catch { fail("The iPod Did Not Eject", error) }
     }
 
     func refreshBackups() { backups = Backups.list(in: Self.backupDir) }
@@ -1527,8 +1544,8 @@ final class AppModel: ObservableObject {
         do {
             let r = try await runBackup(ipod)
             guard r.ok else { throw r.failure() }
-            alert = AlertInfo(title: "Backup saved", message: "\(r.message)\n\n\(r.backup?.file ?? "")")
-        } catch { fail("Backup failed", error) }
+            alert = AlertInfo(title: "Backup Saved", message: "\(r.message)\n\n\(r.backup?.file ?? "")")
+        } catch { fail("Backup Failed", error) }
     }
 
     /// Step 1 of flashing: dry run (no writes) to show exactly what would change.
@@ -1551,12 +1568,12 @@ final class AppModel: ObservableObject {
             }
             guard r.ok else { throw r.failure() }
             if r.ranges?.isEmpty ?? true {
-                alert = AlertInfo(title: "Nothing to do", message: r.message)
+                alert = AlertInfo(title: "Nothing to Do", message: r.message)
             } else {
                 flashPlan = FlashPlan(ipod: ipod, image: image, reason: reason, result: r,
                                       musicAppRunning: !NSRunningApplication.runningApplications(withBundleIdentifier: MusicAppCheck.miMusicBundleID).isEmpty)
             }
-        } catch { fail("Cannot flash", error) }
+        } catch { fail("Cannot Flash", error) }
     }
 
     /// A firmware without the patch shuffle-album-mix still loads Album Mix from the settings file of
@@ -1595,7 +1612,7 @@ final class AppModel: ObservableObject {
             recordWrittenImage(plan.image, ipod: plan.ipod)
             alert = AlertInfo(title: plan.reason == "flash" ? "Flashed" : "Restored",
                               message: "\(r.message)\nBackup taken first: \(r.backup?.file ?? "-")\(mixNote.map { "\n\n" + $0 } ?? "")\n\nEject the iPod. If the iPod does not start, reset it (hold Menu and Select). Then hold Select and Play for disk mode, and restore a backup in iPodFirm.")
-        } catch { fail("Flash failed", error) }
+        } catch { fail("Flash Failed", error) }
     }
 
     /// true: the app can start a flash of the open firmware.
@@ -1608,7 +1625,7 @@ final class AppModel: ObservableObject {
             try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion, list: activeList)).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
-        } catch { fail("Cannot flash", error) }
+        } catch { fail("Cannot Flash", error) }
     }
 
     func restore(_ b: BackupInfo) async { await prepareFlash(image: backupURL(b), reason: "restore") }
@@ -1619,7 +1636,7 @@ final class AppModel: ObservableObject {
             let ipsw = try await ensureAppleIPSW()
             NSWorkspace.shared.activateFileViewerSelecting([ipsw])
             showFinderRestoreHelp = true
-        } catch { fail("Cannot get the Apple firmware", error) }
+        } catch { fail("Cannot Get the Apple Firmware", error) }
     }
 
     // MARK: emulator
@@ -1638,7 +1655,7 @@ final class AppModel: ObservableObject {
                     try IPSW.repack(original: original, firmware: IPSW.firmware(original: original, withOSOS: osos), to: out)
                 }
                 NSWorkspace.shared.activateFileViewerSelecting([out])
-            } catch { fail("Cannot write the .ipsw", error) }
+            } catch { fail("Cannot Write the .ipsw", error) }
         }
     }
 
@@ -1657,4 +1674,23 @@ final class AppModel: ObservableObject {
             try await emu.prepare(firmware: fw, ososLength: ososLength, originalIPSW: original, library: library)
         }
     }
+}
+
+/// The count and the noun in the correct form, for example "1 game" or "2 games".
+func counted(_ count: Int, _ noun: String) -> String { "\(count) \(noun)\(count == 1 ? "" : "s")" }
+
+/// Gives the progress of one download to the app.
+final class DownloadWatcher: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    private let progress: (Double) -> Void
+
+    init(progress: @escaping (Double) -> Void) { self.progress = progress }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        progress(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
+    }
+
+    /// The async download call gives the file to the app.
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
 }

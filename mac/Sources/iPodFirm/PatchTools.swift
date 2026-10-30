@@ -185,7 +185,7 @@ struct PlaylistFolderRow: View {
             HStack {
                 // ColorPicker("Colour", selection: colour, supportsOpacity: false).labelsHidden()
                 TextField("Folder name", text: $folder.name).textFieldStyle(.roundedBorder)
-                Text("\(folder.members.count) playlist(s)").font(.caption).foregroundStyle(.secondary)
+                Text(counted(folder.members.count, "playlist")).font(.caption).foregroundStyle(.secondary)
                 Button(role: .destructive) {
                     if let i = index { model.playlistFolders.folders.remove(at: i) }
                 } label: { Image(systemName: "trash") }

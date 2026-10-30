@@ -84,11 +84,13 @@ struct IPodView: View {
             } header: { Text("Recovery") }
 
             Section {
+                TitleDisclosure(title: "How iPodFirm Protects the iPod") {
                 SafetyRow(symbol: "externaldrive.badge.timemachine", text: "Before each flash or restore, iPodFirm makes a backup of the full firmware partition of the iPod. iPodFirm keeps the first backup as a permanent “Original”. iPodFirm reads each backup again to check it, and never overwrites a backup.")
                 SafetyRow(symbol: "lock.shield", text: "iPodFirm never changes the boot-flash updater (aupd). Only a change to aupd can make the iPod unusable. iPodFirm stops a flash that changes aupd or writes to aupd.")
                 SafetyRow(symbol: "checklist", text: "The new firmware must have correct checksums and agree with the partition layout of the iPod. Before a write, iPodFirm shows each part that it will write.")
                 SafetyRow(symbol: "checkmark.circle", text: "iPodFirm writes only the changed blocks. It reads each block again and compares it.")
                 SafetyRow(symbol: "lifepreserver", text: "If the iPod does not start, hold Menu and Select to reset it. Then hold Select and Play for disk mode, and restore a backup in iPodFirm. A restore in Finder also puts the Apple firmware on the iPod.")
+                }
             } header: { Text("Protections") }
         }
         .formStyle(.grouped)
@@ -218,7 +220,7 @@ struct FlashConfirmSheet: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 Label("First, iPodFirm makes a backup of the current firmware on the iPod.", systemImage: "externaldrive.badge.timemachine")
-                Label("iPodFirm writes \(ByteCountFormatter.string(fromByteCount: Int64(total), countStyle: .file)) in \(ranges.count) place(s). Then it reads the data again and checks it.", systemImage: "square.and.pencil")
+                Label("iPodFirm writes \(ByteCountFormatter.string(fromByteCount: Int64(total), countStyle: .file)) in \(counted(ranges.count, "place")). Then it reads the data again and checks it.", systemImage: "square.and.pencil")
                 Label("iPodFirm does not change the boot-flash updater (aupd).", systemImage: "lock.shield")
             }
             .foregroundStyle(.secondary)
@@ -322,7 +324,7 @@ struct FullDiskAccessSheet: View {
                 Step(n: 1, text: "Click Open Privacy Settings.")
                 Step(n: 2, text: "Turn on iPodFirm in the list. If the list does not show iPodFirm, click + and select Applications → iPodFirm.")
                 Step(n: 3, text: "When macOS asks, quit iPodFirm and open it again. Then do the operation again.")
-                Step(n: 4, text: "If the Touch ID helper is on and the status stays orange, add the helper too. Click +, press ⌘⇧G and paste the path from Copy Helper Path.")
+                Step(n: 4, text: "If the Touch ID helper is on and the status still shows a warning, add the helper too. Click +, press ⌘⇧G and paste the path from Copy Helper Path.")
             }
             HStack {
                 Button("Copy Helper Path") {
