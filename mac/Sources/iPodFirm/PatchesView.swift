@@ -45,7 +45,7 @@ struct SpaceUseRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     SpaceBar(use: s, parts: parts(s))
                     if s.fits {
-                        Text("\(kb(s.used)) of \(kb(s.total)) used, \(kb(s.total - s.used)) remaining")
+                        Text("\(kb(s.used)) of \(kb(s.total)) used, \(kb(s.total - s.used)) remaining · \(onCount)")
                     } else {
                         Label("The firmware is too large by \(kb(s.end - Patcher.SpaceUse.limit)). Switch off a patch, or choose Light.", systemImage: "exclamationmark.triangle.fill")
                             .labelStyle(StatusLabelStyle(tint: .red))
@@ -62,6 +62,8 @@ struct SpaceUseRow: View {
             await model.refreshSpaceUse()
         }
     }
+
+    var onCount: String { model.activePatches.count == 1 ? "1 patch on" : "\(model.activePatches.count) patches on" }
 
     func kb(_ bytes: Int) -> String { String(format: "%.1f KB", Double(bytes) / 1024) }
 
@@ -191,7 +193,7 @@ struct PatchList: View {
             Divider()
             HStack(spacing: 0) {
                 Button { model.choosePatchToInstall() } label: { Image(systemName: "plus").frame(width: 24, height: 20) }
-                    .help("Install a patch").accessibilityLabel("Install Patch")
+                    .help("Install a patch. You can also drag a .ipodpatch file to the list.").accessibilityLabel("Install Patch")
                 Button { confirmRemove = selectedPatch } label: { Image(systemName: "minus").frame(width: 24, height: 20) }
                     .disabled(selectedPatch?.source != .user)
                     .help("Remove the selected patch").accessibilityLabel("Remove Patch")
@@ -215,8 +217,6 @@ struct PatchList: View {
             Divider()
             VStack(alignment: .leading, spacing: 4) {
                 SpaceUseRow()
-                Text("Turned-on patches: \(model.activePatches.count)")
-                Text("To install a patch, drag a .ipodpatch file here.")
                 if model.editor == nil {
                     Label("Open a firmware to see which patches agree with it.", systemImage: "info.circle")
                         .fixedSize(horizontal: false, vertical: true)
@@ -259,14 +259,14 @@ struct OptionRow: View {
     let tint: Color
 
     var body: some View {
-        HStack(spacing: 10) {
-            SymbolTile(symbol: symbol, tint: tint)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+        HStack(spacing: 8) {
+            SymbolTile(symbol: symbol, tint: tint, size: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).lineLimit(1)
                 Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 1)
     }
 }
 
@@ -275,17 +275,15 @@ struct PatchListRow: View {
     let patch: PatchInfo
 
     var body: some View {
-        HStack(spacing: 10) {
-            SymbolTile(symbol: validSymbol(patch.spec.symbol), tint: patch.tint)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 8) {
+            SymbolTile(symbol: validSymbol(patch.spec.symbol), tint: patch.tint, size: 20)
+            VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
-                    Text(patch.spec.displayTitle)
+                    Text(patch.spec.displayTitle).lineLimit(1)
                     LetterBadge(patch: patch)
-                    if let v = patch.spec.version { Text(v).font(.caption).foregroundStyle(.secondary) }
-                    if let s = patch.spec.shortSizeText { Text(s).font(.caption).foregroundStyle(.secondary) }
                 }
                 if let summary = patch.spec.summary {
-                    Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if let mark = model.ipodMark(patch) { IPodMarkLabel(mark: mark) }
             }
@@ -296,7 +294,7 @@ struct PatchListRow: View {
             }
             PatchSwitch(patch: patch).controlSize(.small)
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 1)
     }
 }
 
@@ -425,7 +423,7 @@ struct TestPatchWarning: View {
         VStack(alignment: .leading, spacing: 4) {
             Label("Test Patch", systemImage: "exclamationmark.octagon.fill")
                 .font(.headline)
-            Text("This patch is for research and tests only. It has no function for normal use, and it can make the iPod unstable. Do not install it on an iPod that you use every day.")
+            Text("For research only. It can make the iPod unstable. Do not use it on an iPod that you use every day.")
                 .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(.white)
@@ -442,44 +440,52 @@ struct PatchDetail: View {
     var body: some View {
         Form {
             Section {
-                DetailHeader(title: patch.spec.displayTitle, subtitle: patch.spec.summary,
-                             symbol: validSymbol(patch.spec.symbol), tint: patch.tint, patch: patch)
+                HStack(alignment: .top) {
+                    DetailHeader(title: patch.spec.displayTitle, subtitle: patch.spec.summary,
+                                 symbol: validSymbol(patch.spec.symbol), tint: patch.tint, patch: patch)
+                    Spacer()
+                    PatchSwitch(patch: patch, label: "Include in Firmware")
+                        .fixedSize()
+                        .help("iPodFirm includes the turned-on patches when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.")
+                }
                 if patch.spec.isTest { TestPatchWarning() }
                 if let caution = patch.spec.caution {
                     Label(caution, systemImage: "exclamationmark.triangle.fill")
                         .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
                 }
-                PatchSwitch(patch: patch, label: "Include in Firmware")
-                    .help("iPodFirm includes the turned-on patches when you save, flash, export an .ipsw or run the emulator. Your picture and text changes stay as they are.")
-                if let state = model.ipodState {
-                    LabeledContent("On the iPod", value: ipodText(state))
-                    if let mark = model.ipodMark(patch), mark != .onIPod {
-                        IPodMarkLabel(mark: mark, long: true)
+                PatchWarnings(patch: patch)
+                if let mark = model.ipodMark(patch), mark != .onIPod {
+                    IPodMarkLabel(mark: mark, long: true)
+                }
+            }
+            PatchAbout(spec: patch.spec)
+            PatchOptions(patch: patch)
+            PatchControls(patch: patch)
+            Section("Information") {
+                Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 6) {
+                    GridRow {
+                        InfoItem(title: "Version", value: patch.spec.versionText)
+                        InfoItem(title: "Size on iPod", value: patch.spec.sizeText)
+                    }
+                    GridRow {
+                        InfoItem(title: "For", value: patch.spec.targetText)
+                        InfoItem(title: "Source", value: patch.source == .user ? "Installed by you" : "Included with iPodFirm")
+                    }
+                    if let state = model.ipodState {
+                        GridRow { InfoItem(title: "On the iPod", value: ipodText(state)) }
                     }
                 }
-            }
-            PatchOptions(patch: patch)
-            PatchAbout(spec: patch.spec)
-            Section("Compatibility") {
-                PatchCompatibility(patch: patch)
-                ForEach(model.conflicts(patch), id: \.0.id) { other, place in
-                    Label("Changes the same place as \"\(other.spec.displayTitle)\" (\(place)). You cannot turn on the two patches together.",
-                          systemImage: "exclamationmark.triangle.fill")
-                        .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
-                }
-                LabeledContent("Version", value: patch.spec.versionText)
-                LabeledContent("Size on iPod", value: patch.spec.sizeText)
+                PatchChecks(patch: patch)
                 if patch.spec.size == 0 {
                     Text("The patch adds no code. It changes only bytes that are already in the firmware.")
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                LabeledContent("Source", value: patch.source == .user ? "Installed by you" : "Included with iPodFirm")
                 if patch.replacesBuiltIn {
                     Text("This patch replaces the built-in version \(patch.builtInVersion ?? "–"). To use the built-in patch again, remove this patch.")
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            PatchControls(patch: patch)
+            PatchNotes(spec: patch.spec)
             if patch.source == .user { PatchCodeSections(patch: patch) }
         }
         .formStyle(.grouped)
@@ -492,6 +498,21 @@ struct PatchDetail: View {
         case .absent: return "No"
         case .unknown: return "Not known"
         }
+    }
+}
+
+/// One fact in the Information section of a patch.
+struct InfoItem: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.callout).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -585,7 +606,7 @@ struct IPodSyncBanner: View {
         if remove > 0 { parts.append("\(remove) to remove") }
         if update > 0 { parts.append("\(update) to update") }
         if model.ipodAppearanceDiffers { parts.append("a different appearance") }
-        return "The switches do not agree with the iPod: " + parts.joined(separator: ", ") + "."
+        return "Different from the iPod: " + parts.joined(separator: ", ") + "."
     }
 }
 
@@ -602,6 +623,7 @@ struct PatchOptions: View {
                     ForEach(o.choices, id: \.value) { c in Text(c.title).tag(c.value) }
                 }
                 .pickerStyle(.menu)
+                .help("iPodFirm uses this choice when you save, flash, export an .ipsw or run the emulator. To change the iPod, flash it again.")
                 if let c = o.choices.first(where: { $0.value == value }) {
                     if let d = c.description {
                         Text(d).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -611,14 +633,12 @@ struct PatchOptions: View {
                             .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Text("iPodFirm uses this choice when you save, flash, export an .ipsw or run the emulator. To change the iPod, flash it again.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 }
 
-/// The text of a patch in sections: What It Does, You Need and Good to Know.
+/// The text of a patch: What It Does and You Need.
 struct PatchAbout: View {
     let spec: PatchSpec
 
@@ -634,9 +654,23 @@ struct PatchAbout: View {
                 ForEach(items, id: \.self) { BulletRow(text: $0, symbol: "checkmark.circle", tint: .green) }
             }
         }
+    }
+}
+
+/// The notes of a patch, folded.
+struct PatchNotes: View {
+    let spec: PatchSpec
+
+    var body: some View {
         if let items = spec.notes, !items.isEmpty {
-            Section("Good to Know") {
-                ForEach(items, id: \.self) { BulletRow(text: $0, symbol: "info.circle", tint: .secondary) }
+            Section {
+                TitleDisclosure(title: "Good to Know") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(items, id: \.self) { BulletRow(text: $0, symbol: "info.circle", tint: .secondary) }
+                    }
+                    .padding(.top, 4)
+                }
+                .id(spec.name)
             }
         }
     }
@@ -684,29 +718,44 @@ struct StatusLabelStyle: LabelStyle {
     }
 }
 
-/// The firmware and storage checks of a patch.
-struct PatchCompatibility: View {
+/// The problems of a patch. They show at the top of the detail.
+struct PatchWarnings: View {
     @EnvironmentObject var model: AppModel
     let patch: PatchInfo
 
     var body: some View {
-        LabeledContent("For", value: patch.spec.targetText)
+        if model.editor != nil && !model.isCompatible(patch) {
+            Label("Does not agree with the open firmware. The patch is only for the original Apple firmware of its target. iPodFirm does not apply it.",
+                  systemImage: "xmark.octagon.fill")
+                .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
+        }
+        if let warning = patch.spec.hdd_warning, let gb = model.currentIPod?.likelyOriginalHDD {
+            Label("The connected iPod has approximately \(gb) GB. This is the size of an original hard drive. \(warning)",
+                  systemImage: "exclamationmark.triangle.fill")
+                .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
+        }
+        ForEach(model.conflicts(patch), id: \.0.id) { other, place in
+            Label("Changes the same place as \"\(other.spec.displayTitle)\" (\(place)). You cannot turn on the two patches together.",
+                  systemImage: "exclamationmark.triangle.fill")
+                .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// The firmware and storage checks that pass or that wait for an item.
+struct PatchChecks: View {
+    @EnvironmentObject var model: AppModel
+    let patch: PatchInfo
+
+    var body: some View {
         if model.editor == nil {
             Label("Open a firmware to examine this patch.", systemImage: "info.circle").foregroundStyle(.secondary)
         } else if model.isCompatible(patch) {
             Label("Agrees with the open firmware.", systemImage: "checkmark.circle.fill")
                 .labelStyle(StatusLabelStyle(tint: .green))
-        } else {
-            Label("Does not agree with the open firmware. The patch is only for the original Apple firmware of its target. iPodFirm does not apply it.",
-                  systemImage: "xmark.octagon.fill")
-                .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
         }
-        if let warning = patch.spec.hdd_warning {
-            if let gb = model.currentIPod?.likelyOriginalHDD {
-                Label("The connected iPod has approximately \(gb) GB. This is the size of an original hard drive. \(warning)",
-                      systemImage: "exclamationmark.triangle.fill")
-                    .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
-            } else if let ipod = model.currentIPod {
+        if patch.spec.hdd_warning != nil, model.currentIPod?.likelyOriginalHDD == nil {
+            if let ipod = model.currentIPod {
                 Label("The connected iPod has \(ByteCountFormatter.string(fromByteCount: ipod.size, countStyle: .decimal)). No original iPod drive has this size, thus the storage is flash.",
                       systemImage: "checkmark.circle.fill")
                     .labelStyle(StatusLabelStyle(tint: .green)).fixedSize(horizontal: false, vertical: true)
@@ -757,13 +806,13 @@ struct AppearanceDetail: View {
                 .frame(maxWidth: 380)
                 .accessibilityLabel("Appearance")
                 if model.appearance == .onIPod {
-                    Text("The firmware starts light. In Settings on the iPod, select \"Dark Mode\" to change between light and dark. The iPod saves its settings and restarts (a few seconds). The choice is in the file iPod_Control/iTunes/iPodFirmDarkMode.")
+                    Text("The firmware starts light. To change, select Settings > Dark Mode on the iPod. The iPod restarts in a few seconds.")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             } header: {
                 Text("Appearance")
             } footer: {
-                FormFooter("Light uses the Apple colours. Dark applies an imported dark theme when you save, flash, export an .ipsw or run the emulator. Switch on iPod adds a \"Dark Mode\" item to Settings on the iPod.")
+                FormFooter("Light uses the Apple colours. Dark uses an imported dark theme. Switch on iPod adds a \"Dark Mode\" item to Settings on the iPod.")
             }
             Section("Dark Theme") {
                 if model.themes.isEmpty {
@@ -785,10 +834,10 @@ struct AppearanceDetail: View {
                     LabeledContent("Size on iPod (Dark)", value: PatchSpec.byteText(current.theme.addedSize))
                     LabeledContent("Size on iPod (Switch on iPod)",
                                    value: model.switchOnIPodSize.map(PatchSpec.byteText) ?? "Open the firmware 1.3 to calculate")
-                    Text("The size is the new space after the end of the iPod software. The theme also changes \(PatchSpec.byteText(current.theme.changedSize)) of the Apple pictures and layouts. These changes use no new space. Switch on iPod also adds the Dark Mode switch table, the Settings item and the code (\(AppModel.darkModePatch?.spec.sizeText ?? "–")).")
+                    Text("The theme also changes \(PatchSpec.byteText(current.theme.changedSize)) of the Apple pictures and layouts. These changes use no new space. Switch on iPod adds code of \(AppModel.darkModePatch?.spec.sizeText ?? "–").")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     if model.appearance != .light {
-                        Text("The theme makes the iPod software larger. iPodFirm moves the rsrc image (fonts and video firmware) to free space in the firmware partition. It does not move or change aupd or hibe.")
+                        Text("iPodFirm moves the rsrc image to free space in the firmware partition. It does not change aupd or hibe.")
                             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     HStack {
@@ -803,7 +852,7 @@ struct AppearanceDetail: View {
             } header: {
                 Text("Import")
             } footer: {
-                FormFooter("Select the theme file (a firmware file from iPodWizard), then the Apple firmware that the theme came from, for example iPod_25.1.2.1.ipsw. iPodFirm moves the pictures, colours and layouts of the theme to firmware 1.3.")
+                FormFooter("Select the theme file from iPodWizard. Then select the Apple firmware that the theme came from, for example iPod_25.1.2.1.ipsw.")
             }
         }
         .formStyle(.grouped)
