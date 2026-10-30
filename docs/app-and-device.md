@@ -19,6 +19,8 @@ The app needs macOS 14 or later and an Apple silicon Mac (`--arch arm64`).
 
 ## The panes
 
+The sidebar has two sections. The section "Device" has only the iPod row. The first line of the row shows the name that iTunes set for the iPod, "Not Connected" or "Not Supported" (`AppModel.currentIPodStatus`). The second line shows "iPod". The app reads the name from the master playlist of the `iTunesDB` (`ITunesDB.readLibraryName`). If the iPod has no name, the row shows the volume name. The icon is green only for a connected, supported iPod. The section "Tools" has the other panes (`Pane.tools`). The footer shows the app version.
+
 | Pane | Functions | Main code |
 |---|---|---|
 | Firmware | The images, the checksums and the model of the open file. | [OverviewView.swift](../mac/Sources/iPodFirm/OverviewView.swift) |

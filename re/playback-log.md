@@ -94,13 +94,59 @@ The first 2048 bytes of the log have:
 
 - the RAM size (0x9d9d0), the free heap, the lowest free heap and the count of failed allocations;
 - the counts of the lines;
+- the settings (version 1.1): Shuffle, Repeat and the Hold Select value of `up-next`;
 - the iPodFirm list of the build (`list <JSON>`). The patch finds the text `iPodFirmManifest1` on a 16-byte step from 0x736800 to 0x7f8000. osos is in RAM, so the list is in RAM too. Refer to [patch-system.md](../docs/patch-system.md#the-ipodfirm-list). The app shows the patches with their letters.
 
 The patch keeps the text of the magic with each byte XOR 0x55. Thus the search does not find the text in the patch itself.
 
+### The settings (version 1.1)
+
+| Value | Source | Result |
+|---|---|---|
+| Shuffle | `0x9edb0(app)`, and `+0x93` for Album Mix | Off, Songs, Albums, Album Mix |
+| Repeat | `0x9e96c(app)`: settings `+0x1c`, 1 → 2 and 2 → 1 | 0, 1 or 2. The controller keeps it at `+0x1d`, next to Shuffle. The text Off, One, All is not proved yet: a real iPod must confirm it. |
+| Hold Select | The first character of `iPod_Control\iTunes\iPodFirmHoldSelect` | On-The-Go, Play Next, Play Last, Cover Flow. No file: "not known". |
+
+The app is `settings_object() + 0x98`, the method of `shuffle-album-mix`. Only the UI task reads the settings. Shuffle and Repeat come from RAM at a button or wheel event, at most one time each 5 s. The patch reads the file of `up-next` only before a file write, so that a wheel event does not start the disk. A changed value gives a line `settings ...`. Thus the time of a change in Hold Select is the time of the next file write, not the time of the change.
+
+The app also shows the options of each patch from the iPodFirm list, for example `up-next 0.5 hold=3`. This is the value of the build. The file on the iPod has the value that is in use.
+
+### The song (version 1.1)
+
+`song=` is now the Unique ID of the track: item + 0x20 is the track object, and track + 0x20 is mhit + 0x10 (refer to [song-info.md](song-info.md)). The patch stores no text on the iPod, because a read of the string pools in the task of the player needs locks. The value 0 means no track.
+
+"Show Playback Log" reads `iPod_Control/iTunes/iTunesDB` of the connected iPod (`ITunesDB.readTrackInfo`). A line with one `song=` gets the title and the artist. A list at the end has the title, the artist, the album and the file of each song in the log. A sync can change the IDs or remove a song. Thus show the log before a sync. For an ID that it does not find, the list and the line write "ID <value> is not in the iTunesDB". The saved file has the names of the songs, but the body of the GitHub issue does not.
+
 ### Tests
 
-- Swift: `PlaybackLogTests`, `testPatchSizes` (38025 bytes), `testPatchMetadata`.
+- Swift: `PlaybackLogTests`, `testPatchSizes` (38849 bytes), `testPatchMetadata`.
 - Python: `test_playback_log_hooks` with the Apple firmware 1.3. Each hook word is correct, and the chain wrapper of 0xb40c4 runs `push {r3-r5, lr}` and continues at 0xb40c8.
 - A build of the 17 patches that are not `test` or `internal`, together with `playback-log`, links with no conflict (29 October 2026).
-- Not tested in the emulator or on the real iPod yet. The emulator has no audio, thus each song fails there. This is a good test of the records of a failed song.
+- Not tested in the emulator. The emulator has no audio, thus each song fails there. This is a good test of the records of a failed song.
+
+## First log from a real iPod
+
+The owner ran version 1.0 on the iPod 5.5G (64 MB, 5202 songs) with 17 patches on 30 October 2026. The music did not stop. The log had 116 lines, no dropped line and no failed allocation.
+
+### The results
+
+| Item | Result |
+|---|---|
+| The information block | RAM 64 MB. The list of patches is correct. |
+| The free heap | 2,618,056 bytes at the first shuffle, approximately 2.0 MB after the first minutes. The lowest value was 1,979,132 bytes. |
+| The end of a song | `next from=ac22c flags=10`. The player then calls 0xac6f4 from 0xac5b4 (`play from=ac5b8`). Each of the 3 ends gave `play end result=0`. |
+| The Next button | `next from=a9800 flags=0`. The position changes, but `play` does not run at each push. `play from=a1484` runs later, after the pushes stop. |
+| A change of the Shuffle value during playback | `shuffle start from=b0d8c`, the call at 0xb0d88 in 0xb0d40. The current song goes to position 1. |
+| Shuffle Songs | `shuffle start from=b374c`, the `blne` at 0xb3748 in 0xb36b8. |
+| Shuffle Songs, 5202 songs | 28 ms and 38 ms. |
+| The first shuffle with Albums | 4041 ms. The cause is probably the sort of slot 6, because the next shuffle with Album Mix took 153 ms. |
+| The check of the result | `empty=0 repeated=0` for Songs, Albums and Album Mix. |
+| Album Mix | The first album played 14 different songs in a random order, the current song first. Then the next album started. |
+
+Thus the Next button and the end of a song use two different paths. A test with Next does not test the end of a song.
+
+### A fault in the log
+
+Each line has `track=46494c45`. This is the text `FILE`, not a track ID. Track + 0x0c is a type word, and 0xb7858 compares it. Version 1.1 removes the value `track`.
+
+The value `song` of version 1.0 (item + 0x10) is also not a track ID. It comes from a counter: 0xd1df0 writes the result of 0xa01e8 to item + 0x10. The iTunesDB of the same iPod has the IDs 0x22cd5 to 0x2557a, and it does not have the value 0x449f of the log.

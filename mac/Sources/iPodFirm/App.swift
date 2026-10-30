@@ -192,9 +192,17 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(Pane.allCases, selection: $model.section) { s in
-                Label(s.rawValue, systemImage: s.symbol).tag(s)
+            List(selection: $model.section) {
+                Section("Device") {
+                    IPodSidebarRow().tag(Pane.ipod)
+                }
+                Section("Tools") {
+                    ForEach(Pane.tools) { s in
+                        Label(s.rawValue, systemImage: s.symbol).tag(s)
+                    }
+                }
             }
+            .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 170, ideal: 190)
             .safeAreaInset(edge: .bottom) { SidebarFooter() }
         } detail: {
@@ -278,20 +286,29 @@ struct ContentView: View {
     }
 }
 
+/// The iPod row of the sidebar. The first line gives the state in words, so that color is not the only signal.
+struct IPodSidebarRow: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(model.currentIPodStatus).lineLimit(1)
+                Text(Pane.ipod.rawValue).font(.caption).foregroundStyle(.secondary)
+            }
+        } icon: {
+            Image(systemName: Pane.ipod.symbol)
+        }
+        .listItemTint(model.currentIPod != nil && !model.currentIPodIsUnsupported ? ListItemTint.fixed(.green) : .monochrome)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct SidebarFooter: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let ipod = model.currentIPod {
-                Label(ipod.volumeName ?? ipod.mediaName, systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green).font(.caption)
-            } else {
-                Label("No iPod connected", systemImage: "circle.dashed").foregroundStyle(.secondary).font(.caption)
-            }
-            Text("Version \(model.version)").font(.caption2).foregroundStyle(.tertiary)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Text("Version \(model.version)").font(.caption2).foregroundStyle(.tertiary)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

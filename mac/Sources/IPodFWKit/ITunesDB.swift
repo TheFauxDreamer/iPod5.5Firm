@@ -208,6 +208,20 @@ public enum ITunesDB {
     /// Read (track ID, album, path) of each track in an iTunesDB. The track ID is the value that the
     /// playlists use.
     public static func readTrackRecords(_ db: [UInt8]) -> [(id: UInt32, album: String, path: String)] {
+        readTrackInfo(db).map { ($0.id, $0.album, $0.path) }
+    }
+
+    /// The text fields of one track of an iTunesDB.
+    public struct TrackInfo: Equatable {
+        public var id: UInt32
+        public var title = "", artist = "", album = "", path = ""
+        public init(id: UInt32, title: String = "", artist: String = "", album: String = "", path: String = "") {
+            self.id = id; self.title = title; self.artist = artist; self.album = album; self.path = path
+        }
+    }
+
+    /// Read the text fields of each track in an iTunesDB.
+    public static func readTrackInfo(_ db: [UInt8]) -> [TrackInfo] {
         guard db.count > 12, Array(db[0..<4]) == Array("mhbd".utf8) else { return [] }
         // Go from one mhsd to the next with its total size. The other sections (for example
         // the album list, mhla, which iTunes writes first) do not all keep their size at +8.
@@ -223,26 +237,31 @@ public enum ITunesDB {
         return []
     }
 
-    static func readTrackList(_ db: [UInt8], from start: Int, to end: Int) -> [(id: UInt32, album: String, path: String)] {
+    static func readTrackList(_ db: [UInt8], from start: Int, to end: Int) -> [TrackInfo] {
         guard start + 12 <= end, String(decoding: db[start..<start + 4], as: UTF8.self) == "mhlt" else { return [] }
-        var out: [(UInt32, String, String)] = []
+        var out: [TrackInfo] = []
         var p = start + Int(le32(db, start + 4))
         for _ in 0..<Int(le32(db, start + 8)) {
             guard p + 20 <= end, String(decoding: db[p..<p + 4], as: UTF8.self) == "mhit" else { break }
             let hlen = Int(le32(db, p + 4)), total = Int(le32(db, p + 8))
             guard total >= hlen, hlen > 0 else { break }
-            var album = "", path = ""
+            var info = TrackInfo(id: le32(db, p + 16))
             var q = p + hlen
             for _ in 0..<Int(le32(db, p + 12)) {
                 guard q + 40 <= min(p + total, end), String(decoding: db[q..<q + 4], as: UTF8.self) == "mhod" else { break }
                 let kind = le32(db, q + 12), len = Int(le32(db, q + 8))
                 guard len > 0 else { break }
-                if kind == 2 || kind == 3, let text = mhodString(db, q) {
-                    if kind == 2 { path = text } else { album = text }
+                if (1...4).contains(kind), let text = mhodString(db, q) {
+                    switch kind {
+                    case 1: info.title = text
+                    case 2: info.path = text
+                    case 3: info.album = text
+                    default: info.artist = text
+                    }
                 }
                 q += len
             }
-            out.append((le32(db, p + 16), album, path))
+            out.append(info)
             p += total
         }
         return out
@@ -262,11 +281,22 @@ public enum ITunesDB {
         public var trackIDs: [UInt32]
         /// A podcast playlist (mhyp +0x2a). The Playlists list of the iPod does not show it.
         public var isPodcast: Bool
+        /// The master playlist (mhyp +0x14): the whole library. The iPod does not show it as a playlist.
+        public var isMaster = false
         public var id: UInt64 { persistentID }
     }
 
     /// The playlists of an iTunesDB, in the order of the database, without the master playlist.
     public static func readPlaylistEntries(_ db: [UInt8]) -> [PlaylistEntry] {
+        readAllPlaylists(db).filter { !$0.isMaster }
+    }
+
+    /// The name of the iPod that iTunes set. The master playlist holds this name.
+    public static func readLibraryName(_ db: [UInt8]) -> String? {
+        readAllPlaylists(db).first(where: \.isMaster).map(\.name).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    static func readAllPlaylists(_ db: [UInt8]) -> [PlaylistEntry] {
         guard db.count > 12, Array(db[0..<4]) == Array("mhbd".utf8) else { return [] }
         var p = Int(le32(db, 4))
         while p + 16 <= db.count, String(decoding: db[p..<p + 4], as: UTF8.self) == "mhsd" {
@@ -298,11 +328,9 @@ public enum ITunesDB {
                 if tag == "mhip", q + 28 <= end { ids.append(le32(db, q + 24)) }
                 q += len
             }
-            if !hidden {
-                let pid = hlen >= 0x24 ? UInt64(le32(db, p + 0x1c)) | UInt64(le32(db, p + 0x20)) << 32 : 0
-                let podcast = hlen >= 0x2c && (UInt16(db[p + 0x2a]) | UInt16(db[p + 0x2b]) << 8) != 0
-                out.append(PlaylistEntry(name: name, persistentID: pid, trackIDs: ids, isPodcast: podcast))
-            }
+            let pid = hlen >= 0x24 ? UInt64(le32(db, p + 0x1c)) | UInt64(le32(db, p + 0x20)) << 32 : 0
+            let podcast = hlen >= 0x2c && (UInt16(db[p + 0x2a]) | UInt16(db[p + 0x2b]) << 8) != 0
+            out.append(PlaylistEntry(name: name, persistentID: pid, trackIDs: ids, isPodcast: podcast, isMaster: hidden))
             p += total
         }
         return out

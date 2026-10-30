@@ -27,7 +27,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | Version 0.6.7: yes (27 October 2026). Version 0.6.8: yes (28 October 2026) |
 | [up-next](#up-next) | Code patch (extended) | Patches | 1 `bl`, 1 `b` and 2 vtable words (3 with `chain`), a Settings menu | Version 0.4: yes. Version 0.5: yes (28 October 2026) |
 | [playlist-folders](#playlist-folders) | Code patch (extended) | Patches | 4 `bl`, 2 `b` and 1 vtable word (with `chain`) | Version 0.1: emulator only (29 October 2026). Not tested on the real iPod |
-| [playback-log](#playback-log) | Code patch (test, extended) | Patches | 8 `bl`, 5 `b` (all 5 with `chain`) | No. Not tested in the emulator |
+| [playback-log](#playback-log) | Code patch (test, extended) | Patches | 8 `bl`, 5 `b` (all 5 with `chain`) | Version 1.0: yes (30 October 2026). Version 1.2: no. Not tested in the emulator |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
@@ -752,7 +752,7 @@ The `bytes` key changes 4 instruction words:
 
 The card game deck shuffle `0x12d494` also uses `0xaf4b4` and `0x55c`. It cuts its own n to 16 bits, n is a maximum of 52, and it has its own call of `0x55c`. Thus the card game does not change.
 
-**Test status.** Emulator (20 October 2026). Version 1.0: with 60 tracks, the order is the same as the stock firmware; with 40000 tracks, the shuffle completes and the state agrees with the model. Version 2.0, 60 tracks: the seed 0 of the emulator becomes 1; a fixed seed gives the stock order; the inner album shuffle (a test firmware sets `+0x93`) gives the first tracks of the model. The emulator has no audio, thus it cannot play the songs. Real iPod 5.5G (owner, 28 October 2026, version 2.1): the patch operates. That test used Next. A song that plays to its end with a large library is not tested. Static checks with a large library found no fault (refer to [re/shuffle.md](../re/shuffle.md#checks-of-the-shuffle-patches-with-a-large-library)).
+**Test status.** Emulator (20 October 2026). Version 1.0: with 60 tracks, the order is the same as the stock firmware; with 40000 tracks, the shuffle completes and the state agrees with the model. Version 2.0, 60 tracks: the seed 0 of the emulator becomes 1; a fixed seed gives the stock order; the inner album shuffle (a test firmware sets `+0x93`) gives the first tracks of the model. The emulator has no audio, thus it cannot play the songs. Real iPod 5.5G (owner, 28 October 2026, version 2.1): the patch operates. That test used Next. Version 2.2 (30 October 2026, 5202 songs): a song plays to its end and the next song starts. A library near the limit of a 32 MB iPod is not tested. Static checks with a large library found no fault (refer to [re/shuffle.md](../re/shuffle.md#checks-of-the-shuffle-patches-with-a-large-library)).
 
 ## shuffle-album-mix
 
@@ -1043,11 +1043,11 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 
 **User interface.** Patches pane > Playback Log, letter `g`. It is a test patch: turn on **Enable Test Patches** to see it. "Clear the Playback Log" writes an empty 32768-byte `iPod_Control/iTunes/iPodFirmPlaybackLog` on the connected iPod. The tool `playback-log` gives the section "Playback Log" with "Show Playback Log", "Copy Log", "Save the Log to Share…" and "Report on GitHub…" (`PlaybackLog` in [PlaybackLog.swift](../mac/Sources/IPodFWKit/PlaybackLog.swift), `AppModel.readPlaybackLog`, `savePlaybackLog`, `reportPlaybackLog`). "Save the Log to Share…" writes the log as a `.txt` file (default name "iPodFirm Playback Log yyyy-MM-dd HHmm.txt") and shows it in Finder. "Report on GitHub…" also saves the file, then opens a new issue in the browser with a title and a body (the app version and the information lines of the log). The user drags the file into the issue. This needs a GitHub account. Without an account, send the saved file in a different way.
 
-**Effect.** The iPod records each shuffle, each change of the song, each song that cannot play, each stop for "no next song" and each failed memory allocation. A button or wheel event writes the log to the file, at most one time each 5 seconds. The log starts with the RAM size, the free memory, the lowest free memory and the iPodFirm list of the build. The app shows the patches of the list with their letters.
+**Effect.** The iPod records each shuffle, each change of the song, each song that cannot play, each stop for "no next song" and each failed memory allocation. A button or wheel event writes the log to the file, at most one time each 5 seconds. The log starts with the RAM size, the free memory, the lowest free memory, the settings and the iPodFirm list of the build. The settings are Shuffle, Repeat and Hold Select (`up-next`). A changed setting also gives a line in the log. The app shows the patches of the list with their letters and options. `song=` is the iTunesDB track ID. The app finds each song in the iTunesDB of the connected iPod. It shows the title and the artist in the line, and a list of the songs with the album and the file at the end. The saved file has these names, so the user must know this before they attach the file to a public issue.
 
 **Research.** Refer to [re/playback-log.md](../re/playback-log.md).
 
-**Load address.** `extended`. The code, the data and the 32 KB log buffer (`.bss`) are 38025 bytes. The buffer is in the patch, thus the log operates also when the heap is full.
+**Load address.** `extended`. The code, the data and the 32 KB log buffer (`.bss`) are 38849 bytes. The buffer is in the patch, thus the log operates also when the heap is full.
 
 **Hooks.**
 
@@ -1067,7 +1067,7 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 
 **Caution.** Do not install this patch together with `usb-host-probe`. The two patches use the hook site 0x1d8260. `Patcher.conflicts` finds this: the app does not turn on the second patch, the Patches pane shows "Changes the same place as …", and the build fails. The test `testPlaybackLogConflicts` checks it.
 
-**Test status.** Swift and Python tests (29 October 2026): the log text, the size, each hook word and the chain wrappers. A build with the 17 patches that are not `test` or `internal` links with no conflict. Not tested in the emulator. Not tested on the real iPod.
+**Test status.** Swift and Python tests (29 October 2026): the log text, the size, each hook word and the chain wrappers. A build with the 17 patches that are not `test` or `internal` links with no conflict. Not tested in the emulator. Real iPod 5.5G (owner, 30 October 2026, version 1.0): the log operates, with 17 patches and 5202 songs. The value `track` is not correct: it is the text `FILE`. Version 1.1 removes it, adds the settings and records the iTunesDB track ID as `song`. Versions 1.1 and 1.2 are not tested on the real iPod. Refer to [re/playback-log.md](../re/playback-log.md#first-log-from-a-real-ipod).
 
 ## Storage type
 

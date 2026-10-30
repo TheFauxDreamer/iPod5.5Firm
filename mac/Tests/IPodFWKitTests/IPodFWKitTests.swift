@@ -685,6 +685,16 @@ final class PatchAndArtTests: XCTestCase {
         let read = ITunesDB.readTracks(ITunesDB.build(tracks))
         XCTAssertEqual(read.map(\.album), tracks.map(\.album))
         XCTAssertEqual(read.map(\.path), tracks.map(\.path))
+        let info = ITunesDB.readTrackInfo(ITunesDB.build(tracks))
+        XCTAssertEqual(info.map(\.title), tracks.map(\.title))
+        XCTAssertEqual(info.map(\.artist), tracks.map(\.artist))
+    }
+
+    func testReadLibraryName() {
+        let track = DBTrack(title: "A", artist: "B", album: "C", path: ":iPod_Control:Music:F00:A.m4a", size: 1, lengthMS: 1)
+        XCTAssertEqual(ITunesDB.readLibraryName(ITunesDB.build([track], libraryName: "Music Box")), "Music Box")
+        XCTAssertEqual(ITunesDB.readLibraryName(ITunesDB.build([track], libraryName: "")), nil)
+        XCTAssertNil(ITunesDB.readLibraryName([]))
     }
 
     func testReadPlaylists() {
@@ -1147,7 +1157,7 @@ final class PatcherOptionTests: XCTestCase {
 final class PlaybackLogTests: XCTestCase {
     func testText() throws {
         let list = String(decoding: try JSONEncoder().encode(FirmwareManifest(app: "0.1.180 (181)", patches: [
-            .init(name: "up-next", version: "0.5"), .init(name: "shuffle-fixes", version: "2.2"), .init(name: "user-patch", version: "1.0")])), as: UTF8.self)
+            .init(name: "up-next", version: "0.5", options: ["hold": 3]), .init(name: "shuffle-fixes", version: "2.2"), .init(name: "user-patch", version: "1.0")])), as: UTF8.self)
         let info = "PL01 playback-log 1.0\nram=32 MB heap=3100000 lowest=2900000 failed=0\nlines=2 dropped=0 lost=0 writes=1\nlist " + list
         var d = [UInt8](info.utf8) + [UInt8](repeating: 0x20, count: 2047 - info.utf8.count) + [0x0A]
         d += [UInt8]("     0.000 shuffle start count=60\n     0.012 shuffle end result=1\n".utf8)
@@ -1158,7 +1168,7 @@ final class PlaybackLogTests: XCTestCase {
             lines=2 dropped=0 lost=0 writes=1
             app: 0.1.180 (181)
             patches: 3, letters fn
-              n up-next 0.5
+              n up-next 0.5 hold=3
               f shuffle-fixes 2.2
               - user-patch 1.0
             0.000 shuffle start count=60
@@ -1167,6 +1177,23 @@ final class PlaybackLogTests: XCTestCase {
         XCTAssertNil(PlaybackLog.text([UInt8](repeating: 0, count: PlaybackLog.fileSize)))
         XCTAssertNil(PlaybackLog.text([UInt8]("VL01".utf8)))
         XCTAssertEqual(PlaybackLog.text([UInt8]("PL01 playback-log 1.0\nlist none\n".utf8)), "PL01 playback-log 1.0\npatches: not known (none)")
+    }
+
+    /// A line with a track ID gets the song, and a list at the end has each song in the log.
+    func testSongs() {
+        let log = "PL01 playback-log 1.1\nsettings shuffle=Songs repeat=Off hold=Play Next\n"
+        let lines = "     0.033   shuffle n=2 first=1a,2b,0 heap=1\n     0.314 play from=abc5c song=1a flags=1 heap=2\n     1.000   set song failed: -50 song=99 heap=2\n"
+        let d = [UInt8](log.utf8) + [UInt8](lines.utf8)
+        let songs = [ITunesDB.TrackInfo(id: 0x1a, title: "One", artist: "A", album: "B", path: ":iPod_Control:Music:F00:X.mp3"),
+                     ITunesDB.TrackInfo(id: 0x2b, title: "Two", artist: "C", album: "D", path: ":P")]
+        let text = PlaybackLog.text(d, songs: songs) ?? ""
+        XCTAssertTrue(text.contains("0.314 play from=abc5c song=1a flags=1 heap=2 \"One\" - A"))
+        XCTAssertTrue(text.contains("  ID 1a: One | A | B | :iPod_Control:Music:F00:X.mp3"))
+        XCTAssertTrue(text.contains("  ID 2b: Two | C | D | :P"))
+        XCTAssertTrue(text.contains("  ID 99 is not in the iTunesDB"))
+        XCTAssertTrue(text.contains("set song failed: -50 song=99 heap=2 (ID 99 is not in the iTunesDB)"))
+        XCTAssertFalse(text.contains("ID 0 "))
+        XCTAssertFalse((PlaybackLog.text(d) ?? "").contains("Songs in this log"))
     }
 
     func testFileName() {

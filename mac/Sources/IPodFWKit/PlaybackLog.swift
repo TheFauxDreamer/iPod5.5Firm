@@ -13,8 +13,10 @@ public enum PlaybackLog {
 
     /// The text of the log, or nil if the file has no log. An empty file (only zero bytes) gives nil.
     /// `letters` gives the version letter of each patch name. The line "list <JSON>" becomes the line
-    /// "patches: <letters>" and one line for each patch.
-    public static func text(_ data: [UInt8], letters: [String: String] = [:]) -> String? {
+    /// "patches: <letters>" and one line for each patch. `songs` has the tracks of the iTunesDB on the
+    /// iPod: a line with "song=<ID>" gets the title and the artist, and a list at the end has the album
+    /// and the file of each song in the log.
+    public static func text(_ data: [UInt8], letters: [String: String] = [:], songs: [ITunesDB.TrackInfo] = []) -> String? {
         let end = data.firstIndex(of: 0) ?? data.count
         guard end >= 4, data[0..<4] == [0x50, 0x4C, 0x30, 0x31] else { return nil }   // "PL01"
         var out: [String] = []
@@ -27,7 +29,42 @@ public enum PlaybackLog {
                 out.append(line)
             }
         }
-        return out.joined(separator: "\n")
+        return addSongs(out, songs: songs).joined(separator: "\n")
+    }
+
+    /// The track IDs in a log line: after "song=", "current=" and "first=". The value 0 is no song.
+    static func songIDs(_ line: String) -> [UInt32] {
+        var ids: [UInt32] = []
+        for field in line.split(separator: " ") {
+            guard let eq = field.firstIndex(of: "="), ["song", "current", "first"].contains(String(field[..<eq])) else { continue }
+            ids += field[field.index(after: eq)...].split(separator: ",").compactMap { UInt32($0, radix: 16) }.filter { $0 != 0 }
+        }
+        return ids
+    }
+
+    static func addSongs(_ lines: [String], songs: [ITunesDB.TrackInfo]) -> [String] {
+        guard !songs.isEmpty else { return lines }
+        var byID: [UInt32: ITunesDB.TrackInfo] = [:]
+        for s in songs { byID[s.id] = s }
+        var order: [UInt32] = []
+        var out = lines.map { line -> String in
+            let ids = isTimed(Substring(line)) || line.hasPrefix(" ") ? songIDs(line) : []
+            for id in ids where !order.contains(id) { order.append(id) }
+            guard let id = ids.first, ids.count == 1 else { return line }
+            guard let s = byID[id] else { return "\(line) (ID \(String(id, radix: 16)) is not in the iTunesDB)" }
+            return "\(line) \"\(s.title)\" - \(s.artist)"
+        }
+        guard !order.isEmpty else { return out }
+        out += ["", "Songs in this log (from the iTunesDB on the iPod. A sync after the test can change them):"]
+        for id in order {
+            let hex = String(id, radix: 16)
+            if let s = byID[id] {
+                out.append("  ID \(hex): \(s.title) | \(s.artist) | \(s.album) | \(s.path)")
+            } else {
+                out.append("  ID \(hex) is not in the iTunesDB")
+            }
+        }
+        return out
     }
 
     /// The name of the text file that "Save the Log to Share…" makes, for example
@@ -80,7 +117,8 @@ public enum PlaybackLog {
         let all = list.patches.compactMap { letters[$0.name] }.sorted().joined()
         var lines = ["app: \(list.app)", "patches: \(list.patches.count), letters \(all.isEmpty ? "none" : all)"]
         for p in list.patches {
-            lines.append("  \(letters[p.name] ?? "-") \(p.name)" + (p.version.map { " \($0)" } ?? ""))
+            let options = (p.options ?? [:]).sorted { $0.key < $1.key }.map { " \($0.key)=\($0.value)" }.joined()
+            lines.append("  \(letters[p.name] ?? "-") \(p.name)" + (p.version.map { " \($0)" } ?? "") + options)
         }
         return lines
     }

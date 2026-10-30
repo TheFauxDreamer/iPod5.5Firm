@@ -9,6 +9,8 @@ import UniformTypeIdentifiers
 enum Pane: String, CaseIterable, Identifiable {
     case overview = "Firmware", pictures = "Pictures", strings = "Text", patches = "Patches", games = "Games", ipod = "iPod", emulator = "Emulator"
     var id: String { rawValue }
+    /// The panes in the Tools section of the sidebar. The iPod pane has its own section.
+    static let tools: [Pane] = [.overview, .pictures, .strings, .patches, .games, .emulator]
     var symbol: String {
         switch self {
         case .overview: "cpu"
@@ -16,7 +18,7 @@ enum Pane: String, CaseIterable, Identifiable {
         case .strings: "textformat"
         case .patches: "puzzlepiece.extension"
         case .games: "gamecontroller"
-        case .ipod: "externaldrive.connected.to.line.below"
+        case .ipod: "ipod"
         case .emulator: "play.display"
         }
     }
@@ -37,6 +39,8 @@ final class AppModel: ObservableObject {
     @Published var selectedIPod: String?
     /// iPods for which the helper gave HelperResult.unsupportedIPod (for example an iPod classic).
     @Published var unsupportedIPods: Set<IPodDisk> = []
+    /// The name of the connected iPod that iTunes set. Nil if the iPod has no music database.
+    @Published var ipodLibraryName: String?
     @Published var backups: [BackupInfo] = []
     @Published var flashPlan: FlashPlan?
     @Published var hasFullDiskAccess = AppModel.checkFullDiskAccess()
@@ -226,6 +230,12 @@ final class AppModel: ObservableObject {
 
     /// True if the helper found that the selected iPod is not an iPod Video.
     var currentIPodIsUnsupported: Bool { currentIPod.map { unsupportedIPods.contains($0) } ?? false }
+
+    /// The state of the iPod in the sidebar.
+    var currentIPodStatus: String {
+        guard let ipod = currentIPod else { return "Not Connected" }
+        return currentIPodIsUnsupported ? "Not Supported" : ipodLibraryName ?? ipod.volumeName ?? ipod.mediaName
+    }
 
     // MARK: helpers
 
@@ -1233,7 +1243,8 @@ final class AppModel: ObservableObject {
         }
         var letters: [String: String] = [:]
         for p in Self.patchLibrary.list() { if let l = p.spec.version_letter { letters[p.spec.name] = l } }
-        playbackLog = PlaybackLog.text([UInt8](data), letters: letters) ?? ""
+        let database = (try? Data(contentsOf: volume.appendingPathComponent("iPod_Control/iTunes/iTunesDB"))).map { [UInt8]($0) } ?? []
+        playbackLog = PlaybackLog.text([UInt8](data), letters: letters, songs: ITunesDB.readTrackInfo(database)) ?? ""
     }
 
     /// Save the playback log as a text file, then show the file in Finder. Returns the file, or nil.
@@ -1434,6 +1445,7 @@ final class AppModel: ObservableObject {
             unsupportedIPods.formIntersection(ipods)
         } catch { fail("Cannot list disks", error) }
         refreshBackups()
+        await readIPodLibraryName()
         // A different iPod (or none): the old state is not valid. Read the new iPod.
         guard busy == nil else { return }
         guard let ipod = currentIPod, !currentIPodIsUnsupported else { ipodState = nil; ipodReadStatus = nil; return }
@@ -1441,6 +1453,16 @@ final class AppModel: ObservableObject {
             ipodState = nil
             await readIPodPatches(automatic: true)
         }
+    }
+
+    /// Read the name of the iPod from its music database.
+    func readIPodLibraryName() async {
+        let volume = ipodMusicVolume()
+        ipodLibraryName = await Task.detached(priority: .userInitiated) { () -> String? in
+            guard let volume,
+                  let db = try? Data(contentsOf: volume.appendingPathComponent("iPod_Control/iTunes/iTunesDB")) else { return nil }
+            return ITunesDB.readLibraryName([UInt8](db))
+        }.value
     }
 
     func ejectIPod() async {

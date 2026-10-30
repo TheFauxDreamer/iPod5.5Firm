@@ -232,7 +232,7 @@ struct PlaybackLogSection: View {
         } header: {
             Text("Playback Log")
         } footer: {
-            FormFooter("Report on GitHub saves the log as a text file and opens a new issue in the browser. Drag the file into the issue. You need a GitHub account.")
+            FormFooter("Report on GitHub saves the log as a text file and opens a new issue in the browser. Drag the file into the issue. You need a GitHub account. The file has the names of the songs in the log, and an issue is public.")
         }
     }
 }

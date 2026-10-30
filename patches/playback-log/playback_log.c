@@ -25,10 +25,15 @@
  * disable the interrupts while a line goes into the buffer, because several tasks write lines.
  *
  * File format: plain text, LOG_BYTES bytes. The first INFO bytes are the information block: the
- * line "PL01 playback-log 1.0", the RAM line, the counts and the line "list <JSON>" (the iPodFirm list
- * of the build, with the names and the versions of the patches). Spaces fill the rest of the block,
+ * line "PL01 playback-log 1.2", the RAM line, the counts, the line "settings ..." (Shuffle, Repeat and
+ * the Hold Select value of up-next) and the line "list <JSON>" (the iPodFirm list of the build, with
+ * the names, the versions and the options of the patches). Spaces fill the rest of the block,
  * and a line end ends it. The log lines follow. Zero bytes fill the rest of the file. When the buffer
- * is full, the patch removes the oldest half of the lines and counts them ("dropped"). */
+ * is full, the patch removes the oldest half of the lines and counts them ("dropped").
+ *
+ * The UI task reads the settings before each file write. Shuffle and Repeat are in RAM. Hold Select
+ * is in the file of up-next, and the patch reads this file only for a write, so that a wheel event
+ * does not start the disk. A change of a value also gives a line "settings ..." in the log. */
 
 #include <stdarg.h>
 
@@ -44,7 +49,9 @@
 #define RAND_GUARD (*(volatile unsigned *)0x1081e044)   /* 0: the seed is not set yet */
 #define LIST_FROM  0x736800                             /* the search area of the iPodFirm list */
 #define LIST_TO    0x7f8000
-#define LIST_MAX   (INFO - 256)
+#define HOLD_PATH  "iPod_Control\\iTunes\\iPodFirmHoldSelect"
+#define INFO_HEAD  320                                  /* the maximum of the text before the list */
+#define LIST_MAX   (INFO - INFO_HEAD - 8)
 
 #define FIELD(type, object, offset) (*(type *)((char *)(object) + (offset)))
 
@@ -52,13 +59,18 @@ void fw_memset0(void *p, unsigned size);                                   /* 0x
 void fw_strcpy(char *dst, const char *src);                                /* 0x7cd6c */
 int fw_vsnprintf(char *buf, unsigned size, const char *fmt, va_list args); /* 0x7b114 */
 int fw_snprintf(char *buf, unsigned size, const char *fmt, ...);           /* 0x7b240 */
+int file_open(void *path_record, void *fh, int zero, unsigned mode);
 int file_open_rw(void *path_record, void *fh, unsigned buffer, unsigned mode);
+int file_read(void *fh, unsigned *len, void *buf);
 int file_write(void *fh, unsigned *len, const void *buf);
 int file_seek(void *fh, int unused, unsigned long long position);
 int file_close(void *fh);
 int fw_long_play_timer(void *ui, void *event);         /* the original call at 0x1d8260 */
 unsigned heap_free(void);                              /* 0xc7444 */
 unsigned ram_size(void);                               /* 0x9d9d0: SysInfo + 0xe0 */
+void *settings_object(void);                           /* 0x193090 */
+int get_mode(void *app);                               /* 0x9edb0: 0 Off, 1 Songs, 2 Albums */
+int get_repeat(void *app);                             /* 0x9e96c: 0 Off, 1 One, 2 All */
 void *next_item(void *playlist, int song, unsigned flags);                 /* 0x1968c0 */
 int set_song(void *player, void *item, unsigned flags);                    /* 0xeb610 */
 int open_decoder(void *player, void *item, unsigned flags, void *out, void *cache); /* 0x10b894 */
@@ -173,16 +185,12 @@ static void list_state(int *at, int *count, int *shuffled)
     *shuffled = tl ? FIELD(unsigned char, tl, 0xec) & 1 : 0;
 }
 
-/* The song of an item (item + 0x10) and the track ID of its track (item + 0x20, track + 0x0c). */
+/* The iTunesDB track ID (mhit + 0x10) of an item: item + 0x20 is the track, and track + 0x20 is the ID.
+ * Item + 0x10 is not this ID: it comes from a counter (0xa01e8). The app finds the song with the ID. */
 static unsigned song_of(void *item)
 {
-    return item ? FIELD(unsigned, item, 0x10) : 0;
-}
-
-static unsigned track_of(void *item)
-{
     char *track = item ? FIELD(char *, item, 0x20) : 0;
-    return track ? FIELD(unsigned, track, 0x0c) : 0;
+    return track ? FIELD(unsigned, track, 0x20) : 0;
 }
 
 /* ---- The shuffle ------------------------------------------------------------------------------ */
@@ -271,7 +279,7 @@ void *hook_next_item(void *playlist, int song, unsigned flags)
     void *r = next_item(playlist, song, flags);
     int at, count, shuffled;
     list_state(&at, &count, &shuffled);
-    line("  next item=%x song=%x track=%x at=%d/%d", (unsigned)r, song_of(r), track_of(r), at, count);
+    line("  next item=%x song=%x at=%d/%d", (unsigned)r, song_of(r), at, count);
     return r;
 }
 
@@ -290,7 +298,7 @@ int hook_set(void *player, void *item, unsigned flags)
 {
     int r = set_song(player, item, flags);
     if (r != 0)
-        line("  set song failed: %d song=%x track=%x heap=%u", r, song_of(item), track_of(item), heap());
+        line("  set song failed: %d song=%x heap=%u", r, song_of(item), heap());
     return r;
 }
 
@@ -312,7 +320,7 @@ int hook_play(void *player, void *item, unsigned flags)
 {
     unsigned from = (unsigned)__builtin_return_address(0);
     int r;
-    line("play from=%x song=%x track=%x flags=%x heap=%u", from, song_of(item), track_of(item), flags, heap());
+    line("play from=%x song=%x flags=%x heap=%u", from, song_of(item), flags, heap());
     r = play_chain(player, item, flags);
     line("play end result=%d", r);
     return r;
@@ -393,16 +401,62 @@ static void find_list(void)
     }
 }
 
+/* The settings. -1: not known. Only the UI task calls these functions. */
+static int shuffle_now = -1, repeat_now = -1, hold_now = -1;
+static int shuffle_log = -2, repeat_log = -2, hold_log = -2;
+
+static const char *const shuffle_names[] = {"Off", "Songs", "Albums", "Album Mix"};
+static const char *const repeat_names[] = {"Off", "One", "All"};
+static const char *const hold_names[] = {"On-The-Go", "Play Next", "Play Last", "Cover Flow"};
+
+static const char *name_of(const char *const *names, int count, int value)
+{
+    return value >= 0 && value < count ? names[value] : "not known";
+}
+
+/* Shuffle and Repeat, from RAM. The app is settings_object + 0x98, as in shuffle-album-mix. */
+static void read_ram_settings(void)
+{
+    void *object = settings_object();
+    char *app = object ? FIELD(char *, object, 0x98) : 0;
+    char *settings = app ? FIELD(char *, app, 0xca0) : 0;
+    if (!settings)
+        return;
+    shuffle_now = get_mode(app);
+    if (shuffle_now == 2 && settings[0x93])
+        shuffle_now = 3;
+    repeat_now = get_repeat(app);
+}
+
+/* The Hold Select value of up-next: one character '0' to '3' in its file. No file: -1. */
+static void read_hold(void)
+{
+    unsigned path[0x108 / 4], fh[0x30 / 4], got = 1;
+    unsigned char c = 0;
+    hold_now = -1;
+    fw_memset0(path, 0x108);
+    fw_strcpy((char *)path + 4, HOLD_PATH);
+    fw_memset0(fh, sizeof fh);
+    if (file_open(path, fh, 0, MODE_DATA) == 0) {
+        if (file_read(fh, &got, &c) == 0 && got == 1 && c >= '0' && c <= '3')
+            hold_now = c - '0';
+        file_close(fh);
+    }
+}
+
 /* The information block: INFO bytes, spaces at the end and a line end. */
 static void info(void)
 {
     unsigned n, i, f = heap();
     find_list();
-    n = fw_snprintf(L, 256,
-                    "PL01 playback-log 1.0\nram=%u MB heap=%u lowest=%u failed=%u\nlines=%u dropped=%u lost=%u writes=%u\nlist ",
-                    ram_size() >> 20, f, lowest, failures, lines, dropped, lost, writes);
-    if (n > 255)
-        n = 255;
+    n = fw_snprintf(L, INFO_HEAD,
+                    "PL01 playback-log 1.2\nram=%u MB heap=%u lowest=%u failed=%u\nlines=%u dropped=%u lost=%u writes=%u\n"
+                    "settings shuffle=%s repeat=%s hold=%s\nlist ",
+                    ram_size() >> 20, f, lowest, failures, lines, dropped, lost, writes,
+                    name_of(shuffle_names, 4, shuffle_now), name_of(repeat_names, 3, repeat_now),
+                    name_of(hold_names, 4, hold_now));
+    if (n > INFO_HEAD - 1)
+        n = INFO_HEAD - 1;
     if (list_json && list_length <= LIST_MAX) {
         for (i = 0; i < list_length; i++) {
             char c = list_json[i];
@@ -446,9 +500,18 @@ int hook_event(void *ui, void *event)
     now = USEC;
     if (now - last_write_us < WRITE_US && writes)
         return r;
-    if (!changed && writes)
+    read_ram_settings();
+    if (!changed && writes && shuffle_now == shuffle_log && repeat_now == repeat_log)
         return r;
     last_write_us = now;
+    read_hold();
+    if (shuffle_now != shuffle_log || repeat_now != repeat_log || hold_now != hold_log) {
+        line("settings shuffle=%s repeat=%s hold=%s", name_of(shuffle_names, 4, shuffle_now),
+             name_of(repeat_names, 3, repeat_now), name_of(hold_names, 4, hold_now));
+        shuffle_log = shuffle_now;
+        repeat_log = repeat_now;
+        hold_log = hold_now;
+    }
     if (fail_repeats) {
         line("  = the last failed allocation %u more times", fail_repeats);
         fail_repeats = 0;
