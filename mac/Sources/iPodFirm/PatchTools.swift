@@ -200,12 +200,30 @@ struct PlaylistFolderRow: View {
 
 /// The log that the playback-log patch writes on the iPod: the shuffle, the playback and the memory.
 struct PlaybackLogSection: View {
-    @EnvironmentObject var model: AppModel
-
     var body: some View {
         Section {
+            PlaybackLogContent()
+        } header: {
+            Text("Playback Log")
+        } footer: {
+            FormFooter(PlaybackLogContent.footer)
+        }
+    }
+}
+
+/// The buttons and the text of the playback log, in the Patches pane and in `IPodLogSheet`.
+struct PlaybackLogContent: View {
+    static let footer = "Report on GitHub saves the log as a text file and opens a new issue in the browser. Drag the file into the issue. You need a GitHub account. The file has the names of the songs in the log, and an issue is public."
+
+    @EnvironmentObject var model: AppModel
+    var showsRead = true
+
+    var body: some View {
+        Group {
             HStack {
-                Button("Show Playback Log") { model.readPlaybackLog() }.disabled(model.currentIPod == nil)
+                if showsRead {
+                    Button("Show Playback Log") { model.readPlaybackLog() }.disabled(model.currentIPod == nil)
+                }
                 Spacer()
                 if let log = model.playbackLog, !log.isEmpty {
                     Button("Copy Log") {
@@ -229,10 +247,6 @@ struct PlaybackLogSection: View {
                     .frame(minHeight: 80, maxHeight: 400)
                 }
             }
-        } header: {
-            Text("Playback Log")
-        } footer: {
-            FormFooter("Report on GitHub saves the log as a text file and opens a new issue in the browser. Drag the file into the issue. You need a GitHub account. The file has the names of the songs in the log, and an issue is public.")
         }
     }
 }
@@ -241,12 +255,26 @@ struct PlaybackLogSection: View {
 
 /// The log that the usb-host-probe patch writes on the iPod. Refer to USB-AUDIO-OUT.md (Stage 0).
 struct USBLogSection: View {
-    @EnvironmentObject var model: AppModel
-
     var body: some View {
         Section {
+            USBLogContent()
+        } header: {
+            Text("USB Log")
+        }
+    }
+}
+
+/// The buttons and the text of the USB log, in the Patches pane and in `IPodLogSheet`.
+struct USBLogContent: View {
+    @EnvironmentObject var model: AppModel
+    var showsRead = true
+
+    var body: some View {
+        Group {
             HStack {
-                Button("Show USB Log") { model.readUSBProbeLog() }.disabled(model.currentIPod == nil)
+                if showsRead {
+                    Button("Show USB Log") { model.readUSBProbeLog() }.disabled(model.currentIPod == nil)
+                }
                 Spacer()
                 if let log = model.usbProbeLog {
                     Button("Copy Log") {
@@ -269,8 +297,40 @@ struct USBLogSection: View {
                     .frame(minHeight: 80, maxHeight: 320)
                 }
             }
-        } header: {
-            Text("USB Log")
+        }
+    }
+}
+
+/// A log on the iPod. The iPod pane opens this sheet.
+struct IPodLogSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) var dismiss
+    let log: IPodLogFile
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(log.title).font(.title3.bold())
+            Text(log.details).font(.caption).foregroundStyle(.secondary)
+            switch log.kind {
+            case .playback:
+                PlaybackLogContent(showsRead: false)
+                FormFooter(PlaybackLogContent.footer)
+            case .usb:
+                USBLogContent(showsRead: false)
+            }
+            Spacer(minLength: 0)
+            HStack {
+                Spacer()
+                Button("Close") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 660, height: 600)
+        .onAppear {
+            switch log.kind {
+            case .playback: model.readPlaybackLog()
+            case .usb: model.readUSBProbeLog()
+            }
         }
     }
 }

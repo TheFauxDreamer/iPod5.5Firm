@@ -325,6 +325,7 @@ struct ContentView: View {
         .sheet(isPresented: $model.showDisclaimer) { DisclaimerSheet(review: false).interactiveDismissDisabled() }
         .sheet(isPresented: $model.showDisclaimerReview) { DisclaimerSheet(review: true) }
         .sheet(isPresented: $model.showThanks) { ThanksSheet() }
+        .sheet(item: $model.shownLog) { IPodLogSheet(log: $0) }
         .task { await model.refreshIPods() }
         .task {
             // A connected or disconnected iPod: find the iPods again, and read the patches on a new iPod.

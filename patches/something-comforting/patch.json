@@ -1,15 +1,18 @@
 {
   "name": "something-comforting",
   "title": "Something Comforting",
-  "summary": "A Proof of Concept that plays a melody on the iPod speaker.",
+  "summary": "Example patch: plays a melody on the speaker.",
   "symbol": "music.note",
   "category": "fun",
   "version_letter": "m",
-  "version": "1.1",
+  "version": "1.2",
   "size": 692,
-  "description": "An example patch. The Settings menu has a Something Comforting item. When you select the item, the internal speaker of the iPod (the piezo) plays a part of \"Something Comforting\" by Porter Robinson. The patch can be used with all other patches and with Dark Mode.",
-  "details": ["Settings has a Something Comforting item after Clicker.", "Select the item to play approximately 13 seconds of the melody.", "The melody plays on the internal speaker, not in the headphones."],
-  "notes": ["The iPod does not react to the buttons while the melody plays.", "The Clicker setting does not stop the melody.", "This patch is an example of a patch that adds a Settings item."],
+  "description": "Select Settings > Something Comforting to play approximately 13 seconds of \"Something Comforting\" by Porter Robinson.",
+  "details": [
+    "The melody plays on the internal speaker, not in the headphones.",
+    "The iPod does not react to the buttons while the melody plays.",
+    "The Clicker setting does not stop the melody."
+  ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }

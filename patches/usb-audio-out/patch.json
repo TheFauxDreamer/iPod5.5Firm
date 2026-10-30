@@ -1,22 +1,19 @@
 {
   "name": "usb-audio-out",
   "title": "USB-C Audio",
-  "summary": "Enables music through USB-C headphones (Settings > USB-C Audio).",
+  "summary": "Plays music through USB-C headphones.",
   "symbol": "headphones",
   "category": "audio",
   "version_letter": "u",
-  "version": "1.9",
+  "version": "1.10",
   "size": 15924,
-  "description": "Adds the item USB-C Audio to Settings. When it is On, the iPod operates as the USB host and sends its music to USB Audio Class 2 headphones, for example the Apple USB-C EarPods. The volume of the iPod sets the volume of the headphones, and the buttons of the headphones operate the iPod.",
+  "description": "The iPod operates as the USB host and sends its music to USB Audio Class 2 headphones, for example the Apple USB-C EarPods.",
   "caution": "USB-C Audio needs a USB-C mod and a dock or an OTG adapter that gives 5 V. While USB-C Audio is On, a computer cannot see the iPod: set it to Off before a sync. The probe patch usb-host-probe uses the same hook sites: do not install both.",
   "details": [
-    "Settings > USB-C Audio is Off after each start. Then the USB port operates as usual: sync, disk mode and charging.",
-    "Settings > Main Menu > USB-C Audio puts the item in the main menu, after Settings. The default is Off. The main menu item shows the state, for example \"USB-C Audio: Off\" or \"USB-C Audio: 48 kHz\". Select it to switch USB-C Audio On or Off.",
-    "Set USB-C Audio to On. Connect the headphones through the dock. The music comes from the headphones a few seconds after they connect.",
-    "The click wheel sets the volume of the headphones.",
-    "The headphone buttons: volume + and volume −; the middle button one time is Play/Pause, two times is the next song, three times is the previous song.",
-    "When you disconnect the dock, the song pauses. When you connect it again, the music goes to the headphones again; press Play to continue.",
-    "Set USB-C Audio to Off: the music goes to the headphone jack, and a computer can see the iPod again."
+    "Set Settings > USB-C Audio to On. Connect the headphones through the dock. The music starts a few seconds later.",
+    "The click wheel sets the volume. On the headphones, the middle button is Play/Pause. Two pushes give the next song, and three pushes give the previous song.",
+    "When you disconnect the dock, the song pauses. After you connect it again, press Play.",
+    "The setting is Off after each start. When it is Off, the USB port operates as usual."
   ],
   "requires": [
     "An iPod Video (5G/5.5G) with a USB-C mod.",
@@ -24,10 +21,9 @@
     "USB Audio Class 2 headphones at full speed, for example the Apple USB-C EarPods."
   ],
   "notes": [
-    "The patch sends the music at the rate of the option Sample Rate: 44.1 kHz (the default) or 48 kHz. If the headphones refuse that rate, it uses the other one. 16 bits, stereo, at full speed. While the music plays, Settings shows the rate that the headphones report, for example \"On (48 kHz)\". Caution: make sure that the Sample Rate matches the music in your library (most songs are 44.1 kHz). If the rates are different, Apple's rate converter runs, and it causes performance drops (about 12 % of the CPU; the scrolling is less smooth).",
-    "The volume curve: full volume is 0 dB, half volume is -24 dB.",
-    "Tested functions (probe 1.27): music, Now Playing art, volume, buttons, a pause at a disconnection, a new start after a reconnection.",
-    "The iPod charges from the dock while USB-C Audio plays (the owner, 2026-10-17).",
+    "Settings > Main Menu > USB-C Audio puts the item in the main menu.",
+    "Make sure that the Sample Rate agrees with your music. Most songs are 44.1 kHz. A different rate uses approximately 12 % of the CPU, and the scroll is less smooth.",
+    "The iPod charges from the dock while USB-C Audio plays.",
     "Install Instant Save to keep the Main Menu row after a restart with Menu+Select."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
