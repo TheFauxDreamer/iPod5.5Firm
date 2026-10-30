@@ -67,6 +67,7 @@ struct PicturesView: View {
                     PictureDetail(item: item)
                 } else {
                     ContentUnavailableView("No Picture Selected", systemImage: "photo", description: Text("Select a picture in the grid."))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .frame(minWidth: 300, idealWidth: 340, maxWidth: 460)
