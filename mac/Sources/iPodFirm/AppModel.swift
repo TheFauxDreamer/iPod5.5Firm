@@ -156,6 +156,10 @@ final class AppModel: ObservableObject {
     @Published var usbProbeLog: [USBProbeLog.Entry]?
     /// The text of the playback log (nil: not read; empty: the file has no log).
     @Published var playbackLog: String?
+    /// The log files on the connected iPod.
+    @Published var ipodLogs: [IPodLogFile] = []
+    /// The log in `IPodLogSheet`.
+    @Published var shownLog: IPodLogFile?
     /// The playlists of the connected iPod and their thumbnails (album-art patch).
     @Published var playlistArt: [MusicImport.PlaylistArt] = []
     /// True after a change to a playlist image that is not yet in the thumbnail file on the iPod.
@@ -983,6 +987,7 @@ final class AppModel: ObservableObject {
             }
             if action.write.contains(where: { $0.path == Self.usbProbeLogFile }) { usbProbeLog = nil }
             if action.write.contains(where: { $0.path == Self.playbackLogFile }) { playbackLog = nil }
+            refreshIPodLogs()
             patchActionStatus[patch.spec.name] = "\(action.status ?? "\(action.title): complete.") (\(Date().formatted(date: .omitted, time: .shortened)))"
         } catch { fail("Cannot Write the File on the iPod", error) }
     }
@@ -1270,6 +1275,18 @@ final class AppModel: ObservableObject {
     /// trigger file; the patch writes the log on the iPod.
     static let usbProbeLogFile = "iPod_Control/iTunes/iPodFirmUSBLog"
 
+    /// Finds the log files on the iPod. A file with no data gets no row.
+    func refreshIPodLogs() {
+        guard let volume = ipodMusicVolume() else { ipodLogs = []; return }
+        ipodLogs = IPodLogFile.Kind.allCases.compactMap { kind in
+            let file = kind == .playback ? Self.playbackLogFile : Self.usbProbeLogFile
+            let path = volume.appendingPathComponent(file).path
+            guard let info = try? FileManager.default.attributesOfItem(atPath: path),
+                  let bytes = info[.size] as? Int, bytes > 0 else { return nil }
+            return IPodLogFile(kind: kind, bytes: bytes, date: info[.modificationDate] as? Date)
+        }
+    }
+
     func readUSBProbeLog() {
         guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder, then try again.")
@@ -1499,6 +1516,7 @@ final class AppModel: ObservableObject {
         } catch { fail("Cannot List Disks", error) }
         refreshBackups()
         await readIPodLibraryName()
+        refreshIPodLogs()
         // A different iPod (or none): the old state is not valid. Read the new iPod.
         guard busy == nil else { return }
         guard let ipod = currentIPod, !currentIPodIsUnsupported else { ipodState = nil; ipodReadStatus = nil; return }

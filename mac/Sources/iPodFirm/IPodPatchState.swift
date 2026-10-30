@@ -170,3 +170,20 @@ extension AppModel {
         applyIPodState(patchState(osos: osos, ipod: ipod))
     }
 }
+
+/// One log file on the connected iPod.
+struct IPodLogFile: Identifiable {
+    enum Kind: CaseIterable { case playback, usb }
+
+    let kind: Kind
+    let bytes: Int
+    let date: Date?
+    var id: Kind { kind }
+
+    var title: String { kind == .playback ? "Playback Log" : "USB Log" }
+
+    var details: String {
+        let size = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+        return date.map { "\(size) · Changed \($0.formatted(date: .abbreviated, time: .shortened))" } ?? size
+    }
+}

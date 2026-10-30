@@ -59,7 +59,7 @@ The check sends no data about you or your iPod.
 1. Connect the iPod to the Mac.
 2. In iPodFirm, open the **iPod** pane. The app finds the iPod.
 3. Click **Back Up iPod**. The app keeps the first backup as "Original (first backup)".
-4. Open the Apple firmware. Select File > Download Apple Firmware 1.3, or click **Edit a Copy** on a backup.
+4. Open the Apple firmware. Select File > Download Apple Firmware 1.3, or open the **…** menu of a backup and click **Edit a Copy**.
 5. Open the **Patches** pane.
 6. Switch on the patches that you want.
 7. Open the **iPod** pane.
@@ -119,7 +119,7 @@ The table shows the status that the test notes record. For the full test record,
 | Album Mix Shuffle | x | Adds Album Mix to Settings > Shuffle: the albums and the songs in each album play in a random order. Settings > Main Menu > Shuffle adds a main menu item that changes the Shuffle value. It needs Shuffle Fixes, and the app turns on Shuffle Fixes with it. | Yes (version 1.2) |
 | Something Comforting | m | An example patch. A Settings item plays a short song on the internal speaker of the iPod. | Yes |
 | USB-C Audio | u | Plays the music through USB-C headphones. Refer to [USB-C Audio](#usb-c-audio). | Yes (version 1.9) |
-| Playback Log | g | A test patch. It records the shuffle, the playback, the memory and the installed patches in a log on the iPod. Turn on Enable Test Patches to see it. Use it when the music stops. "Save the Log to Share…" makes a text file. "Report on GitHub…" also opens a new issue (a GitHub account is necessary). | No |
+| Playback Log | g | A test patch. It records the shuffle, the playback, the memory and the installed patches in a log on the iPod. The iPod pane shows the log in the section **Logs on This iPod**. Turn on Enable Test Patches to see it. Use it when the music stops. "Save the Log to Share…" makes a text file. "Report on GitHub…" also opens a new issue (a GitHub account is necessary). | No |
 | USB Host Probe | h | A test patch for research only. Refer to [USB Host Probe](#usb-host-probe). | Yes (up to version 1.29) |
 
 ### The space for patches

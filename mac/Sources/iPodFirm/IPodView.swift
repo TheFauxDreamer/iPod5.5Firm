@@ -7,12 +7,21 @@ struct IPodView: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
+        HSplitView {
+            deviceColumn
+                .frame(minWidth: 380, idealWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
+            macColumn
+                .frame(minWidth: 340, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .onAppear { model.refreshBackups(); model.recheckFullDiskAccess(); model.refreshIPodLogs() }
+        .onChange(of: model.selectedIPod) { Task { await model.refreshIPods() } }
+    }
+
+    /// The connected iPod: its state, its patches and its logs.
+    var deviceColumn: some View {
         Form {
             Section {
                 PermissionSummaryRow()
-            } header: { Text("Permission") }
-
-            Section {
                 if model.ipods.isEmpty {
                     Label("No iPod is connected. Connect the iPod. If the Mac does not find it, put it in disk mode: hold Menu and Select to reset it, then hold Select and Play.",
                           systemImage: "cable.connector.slash").foregroundStyle(.secondary)
@@ -29,16 +38,19 @@ struct IPodView: View {
                           systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .red))
                 }
                 HStack {
-                    Button("Refresh") { Task { await model.refreshIPods() } }
-                    Button("Eject iPod") { Task { await model.ejectIPod() } }
-                        .disabled(model.currentIPod == nil)
-                        .help("Unmount the iPod so that you can disconnect it")
-                    Spacer()
                     Button("Back Up iPod") { Task { await model.backupNow() } }
                         .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported)
                     Button("Flash to iPod…") { Task { await model.flashEdited() } }
                         .disabled(!model.canFlash)
                         .buttonStyle(.borderedProminent)
+                    Spacer()
+                }
+                HStack {
+                    Button("Refresh") { Task { await model.refreshIPods() } }
+                    Spacer()
+                    Button("Eject iPod") { Task { await model.ejectIPod() } }
+                        .disabled(model.currentIPod == nil)
+                        .help("Unmount the iPod so that you can disconnect it")
                 }
             } header: { Text("Connected iPod") }
 
@@ -46,8 +58,17 @@ struct IPodView: View {
                 Section {
                     IPodPatchesSection()
                 } header: { Text("Patches on This iPod") }
+                Section {
+                    IPodLogsSection()
+                } header: { Text("Logs on This iPod") }
             }
+        }
+        .formStyle(.grouped)
+    }
 
+    /// The items that stay on the Mac, and the help for a problem.
+    var macColumn: some View {
+        Form {
             Section {
                 if model.backups.isEmpty {
                     Text("There are no backups. iPodFirm makes a backup before each flash. You can also click Back Up iPod.")
@@ -66,19 +87,19 @@ struct IPodView: View {
             Section {
                 Label("Charge the iPod before a recovery. An iPod with an empty battery does not show disk mode.",
                       systemImage: "exclamationmark.triangle.fill").labelStyle(StatusLabelStyle(tint: .orange))
-                VStack(alignment: .leading, spacing: 6) {
-                    Step(n: 1, text: "Push and hold Menu and Select until the iPod restarts.")
-                    Step(n: 2, text: "When the Apple logo shows, push and hold Select and Play until disk mode shows.")
-                    Step(n: 3, text: "Connect the iPod to the Mac and click Refresh.")
-                    Step(n: 4, text: "Click Restore… on a backup. If the firmware on the iPod is damaged, iPodFirm does a rescue restore.")
-                }
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("If iPodFirm cannot restore a backup, restore the Apple firmware with Finder.")
-                        Text("Finder also repairs a damaged partition table. Finder erases the music on the iPod.")
-                            .font(.caption).foregroundStyle(.secondary)
+                TitleDisclosure(title: "Recovery Steps") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Step(n: 1, text: "Push and hold Menu and Select until the iPod restarts.")
+                        Step(n: 2, text: "When the Apple logo shows, push and hold Select and Play until disk mode shows.")
+                        Step(n: 3, text: "Connect the iPod to the Mac and click Refresh.")
+                        Step(n: 4, text: "Click Restore… on a backup. If the firmware on the iPod is damaged, iPodFirm does a rescue restore.")
                     }
-                    Spacer()
+                    .padding(.top, 4)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("If iPodFirm cannot restore a backup, restore the Apple firmware with Finder.")
+                    Text("Finder also repairs a damaged partition table. Finder erases the music on the iPod.")
+                        .font(.caption).foregroundStyle(.secondary)
                     Button("Restore with Finder…") { Task { await model.restoreWithFinder() } }
                 }
             } header: { Text("Recovery") }
@@ -94,8 +115,6 @@ struct IPodView: View {
             } header: { Text("Protections") }
         }
         .formStyle(.grouped)
-        .onAppear { model.refreshBackups(); model.recheckFullDiskAccess() }
-        .onChange(of: model.selectedIPod) { Task { await model.refreshIPods() } }
     }
 }
 
@@ -105,25 +124,37 @@ struct IPodPatchesSection: View {
 
     var body: some View {
         if let state = model.ipodState {
-            let rows = model.detectablePatches.compactMap { p -> (String, String)? in
+            let known = model.detectablePatches.compactMap { p -> (String, String)? in
                 switch state.detections[p.spec.name] ?? .absent {
-                case .installed(let v): return (p.spec.displayTitle, v.map { "Version \($0)" } ?? "Installed")
+                case .installed(let v): return (p.spec.displayTitle, v ?? "Installed")
                 case .unknown: return (p.spec.displayTitle, "Not known")
                 case .absent: return nil
                 }
             }
+            let rows = known + state.unknownNames(known: Set(model.patches.map(\.spec.name))).map { ($0, "Not in iPodFirm") }
             if rows.isEmpty {
                 Text("The iPod has no iPodFirm patches.").foregroundStyle(.secondary)
             }
-            ForEach(rows, id: \.0) { LabeledContent($0.0, value: $0.1) }
-            ForEach(state.unknownNames(known: Set(model.patches.map(\.spec.name))), id: \.self) { name in
-                LabeledContent(name, value: "Not in iPodFirm")
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
+                      alignment: .leading, spacing: 3) {
+                ForEach(rows, id: \.0) { name, value in
+                    HStack(spacing: 4) {
+                        Text(name).lineLimit(1)
+                        Spacer(minLength: 2)
+                        Text(value).foregroundStyle(.secondary)
+                    }
+                    .font(.caption)
+                    .help("\(name): \(value)")
+                    .accessibilityElement(children: .combine)
+                }
             }
             if let list = state.list {
-                LabeledContent("Appearance", value: list.appearance.map { a in
+                let appearance = list.appearance.map { a in
                     (AppModel.Appearance(rawValue: a)?.title ?? a) + (list.theme.map { ": \($0)" } ?? "")
-                } ?? "Not known")
-                LabeledContent("Made with", value: "iPodFirm \(list.app)")
+                } ?? "Not known"
+                Text("Appearance: \(appearance) · Made with iPodFirm \(list.app)")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("The firmware on the iPod has no iPodFirm list. iPodFirm found the patches from their changes in the firmware. The versions are not known. A flash with this version of iPodFirm adds the list.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -141,6 +172,28 @@ struct IPodPatchesSection: View {
             Button("Read iPod") { Task { await model.readIPodPatches(automatic: false) } }
                 .disabled(model.busy != nil)
                 .help("Read the firmware on the iPod to see its patches. iPodFirm writes nothing to the iPod.")
+        }
+    }
+}
+
+/// The logs on the connected iPod. A log shows here also if its patch is off in the app.
+struct IPodLogsSection: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        if model.ipodLogs.isEmpty {
+            Text("The iPod has no logs.").foregroundStyle(.secondary)
+        }
+        ForEach(model.ipodLogs) { log in
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(log.title)
+                    Text(log.details).font(.caption).foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                Spacer()
+                Button("Show Log") { model.shownLog = log }
+            }
         }
     }
 }
@@ -171,16 +224,18 @@ struct BackupRow: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Edit a Copy") { Task { await model.open(model.backupURL(backup), fromBackup: true) } }
-                .help("Open this backup for editing. The backup file itself is never changed.")
             Button("Restore…") { Task { await model.restore(backup) } }
                 .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported || backup.model == Backups.damagedModel)
                 .help(backup.model == Backups.damagedModel ? "This backup is a copy of a damaged firmware. You cannot restore it." : "")
-            Button { NSWorkspace.shared.activateFileViewerSelecting([model.backupURL(backup)]) } label: {
-                Image(systemName: "folder")
+            Menu {
+                Button("Edit a Copy") { Task { await model.open(model.backupURL(backup), fromBackup: true) } }
+                    .help("Open this backup for editing. The backup file itself is never changed.")
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([model.backupURL(backup)]) }
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
-            .help("Show in Finder")
-            .accessibilityLabel("Show in Finder")
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .accessibilityLabel("More Backup Actions")
         }
     }
 }
