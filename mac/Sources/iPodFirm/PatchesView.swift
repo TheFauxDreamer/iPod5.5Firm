@@ -44,9 +44,8 @@ struct SpaceUseRow: View {
             if let s = model.spaceUse {
                 VStack(alignment: .leading, spacing: 3) {
                     SpaceBar(use: s, parts: parts(s))
-                    SpaceLegend(parts: parts(s))
                     if s.fits {
-                        Text("Space for the theme and the patches: \(kb(s.used)) of \(kb(s.total)) used, \(kb(s.total - s.used)) free.")
+                        Text("\(kb(s.used)) of \(kb(s.total)) used, \(kb(s.total - s.used)) remaining")
                     } else {
                         Label("The firmware is too large by \(kb(s.end - Patcher.SpaceUse.limit)). Switch off a patch, or choose Light.", systemImage: "exclamationmark.triangle.fill")
                             .labelStyle(StatusLabelStyle(tint: .red))
@@ -124,23 +123,6 @@ struct SpaceBar: View {
         .accessibilityElement()
         .accessibilityLabel("Space used")
         .accessibilityValue(parts.map(\.text).joined(separator: ", "))
-    }
-}
-
-/// The names and the sizes of the parts of the bar.
-struct SpaceLegend: View {
-    let parts: [SpacePart]
-
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), alignment: .leading)], alignment: .leading, spacing: 2) {
-            ForEach(parts) { p in
-                HStack(spacing: 4) {
-                    Circle().fill(p.color).frame(width: 7, height: 7)
-                    Text(p.text).lineLimit(1).truncationMode(.middle)
-                }
-                .help(p.text)
-            }
-        }
     }
 }
 
