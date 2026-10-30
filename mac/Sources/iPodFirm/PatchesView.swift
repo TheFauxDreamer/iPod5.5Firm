@@ -615,11 +615,11 @@ struct PatchOptions: View {
     var body: some View {
         ForEach(patch.spec.options ?? [], id: \.id) { o in
             let value = model.optionValue(patch, o)
-            Section(o.title) {
+            Section {
                 Picker(o.title, selection: Binding(get: { value }, set: { model.setOptionValue(patch, o, $0) })) {
                     ForEach(o.choices, id: \.value) { c in Text(c.title).tag(c.value) }
                 }
-                .pickerStyle(.radioGroup).labelsHidden()
+                .pickerStyle(.menu)
                 if let c = o.choices.first(where: { $0.value == value }) {
                     if let d = c.description {
                         Text(d).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

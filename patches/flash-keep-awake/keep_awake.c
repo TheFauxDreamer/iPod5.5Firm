@@ -9,8 +9,11 @@
  * IMMEDIATE and then its power is switched off (GPO32 bit 30). A flash adapter must then start
  * its cards again at the next access, and the next song starts 3-6 s late.
  *
+ * The time is the variable keep_awake_ms. The owner selects the value in the Patches pane, and
+ * the patcher writes it into the variable (option "time" in patch.json).
+ *
  * Hook 1 replaces "ldr r1, [r4, #0x18]" at 0x284c7c. It reads the same time and makes a time
- * that is shorter than MIN_MS equal to MIN_MS. It does not change 0, 1 or 0xffffffff. The
+ * that is shorter than keep_awake_ms equal to keep_awake_ms. It does not change 0, 1 or 0xffffffff. The
  * helper 0x94d80 adds 1 to the time, thus a client that releases its slot ("0 ms") sends 1.
  * The caller uses r0, r1, r2 and r4 after the hook. The hook changes only r1 and ip.
  *
@@ -21,7 +24,7 @@
  *
  * Hook 3 replaces "bl 0x94cec" at 0x1d871c, in the sleep gate. 0x94cec returns 1 if a slot is
  * active, and then the gate refuses the sleep. This gate also completes a Sleep that the
- * firmware deferred. With hook 1, each access keeps a slot active for MIN_MS, thus the iPod
+ * firmware deferred. With hook 1, each access keeps a slot active for keep_awake_ms, thus the iPod
  * did not sleep. The hook returns 1 only for a slot that is always on (time 0xffffffff): a
  * client that uses the storage now. A timed slot does not stop the sleep. The sleep function
  * then puts the storage to sleep as usual (message type 4, 0x94e08).
@@ -37,7 +40,6 @@
  * All the power paths of the firmware stay the same. See re/play-latency.md.
  */
 
-#define MIN_MS 1800000
 #define SETTLE_MS 500
 #define WAKE_SLOT 40            /* no firmware code uses this slot as a constant */
 #define SLOTS 45
@@ -51,6 +53,8 @@ extern volatile int ka_time[SLOTS];                 /* the time left of each slo
 void fw_drive_power(int on);                /* the original call at 0x23344c */
 void fw_task_sleep(int ms);
 
+unsigned keep_awake_ms = 1800000;           /* the option "time": 30 minutes is the default */
+
 __attribute__((naked)) void hook_keep_awake_time(void)
 {
     __asm__ volatile(
@@ -60,18 +64,18 @@ __attribute__((naked)) void hook_keep_awake_time(void)
         "cmn   r1, #1\n"
         "bxeq  lr\n"
         "ldr   ip, 1f\n"
+        "ldr   ip, [ip]\n"
         "cmp   r1, ip\n"
         "movlo r1, ip\n"
         "bx    lr\n"
-        "1: .word %c0\n"
-        :: "i"(MIN_MS));
+        "1: .word keep_awake_ms\n");
 }
 
 /* Ask for the storage in slot WAKE_SLOT, as the firmware's own clients do (always on, then a time). */
 __attribute__((minsize)) static void wake_storage(void)
 {
     ka_always_on(WAKE_SLOT, 0);
-    ka_timed(WAKE_SLOT, MIN_MS);
+    ka_timed(WAKE_SLOT, keep_awake_ms);
 }
 
 __attribute__((minsize)) int hook_after_wake(int a, int b)

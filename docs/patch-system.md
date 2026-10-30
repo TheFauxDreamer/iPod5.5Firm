@@ -205,7 +205,7 @@ Example (a part of [patches/flash-keep-awake/patch.json](../patches/flash-keep-a
 {
   "name": "flash-keep-awake",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
-  "load_address": "0x736644",
+  "load_address": "0x736480",
   "symbols": { "fw_resume_tail": "0x1b9118", "ka_always_on": "0x94e6c", "ka_timed": "0x94d80",
                "ka_active": "0x1086bedc", "ka_time": "0x1086bf0c",
                "fw_drive_power": "0x265cc8", "fw_task_sleep": "0x11c9fc" },
@@ -328,12 +328,12 @@ To know which item the owner selects, hook the `activate` method of the menu lis
 | Key | Content |
 |---|---|
 | `id` | The name of the option, for example `source`. The app keeps the selection by patch name and `id` (`UserDefaults` key `patchOptions`). |
-| `title` | The title of the section in the Patches pane. |
+| `title` | The label of the drop-down list in the Patches pane. |
 | `symbol` | A global 32-bit variable of the patch, for example `unsigned hold_default = 3;`. |
 | `choices` | One or more choices. Each choice has `value` (a number), `title`, and optional `description` and `caution`. The pane shows the description and the caution of the selected choice. |
 | `default` | Optional. The value without a selection. The default is the first choice. |
 
-After the link, the patcher writes the value of the selected choice into the variable (`Patcher.setOptions`, Python `set_options`). Thus a precompiled `patch.o` operates the same. The build stops if the value is not a choice, or if `symbol` is not a global 32-bit variable of the patch. The install examines the choices and the variable with a trial link. [patches/up-next/patch.json](../patches/up-next/patch.json) has an example.
+After the link, the patcher writes the value of the selected choice into the variable (`Patcher.setOptions`, Python `set_options`). Thus a precompiled `patch.o` operates the same. The build stops if the value is not a choice, or if `symbol` is not a global 32-bit variable of the patch. The install examines the choices and the variable with a trial link. [patches/up-next/patch.json](../patches/up-next/patch.json) has an example. In [patches/flash-keep-awake/patch.json](../patches/flash-keep-awake/patch.json), the value is a time in milliseconds.
 
 ## The checks before a patch is applied
 
@@ -362,14 +362,15 @@ A patch can need other patches. Put their names in `needs`. For example, `shuffl
 
 ## The free space
 
-Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker. Do not put code on them. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. Two parts are free: 0x7358d0–0x73658c (3260 bytes; `album-art` used it before version 2.0) and 0x736784–0x736800 (124 bytes). A larger patch uses the extended area (see below).
+Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker. Do not put code on them. The patches use the area from 0x7358d0 to 0x736800 (3888 bytes). Each patch has a fixed load address, so each patch has a fixed part of this area. Four parts are free: 0x7358d0–0x736480 (2992 bytes; `album-art` used the area before version 2.0), 0x736548–0x73658c (68 bytes), 0x736644–0x736700 (188 bytes) and 0x736790–0x736800 (112 bytes). A larger patch uses the extended area (see below).
 
 | Patch | Load address | Space | Notes |
 |---|---|---|---|
-| (free) | | 0x7358d0–0x73658c (3260 bytes) | `album-art` 1.0 used this area. |
+| (free) | | 0x7358d0–0x736480 (2992 bytes) | `album-art` 1.0 used this area. |
+| `flash-keep-awake` | 0x736480 | 0x736480–0x73658c (268 bytes) | The code and the variable use 200 bytes. The functions use `__attribute__((minsize))` to make the code smaller. Before version 1.2, the load address was 0x736644. |
 | `sleep-now` | 0x73658c | 0x73658c–0x736644 (184 bytes) | The code uses 181 bytes. |
-| `flash-keep-awake` | 0x736644 | 0x736644–0x736700 (188 bytes) | The functions use `__attribute__((minsize))` to make the code smaller. |
-| `flash-wake-on-input` | 0x736700 | 0x736700–0x736784 (132 bytes) | Code and two variables. |
+| (free) | | 0x736644–0x736700 (188 bytes) | `flash-keep-awake` used this area before version 1.2. |
+| `flash-wake-on-input` | 0x736700 | 0x736700–0x736790 (144 bytes) | Code and three variables. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F8000 | The value 0x7eb000 in `patch.json` is not used. |
 | `album-art` | `extended` | After all other data (14848 bytes). Alone: 0x736800–0x73a200. The album table, the thumbnails, the cache and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
 | `usb-audio-out` | `extended` | After all other data (15924 bytes), then three menus: Settings, the main menu and Settings > Main Menu. The control page, the siTDs and the music buffers (52 KB) come from 0xad80c | Extended patch. |

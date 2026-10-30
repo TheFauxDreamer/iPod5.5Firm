@@ -405,11 +405,11 @@ final class PatchAndArtTests: XCTestCase {
         let keep = all.filter { $0.spec.name == "flash-keep-awake" }
         XCTAssertEqual(keep.count, 1)
         let out = try Patcher.apply(keep, to: osos)
-        XCTAssertEqual(le32(out, 0x284c7c), try Patcher.branch("bl", at: 0x284c7c, to: 0x736644))
-        XCTAssertEqual(le32(out, 0x736644), 0xe594_1018)
+        XCTAssertEqual(le32(out, 0x284c7c), try Patcher.branch("bl", at: 0x284c7c, to: 0x736480))
+        XCTAssertEqual(le32(out, 0x736480), 0xe594_1018)
         XCTAssertEqual(le32(out, 0xb45f4) & 0xFF00_0000, 0xEB00_0000)   // the wake hook is a bl
         XCTAssertNotEqual(le32(out, 0xb45f4), le32(osos, 0xb45f4))
-        XCTAssertEqual(le32(out, 0x736648), 0xe351_0001)                 // "cmp r1, #1": a release stays a release
+        XCTAssertEqual(le32(out, 0x736484), 0xe351_0001)                 // "cmp r1, #1": a release stays a release
         // the sleep gate and the power-off call are bl hooks
         for at in [0x1d871c, 0x23344c] {
             XCTAssertEqual(le32(out, at) & 0xFF00_0000, 0xEB00_0000)
@@ -430,6 +430,36 @@ final class PatchAndArtTests: XCTestCase {
         let out = try Patcher.apply(wake, to: osos)
         XCTAssertEqual(le32(out, 0x1d8344), try Patcher.branch("bl", at: 0x1d8344, to: 0x736700))
         _ = try Patcher.apply(all.filter { ["album-art", "sleep-now", "flash-keep-awake", "flash-wake-on-input"].contains($0.spec.name) }, to: osos)
+    }
+
+    /// The Storage Time option: the two flash patches have the same choices, and 30 minutes is the default.
+    func testStorageTimeChoices() throws {
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        for name in ["flash-keep-awake", "flash-wake-on-input"] {
+            let option = try XCTUnwrap(all.first { $0.spec.name == name }?.spec.options?.first { $0.id == "time" })
+            XCTAssertEqual(option.choices.map(\.value), [60000, 120000, 300000, 600000, 1800000, 3600000])
+            XCTAssertEqual(option.defaultValue, 1800000)
+        }
+    }
+
+    /// The Storage Time option: the patcher writes the selected time into one word of each flash patch.
+    func testStorageTimeOption() throws {
+        guard let ipsw = ProcessInfo.processInfo.environment["IPODFW_IPSW"] else { throw XCTSkip("set IPODFW_IPSW") }
+        let osos = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data).image("osos")
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        for name in ["flash-keep-awake", "flash-wake-on-input"] {
+            var patch = try XCTUnwrap(all.first { $0.spec.name == name })
+            let standard = try Patcher.apply([patch], to: osos)
+            patch.options = ["time": 60000]
+            let short = try Patcher.apply([patch], to: osos)
+            let changed = standard.indices.filter { standard[$0] != short[$0] }
+            let word = try XCTUnwrap(changed.first) & ~3
+            XCTAssertTrue(changed.allSatisfy { ($0 & ~3) == word })
+            XCTAssertEqual(le32(standard, word), 1800000)
+            XCTAssertEqual(le32(short, word), 60000)
+            patch.options = ["time": 7]
+            XCTAssertThrowsError(try Patcher.apply([patch], to: osos))
+        }
     }
 
     /// The sleep-now patch: the Sleep item handler calls the patch, and the power test in 0x1ee8d0 is a bl.
@@ -688,6 +718,9 @@ final class PatchAndArtTests: XCTestCase {
         let info = ITunesDB.readTrackInfo(ITunesDB.build(tracks))
         XCTAssertEqual(info.map(\.title), tracks.map(\.title))
         XCTAssertEqual(info.map(\.artist), tracks.map(\.artist))
+        var withID = tracks[0]
+        withID.dbid = 0x1122334455667788
+        XCTAssertEqual(ITunesDB.readTrackInfo(ITunesDB.build([withID])).first?.dbidLow, 0x55667788)
     }
 
     func testReadLibraryName() {
@@ -1184,8 +1217,8 @@ final class PlaybackLogTests: XCTestCase {
         let log = "PL01 playback-log 1.1\nsettings shuffle=Songs repeat=Off hold=Play Next\n"
         let lines = "     0.033   shuffle n=2 first=1a,2b,0 heap=1\n     0.314 play from=abc5c song=1a flags=1 heap=2\n     1.000   set song failed: -50 song=99 heap=2\n"
         let d = [UInt8](log.utf8) + [UInt8](lines.utf8)
-        let songs = [ITunesDB.TrackInfo(id: 0x1a, title: "One", artist: "A", album: "B", path: ":iPod_Control:Music:F00:X.mp3"),
-                     ITunesDB.TrackInfo(id: 0x2b, title: "Two", artist: "C", album: "D", path: ":P")]
+        let songs = [ITunesDB.TrackInfo(id: 1, dbidLow: 0x1a, title: "One", artist: "A", album: "B", path: ":iPod_Control:Music:F00:X.mp3"),
+                     ITunesDB.TrackInfo(id: 2, dbidLow: 0x2b, title: "Two", artist: "C", album: "D", path: ":P")]
         let text = PlaybackLog.text(d, songs: songs) ?? ""
         XCTAssertTrue(text.contains("0.314 play from=abc5c song=1a flags=1 heap=2 \"One\" - A"))
         XCTAssertTrue(text.contains("  ID 1a: One | A | B | :iPod_Control:Music:F00:X.mp3"))

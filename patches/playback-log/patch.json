@@ -33,7 +33,7 @@
     ]
   },
   "version_letter": "g",
-  "version": "1.2",
+  "version": "1.3",
   "size": 38849,
   "description": "A test. It records each shuffle, each change of the song, each song that cannot play and each failed memory allocation. The log also shows the RAM of the iPod and the installed patches. Use the log to find why the music stops.",
   "caution": "Do not install this patch together with USB Host Probe. The two patches use the same hook site.",
@@ -48,7 +48,7 @@
   ],
   "notes": [
     "Each line starts with the time in seconds since the first line.",
-    "\"song\" is the track ID of the song in iTunesDB. When the iPod is connected, the app shows the title, the artist, the album and the file of each song. Show the log before a new sync, because a sync can change the IDs.",
+    "\"song\" is the low part of the dbid of the song in iTunesDB. When the iPod is connected, the app shows the title, the artist, the album and the file of each song. Show the log before a new sync, because a sync can change the IDs.",
     "The line \"settings\" shows Settings > Shuffle, Settings > Repeat and Settings > Hold Select. hold=not known: the iPod has no Up Next value.",
     "\"at=3/16236\" is the position in the play list, as \"3 of 16236\" in Now Playing.",
     "The log keeps 32 KB. When it is full, the iPod removes the oldest half of the lines and counts them as \"dropped\".",

@@ -1,22 +1,22 @@
 {
   "name": "flash-keep-awake",
   "title": "SSD Mode",
-  "summary": "Keeps flash storage on for 30 minutes after each use.",
+  "summary": "Keeps flash storage on for a time that you select after each use.",
   "symbol": "bolt.horizontal",
   "category": "power",
   "version_letter": "k",
-  "version": "1.1",
-  "size": 188,
+  "version": "1.2",
+  "size": 200,
   "description": "Makes songs start faster on an iPod with flash storage.",
-  "details": ["The iPod keeps the storage on for 30 minutes after each use. The Apple firmware switches it off after 1 second.", "When the iPod wakes from sleep, it starts the storage immediately.", "Thus the storage is ready when you choose a song.", "Before the iPod switches off the storage, it waits 0.5 seconds. This gives the flash card time to complete its writes."],
+  "details": ["The iPod keeps the storage on after each use, for the time that you select. The default is 30 minutes. The Apple firmware switches it off after 1 second.", "When the iPod wakes from sleep, it starts the storage immediately.", "Thus the storage is ready when you choose a song.", "Before the iPod switches off the storage, it waits 0.5 seconds. This gives the flash card time to complete its writes."],
   "requires": ["Flash storage, for example an iFlash, CompactFlash or SSD adapter. Do not use this patch with the original hard drive."],
-  "notes": ["For the fastest start after a long pause, also turn on Wake Storage on Input."],
-  "hdd_warning": "This patch is for flash storage. On the original hard drive, it keeps the disk turning for 30 minutes after each use. This uses more battery and causes more wear.",
+  "notes": ["For the fastest start after a long pause, also turn on Wake Storage on Input. Set the same Storage Time in the two patches."],
+  "hdd_warning": "This patch is for flash storage. On the original hard drive, it keeps the disk turning for the selected time after each use. This uses more battery and causes more wear.",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
   ],
-  "load_address": "0x736644",
+  "load_address": "0x736480",
   "symbols": {
     "fw_resume_tail": "0x1b9118",
     "ka_always_on": "0x94e6c",
@@ -31,5 +31,21 @@
     { "kind": "bl", "at": "0xb45f4", "expect": "0xeb0412c7", "to": "hook_after_wake" },
     { "kind": "bl", "at": "0x1d871c", "expect": "0xebfaf172", "to": "hook_storage_in_use" },
     { "kind": "bl", "at": "0x23344c", "expect": "0xeb00ca1d", "to": "hook_drive_power_off" }
+  ],
+  "options": [
+    {
+      "id": "time",
+      "title": "Storage Time",
+      "symbol": "keep_awake_ms",
+      "default": 1800000,
+      "choices": [
+        { "value": 60000, "title": "1 minute", "description": "The storage stops soon after each use. This uses the least battery. The first song after a pause can start late." },
+        { "value": 120000, "title": "2 minutes", "description": "The storage stops soon after each use. The first song after a pause can start late." },
+        { "value": 300000, "title": "5 minutes", "description": "A balance of battery use and fast starts." },
+        { "value": 600000, "title": "10 minutes", "description": "A balance of battery use and fast starts." },
+        { "value": 1800000, "title": "30 minutes", "description": "The default. Songs start fast after most pauses." },
+        { "value": 3600000, "title": "60 minutes", "description": "Songs start fast after long pauses. This uses the most battery." }
+      ]
+    }
   ]
 }

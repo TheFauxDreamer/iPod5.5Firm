@@ -113,7 +113,7 @@ The app also shows the options of each patch from the iPodFirm list, for example
 
 ### The song (version 1.1)
 
-`song=` is now the Unique ID of the track: item + 0x20 is the track object, and track + 0x20 is mhit + 0x10 (refer to [song-info.md](song-info.md)). The patch stores no text on the iPod, because a read of the string pools in the task of the player needs locks. The value 0 means no track.
+In version 1.3, `song=` is the low 32 bits of the dbid: item + 0x20 is the track object, and track + 0x108 is mhit + 0x70 (refer to [song-info.md](song-info.md)). `album-art` and `cover-flow` read the same field on the real iPod. Version 1.2 used track + 0x20: the loader 0xd7888 writes mhit + 0x10 there (0xd7a30), but each line of a log from the real iPod had `song=0` (30 October 2026). The cause of the 0 is not known. The iTunesDB of the same iPod has 5205 tracks and 5205 different dbids, none 0. The patch stores no text on the iPod, because a read of the string pools in the task of the player needs locks. The value 0 means no track.
 
 "Show Playback Log" reads `iPod_Control/iTunes/iTunesDB` of the connected iPod (`ITunesDB.readTrackInfo`). A line with one `song=` gets the title and the artist. A list at the end has the title, the artist, the album and the file of each song in the log. A sync can change the IDs or remove a song. Thus show the log before a sync. For an ID that it does not find, the list and the line write "ID <value> is not in the iTunesDB". The saved file has the names of the songs, but the body of the GitHub issue does not.
 
@@ -144,6 +144,25 @@ The owner ran version 1.0 on the iPod 5.5G (64 MB, 5202 songs) with 17 patches o
 | Album Mix | The first album played 14 different songs in a random order, the current song first. Then the next album started. |
 
 Thus the Next button and the end of a song use two different paths. A test with Next does not test the end of a song.
+
+### The second log
+
+The owner ran a build of version 1.1 on the same iPod on 30 October 2026 (app 0.1.185). That build had the settings, but `song=` was still item + 0x10. The later code in version 1.1 and version 1.2 records the track ID. The music did not stop.
+
+| Item | Result |
+|---|---|
+| The settings | Shuffle and Hold Select show correctly, and a change gives a timed line. Only `repeat=Off` occurred, so One and All are still not proved. |
+| The end of a song | 3 more ends, all with `play end result=0`: Album Mix, Songs and Songs. |
+| The first shuffle with Album Mix after a start | 2735 ms. Songs took 28 ms and 30 ms. |
+| The lowest free heap | 1,935,588 bytes. No failed allocation. |
+| A new start of Shuffle Songs | The items get new `song=` values (0x4135 … became 0x5aed … 0x6910). This agrees with a counter. |
+| Shuffle changes to Off | One more shuffle runs (30 ms, `albums=0 mix=0`). Then the position is the place of the song in the list that is not shuffled, for example 99 of 5202. |
+
+The patch does not record the Previous button. In the log, the position goes back (`at=101`, then `at=100`) with no line that shows why.
+
+### The third log
+
+Version 1.2 on the same iPod, 30 October 2026 (app 0.1.187). The music did not stop. 2 more ends of a song gave `play end result=0`. Each `song=` was 0. Version 1.3 corrects this (refer to [The song](#the-song-version-11)).
 
 ### A fault in the log
 

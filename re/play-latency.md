@@ -8,7 +8,7 @@ The iPod 5.5G has the stock firmware 1.3 and a flash adapter. The first song aft
 
 The stock firmware switches off the storage power about 1 s after the last access. The next access must switch the power on again. The firmware then waits until the adapter clears BSY. A flash adapter must start its SD card(s) again after a power cut, and this takes seconds.
 
-The firmware's own part of the wake is approximately 15 ms. Thus, a shorter wait in the firmware cannot remove the delay. The patch `patches/flash-keep-awake` keeps the storage on for 30 minutes after each access, and starts the storage when the iPod wakes from sleep.
+The firmware's own part of the wake is approximately 15 ms. Thus, a shorter wait in the firmware cannot remove the delay. The patch `patches/flash-keep-awake` keeps the storage on after each access, for a time that the owner selects (default 30 minutes), and starts the storage when the iPod wakes from sleep.
 
 ## Findings from other projects
 
@@ -189,3 +189,15 @@ The owner reported that scrolling in lists felt slower with `flash-keep-awake`. 
 - Hook 4 is now a separate patch, `flash-wake-on-input` (load address 0x736700). The owner can switch it on only if the first song after a long pause starts late. Emulator test with all four patches (`album-art`, `sleep-now`, `flash-keep-awake`, `flash-wake-on-input`): the iPod started, the hook ran for each button press, and only the first press examined the slots.
 - Open: compare the scrolling on the real iPod with only one patch switched on at a time (`flash-keep-awake`, `flash-wake-on-input`, `album-art`, `sleep-now`, `backlight-60s`).
 
+## Selectable time (2026-10-30)
+
+Before this change, the time was fixed. The sections above describe the fixed time of 30 minutes. A shorter time uses less battery.
+
+- `flash-keep-awake` 1.2 and `flash-wake-on-input` 1.3 have the option `time`: 1, 2, 5, 10, 30 (default) or 60 minutes.
+- The patcher writes the value in ms into `keep_awake_ms` and `wake_ms`.
+- Hook 1 still changes only `r1` and `ip`. It loads the address of the variable into `ip`, then the value.
+- The variable made `flash-keep-awake` 200 bytes. The old space 0x736644–0x736700 has 188 bytes. Thus the load address is now 0x736480.
+- The check gap of `flash-wake-on-input` is `wake_ms * 1000`. The maximum, 3,600,000,000 µs, is less than 2^32.
+- With a short time, the first song after a pause can start late again. The storage must then start, which takes 3–6 s.
+
+Test: the firmware builds and the patcher tests pass. No test on a real iPod yet.

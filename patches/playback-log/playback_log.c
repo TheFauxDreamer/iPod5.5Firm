@@ -25,7 +25,7 @@
  * disable the interrupts while a line goes into the buffer, because several tasks write lines.
  *
  * File format: plain text, LOG_BYTES bytes. The first INFO bytes are the information block: the
- * line "PL01 playback-log 1.2", the RAM line, the counts, the line "settings ..." (Shuffle, Repeat and
+ * line "PL01 playback-log 1.3", the RAM line, the counts, the line "settings ..." (Shuffle, Repeat and
  * the Hold Select value of up-next) and the line "list <JSON>" (the iPodFirm list of the build, with
  * the names, the versions and the options of the patches). Spaces fill the rest of the block,
  * and a line end ends it. The log lines follow. Zero bytes fill the rest of the file. When the buffer
@@ -185,12 +185,13 @@ static void list_state(int *at, int *count, int *shuffled)
     *shuffled = tl ? FIELD(unsigned char, tl, 0xec) & 1 : 0;
 }
 
-/* The iTunesDB track ID (mhit + 0x10) of an item: item + 0x20 is the track, and track + 0x20 is the ID.
- * Item + 0x10 is not this ID: it comes from a counter (0xa01e8). The app finds the song with the ID. */
+/* The low 32 bits of the dbid (mhit + 0x70) of an item: item + 0x20 is the track, and track + 0x108 is
+ * the dbid, which album-art also uses. Item + 0x10 comes from a counter (0xa01e8), and track + 0x20
+ * was 0 on the real iPod. The app finds the song with this value. */
 static unsigned song_of(void *item)
 {
     char *track = item ? FIELD(char *, item, 0x20) : 0;
-    return track ? FIELD(unsigned, track, 0x20) : 0;
+    return track ? FIELD(unsigned, track, 0x108) : 0;
 }
 
 /* ---- The shuffle ------------------------------------------------------------------------------ */
@@ -450,7 +451,7 @@ static void info(void)
     unsigned n, i, f = heap();
     find_list();
     n = fw_snprintf(L, INFO_HEAD,
-                    "PL01 playback-log 1.2\nram=%u MB heap=%u lowest=%u failed=%u\nlines=%u dropped=%u lost=%u writes=%u\n"
+                    "PL01 playback-log 1.3\nram=%u MB heap=%u lowest=%u failed=%u\nlines=%u dropped=%u lost=%u writes=%u\n"
                     "settings shuffle=%s repeat=%s hold=%s\nlist ",
                     ram_size() >> 20, f, lowest, failures, lines, dropped, lost, writes,
                     name_of(shuffle_names, 4, shuffle_now), name_of(repeat_names, 3, repeat_now),

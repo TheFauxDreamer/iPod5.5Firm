@@ -106,8 +106,8 @@ The table shows the status that the test notes record. For the full test record,
 | Album Artists | l | Adds an Album Artists item to the Music menu. All the songs of a compilation are under one entry. You can also put the item in the main menu. | Yes (version 1.3) |
 | Cover Flow | c | Hold Select in the Albums list to see the album covers in 3D. This is a new version for the iPod Video, not the Apple version from the iPod Classic. It replaces "hold Select to add an album to On-The-Go". With Up Next, Settings > Hold Select decides if the hold opens Cover Flow. | Yes (version 0.6.8) |
 | 60-Second Backlight | b | The Backlight Timer menu has 60 Seconds in place of 2 Seconds. | Yes |
-| SSD Mode | k | For flash storage. Keeps the storage on for 30 minutes after each access, not for 1 second. Songs start faster. | Yes |
-| Wake Storage on Input | w | For flash storage. Starts the storage when you push a button, so that the first song starts sooner after a long pause. | Yes |
+| SSD Mode | k | For flash storage. Keeps the storage on after each access for a time that you select (1 to 60 minutes, default 30), not for 1 second. Songs start faster. | Yes |
+| Wake Storage on Input | w | For flash storage. Starts the storage when you push a button, so that the first song starts sooner after a long pause. The storage stays on for a time that you select. | Yes |
 | Sleep Now | s | The Sleep item puts the iPod to sleep immediately. Use it with SSD Mode. | Yes |
 | Instant Save | i | Saves each change in Settings > Main Menu immediately. Without it, the iPod saves the change only when it sleeps. | Yes |
 | No EU Volume Limit | v | Removes the volume limit of iPods for the EU. | No. The test needs an iPod for the EU. |

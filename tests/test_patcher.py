@@ -251,6 +251,21 @@ def test_patch_option():
         patcher.apply(osos, REPO / "patches/up-next", 0x736800, options={"hold": 7})
 
 
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+@pytest.mark.parametrize("name,symbol", [("flash-keep-awake", "keep_awake_ms"), ("flash-wake-on-input", "wake_ms")])
+def test_storage_time_option(name, symbol):
+    """The option "time": the patcher writes the selected time into the variable of each flash patch."""
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    standard, report = patcher.apply(osos, REPO / "patches" / name, 0x736800)
+    short, _ = patcher.apply(osos, REPO / "patches" / name, 0x736800, options={"time": 60000})
+    at = int(report["symbols"][symbol], 16)
+    assert struct.unpack_from("<I", standard, at)[0] == 1800000
+    assert struct.unpack_from("<I", short, at)[0] == 60000
+    assert all(at <= i < at + 4 for i in range(len(short)) if short[i] != standard[i])
+    with pytest.raises(patcher.PatchError, match="no choice"):
+        patcher.apply(osos, REPO / "patches" / name, 0x736800, options={"time": 7})
+
+
 def test_insert_menu_item():
     def item(label: int, target: int) -> bytes:
         i = bytearray(40)

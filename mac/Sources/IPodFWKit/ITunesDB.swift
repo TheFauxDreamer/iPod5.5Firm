@@ -214,9 +214,11 @@ public enum ITunesDB {
     /// The text fields of one track of an iTunesDB.
     public struct TrackInfo: Equatable {
         public var id: UInt32
+        /// The low 32 bits of the dbid (mhit + 0x70). The playback log uses this value.
+        public var dbidLow: UInt32
         public var title = "", artist = "", album = "", path = ""
-        public init(id: UInt32, title: String = "", artist: String = "", album: String = "", path: String = "") {
-            self.id = id; self.title = title; self.artist = artist; self.album = album; self.path = path
+        public init(id: UInt32, dbidLow: UInt32 = 0, title: String = "", artist: String = "", album: String = "", path: String = "") {
+            self.id = id; self.dbidLow = dbidLow; self.title = title; self.artist = artist; self.album = album; self.path = path
         }
     }
 
@@ -245,7 +247,7 @@ public enum ITunesDB {
             guard p + 20 <= end, String(decoding: db[p..<p + 4], as: UTF8.self) == "mhit" else { break }
             let hlen = Int(le32(db, p + 4)), total = Int(le32(db, p + 8))
             guard total >= hlen, hlen > 0 else { break }
-            var info = TrackInfo(id: le32(db, p + 16))
+            var info = TrackInfo(id: le32(db, p + 16), dbidLow: hlen >= 0x74 ? le32(db, p + 0x70) : 0)
             var q = p + hlen
             for _ in 0..<Int(le32(db, p + 12)) {
                 guard q + 40 <= min(p + total, end), String(decoding: db[q..<q + 4], as: UTF8.self) == "mhod" else { break }

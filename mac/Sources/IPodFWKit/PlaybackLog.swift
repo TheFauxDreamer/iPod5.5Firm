@@ -14,7 +14,7 @@ public enum PlaybackLog {
     /// The text of the log, or nil if the file has no log. An empty file (only zero bytes) gives nil.
     /// `letters` gives the version letter of each patch name. The line "list <JSON>" becomes the line
     /// "patches: <letters>" and one line for each patch. `songs` has the tracks of the iTunesDB on the
-    /// iPod: a line with "song=<ID>" gets the title and the artist, and a list at the end has the album
+    /// iPod: a line with "song=<ID>" gets the title and the artist (the ID is the low part of the dbid), and a list at the end has the album
     /// and the file of each song in the log.
     public static func text(_ data: [UInt8], letters: [String: String] = [:], songs: [ITunesDB.TrackInfo] = []) -> String? {
         let end = data.firstIndex(of: 0) ?? data.count
@@ -45,7 +45,7 @@ public enum PlaybackLog {
     static func addSongs(_ lines: [String], songs: [ITunesDB.TrackInfo]) -> [String] {
         guard !songs.isEmpty else { return lines }
         var byID: [UInt32: ITunesDB.TrackInfo] = [:]
-        for s in songs { byID[s.id] = s }
+        for s in songs { byID[s.dbidLow] = s }
         var order: [UInt32] = []
         var out = lines.map { line -> String in
             let ids = isTimed(Substring(line)) || line.hasPrefix(" ") ? songIDs(line) : []

@@ -291,21 +291,23 @@ The large artwork in Now Playing does not come from the patch. RetailOS reads `i
 
 Outside a forced sleep, `hook_power_test` calls the Apple test 0x1ecc8c.
 
-**Test status.** In the emulator, the hook ran and the firmware wrote the cache to the disk (ATA 0xCA). Then 0xb43dc turned the display off. The emulator does not model the hardware sleep, so the test stops there. The settings were kept after a restart. Real iPod 5.5G (owner, 28 October 2026, version 1.2): the patch operates.
+**Test status.** In the emulator, the hook ran and the firmware wrote the cache to the disk (ATA 0xCA). Then 0xb43dc turned the display off. The emulator does not model the hardware sleep, so the test stops there. The settings were kept after a restart. Real iPod 5.5G (owner, 28 October 2026, version 1.2): the patch operates. Version 1.3 (selected time): not tested on a real iPod.
 
 ## flash-keep-awake
 
-**User interface.** Patches pane > SSD Mode, letter `k`. The pane shows a warning if the iPod probably has the original hard drive. Refer to [Storage type](#storage-type).
+**User interface.** Patches pane > SSD Mode, letter `k`. The pane shows a warning if the iPod probably has the original hard drive. Refer to [Storage type](#storage-type). The section Storage Time gives the time: 1, 2, 5, 10, 30 (default) or 60 minutes. To change the time on the iPod, flash it again.
 
 **Effect ("SSD mode").**
 
-- The storage stays on for 30 minutes after each access, not for approximately 1 second.
+- The storage stays on for the selected time after each access, not for approximately 1 second.
 - When the iPod wakes from sleep, the iPod starts the storage at once.
 - Before the storage power goes off, the iPod waits 0.5 seconds.
 
 **Problem.** A flash adapter needs 3–6 seconds to start its cards after a power cut. The Apple firmware cuts the storage power approximately 1 second after the last access. Thus the first song after a pause starts late. The firmware itself needs only approximately 15 ms for a wake. Refer to [re/play-latency.md](../re/play-latency.md).
 
-**Load address.** 0x736644. The compiled code is 188 bytes. The functions use `__attribute__((minsize))`.
+**Load address.** 0x736480. The compiled code and the variable are 200 bytes. The functions use `__attribute__((minsize))`. Before version 1.2, the load address was 0x736644. The space there was 188 bytes, and the variable made the patch too large.
+
+**Option.** `time` (variable `keep_awake_ms`, in milliseconds). The values are 60000, 120000, 300000, 600000, 1800000 (default) and 3600000.
 
 **Hooks.**
 
@@ -320,8 +322,8 @@ Hook 4 is in the separate patch [flash-wake-on-input](#flash-wake-on-input).
 
 **Runtime logic.**
 
-- **Hook 1** is a `naked` function. It loads the time of a type-2 keep-awake message, as the original instruction did. If the time is less than 1,800,000 ms, it sets 1,800,000 ms. It does not change 0, 1 or 0xffffffff. It changes only `r1` and `ip`, because the caller uses `r0`, `r2` and `r4` after the hook.
-- **Hook 2** calls the original function 0x1b9118. Then it sends "always on" (0x94e6c) and "on for 30 minutes" (0x94d80) for slot 40. No firmware code uses slot 40 as a constant.
+- **Hook 1** is a `naked` function. It loads the time of a type-2 keep-awake message, as the original instruction did. If the time is less than `keep_awake_ms`, it sets `keep_awake_ms`. It does not change 0, 1 or 0xffffffff. It changes only `r1` and `ip`, because the caller uses `r0`, `r2` and `r4` after the hook.
+- **Hook 2** calls the original function 0x1b9118. Then it sends "always on" (0x94e6c) and "on for `keep_awake_ms`" (0x94d80) for slot 40. No firmware code uses slot 40 as a constant.
 - **Hook 3** replaces the "any slot active" test of the sleep gate. It returns 1 only if a slot is active and its time is 0xffffffff (a client that uses the storage now). A timed slot does not stop the sleep.
 - **Hook 5** waits 500 ms (task sleep 0x11c9fc). Then it calls 0x265cc8 with 0 (power off). The firmware sends STANDBY IMMEDIATE before this call. The wait gives the flash card time to complete its writes.
 
@@ -339,15 +341,17 @@ The fix has two parts: hook 1 does not change 0, 1 or 0xffffffff, and hook 3 ign
 - The emulator cannot sleep. Thus hook 2 and hook 3 have no full test in the emulator.
 - The owner reported slower scroll in lists with this patch. The emulator showed that the patch code does not run during a scroll. The cause is not known.
 
-**Test status.** The 2-minute version of hook 1 was tested on a real iPod (2 October 2026). Real iPod 5.5G (owner, 28 October 2026, version 1.1, with hooks 2, 3 and 5): the patch operates.
+**Test status.** The 2-minute version of hook 1 was tested on a real iPod (2 October 2026). Real iPod 5.5G (owner, 28 October 2026, version 1.1, with hooks 2, 3 and 5): the patch operates. Version 1.2 (selected time, new load address): not tested on a real iPod.
 
 ## flash-wake-on-input
 
-**User interface.** Patches pane > Wake Storage on Input, letter `w`. The pane shows the same storage warning as for `flash-keep-awake`.
+**User interface.** Patches pane > Wake Storage on Input, letter `w`. The pane shows the same storage warning as for `flash-keep-awake`. The section Storage Time gives the time that the storage stays on after a wake: 1, 2, 5, 10, 30 (default) or 60 minutes. This selection is separate from the selection of SSD Mode, because each patch also operates alone. Set the same time in the two patches.
 
 **Effect.** When you push a button after a long pause, the iPod starts the storage at once. A turn of the wheel does not start the storage.
 
-**Load address.** 0x736700. The compiled code is 132 bytes. It ends at 0x736784.
+**Load address.** 0x736700. The compiled code and the variables are 144 bytes. They end at 0x736790.
+
+**Option.** `time` (variable `wake_ms`, in milliseconds), with the same values as `flash-keep-awake`.
 
 **Hook.**
 
@@ -362,12 +366,12 @@ The fix has two parts: hook 1 does not change 0, 1 or 0xffffffff, and hook 3 ign
 1. Call the original 0x1d813c.
 2. Read `USEC_TIMER` (0x60005010). If the time since the last check is less than the check gap, stop.
 3. If a keep-awake slot is active (0x94cec), set the check gap to 1 second and stop.
-4. Send "always on" and "on for 30 minutes" for slot 40.
-5. Set the check gap to 30 minutes.
+4. Send "always on" and "on for `wake_ms`" for slot 40.
+5. Set the check gap to `wake_ms`. The maximum, 3,600,000,000 µs, fits in 32 bits.
 
 The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 minutes).
 
-**Test status.** Emulator: one button push turned on the storage power 0.05 ms later. 60 wheel steps did not run the hook. Real iPod 5.5G (owner, 28 October 2026, version 1.2): the patch operates.
+**Test status.** Emulator: one button push turned on the storage power 0.05 ms later. 60 wheel steps did not run the hook. Real iPod 5.5G (owner, 28 October 2026, version 1.2): the patch operates. Version 1.3 (selected time): not tested on a real iPod.
 
 ## cover-flow
 
@@ -1043,7 +1047,7 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 
 **User interface.** Patches pane > Playback Log, letter `g`. It is a test patch: turn on **Enable Test Patches** to see it. "Clear the Playback Log" writes an empty 32768-byte `iPod_Control/iTunes/iPodFirmPlaybackLog` on the connected iPod. The tool `playback-log` gives the section "Playback Log" with "Show Playback Log", "Copy Log", "Save the Log to Share…" and "Report on GitHub…" (`PlaybackLog` in [PlaybackLog.swift](../mac/Sources/IPodFWKit/PlaybackLog.swift), `AppModel.readPlaybackLog`, `savePlaybackLog`, `reportPlaybackLog`). "Save the Log to Share…" writes the log as a `.txt` file (default name "iPodFirm Playback Log yyyy-MM-dd HHmm.txt") and shows it in Finder. "Report on GitHub…" also saves the file, then opens a new issue in the browser with a title and a body (the app version and the information lines of the log). The user drags the file into the issue. This needs a GitHub account. Without an account, send the saved file in a different way.
 
-**Effect.** The iPod records each shuffle, each change of the song, each song that cannot play, each stop for "no next song" and each failed memory allocation. A button or wheel event writes the log to the file, at most one time each 5 seconds. The log starts with the RAM size, the free memory, the lowest free memory, the settings and the iPodFirm list of the build. The settings are Shuffle, Repeat and Hold Select (`up-next`). A changed setting also gives a line in the log. The app shows the patches of the list with their letters and options. `song=` is the iTunesDB track ID. The app finds each song in the iTunesDB of the connected iPod. It shows the title and the artist in the line, and a list of the songs with the album and the file at the end. The saved file has these names, so the user must know this before they attach the file to a public issue.
+**Effect.** The iPod records each shuffle, each change of the song, each song that cannot play, each stop for "no next song" and each failed memory allocation. A button or wheel event writes the log to the file, at most one time each 5 seconds. The log starts with the RAM size, the free memory, the lowest free memory, the settings and the iPodFirm list of the build. The settings are Shuffle, Repeat and Hold Select (`up-next`). A changed setting also gives a line in the log. The app shows the patches of the list with their letters and options. `song=` is the low 32 bits of the dbid of the track (track + 0x108, mhit + 0x70). The app finds each song in the iTunesDB of the connected iPod. It shows the title and the artist in the line, and a list of the songs with the album and the file at the end. The saved file has these names, so the user must know this before they attach the file to a public issue.
 
 **Research.** Refer to [re/playback-log.md](../re/playback-log.md).
 
@@ -1067,7 +1071,7 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 
 **Caution.** Do not install this patch together with `usb-host-probe`. The two patches use the hook site 0x1d8260. `Patcher.conflicts` finds this: the app does not turn on the second patch, the Patches pane shows "Changes the same place as …", and the build fails. The test `testPlaybackLogConflicts` checks it.
 
-**Test status.** Swift and Python tests (29 October 2026): the log text, the size, each hook word and the chain wrappers. A build with the 17 patches that are not `test` or `internal` links with no conflict. Not tested in the emulator. Real iPod 5.5G (owner, 30 October 2026, version 1.0): the log operates, with 17 patches and 5202 songs. The value `track` is not correct: it is the text `FILE`. Version 1.1 removes it, adds the settings and records the iTunesDB track ID as `song`. Versions 1.1 and 1.2 are not tested on the real iPod. Refer to [re/playback-log.md](../re/playback-log.md#first-log-from-a-real-ipod).
+**Test status.** Swift and Python tests (29 October 2026): the log text, the size, each hook word and the chain wrappers. A build with the 17 patches that are not `test` or `internal` links with no conflict. Not tested in the emulator. Real iPod 5.5G (owner, 30 October 2026, version 1.0): the log operates, with 17 patches and 5202 songs. The value `track` is not correct: it is the text `FILE`. Version 1.1 removes it, adds the settings and records a song ID. Version 1.2 gave `song=0`. Version 1.3 uses the dbid. Versions 1.1 and 1.2 are not tested on the real iPod. Refer to [re/playback-log.md](../re/playback-log.md#first-log-from-a-real-ipod).
 
 ## Storage type
 

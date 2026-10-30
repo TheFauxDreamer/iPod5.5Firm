@@ -89,11 +89,13 @@ The code runs at the same addresses as the offsets in the osos image. The table 
 | 0x6ca452 | A zero area of 310 KB. The firmware needs it to be zero. If data is put there, the iPod stops at start. |
 | 0x7358c0 | The end of Apple's code and data. |
 | 0x7358c0 | A marker: the bytes `55 AA 55 AA` (the little-endian word 0xAA55AA55). |
-| 0x7358d0–0x73658c | Free (3260 bytes). `album-art` 1.0 used this area. Version 2.0 is an extended patch. |
+| 0x7358d0–0x736480 | Free (2992 bytes). `album-art` 1.0 used this area. Version 2.0 is an extended patch. |
+| 0x736480–0x736548 | The `flash-keep-awake` patch (200 bytes). |
+| 0x736548–0x73658c | Free (68 bytes). |
 | 0x73658c–0x736644 | The `sleep-now` patch (181 bytes). |
-| 0x736644–0x736700 | The `flash-keep-awake` patch (188 bytes). |
-| 0x736700–0x736784 | The `flash-wake-on-input` patch (132 bytes). |
-| 0x736784–0x736800 | Free (124 bytes). |
+| 0x736644–0x736700 | Free (188 bytes). |
+| 0x736700–0x736790 | The `flash-wake-on-input` patch (144 bytes). |
+| 0x736790–0x736800 | Free (112 bytes). |
 | 0x736800 | The maximum osos size for patches (`Patcher.maxOSOSSize`). It is the start of rsrc in Apple's layout. |
 | 0x736800–0x7F8000 | Theme data, the Dark Mode switch, then the extended patches (`"load_address": "extended"`, for example `cover-flow`) after all this data. A patch with `settings_items` puts a new copy of the Settings menu (Menu 24598) after its code, and the resource table entry points to the copy. A patch with `menu_items` does the same for its menu, for example the Music menu (Menu 24440). After the last patch, the app writes the iPodFirm list (`FirmwareManifest`, approximately 110 bytes plus 45 bytes for each patch). This area is available only when iPodFirm moves rsrc. |
 | 0x7F8000 | `ThemeImport.ososLimit`: the upper limit for all added data. The 32 KB below 8 MB (0x7F8000–0x800000) stay empty as a margin. Before 9 October 2026 the limit was 0x7F0000 (a margin of 64 KB). The app setting "Layout" (`ososMargin`) selects 0x7F8000, 0x7FC000 or 0x7F0000. The Python tools use 0x7F8000. |
