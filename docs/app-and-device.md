@@ -33,7 +33,7 @@ The sidebar has two sections. The section "Device" has only the iPod row. The fi
 
 [AppModel.swift](../mac/Sources/iPodFirm/AppModel.swift) holds the state and the actions of all panes.
 
-The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has four tabs. Permissions: the Touch ID helper and its check (refer to [The helper check in the Settings window](#the-helper-check-in-the-settings-window)), `requireTouchID` and Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`): 32 KB (the limit 0x7F8000, the default), 16 KB (the limit 0x7FC000, more space for patches) or 64 KB (the limit 0x7F0000, the value before 9 October 2026). The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`), and a build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`). Updates: "Check for a new version at launch" (`checkForUpdates`, On by default). Refer to [The update check](#the-update-check).
+The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has four tabs. Permissions: the Touch ID helper and its check (refer to [The helper check in the Settings window](#the-helper-check-in-the-settings-window)), `requireTouchID` and Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`). The default is 32 KB (the limit 0x7F8000). The value 16 KB (the limit 0x7FC000) gives more space for patches. The value 64 KB (the limit 0x7F0000) is the value before 9 October 2026. The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`). A build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`). Updates: "Check for a new version at launch" (`checkForUpdates`, On by default). Refer to [The update check](#the-update-check).
 
 The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
@@ -78,7 +78,7 @@ The log has no home folder path and no user name. `AppLog.redact` changes `/User
 
 Each error has more data than its message. `FirmwareError` and `PatchError` record the file, the line and the function of the throw. A `FirmwareError` can also have `context` (the steps of the callers, from `adding(_:)`) and `cause` (the full description of the error that caused it). `AppLog.describe` writes all of this data. It also writes the domain, the code and the underlying errors of an `NSError`.
 
-All faults go through `AppModel.fail`. It writes the error, the last 15 steps and the state of the app (`diagnosticSnapshot`) to the log. The state has the open file name, the iPod model and size, the patches on the iPod and in the app with their versions and options, the appearance and the helper status. The alert shows the message and the last step of the last two minutes. The alert of a fault has three buttons:
+All faults go through `AppModel.fail`. It writes the error, the last 15 steps and the state of the app (`diagnosticSnapshot`) to the log. The state has the open file name, the iPod model and the iPod size. It also has the patches on the iPod and in the app, with their versions and options. It also has the appearance and the helper status. The alert shows the message and the last step of the last two minutes. The alert of a fault has three buttons:
 
 - **Report on GitHub…** saves the log as a text file. Then it opens a new issue on GitHub in the browser (refer to [Network connections](#network-connections)). The user drags the file into the issue.
 - **Save Log…** saves the state of the app and the two log files as one text file, for example `iPodFirm Log 2026-10-29 1405.txt`. Finder then shows the file.
@@ -97,7 +97,7 @@ The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the cent
 3. It makes `iPodFirm.app` with the app, the helper, the launchd property list, the emulator files and the patches.
 4. It runs `strip -S` on the app and on the helper. This removes the debug map of the linker. The app does not use it.
 5. It writes `Info.plist`. The bundle identifier is `com.thefauxdreamer.ipodfirm`.
-6. It signs the helper with the identifier `com.thefauxdreamer.ipodfirm.helper`, then the app. It uses the first "Apple Development" or "Developer ID Application" identity, or `CODESIGN_IDENTITY`.
+6. It signs the helper with the identifier `com.thefauxdreamer.ipodfirm.helper`, then the app. It uses the first "Apple Development" or "Developer ID Application" identity, or `CODESIGN_IDENTITY`. It turns on the hardened runtime (`--options runtime`) for the two programs.
 7. It writes the new numbers to `version.env` only after a successful build.
 8. It quits iPodFirm with `osascript` if iPodFirm is open. Then it installs the app in `/Applications`.
 
@@ -110,7 +110,7 @@ A stable signature is necessary. macOS connects Full Disk Access to the signatur
 `RELEASE=1 mac/scripts/build-app.sh` makes a build for a GitHub release:
 
 1. It increases the version and the build number, as a normal build does.
-2. It signs the helper and the app with an ad-hoc signature (`codesign --sign -`). It ignores `CODESIGN_IDENTITY`.
+2. It signs the helper and the app with an ad-hoc signature (`codesign --options runtime --sign -`). It ignores `CODESIGN_IDENTITY`.
 3. It stops if a file in the app contains a path of the build Mac or the Git e-mail address. The script does not examine an address that ends in `@users.noreply.github.com`. The check occurs before the script writes the new numbers to `version.env`.
 4. It stops if `codesign -dvv` shows an `Authority=` line.
 5. It makes `build/iPodFirm-<version>.zip` with `ditto -c -k --keepParent`.
@@ -130,7 +130,7 @@ A developer certificate contains the e-mail address or the name of the owner. An
 
 An ad-hoc build has these limits:
 
-- Gatekeeper blocks the app at the first start. The user must open it with Control-click and **Open**.
+- The script does not notarize the app. Gatekeeper blocks the app at the first start. The user must open it with Control-click and **Open**.
 - The build has no team identifier. The daemon refuses to start, so the Touch ID helper is not available. `HelperRow` shows this and does not show "Set Up Touch ID". The app uses the password prompt.
 - macOS loses Full Disk Access after each update, because the signature changes. The user must turn on the permission again.
 
@@ -170,6 +170,10 @@ Both sides of the XPC connection examine the code signature:
 - The daemon accepts only the code `identifier "com.thefauxdreamer.ipodfirm"`, signed by the same team (`setCodeSigningRequirement`).
 - The app accepts only the helper `identifier "com.thefauxdreamer.ipodfirm.helper"`, signed by the same team.
 - The daemon refuses to start if it has no team identifier (an ad-hoc signature).
+
+The app and the helper use the hardened runtime. The app needs no entitlement. Thus another program cannot inject code into the app and use the connection to the daemon.
+
+The daemon writes a backup only in `~/Library/Application Support/iPodFirm` of the caller. `checkedBackupDirectory` resolves symbolic links before the check. Thus a link in that folder cannot send a write of root to a different location.
 
 The daemon is registered for the whole Mac. Each copy of the app with the same bundle identifier sees the status `.enabled`, also a copy for a different user. Thus the app does two more checks (`HelperClient`):
 
@@ -259,7 +263,7 @@ The patch switches are settings of the app. The owner can change a switch and no
 3. `Patcher.detect` gives the state of each patch: installed (with the version from the list), absent, or not known. Without a list, the result comes from the changed words, and the versions are not known.
 4. After a flash or a restore, the app uses the image that it wrote (`recordWrittenImage`). It does not read the iPod again.
 
-The mirror rule: if the owner did not change a switch, an option or the appearance after the last flash, restore or read (`switchesChangedSinceSync`), a new state sets the switches to the iPod (`AppModel.matchIPod`). Else the switches stay. A patch with the state "not known" keeps its switch. A patch on the iPod that the app does not have stays off.
+The mirror rule uses `switchesChangedSinceSync`. This value shows a change to a switch, an option or the appearance after the last flash, restore or read. If there is no change, a new state sets the switches to the iPod (`AppModel.matchIPod`). Else the switches stay. A patch with the state "not known" keeps its switch. A patch on the iPod that the app does not have stays off.
 
 The Patches pane shows the result:
 

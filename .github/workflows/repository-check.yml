@@ -1,0 +1,14 @@
+# Run the check of .githooks/check-repository at each push and at each pull request.
+# This check also operates on a clone that does not have the hook.
+name: Repository check
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh .githooks/check-repository

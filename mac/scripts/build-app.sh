@@ -115,8 +115,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 sign_app() {    # $1 = the app, $2 = the identity
-    codesign --force --sign "$2" --identifier com.thefauxdreamer.ipodfirm.helper "$1/Contents/MacOS/ipodfw-helper"
-    codesign --force --sign "$2" "$1"
+    # The hardened runtime stops the injection of code into the app and into the helper.
+    codesign --force --options runtime --sign "$2" --identifier com.thefauxdreamer.ipodfirm.helper "$1/Contents/MacOS/ipodfw-helper"
+    codesign --force --options runtime --sign "$2" "$1"
     codesign --verify --strict "$1"
 }
 

@@ -94,7 +94,7 @@ The probe showed that the patch does not need a class driver or the UIM isochron
 The patch `patches/usb-audio-out` (letter `u`, version 1.0) is the code of probe 1.27 without the test parts, with:
 
 - the Settings item "USB-C Audio" (On/Off, Off after each start);
-- the task "USBAudioOut", which starts and stops host mode through Apple's USB mode manager (RAM 0x1081edc4) and starts the music route automatically when the headphones are enumerated;
+- the task "USBAudioOut". It starts and stops host mode through Apple's USB mode manager (RAM 0x1081edc4). It starts the music route when the headphones are enumerated;
 - Off at once: Apple's host stop, then the device mode again.
 
 Details: [docs/modifications.md](docs/modifications.md#usb-audio-out) and [re/usb-host.md](re/usb-host.md).

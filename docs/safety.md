@@ -35,7 +35,7 @@ The app does one check before it runs the helper. It does the check again before
 - If a MiMusic temporary file is on the iPod volume, the app stops. The files are `iTunesDB.tmp`, `ArtworkDB.tmp` and `iPodFirmAlbumArt.tmp` (`MusicAppCheck` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift)).
 - If MiMusic is open, the confirmation sheet shows a warning. The owner can quit MiMusic or continue.
 
-Before the write, while the volume is still mounted, the app also does this step. If the image has no `shuffle-album-mix` (the word at osos 0x191e9c is not `cmp r0, #3`), and `iPod_Control/Device/Preferences` has Album Mix on (byte 0x8b, file version 0x39), the app sets the byte to 0. Without this step, the firmware still loads the setting and shuffles the songs in each album, and no menu item can stop it. Settings > Shuffle then shows Albums. The result message tells the owner (`IPodPreferences` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift), `AppModel.clearAlbumMixIfNeeded`, the tests `testClearAlbumMix` and `testHasAlbumMix`). The command-line tool `ipodfw flash` does not do this step.
+Before the write, while the volume is still mounted, the app also does this step. The step applies if the image has no `shuffle-album-mix` (the word at osos 0x191e9c is not `cmp r0, #3`). The step also needs Album Mix on in `iPod_Control/Device/Preferences` (byte 0x8b, file version 0x39). The app then sets the byte to 0. Without this step, the firmware still loads the setting and shuffles the songs in each album, and no menu item can stop it. Settings > Shuffle then shows Albums. The result message tells the owner (`IPodPreferences` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift), `AppModel.clearAlbumMixIfNeeded`, the tests `testClearAlbumMix` and `testHasAlbumMix`). The command-line tool `ipodfw flash` does not do this step.
 
 The helper does these checks in `Operations.flash` ([Operations.swift](../mac/Sources/IPodFWKit/Operations.swift)). Any failed check stops the flash before a write.
 
@@ -185,7 +185,7 @@ A test in the emulator is strong evidence, but not proof:
 
 ## Known problems
 
-- The start code of the iPod can remove the `hibe` entry from the directory and leave the old 64 MB hibernation area in the partition ([re/hibernation-restore.md](../re/hibernation-restore.md)). Without the entry, the iPod does not hibernate. iPodFirm does not repair the hibernation: the research did not read the dump header or the start code of the NOR flash yet (open item). The rsrc move writes around the hibernation area, never into it.
+- The start code of the iPod can remove the `hibe` entry from the directory. The old 64 MB hibernation area then stays in the partition ([re/hibernation-restore.md](../re/hibernation-restore.md)). Without the entry, the iPod does not hibernate. iPodFirm does not repair the hibernation: the research did not read the dump header or the start code of the NOR flash yet (open item). The rsrc move writes around the hibernation area, never into it.
 - The owner reported slower scroll in lists with `flash-keep-awake`. The emulator shows that the patch code does not run during a scroll. The cause is not known.
 - In the dark theme, the rating stars in Now Playing are almost invisible.
 - After a computer session, the stock firmware defers Sleep for approximately 1 minute. `sleep-now` works around this. The cause is not known.
