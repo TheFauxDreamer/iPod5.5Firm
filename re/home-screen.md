@@ -285,7 +285,22 @@ Test: compare with stock Now Playing. If Now Playing has the same delay, the Spl
 
 ## Next steps
 
-1. The owner tests the main menu in the emulator: the cover, the text, Now Playing, and the wheel speed.
-3. Test the main menu with no song, and with a song that has no art.
-4. Test a main menu with more rows than the screen, for the scroll bar.
-5. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`. Theme import reads Views by table offset.
+Split Light is on `main` and operates on a real iPod.
+
+Decisions for the owner:
+
+1. Keep the 204 bytes of stock View data in the theme, or make them from the open firmware at the build.
+2. Name a person for the Thanks list, or give no credit.
+3. Compare the cover delay with stock Now Playing. Keep the delay if they are the same.
+
+Work:
+
+1. Split Dark: start from the dark View 24430, and test the panel text colour.
+2. Split Switch on iPod: add the layout to the switch table, and measure the space.
+3. Contemporary Split: a separate design on the main menu method. Do not rewrite shared Views.
+4. Change the labels in the app, if the owner wants the names Stock and Split.
+
+Later:
+
+1. No automatic Now Playing. Refer to [Automatic Now Playing](#automatic-now-playing).
+2. Find what the gate 0x94bbc(0x19) tests, if the cover delay needs a fix.
