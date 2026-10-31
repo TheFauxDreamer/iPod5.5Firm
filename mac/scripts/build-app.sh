@@ -197,7 +197,17 @@ if [ "$RELEASE" = both ]; then make_zip "$RELEASE_APP"; fi
 
 DEST="/Applications/$APP_NAME.app"
 if [ -d "$DEST" ]; then
-    osascript -e "tell application \"$DEST\" to quit" >/dev/null 2>&1 || true
+    # Never quit the app. The owner can be in a flash. Wait, and stop if the app stays open.
+    WAITED=0
+    while pgrep -f "^$DEST/Contents/MacOS/" >/dev/null 2>&1; do
+        if [ "$WAITED" -eq 0 ]; then echo "==> $APP_NAME is open. Quit it to install this build. Waiting..."; fi
+        if [ "$WAITED" -ge "${APP_WAIT_SECONDS:-600}" ]; then
+            echo "error: $APP_NAME is still open. The installed app did not change. The new build is in $APP." >&2
+            exit 1
+        fi
+        sleep 2
+        WAITED=$((WAITED + 2))
+    done
     rm -rf "$DEST"
 fi
 ditto "$APP" "$DEST"
