@@ -232,9 +232,9 @@ The values of the numbers of the product are at the image 0xd86b4 to
 0xd86dc. The name of the model 7 is the text "iPod mini" at 0xd86c4. The name
 of the other models is the text "iPod" at 0xd86e0.
 
-> The research did not find the number of the product of the iPod Video. The
-> model of the iPod Video is the model 5. The number of the product is 0x1203.
-> The model comes from the function 0x265164.
+> The iPod Video is the model 0x0b. Its number of the product is 0x1209.
+> The model comes from the function 0x265164. Refer to
+> [search-5g.md](search-5g.md#what-the-gate-reads).
 
 ### The descriptor of the device
 

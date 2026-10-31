@@ -30,7 +30,55 @@ The instructions at the end:
 | 0x130b50 | `0000a033` | `movcc r0, #0` |
 | 0x130b54 | `1080bd38` | `ldmcc sp!, {r4, pc}` |
 
-`0x265164` returns a cached word from `0x2827b8` + 0x84. The 16 high bits are the model (0xb is the iPod Video). The 16 low bits are the revision. The emulator notes record `HwVr 0x000b0005` for a 5G (MA146). A prototype dump has `0x000b0011`, probably a 5.5G.
+## What the gate reads
+
+The gate reads the hardware version `HwVr`. It does not read the RAM size, the drive size or the model number. Ghidra confirmed the code on 31 October 2026.
+
+1. `0x130b30` calls the thunk at 0x9b310, which jumps to `0x265164`.
+2. `0x265164` keeps the word at 0x1081de40 + 0x28. The value 0x7fffffff means "no value yet".
+3. If there is no value, `0x265164` calls `0x2827b8`. It reads + 0x84 of the object that `0x2827b8` gives, and keeps the word.
+4. `0x2827b8` returns the pointer at 0x1081df80. In normal operation, this pointer is 0x108710dc, the firmware copy of the SysInfo block.
+
+Thus the firmware reads the word one time. The word does not change until the next start.
+
+## How the value gets into the firmware
+
+Ghidra gave steps 3 to 6 on 31 October 2026. Steps 1 and 2 come from the emulator research.
+
+1. The boot loader reads the `HwVr` record from the `SysCfg` page of the NOR flash. It writes the value to `sysinfo + 0x84` at 0x40006df8.
+2. The boot loader puts the tag 'SysI' at 0x4001ff18 and the block pointer at 0x4001ff1c.
+3. `0x13bc`, called at 0x278, reads the tag and the pointer. It keeps the pointer at 0x40006000 + 0x8c.
+4. `0x1658`, called at 0x2b8, copies 0x90 bytes from 0x40006000 to 0x14983060. Thus the pointer is now at 0x149830ec.
+5. `0x281224`, called at 0x2bc, reads the pointer. It reads the length at + 4 and limits it to 0xf8. It copies the block to 0x108710dc with `0x7cae0`, and keeps the length at 0x1081dab4.
+6. `0x281224` ends with a jump to `0x282800`. That function writes 0x108710dc to the pointer at 0x1081df80.
+
+The default 0x10882048 of `0x2827b8` is only a fallback. It applies if the pointer stays 0, for example if there is no 'SysI' tag.
+
+Thus `HwVr` and the RAM size come from one block. `HwVr` is at + 0x84 and the RAM size is at + 0xe0. The device information object of [volume-limit.md](volume-limit.md) is the same block.
+
+Emulator measurement (31 October 2026, cold start, a copy of the iPodFirm profile, 1.5 billion instructions):
+
+| Address | Value | Meaning |
+|---|---|---|
+| 0x4001ff18 | 0x53797349 | The tag 'SysI' |
+| 0x149830ec | 0x40015898 | The pointer to the block of the boot loader |
+| 0x1081df80 | 0x108710dc | The pointer that `0x2827b8` returns |
+| 0x108710dc | 0x53797349 | The first word of the copy |
+| 0x10871160 | 0x000b0010 | + 0x84: `HwVr` |
+| 0x108711bc | 0x04000000 | + 0xe0: the RAM size, 64 MB |
+| 0x1081de68 | 0x000b0010 | The word that `0x265164` keeps |
+| 0x1081dab4 | 0x000000f8 | The copied length |
+| 0x10882048 | 0x00000000 | The fallback object, not used |
+
+| `HwVr` | iPod | Source | Search |
+|---|---|---|---|
+| 0x000b0005 | 5G (MA146) | Measured: NOR dump | No |
+| 0x000b0010 | 5G, in the iPodLinux table | Published, not measured | No |
+| 0x000b0011 | 5.5G | Measured: NOR of a retail 5.5G, 23 September 2026 | Yes |
+
+The 16 high bits are the generation (0xb is the iPod Video). The 16 low bits are the board revision. A different NOR flash or logic board changes the result. A different drive or a different size of RAM does not change it.
+
+Other functions use the same word. Refer to the entry for 0x265164 in [firmware-functions.md](../docs/firmware-functions.md).
 
 ## The callers
 
@@ -64,5 +112,5 @@ Other sources:
 ## Test status
 
 - Byte check: the Apple osos 1.3 has `00` at 0x130b50 (29 October 2026).
-- Emulator: not tested. The emulator profile of iPodFirm is a 5.5G. The 5.5G shows Search with and without the patch.
+- Emulator: not tested. The iPodFirm profile (`nor_model` A444) has `HwVr` 0x000b0010 (measured, 31 October 2026). This value is below 0x11, so the gate returns 0 on stock firmware. The earlier statement that this profile shows Search with no patch does not agree. Examine the screen to find the cause.
 - Real iPod 5G: tested by RetroCux with their script. Not tested with iPodFirm.

@@ -28,7 +28,7 @@ The 8 bytes are `ldr r0, [pc, #8]` and `ldr r0, [r0, #0x94]`. The next instructi
 
 An earlier note in [ghidra.md](ghidra.md) examined only the first match. It said that the old patch does not apply to 1.3. That was wrong. The iPodWizard search continues to the second match, and that match is correct.
 
-Both functions read the word +0x94 of the object at 0x108710dc. This research calls it the device information object. The same object has the region code at +0x92 (`0x9e958` returns `+0x92 & 0xff3f`). The research did not find the code that fills the object.
+Both functions read the word +0x94 of the object at 0x108710dc. This research calls it the device information object. It is the firmware copy of the SysInfo block (refer to [search-5g.md](search-5g.md#how-the-value-gets-into-the-firmware)). The same object has the region code at +0x92 (`0x9e958` returns `+0x92 & 0xff3f`). The research did not find the code that fills the object.
 
 ## The users of the limit bit
 

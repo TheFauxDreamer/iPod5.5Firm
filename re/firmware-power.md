@@ -193,14 +193,17 @@ The timer of the microseconds is at 0x60005010. The function 0xded04 reads it.
 
 ### The state of the battery
 
-The state of the battery comes from the converter of the analog to the digital.
-The value is a number of 32 bits. The 16 high bits are the number of the
-channel. The 16 low bits are the measurement of the channel.
+> Correction (31 October 2026): the value of the function 0x265164 is not a
+> battery measurement. It is the hardware version `HwVr`. The 16 high bits are
+> the generation of the iPod. The 16 low bits are the board revision. The word
+> does not change until the next start. Thus the functions in this section
+> select an action from the iPod generation. "Channel" in this section means
+> the generation. Refer to [search-5g.md](search-5g.md#what-the-gate-reads).
+> The names "battery", "charger" and "power" of these functions are not proved.
 
-The function 0x265164 reads the value. The function returns the word at +0x28
-of the object at the image 0x65190. The word at +0x28 is 0x7fffffff when the
-value is not yet there. The function then reads the word at +0x84 of the object
-of the driver of the converter.
+The function 0x265164 reads the value. The function keeps the word at
+0x1081de40 + 0x28. The word is 0x7fffffff when the value is not yet there. The
+function then reads + 0x84 of the object that the function 0x2827b8 gives.
 
 The function 0x265a74 says that the battery is low. The function gives 1 when
 the 16 high bits of the value are 10, 11 or 12. The function gives 0 for the

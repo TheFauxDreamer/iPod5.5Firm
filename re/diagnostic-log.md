@@ -19,7 +19,7 @@ Each area has one option in `patch.json`, with a global variable. An area that i
 | Power and Storage | `log_power` | `bl` at 0x1d9344 | The only call of the sleep sequence 0x1ee8d0. The sequence writes the settings file itself (0xbbf1c), thus a file write is safe here. |
 | Power and Storage | `log_power` | `bl` at 0x1dfe18 | The only call of the sleep function 0xb43dc. The function returns after the wake. This hook does not use 0xb45f4, which `flash-keep-awake` uses. |
 | Power and Storage | `log_power` | `b` at 0x265cc8 | The storage power. The first instruction is `push {r3-r11, lr}`. The hook also sees the call through `flash-keep-awake` at 0x23344c. |
-| Power and Storage | `log_power` | 0x265164, in a sample | The raw value: the channel in the high 16 bits, the measurement in the low 16 bits. This is not a battery percentage. The function only reads RAM. |
+| Power and Storage | `log_power` | 0x265164, in a sample | The patch logs this word as `channel` and `value`. These labels are not correct. The word is the hardware version `HwVr`, and it does not change (refer to [search-5g.md](search-5g.md#what-the-gate-reads)). The function only reads RAM. |
 | Artwork and Files | `log_artwork` | `bl` at 0x2055dc, `bl` at 0x205854 | The artwork lookup 0x1f161c and the image load 0x2258a4 in ArtworkLoadTask. |
 | Artwork and Files | `log_artwork` | `b` at 0x8f38c, `b` at 0x8f464 | The file open and the file read. The hooks also time the reads of `album-art` and `cover-flow`, because these patches call the same functions. |
 | Performance | `log_performance` | Word at 0x6701f0 | The event method 0x1d81cc. `cover-flow` uses the same word with no chain. The name `cover-flow` sorts first, thus this hook chains to it. |

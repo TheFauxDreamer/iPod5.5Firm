@@ -312,7 +312,9 @@ RetailOS does not test the RAM. It reads the size from the SysInfo block of the 
 | 0x0013bc | The start code. Finds the SysInfo block: the tag 'SysI' (0x53797349) at 0x4001ff18, then a pointer. | Static |
 | 0x0013e8 | `ldr r3, [r0, #0xe0]` (`e0 30 90 e5`): reads the SDRAM size from SysInfo + 0xe0. `mov r3, #0x2000000` (`02 34 a0 e3`) here makes a 32 MB heap in the emulator. | Static, Emulator |
 | 0x000e6c | Converts the size to a code with the size table at 0x16d8 (0, 0x80000 … 0x8000000). | Static |
-| 0x09d9d0 | Gives the RAM size: SysInfo + 0xe0. 0x947f8 compares it with 0x3ffffff. The patch `playback-log` uses it. | Static, Patch |
+| 0x281224 | Copies the SysInfo block (at most 0xf8 bytes) to 0x108710dc and sets the pointer of 0x2827b8 through 0x282800. The start code calls it at 0x2bc. Refer to [re/search-5g.md](../re/search-5g.md#how-the-value-gets-into-the-firmware). | Static, Emulator |
+| 0x2827b8 | Returns the SysInfo pointer at 0x1081df80 (0x108710dc). The fallback 0x10882048 applies only if the pointer is 0. | Static, Emulator |
+| 0x09d9d0 | Gives the RAM size: SysInfo + 0xe0, from the copy at 0x108710dc. 0x947f8 compares it with 0x3ffffff. The patch `playback-log` uses it. | Static, Patch |
 | 0x000df8 | Adds the sizes of the four banks and writes the RAM top to struct + 0x20. | Static |
 | 0x000c90 | Sets the image region (8 MB) and the data region (from 0x10800000, length 0x20e294). | Static |
 | 0x001658 | Copies the struct (0x90 bytes) from IRAM 0x40006000 to 0x14983060. | Static |
@@ -572,7 +574,7 @@ Refer to [re/album-artist.md](../re/album-artist.md#album-artists-menu-item-15-o
 | 0x0af838 | At the load of old preference versions: merges new default bits into the mask, with the mask 0x1fffffff. | Static |
 | 0x19ed58 | (screen, menu, label, 3, visible): shows or hides an item of a menu (item byte +4, bit 0 = hidden). The UI script calls it for each Apple item of the main menu (Menu 24094) at the start and each time the main menu shows. | Static, Emulator, Patch |
 | 0x24bc38 | (label, menu, visible): calls 0x19ed58 on the menu screen. Search (0x130b70) and Contacts (0x1b9ed0) use it at the start. | Static, Emulator |
-| 0x130b30 | Returns 0 on a 5G and 1 on other models: 0 if the word of 0x265164 has the model 0xb and a revision below 0x11. Only Search uses it (0x105a04 label 0x5f8b, 0x130ca4). The patch `search-5g` changes 0x130b50 (`movcc r0, #0` to `#1`). Refer to [re/search-5g.md](../re/search-5g.md). | Static, Patch |
+| 0x130b30 | Returns 0 on a 5G and 1 on other models: 0 if `HwVr` (0x265164) has the generation 0xb and a board revision below 0x11. It does not read the RAM size. Only Search uses it (0x105a04 label 0x5f8b, 0x130ca4). The patch `search-5g` changes 0x130b50 (`movcc r0, #0` to `#1`). Refer to [re/search-5g.md](../re/search-5g.md). | Static, Patch |
 | 0x130ca4 | Builds the Music menu (0x7600). If 0x130b30 returns 1, it adds the two Search items. It makes the task `SearchHelperThread` (0x155e7c). | Static |
 | 0x253fe4 | (item): 1 if the item is visible (item byte +4, bit 0 = 0). | Static |
 
@@ -913,7 +915,7 @@ the power chip of the PP5020 of Apple. The facts are Static.
 | 0x1b73c8 | Makes the object of the power management unit. The object has the address 0x70000034 at +8. |
 | 0x1b741c | The word with the address 0x70000020. The function 0x1b73c8 sets the bit 0x40000000. |
 | 0x1c7f58 | Makes the object of the clock of the system. The object has the address 0x70000020 at +0xc. |
-| 0x265164 | Returns a cached word from 0x2827b8 + 0x84. The 16 high bits are the channel. The 16 low bits are the measurement. 0x130b30 uses the word as the hardware revision: model 0xb (iPod Video), revision 5 on a 5G. Refer to [re/search-5g.md](../re/search-5g.md). |
+| 0x265164 | Returns the hardware version `HwVr`, read one time from + 0x84 of the object of 0x2827b8 and kept at 0x1081de40 + 0x28. The 16 high bits are the generation (0xb is the iPod Video). The 16 low bits are the board revision: 0xb0005 on a 5G, 0xb0011 on a retail 5.5G. It is not a measurement. Refer to [re/search-5g.md](../re/search-5g.md). |
 | 0x2657fc | Gives the state of the power. The function gives 1 when the channel is 10, 11 or 12. |
 | 0x265820 | Gives the state of the charger. The function gives 1 when the channel is 5, 6, 8 or 9. |
 | 0x265a74 | Gives the state of the battery. The function gives 1 when the channel is 10, 11 or 12. |
