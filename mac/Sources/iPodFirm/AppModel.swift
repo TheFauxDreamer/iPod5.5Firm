@@ -130,7 +130,7 @@ final class AppModel: ObservableObject {
     @Published var showRemoveGamesSheet = false
     /// The state of the last removal of the games.
     @Published var gameRemoveStatus = ""
-    /// The layout of the main menu. Split operates with Light and Dark.
+    /// The layout of the main menu.
     @Published var layout: Layout = Layout(rawValue: UserDefaults.standard.string(forKey: "layout") ?? "") ?? .stock {
         didSet { UserDefaults.standard.set(layout.rawValue, forKey: "layout"); switchesChanged(oldValue != layout) }
     }
@@ -234,7 +234,7 @@ final class AppModel: ObservableObject {
         /// The theme is in the firmware: always dark. The layout can follow it.
         case dark(ImportedTheme, layout: ImportedTheme?)
         /// Light firmware with a Dark Mode item in Settings (DarkMode.build).
-        case switchOnIPod(ImportedTheme, PatchInfo)
+        case switchOnIPod(ImportedTheme, PatchInfo, layout: ImportedTheme?)
     }
 
     /// An imported theme in the Themes folder.
@@ -709,7 +709,9 @@ final class AppModel: ObservableObject {
         switch appearance {
         case .light: return nil
         case .dark: return .dark(theme, layout: layout == .split ? Self.splitTheme : nil)
-        case .onIPod: return Self.darkModePatch.map { .switchOnIPod(theme, $0) }
+        case .onIPod:
+            let split = layout == .split ? Self.splitTheme : nil
+            return Self.darkModePatch.map { .switchOnIPod(theme, $0, layout: split) }
         }
     }
 
@@ -729,10 +731,11 @@ final class AppModel: ObservableObject {
     /// Settings menu and the dark-mode code. Nil if no theme agrees with the open firmware.
     var switchOnIPodSize: Int? {
         guard let editor, let file = selectedTheme, isCompatible(file.theme), let patch = Self.darkModePatch else { return nil }
-        let key = "\(revision) \(themeRevision) \(file.name)"
+        let key = "\(revision) \(themeRevision) \(file.name) \(layout.rawValue)"
         if let c = switchSizeCache, c.key == key { return c.size }
         let size = try? DarkMode.addedSize(partition: editor.partition, osos: editor.osos, theme: file.theme,
-                                           codeSize: patch.spec.size ?? 0)
+                                           codeSize: patch.spec.size ?? 0,
+                                           layout: layout == .split ? Self.splitTheme : nil)
         switchSizeCache = (key, size)
         return size
     }
@@ -1275,10 +1278,10 @@ final class AppModel: ObservableObject {
                 AppLog.step("Build: apply the layout \(layout.name)")
                 try layout.movedLayout(after: osos, dark: true).apply(to: &osos, originalSHA256: editor.originalOSOSHash)
             }
-        case .switchOnIPod(let theme, let patch):
+        case .switchOnIPod(let theme, let patch, let layout):
             AppLog.step("Build: add Dark Mode with the theme \(theme.name) and the patch \(patch.spec.name) \(patch.spec.versionText)")
             osos = try DarkMode.build(partition: editor.partition, osos: osos, theme: theme, patch: patch,
-                                      originalSHA256: editor.originalOSOSHash).0
+                                      originalSHA256: editor.originalOSOSHash, layout: layout).0
         case nil:
             break
         }

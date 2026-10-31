@@ -36,10 +36,39 @@ public enum DarkMode {
 
     static func align(_ n: Int, _ a: Int) -> Int { (n + a - 1) / a * a }
 
+    /// Bytes of the Split layout that are different in the two modes.
+    public struct LayoutRun {
+        var at: Int
+        var old: [UInt8]
+        var new: [UInt8]
+    }
+
+    /// The Split layout for "Switch on iPod", with its View at `end`.
+    static func layoutParts(theme: ImportedTheme, layout: ImportedTheme, osos: [UInt8], end: Int) throws
+        -> (at: Int, view: [UInt8], entry: ThemeChange, extra: [LayoutRun]) {
+        let at = align(end, 16)
+        let place = [UInt8](repeating: 0, count: at)
+        let moved = layout.movedLayout(after: place)
+        let light = [UInt8](try moved.changes[0].withCopiedBytes(osos).new)
+        var themed = osos
+        try theme.apply(to: &themed, originalSHA256: theme.osos_sha256)
+        let dark = [UInt8](try layout.movedLayout(after: place, dark: true).changes[0].withCopiedBytes(themed).new)
+        var extra: [LayoutRun] = []
+        var i = 0
+        while i < light.count {
+            var j = i
+            while j < light.count && light[j] != dark[j] { j += 1 }
+            if j > i { extra.append(LayoutRun(at: at + i, old: Array(light[i..<j]), new: Array(dark[i..<j]))) }
+            i = max(j, i + 1)
+        }
+        return (at, light, moved.changes[1], extra)
+    }
+
     /// The switch table for the changes inside osos, with the rules of `ImportedTheme.apply`: a change
     /// is used if the bytes are the old bytes, and left out if they are already the new bytes (the same
     /// change two times) or other bytes (an edit by the owner).
-    public static func switchTable(_ theme: ImportedTheme, osos: [UInt8]) -> (table: [UInt8], leftOut: Int) {
+    public static func switchTable(_ theme: ImportedTheme, osos: [UInt8],
+                                   extra: [LayoutRun] = []) -> (table: [UInt8], leftOut: Int) {
         var runs: [UInt8] = [], data: [UInt8] = [], count = 0, leftOut = 0
         var work = osos
         for c in theme.withOldBytes(osos).effectiveChanges where c.offset + c.old.count <= osos.count {
@@ -53,6 +82,13 @@ public enum DarkMode {
             put32(&run, 0, UInt32(c.offset)); put32(&run, 4, UInt32(c.new.count))
             runs += run
             data += zip(c.old, c.new).map { $0 ^ $1 }
+            count += 1
+        }
+        for e in extra {
+            var run = [UInt8](repeating: 0, count: 8)
+            put32(&run, 0, UInt32(e.at)); put32(&run, 4, UInt32(e.new.count))
+            runs += run
+            data += zip(e.old, e.new).map { $0 ^ $1 }
             count += 1
         }
         var head = [UInt8](repeating: 0, count: 12)
@@ -106,15 +142,24 @@ public enum DarkMode {
     /// The bytes that "Switch on iPod" adds after the end of osos (`patchAreaEnd`): the theme data, the
     /// switch table, the Settings menu and the code of the patch (`codeSize`, the `size` in patch.json).
     /// The value is the same as the layout of `build`. The Patches pane shows it.
-    public static func addedSize(partition: FirmwarePartition, osos: [UInt8], theme: ImportedTheme, codeSize: Int) throws -> Int {
+    public static func addedSize(partition: FirmwarePartition, osos: [UInt8], theme: ImportedTheme, codeSize: Int,
+                                 layout splitLayout: ImportedTheme? = nil) throws -> Int {
         let menu = try settingsMenu(partition: partition, osos: osos).0
-        let at = layout(themeEnd: themeEnd(theme, osos: osos), table: switchTable(theme, osos: osos).table.count, menu: menu.count)
+        var end = themeEnd(theme, osos: osos)
+        var extra: [LayoutRun] = []
+        if let splitLayout {
+            let parts = try layoutParts(theme: theme, layout: splitLayout, osos: osos, end: end)
+            end = parts.at + parts.view.count
+            extra = parts.extra
+        }
+        let at = layout(themeEnd: end, table: switchTable(theme, osos: osos, extra: extra).table.count, menu: menu.count)
         return at.patchAt + codeSize - patchAreaEnd
     }
 
     /// The osos for "Switch on iPod". `osos` can have edits of the owner; `partition` gives its resources.
+    /// With `layout`, both modes have the Split main menu.
     public static func build(partition: FirmwarePartition, osos: [UInt8], theme: ImportedTheme, patch: PatchInfo,
-                             originalSHA256: String) throws -> ([UInt8], Info) {
+                             originalSHA256: String, layout splitLayout: ImportedTheme? = nil) throws -> ([UInt8], Info) {
         guard originalSHA256 == theme.osos_sha256 else { throw ThemeError("The theme \"\(theme.name)\" is for a different firmware.") }
         let theme = theme.withOldBytes(osos)
         var out = osos
@@ -123,10 +168,23 @@ public enum DarkMode {
             if out.count < c.offset + c.new.count { out += [UInt8](repeating: 0, count: c.offset + c.new.count - out.count) }
             out.replaceSubrange(c.offset..<c.offset + c.new.count, with: c.new)
         }
+        // The layout: in both modes. The switch table changes only its colours and text styles.
+        var end = themeEnd(theme, osos: osos)
+        var extra: [LayoutRun] = []
+        if let splitLayout {
+            let parts = try layoutParts(theme: theme, layout: splitLayout, osos: osos, end: end)
+            if out.count < parts.at + parts.view.count {
+                out += [UInt8](repeating: 0, count: parts.at + parts.view.count - out.count)
+            }
+            out.replaceSubrange(parts.at..<parts.at + parts.view.count, with: parts.view)
+            out.replaceSubrange(parts.entry.offset..<parts.entry.offset + parts.entry.new.count, with: parts.entry.new)
+            end = parts.at + parts.view.count
+            extra = parts.extra
+        }
         // 2. the switch table and 3. the Settings menu
-        let (table, leftOut) = switchTable(theme, osos: osos)
+        let (table, leftOut) = switchTable(theme, osos: osos, extra: extra)
         let (menu, res, block) = try settingsMenu(partition: partition, osos: osos)
-        let (tableAt, menuAt, patchAt) = layout(themeEnd: themeEnd(theme, osos: osos), table: table.count, menu: menu.count)
+        let (tableAt, menuAt, patchAt) = layout(themeEnd: end, table: table.count, menu: menu.count)
         // 4. the patch, then the table and the menu
         out = try Patcher.apply(patch, to: out, originalSHA256: originalSHA256, loadAddress: UInt32(patchAt),
                                 symbols: ["dark_table": UInt32(tableAt)], maxSize: ThemeImport.ososLimit)

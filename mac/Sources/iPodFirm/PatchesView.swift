@@ -773,19 +773,14 @@ struct AppearanceDetail: View {
                 Text("Appearance")
             }
             Section("Layout") {
-                // Switch on iPod builds only the Stock layout. The choice of the owner stays for Light and Dark.
-                Picker("Layout", selection: Binding(get: { model.appearance == .onIPod ? .stock : model.layout },
-                                                    set: { model.layout = $0 })) {
+                Picker("Layout", selection: $model.layout) {
                     ForEach(AppModel.Layout.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 380)
-                .disabled(model.appearance == .onIPod || AppModel.splitTheme == nil)
+                .disabled(AppModel.splitTheme == nil)
                 .help("Split shows the cover and the current song beside the main menu. All other screens stay stock.")
-                if model.appearance == .onIPod {
-                    Label("Switch on iPod uses the Stock layout. Split operates with Light and Dark.", systemImage: "info.circle")
-                        .foregroundStyle(.secondary)
-                } else if let split = AppModel.splitTheme {
+                if let split = AppModel.splitTheme {
                     if model.editor != nil, !model.isCompatible(split) {
                         Label("Split does not agree with the open firmware. It is only for the original Apple firmware 1.3.",
                               systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .orange))

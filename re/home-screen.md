@@ -313,6 +313,12 @@ Measured: Dark Gray puts picture 21997 at 0x736800, so the View of the layout mo
 
 Type 24227 stays black in the dark theme. Dark Now Playing uses Types 24222 and 24223, which the theme makes white. Thus the panel uses Type 24223 in Dark.
 
+## Split with Switch on iPod
+
+Status: on branch `split-switch`. Not tested on a real iPod.
+
+The patch `dark-mode` applies the switch table at the first View lookup. It can change any address, so it needs no change. The build puts the light View after the theme data and changes the table entry in the 2 modes. The switch table has extra runs for the 6 colour bytes and the 4 text style values.
+
 ## Next steps
 
 Split Light is on `main` and operates on a real iPod.

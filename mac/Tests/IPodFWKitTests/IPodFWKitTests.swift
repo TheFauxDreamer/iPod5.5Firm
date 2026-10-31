@@ -1739,6 +1739,25 @@ final class OSOSMarginTests: XCTestCase {
 final class DarkModeTests: XCTestCase {
     /// The owner's case: "Switch on iPod" with a large theme, then an extended patch (usb-host-probe).
     /// Needs IPODFW_IPSW and IPODFW_THEME (an .ipodtheme file).
+    /// Split with Switch on iPod: the same osos as Python, and a correct size in the Patches pane.
+    func testSwitchBuildWithSplitLayout() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let ipsw = env["IPODFW_IPSW"], let themePath = env["IPODFW_THEME"] else { throw XCTSkip("set IPODFW_IPSW and IPODFW_THEME") }
+        let partition = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data)
+        let osos = try partition.image("osos")
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        let dark = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "dark-mode" }!
+        let theme = try ImportedTheme.load(URL(fileURLWithPath: themePath))
+        let split = try ImportedTheme.load(repo.appendingPathComponent("themes/layouts/Split.ipodtheme"))
+        let (out, info) = try DarkMode.build(partition: partition, osos: osos, theme: theme, patch: dark,
+                                             originalSHA256: ThemeImport.sha256(osos), layout: split)
+        let size = try DarkMode.addedSize(partition: partition, osos: osos, theme: theme, codeSize: dark.spec.size!, layout: split)
+        XCTAssertEqual(Patcher.maxOSOSSize + size, info.patchAt + dark.spec.size!)
+        if let path = env["IPODFW_SPLIT_SWITCH_RESULT"] {
+            XCTAssertEqual(ThemeImport.sha256(out), ThemeImport.sha256([UInt8](try Data(contentsOf: URL(fileURLWithPath: path)))))
+        }
+    }
+
     func testExtendedPatchAfterSwitchBuild() throws {
         let env = ProcessInfo.processInfo.environment
         guard let ipsw = env["IPODFW_IPSW"], let themePath = env["IPODFW_THEME"] else { throw XCTSkip("set IPODFW_IPSW and IPODFW_THEME") }

@@ -21,7 +21,7 @@ import struct
 from pathlib import Path
 
 from . import patcher
-from .themeimport import OSOS_LIMIT, Theme, _Image
+from .themeimport import OSOS_LIMIT, Change, Theme, _Image, _with_copied_bytes, apply_theme, moved_layout
 from .partition import FirmwarePartition
 
 MAGIC = 0x4D444649                  # "IFDM"
@@ -42,11 +42,31 @@ def _align(n: int, a: int) -> int:
     return (n + a - 1) // a * a
 
 
-def switch_table(theme: Theme, osos: bytes) -> tuple[bytes, int]:
+def layout_parts(theme: Theme, layout: Theme, osos: bytes, end: int) -> tuple[int, bytes, Change, list]:
+    """The Split layout for "Switch on iPod", with its View at `end`: (address, light View, table
+    entry change, list of (address, light bytes, dark bytes) for the switch table)."""
+    at = _align(end, 16)
+    place = bytes(at)
+    light = _with_copied_bytes(moved_layout(layout, place).changes[0], osos).new
+    themed = bytearray(osos)
+    apply_theme(theme, themed, theme.osos_sha256)
+    dark = _with_copied_bytes(moved_layout(layout, place, dark=True).changes[0], bytes(themed)).new
+    extra, i = [], 0
+    while i < len(light):
+        j = i
+        while j < len(light) and light[j] != dark[j]:
+            j += 1
+        if j > i:
+            extra.append((at + i, light[i:j], dark[i:j]))
+        i = max(j, i + 1)
+    return at, light, moved_layout(layout, place).changes[1], extra
+
+
+def switch_table(theme: Theme, osos: bytes, extra: tuple | list = ()) -> tuple[bytes, int]:
     """The switch table for the changes inside osos, with the rules of apply_theme: a change is
     applied if the bytes are the old bytes, and left out if they are already the new bytes (the
-    same change two times) or other bytes (an edit by the owner). Returns (table, number of
-    changes left out because of an edit)."""
+    same change two times) or other bytes (an edit by the owner). `extra` adds runs of the layout.
+    Returns (table, number of changes left out because of an edit)."""
     runs, data, skipped = [], bytearray(), 0
     work = bytearray(osos)
     for c in theme.with_old_bytes(osos).effective_changes():
@@ -60,6 +80,9 @@ def switch_table(theme: Theme, osos: bytes) -> tuple[bytes, int]:
         work[c.offset:c.offset + len(c.new)] = c.new
         runs.append(struct.pack("<II", c.offset, len(c.new)))
         data += bytes(a ^ b for a, b in zip(c.old, c.new))
+    for at, old, new in extra:
+        runs.append(struct.pack("<II", at, len(new)))
+        data += bytes(a ^ b for a, b in zip(old, new))
     head = struct.pack("<III", MAGIC, len(runs), 12 + 8 * len(runs))
     return head + b"".join(runs) + bytes(data), skipped
 
@@ -87,8 +110,9 @@ def settings_menu(menu: bytes) -> bytes:
 
 
 def build(fw: FirmwarePartition, osos: bytes, theme: Theme, patch_dir: str | Path,
-          original_sha256: str) -> tuple[bytes, dict]:
-    """The osos for "Switch on iPod". `osos` can have edits of the owner; `fw` gives its resources."""
+          original_sha256: str, layout: Theme | None = None) -> tuple[bytes, dict]:
+    """The osos for "Switch on iPod". `osos` can have edits of the owner; `fw` gives its resources.
+    With `layout`, both modes have the Split main menu."""
     if original_sha256 != theme.osos_sha256:
         raise DarkModeError(f"The theme \"{theme.name}\" is for a different firmware.")
     out = bytearray(osos)
@@ -100,8 +124,16 @@ def build(fw: FirmwarePartition, osos: bytes, theme: Theme, patch_dir: str | Pat
                 out += bytes(c.offset + len(c.new) - len(out))
             out[c.offset:c.offset + len(c.new)] = c.new
             end = max(end, c.offset + len(c.new))
+    # The layout: in both modes. The switch table changes only its colours and text styles.
+    extra = []
+    if layout:
+        view_at, view, entry, extra = layout_parts(theme, layout, osos, end)
+        out += bytes(max(0, view_at + len(view) - len(out)))
+        out[view_at:view_at + len(view)] = view
+        out[entry.offset:entry.offset + len(entry.new)] = entry.new
+        end = view_at + len(view)
     # 2. the switch table
-    table, skipped = switch_table(theme, osos)
+    table, skipped = switch_table(theme, osos, extra)
     table_at = _align(end, 16)
     # 3. the Settings menu
     image = _Image(fw)
