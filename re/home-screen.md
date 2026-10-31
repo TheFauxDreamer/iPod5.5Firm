@@ -201,8 +201,34 @@ iPodWizard is under the GPL, so use its source only for facts. Its post says tha
 | Side panel | The list uses the left 2/3 (213 pixels). The panel uses the right 1/3 (107 pixels). | The rows must follow the narrow width. |
 | Mini player | The list keeps the full width and has a shorter height. A strip below it shows the cover and the song. This is the fallback. | The list must accept a shorter height. |
 
+## The stock layout
+
+Status: operates in the emulator on 31 October 2026. Live data, the cover and the other title layers are not tested.
+
+[home-screen-views.py](home-screen-views.py) makes `home-screen-split.ipsw` from stock 1.3. Fonts, pictures, Types and code stay stock. No View changes size. The file changes 91 Views:
+
+| View | Change |
+|---|---|
+| 85 list Views | The right edge of the scroll bar: −107. The list ends at x = 213. |
+| 24069 | The first title layer, 24506, is 240 pixels high, not 24. The 8 other title layers stay stock. |
+| 24506 | The stock strip stays 24 pixels high. View -285 gets the full width. |
+| -277 | The content starts at y = 24 of the parent. It does not follow the title layer. The themes use a value of −240 and change all 9 title layers. |
+| -286 | Gets the stock title and clock from View -285. |
+| -285 | Holds -286 at the stock title position, the cover (-356) and the song panel (25532). |
+| 25532 | The song title, artist, album and count, from the properties 0x63bd–0x63bf and 0x63c3. |
+
+The file drops two stock items of View -285: text 24102 and View 24514. Their use is not known. Test for missing text in the title.
+
+The emulator showed these items correctly: the Language menu, the main menu, the Playlists menu, the stock title and the stock battery. Each list stops at x = 213, and the panel stays on the submenus.
+
+## Game patch
+
+The themes contain the same patch as the DRM research of this project. The research is in the history before commit ca0da76. The patch changes 6 conditional branches to `nop` in 0x131874, the DRM check of a game. Each branch goes to the failure address 0x131b84. The layout does not need the patch. The file of this research does not contain it.
+
 ## Next steps
 
-1. Write our own layout: stock narrow list, then a panel with the title bar at its stock position.
-2. Test live data of the panel in the emulator.
-3. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`.
+1. The owner tests live data in the emulator: the song text, the cover and Now Playing.
+2. Find the art size of Draw 25543 and of Draw 25544. The panel is 107 pixels wide, so Draw 25544 is possibly better.
+3. Test the 8 other title layers: 24507, 10371, 17538, 15617, 19328, 22404, 22532 and 28043.
+4. Find the use of text 24102 and View 24514.
+5. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`.
