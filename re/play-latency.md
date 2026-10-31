@@ -48,7 +48,7 @@ The iPodFirm emulator patch logs each write to the ATA taskfile, the ATA control
 
 The emulated drive is ready at once. On a real iPod, the adapter's start time comes after the 14 ms.
 
-These actions read the drive in the emulator after idle time: open Settings, Shuffle Songs. Notes and games do not read it, because the firmware loads them at start. A song from a list does not start, because the emulator has no audio.
+These actions read the drive in the emulator after idle time: open Settings, Shuffle Songs. Notes and games do not read it, because the firmware loads them at start. A song from a list did not start at the time of these measurements. The emulator patch `0002-ipodfirm-music-playback.patch` corrected this later. Refer to [emulator.md](emulator.md#the-music-playback-fix).
 
 ## First version of the patch (2 minutes)
 

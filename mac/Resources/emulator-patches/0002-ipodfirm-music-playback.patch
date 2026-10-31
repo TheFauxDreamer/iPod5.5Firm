@@ -1,0 +1,85 @@
+diff --git a/tools/ipod-machine/src/lib.rs b/tools/ipod-machine/src/lib.rs
+index 4a9542d..080bca9 100644
+--- a/tools/ipod-machine/src/lib.rs
++++ b/tools/ipod-machine/src/lib.rs
+@@ -4131,6 +4131,8 @@ pub struct Machine {
+     /// Instructions the COP has executed. **Deliberately not added to `executed`**, which is the
+     /// fingerprint every recipe compares — one core's work must not silently inflate the other's.
+     pub cop_executed: u64,
++    /// iPodFirm local patch: the value of `steps()` at the next turn of the COP.
++    pub cop_next_turn: u64,
+     /// `--cop-trace` — the coprocessor's own novelty map: the instruction count at which each
+     /// 16-byte code bucket it ran FIRST executed.
+     ///
+@@ -4817,6 +4819,7 @@ impl Machine {
+             // Reset state. Nothing runs on it until firmware writes PROC_WAKE to `COP_CTL`.
+             cop: Cpu::new(),
+             cop_executed: 0,
++            cop_next_turn: 0,
+             cop_novelty: None,
+             cop_events: Vec::new(),
+             mem,
+@@ -7543,7 +7546,10 @@ pub fn install_game_stubs(&mut self, exe_stem: &str, o: GameStubs) -> bool {
+     /// cores run at once rather than in slices — so whether a workload depends on it is a question
+     /// to answer by measurement, not by assertion. `--quantum=N` exists to answer it, and
+     /// [`Memory::quantum`] is what the scheduler actually reads.
+-    pub const QUANTUM: usize = 1_000;
++    ///
++    /// iPodFirm local patch: 50, not 1000. With 1000 a song started in 1 of 4 tests, with 10000 in
++    /// 0 of 4, and with 50 in 4 of 4. The speed did not change.
++    pub const QUANTUM: usize = 50;
+ 
+     /// Halted cycles the run loop pays for one at a time before it will consider skipping any.
+     ///
+@@ -7680,7 +7686,6 @@ pub fn install_game_stubs(&mut self, exe_stem: &str, o: GameStubs) -> bool {
+             let ce_hi = self.mem.read32(cop_en + 0x100);
+             pending & ce != 0
+                 || pending_hi & ce_hi != 0
+-                || (!self.mem.cop_asleep && self.executed.is_multiple_of(self.mem.quantum))
+         };
+         self.mem.internal = was_internal;
+         if cop_live || pending & en != 0 || pending_hi & en_hi != 0 {
+@@ -7742,6 +7747,11 @@ pub fn install_game_stubs(&mut self, exe_stem: &str, o: GameStubs) -> bool {
+             }
+             n = n.min(closes - here);
+         }
++        // iPodFirm local patch: an awake COP needs its turns and the service ticks, so a jump ends
++        // at the next service boundary.
++        if self.mem.second_core && !self.mem.cop_asleep {
++            n = n.min(64 - (self.steps() & 0x3f));
++        }
+         n.clamp(1, max_steps)
+     }
+ 
+@@ -7786,10 +7796,15 @@ pub fn install_game_stubs(&mut self, exe_stem: &str, o: GameStubs) -> bool {
+             // to a quantum from now. Without it the quantum is a claim that nothing observable
+             // happens between turns, and across this particular edge that claim is false — see the
+             // `COP_CTL` write path for the two-instruction window it was losing.
++            //
++            // iPodFirm local patch: the turn comes from `steps()` and not from `executed`.
++            // `executed` stops while the CPU sleeps, so the test on `executed` gave the COP 1000
++            // instructions for each halted cycle, or no instruction for the full sleep.
+             if self.mem.second_core
+-                && (self.mem.yield_to_cop || self.executed.is_multiple_of(self.mem.quantum))
++                && (self.mem.yield_to_cop || self.steps() >= self.cop_next_turn)
+             {
+                 self.mem.yield_to_cop = false;
++                self.cop_next_turn = self.steps() + self.mem.quantum as u64;
+                 self.run_cop(self.mem.quantum);
+             }
+             let pc = self.cpu.regs[15];
+@@ -12531,11 +12546,9 @@ mod peek_tests {
+         let mut awake = parked_on_a_far_deadline();
+         awake.run(Machine::IDLE_SETTLE as usize * 2);
+         awake.mem.cop_asleep = false;
+-        assert_eq!(awake.executed % awake.mem.quantum, 0, "the fixture is not on a boundary");
+-        assert_eq!(
+-            awake.idle_jump(75, u64::MAX),
+-            1,
+-            "an awake coprocessor on a quantum boundary is executing, not idling"
++        assert!(
++            awake.idle_jump(75, u64::MAX) <= 64,
++            "a jump with an awake coprocessor ends at the next service boundary"
+         );
+ 
+         // `--until` already reached. The run ends at the next service boundary and the walk to it
