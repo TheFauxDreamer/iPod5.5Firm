@@ -773,7 +773,9 @@ struct AppearanceDetail: View {
                 Text("Appearance")
             }
             Section("Layout") {
-                Picker("Layout", selection: $model.layout) {
+                // Switch on iPod builds only the Stock layout. The choice of the owner stays for Light and Dark.
+                Picker("Layout", selection: Binding(get: { model.appearance == .onIPod ? .stock : model.layout },
+                                                    set: { model.layout = $0 })) {
                     ForEach(AppModel.Layout.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
@@ -781,7 +783,7 @@ struct AppearanceDetail: View {
                 .disabled(model.appearance == .onIPod || AppModel.splitTheme == nil)
                 .help("Split shows the cover and the current song beside the main menu. All other screens stay stock.")
                 if model.appearance == .onIPod {
-                    Label("Split does not operate with Switch on iPod yet.", systemImage: "info.circle")
+                    Label("Switch on iPod uses the Stock layout. Split operates with Light and Dark.", systemImage: "info.circle")
                         .foregroundStyle(.secondary)
                 } else if let split = AppModel.splitTheme {
                     if model.editor != nil, !model.isCompatible(split) {
