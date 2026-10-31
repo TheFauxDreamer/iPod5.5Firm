@@ -22,7 +22,7 @@ The table "Collisions with the existing patches" shows where an idea can interfe
 | 2 | Song Info | osos-lab `song_info.c` | High | Medium | Paused (21 October 2026): refer to [song-info.md](song-info.md). The track object has most fields. A patch cannot point a menu item at a new screen; a possible design uses the Main Menu screen with other texts. |
 | 3 | USB-C charge icon | slushiimusic | Low for our mod | Low to medium | Probably not necessary. Refer to the item below. |
 | 4 | Patch list in Settings > About | osos-lab `cfw_info` | Medium | Low | Find the About screen and how it gets its rows. |
-| 5 | Custom EQ | osos-lab `custom_eq.c` | High | High | Done: the patch `custom-eq`, branch `custom-eq`. Refer to [custom-eq.md](custom-eq.md). |
+| 5 | Custom EQ | osos-lab `custom_eq.c` | High | High | Done: the patch `custom-eq`. Refer to [custom-eq.md](custom-eq.md). |
 | 6 | CJK fonts | ipod-cjk-patch | High for CJK users | Medium | Measure the free space in rsrc after the dark theme. |
 | 7 | Early cache refill | ipod-wav-fix, flashpod `flac-refill` | Medium | Medium | Play a long WAV or ALAC song without `flash-keep-awake`. Listen for a pause at the refill. |
 | 8 | Crash screen | osos-lab `panic.c` | For development | Medium | Find the crash handler of 1.3. |
