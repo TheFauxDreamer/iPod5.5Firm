@@ -5,14 +5,13 @@
   "symbol": "slider.vertical.3",
   "category": "playback",
   "version_letter": "q",
-  "version": "0.10",
+  "version": "0.11",
   "size": 1690,
   "details": [
     "Each EQ shows with its name in Settings > EQ. To change the iPod, flash it."
   ],
   "notes": [
-    "The iPod applies the EQ only to 16-bit music at 44.1 kHz or 48 kHz. The Apple presets have the same limit.",
-    "This is a test version."
+    "The iPod applies the EQ only to 16-bit music at 44.1 kHz or 48 kHz. The Apple presets have the same limit."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
