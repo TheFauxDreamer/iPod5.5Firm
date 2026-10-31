@@ -179,6 +179,8 @@ method, the limits and the whole table.
 | 0x255ac4 | Gets the rectangle of a view: {top, left, bottom, right}. | Patch |
 | 0x21a27c | Prepares the graphics context of a view: origin and clip. | Patch |
 | 0x21a4f4 | Makes a view from a View resource. Copies the positions, heights and highlight colours of the elements. | Static |
+| 0x21a5e4 | Calculates the rectangle of a View element from its 4 edges. | Static |
+| 0x21a80c | Calculates one edge of a View element from the reference, the mode and the value. Refer to [../re/home-screen.md](../re/home-screen.md#edge-format-of-a-view-element). | Static |
 | 0x17def4 | Makes the child views. | Static |
 | 0x2445d4 | Method 0xd0 of a view: applies a layout again, but only the text styles (calls 0x243f60). | Static |
 | 0x1bccfc | Loads picture 24351 for the rating row. | Static |
