@@ -3,6 +3,15 @@ import XCTest
 
 /// The folder file of the playlist-folders patch (format: patches/playlist-folders/playlist_folders.c).
 final class PlaylistFoldersTests: XCTestCase {
+    func testFolderIconsFlag() {
+        XCTAssertTrue(PlaylistFolders().folderIcons)
+        let off = PlaylistFolders(alphabetical: true, folderIcons: false)
+        XCTAssertEqual(off.encode()[6], 3)
+        XCTAssertEqual(PlaylistFolders.decode(off.encode()), off)
+        XCTAssertEqual(PlaylistFolders().encode()[6], 0)        // an older file has the icons on
+        XCTAssertEqual(PlaylistFolders.decode(PlaylistFolders().encode())?.folderIcons, true)
+    }
+
     func testEncodeLayout() {
         let f = PlaylistFolders(folders: [.init(name: "Road", colour: 0xf800, members: [0x1122334455667788])],
                                 alphabetical: true)

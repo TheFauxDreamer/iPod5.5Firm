@@ -10,13 +10,14 @@
     ]
   },
   "version_letter": "a",
-  "version": "3.3",
-  "size": 14848,
+  "version": "3.5",
+  "size": 16668,
   "description": "Each album and playlist in a list shows a small cover.",
   "details": [
     "Albums use the artwork that iTunes or Finder put on the iPod.",
     "Playlists show a custom image, or a collage of the covers of their first four albums.",
-    "After a sync, the iPod makes the album pictures one time. Then the lists scroll with no disk access."
+    "After a sync, the iPod makes the album pictures one time. Then the lists scroll with no disk access.",
+    "A folder of the Playlist Folders patch can show a folder icon."
   ],
   "requires": [
     "Albums: artwork that iTunes or Finder put on the iPod. No other step is necessary.",

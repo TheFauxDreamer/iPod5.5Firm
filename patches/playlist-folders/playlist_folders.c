@@ -22,7 +22,8 @@
  *    The patch does not change the slot 0x6701f0: cover-flow hooks it, and up-next reads it.
  *
  * The file (little-endian). All parts start at a multiple of 4 bytes:
- *   "IFPF", u16 version (1), u16 flags (bit 0: alphabetical order), u16 folder count, u16 0
+ *   "IFPF", u16 version (1), u16 flags (bit 0: alphabetical order; bit 1: no folder icons, read
+ *   only by album-art), u16 folder count, u16 0
  *   for each folder: u16 colour (RGB565, for the app), u16 name units, u16 member count, u16 0,
  *                    the name (UTF-16, padded to 4 bytes), the members (u32 low, u32 high: the
  *                    persistent ID of a playlist, mhyp +0x1c)
