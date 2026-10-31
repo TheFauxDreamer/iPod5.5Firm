@@ -645,6 +645,19 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertFalse(CustomEQ.usesAdvanced([:]))
     }
 
+    /// A change of preset asks the user only if the user edited the bands.
+    func testCustomEQIsUnedited() {
+        XCTAssertTrue(CustomEQ.isUnedited(CustomEQ.defaults))
+        XCTAssertTrue(CustomEQ.isUnedited(CustomEQ.simpleLayout))
+        for p in CustomEQ.applePresets {
+            let bands = CustomEQ.bands(forPreset: p)
+            XCTAssertTrue(CustomEQ.isUnedited(CustomEQ.bands(from: CustomEQ.values(of: bands))), p.name)
+        }
+        var edited = CustomEQ.bands(forPreset: CustomEQ.applePresets[0])
+        edited[0].gain += 5
+        XCTAssertFalse(CustomEQ.isUnedited(edited))
+    }
+
     /// The Apple presets are valid start points with the default 3 bands.
     func testCustomEQApplePresets() throws {
         XCTAssertEqual(CustomEQ.applePresets.count, 22)

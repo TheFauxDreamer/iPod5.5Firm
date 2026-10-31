@@ -24,7 +24,7 @@ struct CustomEQView: View {
             Menu("Start From Apple Preset") {
                 ForEach(CustomEQ.applePresets) { preset in
                     Button(preset.name) {
-                        if bands.allSatisfy({ $0.gain == 0 }) { model.applyEQPreset(patch, preset) } else { confirmPreset = preset }
+                        if CustomEQ.isUnedited(bands) { model.applyEQPreset(patch, preset) } else { confirmPreset = preset }
                     }
                 }
             }

@@ -82,6 +82,11 @@ public enum CustomEQ {
         return out
     }
 
+    /// true: the bands are flat or are exactly a preset. Thus a new preset loses no work of the user.
+    public static func isUnedited(_ bands: [Band]) -> Bool {
+        bands.allSatisfy { $0.gain == 0 } || applePresets.contains { Self.bands(forPreset: $0) == bands }
+    }
+
     static let grid = 512
     static let q24 = 16_777_216.0
 
