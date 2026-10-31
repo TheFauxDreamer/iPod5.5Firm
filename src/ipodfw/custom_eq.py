@@ -81,8 +81,11 @@ def peak(filters: list[list[float]], rate: int) -> float:
     return max(response(filters, 20 * 1000 ** (i / (GRID - 1)), rate) for i in range(GRID))
 
 
-def records(bands: list[tuple[int, int, int, int]]) -> tuple[bytes, int]:
-    """Return the 200 bytes of custom_eq_records and the value of custom_eq_mask."""
+def records(bands: list[tuple[int, int, int, int]], precut: bool = False) -> tuple[bytes, int]:
+    """Return the 200 bytes of custom_eq_records and the value of custom_eq_mask.
+
+    With `precut`, the numerator of the first active band lowers the level by the highest boost.
+    """
     if len(bands) != BANDS:
         raise EQError(f"the EQ has {BANDS} bands")
     for b in bands:
@@ -91,7 +94,7 @@ def records(bands: list[tuple[int, int, int, int]]) -> tuple[bytes, int]:
     out = [[0] * 10 for _ in range(BANDS)]
     for r, rate in enumerate(RATES):
         filters = {i: biquad(b, rate) for i, b in enumerate(bands) if b[2] != 0}
-        cut = 10 ** (-max(peak(list(filters.values()), rate), 0.0) / 20) if filters else 1.0
+        cut = 10 ** (-max(peak(list(filters.values()), rate), 0.0) / 20) if filters and precut else 1.0
         for n, (i, f) in enumerate(filters.items()):
             if n == 0:  # the precut: the numerator of the first active band
                 f = [x * cut for x in f[:3]] + f[3:]

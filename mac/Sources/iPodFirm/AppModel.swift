@@ -1083,7 +1083,15 @@ final class AppModel: ObservableObject {
     }
 
     func setEQBands(_ patch: PatchInfo, _ bands: [CustomEQ.Band]) {
-        patchOptions[patch.spec.name] = CustomEQ.values(of: bands)
+        patchOptions[patch.spec.name, default: [:]].merge(CustomEQ.values(of: bands)) { $1 }
+    }
+
+    func eqUsesPrecut(_ patch: PatchInfo) -> Bool {
+        CustomEQ.usesPrecut(patchOptions[patch.spec.name] ?? [:])
+    }
+
+    func setEQUsesPrecut(_ patch: PatchInfo, _ on: Bool) {
+        patchOptions[patch.spec.name, default: [:]]["precut"] = on ? 1 : 0
     }
 
     func isCompatible(_ p: PatchInfo) -> Bool {

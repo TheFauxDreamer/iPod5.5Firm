@@ -33,7 +33,7 @@ def run(c: list[float], samples: list[int]) -> list[int]:
 def test_gain_at_both_rates():
     bands = list(eq.DEFAULTS)
     bands[2] = (eq.PEAK, 910, -60, 100)
-    data, mask = eq.records(bands)
+    data, mask = eq.records(bands, precut=True)
     assert mask == 1 << 2 and len(data) == 200
     for r, rate in enumerate(eq.RATES):
         assert eq.response([row(data, 2, r)], 910, rate) == pytest.approx(-6, abs=0.1)
@@ -41,11 +41,17 @@ def test_gain_at_both_rates():
 
 def test_precut_keeps_the_peak_at_0_db():
     bands = [(eq.LOW_SHELF, 100, 120, 71), *eq.DEFAULTS[1:]]
-    data, mask = eq.records(bands)
+    data, mask = eq.records(bands, precut=True)
     assert mask == 1
     assert hashlib.sha256(data).hexdigest() == GOLDEN
     for r, rate in enumerate(eq.RATES):
         assert eq.peak([row(data, 0, r)], rate) == pytest.approx(0, abs=0.05)
+
+
+def test_no_precut_keeps_the_boost():
+    data, _ = eq.records([(eq.LOW_SHELF, 100, 120, 71), *eq.DEFAULTS[1:]])
+    for r, rate in enumerate(eq.RATES):
+        assert eq.peak([row(data, 0, r)], rate) == pytest.approx(12, abs=0.1)
 
 
 def test_flat_has_no_active_band():

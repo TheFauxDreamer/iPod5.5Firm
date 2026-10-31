@@ -627,7 +627,7 @@ public enum Patcher {
             put32(&code, Int(a - base), UInt32(truncatingIfNeeded: value))
         }
         if let editor = spec.eq_editor {
-            let (data, mask) = try CustomEQ.records(CustomEQ.bands(from: values))
+            let (data, mask) = try CustomEQ.records(CustomEQ.bands(from: values), precut: CustomEQ.usesPrecut(values))
             guard let a = symbols[editor.records], let m = symbols[editor.mask], a >= base, m >= base,
                   Int(a - base) + data.count <= code.count, Int(m - base) + 4 <= code.count else {
                 throw PatchError("eq_editor of \"\(spec.displayTitle)\": the variables are not in the patch.")

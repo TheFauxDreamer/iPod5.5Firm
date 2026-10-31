@@ -9,8 +9,9 @@ struct CustomEQView: View {
 
     var body: some View {
         let bands = model.eqBands(patch)
+        let usesPrecut = model.eqUsesPrecut(patch)
         Section {
-            EQCurve(bands: bands).frame(height: 140)
+            EQCurve(bands: bands, usesPrecut: usesPrecut).frame(height: 140)
             ForEach(bands.indices, id: \.self) { i in
                 EQBandRow(number: i + 1, band: Binding(get: { bands[i] }, set: { b in
                     var all = bands
@@ -18,8 +19,9 @@ struct CustomEQView: View {
                     model.setEQBands(patch, all)
                 }))
             }
+            Toggle("Prevent Clipping", isOn: Binding(get: { usesPrecut }, set: { model.setEQUsesPrecut(patch, $0) }))
             let cut = CustomEQ.precut(bands)
-            if cut < -0.05 {
+            if usesPrecut, cut < -0.05 {
                 LabeledContent("Level", value: String(format: "%.1f dB", cut))
             }
             Button("Reset Bands") { model.setEQBands(patch, CustomEQ.defaults) }
@@ -27,7 +29,7 @@ struct CustomEQView: View {
         } header: {
             Text("Custom EQ")
         } footer: {
-            Text("A band at 0 dB is off. The app lowers the level by the highest boost, so that the music does not clip. Thus a boost can sound quieter than Flat.")
+            Text("A band at 0 dB is off. Prevent Clipping lowers the level by the highest boost, so that loud music does not distort. The music then sounds quieter than Flat. Without it, the EQ operates as the Apple presets do, and a strong boost can distort.")
         }
     }
 }
@@ -81,9 +83,10 @@ private struct EQBandRow: View {
     }
 }
 
-/// The curve of the active bands at 44.1 kHz, with the level change. The range is ±18 dB.
+/// The curve of the active bands at 44.1 kHz, with the level change if it is on. The range is ±18 dB.
 private struct EQCurve: View {
     let bands: [CustomEQ.Band]
+    let usesPrecut: Bool
 
     var body: some View {
         Canvas { context, size in
@@ -96,7 +99,7 @@ private struct EQCurve: View {
 
             let rate = CustomEQ.rates[0]
             let filters = bands.filter { $0.gain != 0 }.map { CustomEQ.biquad($0, rate: rate) }
-            let cut = CustomEQ.precut(bands, rate: rate)
+            let cut = usesPrecut ? CustomEQ.precut(bands, rate: rate) : 0
             var curve = Path()
             for x in stride(from: 0, through: Int(size.width), by: 2) {
                 let f = 20 * pow(1000, Double(x) / Double(size.width))

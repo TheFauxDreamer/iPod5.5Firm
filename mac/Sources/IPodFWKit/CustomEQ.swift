@@ -48,6 +48,9 @@ public enum CustomEQ {
         }
     }
 
+    /// The option "precut": 1 lowers the level by the highest boost. Apple presets do not do this.
+    public static func usesPrecut(_ values: [String: Int]) -> Bool { values["precut"] == 1 }
+
     /// The option values of the bands.
     public static func values(of bands: [Band]) -> [String: Int] {
         var out = [String: Int]()
@@ -114,13 +117,14 @@ public enum CustomEQ {
     }
 
     /// The 200 bytes of custom_eq_records and the value of custom_eq_mask.
-    public static func records(_ bands: [Band]) throws -> (data: [UInt8], mask: UInt32) {
+    /// With `precut`, the numerator of the first active band lowers the level.
+    public static func records(_ bands: [Band], precut usePrecut: Bool = false) throws -> (data: [UInt8], mask: UInt32) {
         guard bands.count == bandCount else { throw PatchError("The EQ has \(bandCount) bands.") }
         var mask: UInt32 = 0, out = [Int32](repeating: 0, count: bandCount * 10)
         for b in bands { try check(b) }
         for (i, b) in bands.enumerated() where b.gain != 0 { mask |= 1 << UInt32(i) }
         for (r, rate) in rates.enumerated() {
-            let cut = pow(10, precut(bands, rate: rate) / 20)
+            let cut = usePrecut ? pow(10, precut(bands, rate: rate) / 20) : 1
             var first = true
             for (i, b) in bands.enumerated() where b.gain != 0 {
                 var f = biquad(b, rate: rate)

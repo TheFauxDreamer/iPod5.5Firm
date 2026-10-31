@@ -607,7 +607,7 @@ final class PatchAndArtTests: XCTestCase {
     func testCustomEQRecords() throws {
         var bands = CustomEQ.defaults
         bands[2].gain = -60
-        let (data, mask) = try CustomEQ.records(bands)
+        let (data, mask) = try CustomEQ.records(bands, precut: true)
         XCTAssertEqual(mask, 1 << 2)
         XCTAssertEqual(data.count, 200)
         for (r, rate) in CustomEQ.rates.enumerated() {
@@ -619,11 +619,16 @@ final class PatchAndArtTests: XCTestCase {
             XCTAssertEqual(CustomEQ.response([q], frequency: 910, rate: rate), -6, accuracy: 0.1)
         }
         let boost = try CustomEQ.records([CustomEQ.Band(kind: .lowShelf, frequency: 100, gain: 120, q: 71)]
-                                         + CustomEQ.defaults.dropFirst())
+                                         + CustomEQ.defaults.dropFirst(), precut: true)
         XCTAssertEqual(boost.mask, 1)
+        let loud = try CustomEQ.records([CustomEQ.Band(kind: .lowShelf, frequency: 100, gain: 120, q: 71)]
+                                        + CustomEQ.defaults.dropFirst())
+        let b0 = Int32(truncatingIfNeeded: (0..<4).reduce(UInt32(0)) { $0 | UInt32(loud.data[$1]) << UInt32($1 * 8) })
+        XCTAssertGreaterThan(b0, 1 << 24, "without the precut, the numerator keeps the boost")
         XCTAssertEqual(SHA256.hash(data: boost.data).map { String(format: "%02x", $0) }.joined(), Self.customEQGolden)
         XCTAssertEqual(try CustomEQ.records(CustomEQ.defaults).mask, 0)
         XCTAssertEqual(CustomEQ.bands(from: CustomEQ.values(of: bands)), bands)
+        XCTAssertFalse(CustomEQ.usesPrecut(CustomEQ.values(of: bands)))
     }
 
     /// The checks of custom-eq reject bad bands.
