@@ -1150,6 +1150,7 @@ An earlier version read the ATA IDENTIFY data in the firmware (a hook at 0x142f9
 
 - "Import iPodWizard Theme…" (also in the File menu).
 - The appearance control: Light, Dark or Switch on iPod.
+- The Layout control: Stock or Split. Refer to [Split layout](#split-layout).
 - The "Dark theme" picker, "Show Import Report" and "Delete Theme…". "Delete Theme…" asks for a confirmation.
 
 **Source.** An iPodWizard theme is a complete firmware partition for an older firmware, usually 1.2.1. iPodFirm needs the theme and the Apple firmware that the theme came from ("base"). The target is always the Apple firmware 1.3. Refer to [re/dark-theme.md](../re/dark-theme.md).
@@ -1301,3 +1302,20 @@ The patch drew a red bar, 6 pixels wide, at the left of each label. It showed th
 ## Proposed: USB audio
 
 This change does not exist yet. The research found a USB Audio Class 1 source in firmware 1.3. The stock firmware enables it only for an iAP accessory with the Digital Audio lingo. Refer to [re/usb-audio.md](../re/usb-audio.md) for the functions and the open items.
+
+## Split layout
+
+**Function.** The main menu shows the list at the left, and the cover, the song, the artist, the album and the count at the right. Stock Now Playing and all other screens stay stock. The panel needs no code: the elements get their data from the firmware.
+
+**Status.** Tested in the emulator only. Not tested on a real iPod.
+
+**User interface.** Patches pane > iPod Appearance > Layout. Split operates only with the Light appearance. The pane shows the size.
+
+**Data.** `themes/layouts/Split.ipodtheme` is a theme in format 2. `re/home-screen-views.py` makes it. The build copies it to `Contents/Resources/Layouts`, so it is not in the list of dark themes. It has 2 changes:
+
+1. A new View of 704 bytes at 0x736800, after the patch area.
+2. The table entry of View 24430 (0x337424): the new offset and size.
+
+The osos becomes 0x737000 bytes, and rsrc moves, as with the dark theme. The research is in [../re/home-screen.md](../re/home-screen.md).
+
+**Limits.** The new View holds a copy of the stock scroll bar and list elements (204 bytes). The Split layout operates only on the original Apple firmware 1.3.

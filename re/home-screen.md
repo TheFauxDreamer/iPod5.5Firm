@@ -211,12 +211,19 @@ Warning: do not write this file to a real iPod until all tests are complete and 
 
 | Change | Bytes | Measured |
 |---|---|---|
-| The table entry of View 24430 points to 0x735c00 and has size 704. | Up to 8 | Table at 0x337424 |
-| The new main menu at 0x735c00, in the patch area: the stock scroll bar (right edge −107), the stock list, the cover View -356, and the song, artist, album and count. | 704 | 279 bytes of `osos` change in total, and none outside these two places. `rsrc` and `aupd` are stock. The zero area at 0x6ca452 is the same. The `osos` checksum is correct. |
+| A new View at 0x736800 (first address after the patch area): the stock scroll bar (right edge −107), the stock list, the cover View -356, and the song, artist, album and count. | 704 | After the end of stock osos |
+| The table entry of View 24430 (0x337424): the new offset and size. | 12 | |
+
+The result is the theme `themes/layouts/Split.ipodtheme` (1,494 bytes). Measured checks:
+
+- Python and Swift give the same osos on stock 1.3 (`testSplitLayoutFile`).
+- Each of 20 patches, one at a time, and a set of 6 patches keep the View and the table entry. `shuffle-album-mix` needs `shuffle-fixes`, so it was not tested alone. `patches/dark-mode` was not in this test.
+- Only blocks 22, 23 and 24 have Views, and only block 24 has View 24430. Thus each language uses the new View.
+- No patch changes View 24430. Some patches add items to Menu 24094. The main menu list uses that Menu.
 
 The text lines are at y = 116, 138, 160 and 188 in the content area, each 22 pixels high.
 
-The old data of View 24430 stays in the firmware, unused. A final patch must get this space from the patch area, because other patches also use that area.
+The old data of View 24430 stays in the firmware, unused.
 
 Emulator results of earlier designs:
 
@@ -270,5 +277,4 @@ Facts from the code (Static, not tested):
 1. The owner tests the main menu in the emulator: the cover, the text, Now Playing, and the wheel speed.
 3. Test the main menu with no song, and with a song that has no art.
 4. Test a main menu with more rows than the screen, for the scroll bar.
-5. Change the place of the View to a location that `patcher.py` allocates.
-6. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`. Theme import reads Views by table offset.
+5. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`. Theme import reads Views by table offset.

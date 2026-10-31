@@ -772,6 +772,28 @@ struct AppearanceDetail: View {
             } header: {
                 Text("Appearance")
             }
+            Section("Layout") {
+                Picker("Layout", selection: $model.layout) {
+                    ForEach(AppModel.Layout.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 380)
+                .disabled(model.appearance != .light || AppModel.splitTheme == nil)
+                .help("Split shows the cover and the current song beside the main menu. All other screens stay stock.")
+                if model.appearance != .light {
+                    Label("Split operates only with the Light appearance.", systemImage: "info.circle")
+                        .foregroundStyle(.secondary)
+                } else if let split = AppModel.splitTheme {
+                    if model.editor != nil, !model.isCompatible(split) {
+                        Label("Split does not agree with the open firmware. It is only for the original Apple firmware 1.3.",
+                              systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .orange))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    LabeledContent("Size on iPod (Split)", value: PatchSpec.byteText(split.addedSize))
+                    Label("Split is not tested on a real iPod.", systemImage: "exclamationmark.triangle.fill")
+                        .labelStyle(StatusLabelStyle(tint: .orange))
+                }
+            }
             Section("Dark Theme") {
                 if model.themes.isEmpty {
                     Label("Import a dark theme first.", systemImage: "info.circle").foregroundStyle(.secondary)

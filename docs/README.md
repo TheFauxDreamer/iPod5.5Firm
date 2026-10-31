@@ -48,6 +48,7 @@ Use this table to find the documents to update:
 | A new patch | All of the above, and the summary table in [modifications.md](modifications.md). Give it a `version_letter`, a `version` and a `size`. |
 | `Patcher.swift` or `patcher.py` | [patch-system.md](patch-system.md) |
 | `Partition.swift`, `Resources.swift`, `Pictures.swift` or their Python versions | [firmware-format.md](firmware-format.md) |
+| `themes/layouts/Split.ipodtheme`, `re/home-screen-views.py` | [modifications.md](modifications.md), [../re/home-screen.md](../re/home-screen.md) |
 | `ThemeImport.swift`, `DarkMode.swift`, `FirmwareVersion.swift`, `AlbumArt.swift`, `ArtworkDB.swift`, `MusicImport.swift` | [modifications.md](modifications.md) |
 | `Device.swift`, `Operations.swift`, the helper or `Privileged.swift` | [safety.md](safety.md), [app-and-device.md](app-and-device.md) |
 | A new external program, system API, network connection, file or `UserDefaults` key | [app-and-device.md](app-and-device.md). If the item works only on macOS, also [porting.md](porting.md). |

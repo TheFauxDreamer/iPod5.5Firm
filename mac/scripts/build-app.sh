@@ -55,6 +55,8 @@ mkdir -p "$APP/Contents/Resources/Themes"
 for t in ../themes/*.ipodtheme; do
     [ -e "$t" ] && cp "$t" "$APP/Contents/Resources/Themes/"
 done
+mkdir -p "$APP/Contents/Resources/Layouts"
+cp ../themes/layouts/*.ipodtheme "$APP/Contents/Resources/Layouts/"
 mkdir -p "$APP/Contents/Resources/patches"
 for p in ../patches/*/; do
     n=$(basename "$p")

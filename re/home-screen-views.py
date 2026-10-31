@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Make test firmware files for the split home screen research.
+"""Make the Split layout: an iPodFirm theme for stock firmware 1.3.
 
-The files use stock firmware 1.3 and change only View resources. Fonts,
-pictures and code stay stock. The files go to the emulator only.
+The theme changes only the main menu. It adds a new View after the end of
+osos, and the table entry of View 24430 points to it. All stock Views, fonts,
+pictures and code stay stock.
 
-Usage: uv run python re/home-screen-views.py iPod_25.1.3.ipsw OUTPUT_FOLDER
+Usage: uv run python re/home-screen-views.py iPod_25.1.3.ipsw THEME_FILE [TEST_IPSW]
 """
 import struct
 import sys
@@ -15,14 +16,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from ipodfw.ipsw import extract_firmware, repack_ipsw  # noqa: E402
 from ipodfw.partition import FirmwarePartition  # noqa: E402
 from ipodfw.resources import main_block, scan  # noqa: E402
-from ipodfw.themeimport import view_elements  # noqa: E402
+from ipodfw.themeimport import Change, Theme, _sha256, apply_theme, view_elements  # noqa: E402
 
 TOP, LEFT, BOTTOM, RIGHT = 28, 40, 52, 64  # offsets of the edges in an element
 PARENT, HEIGHT = 0x80000002, 0x80000008  # edge modes
 
 MAIN_MENU = 24430
-VIEW_AT = 0x735c00  # in the patch area, inside the image. It must be zero in stock.
-VIEW_LIMIT = 0x736000
+VIEW_AT = 0x736800  # the start of rsrc in stock: the first address after the patch area
 PANEL_WIDTH = 107
 PANEL_X = 320 - PANEL_WIDTH
 
@@ -74,30 +74,38 @@ def main_menu_view(stock: bytes) -> bytes:
     return bytes(view)
 
 
-def apply(fw: FirmwarePartition) -> int:
-    """Put the new View in the patch area. Change only the table entry of the main menu."""
-    osos = bytearray(fw.image("osos"))
-    block = main_block(scan(bytes(osos)))
+def split_theme(fw: FirmwarePartition) -> Theme:
+    osos = fw.image("osos")
+    block = main_block(scan(osos))
     menu = next(r for r in block.of_type("View") if r.id == MAIN_MENU)
     stock = bytes(osos[block.abs(menu):block.abs(menu) + menu.size])
     if len(stock) != 208:
         raise SystemExit("this is not stock firmware 1.3")
     new = main_menu_view(stock)
-    if VIEW_AT + len(new) > VIEW_LIMIT or any(osos[VIEW_AT:VIEW_AT + len(new)]):
-        raise SystemExit("the area for the new View is not free")
-    osos[VIEW_AT:VIEW_AT + len(new)] = new
-    struct.pack_into("<II", osos, menu.table_pos + 4, VIEW_AT - block.data_start, len(new))
-    fw.replace_image("osos", bytes(osos))
-    return len(new)
+    entry = bytes(osos[menu.table_pos:menu.table_pos + 12])
+    new_entry = entry[:4] + struct.pack("<II", VIEW_AT - block.data_start, len(new))
+    digest = _sha256(osos)
+    label = f"View {MAIN_MENU}"
+    return Theme("Split", digest, digest, [
+        Change(label, VIEW_AT, b"", new),
+        Change(label, menu.table_pos, entry, new_entry, _sha256(entry)),
+    ], imported=[label])
 
 
 def main() -> None:
     ipsw, out = Path(sys.argv[1]), Path(sys.argv[2])
     _, data = extract_firmware(ipsw)
     fw = FirmwarePartition(data)
-    print("New View bytes:", apply(fw))
-    repack_ipsw(ipsw, fw.to_bytes(), out / "home-screen-split.ipsw")
-    print(out / "home-screen-split.ipsw")
+    theme = split_theme(fw)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(theme.to_json(stripped=True))
+    print(out, out.stat().st_size, "bytes")
+    if len(sys.argv) > 3:
+        osos = bytearray(fw.image("osos"))
+        print("applied, conflicts:", apply_theme(Theme.from_json(out.read_text()), osos, theme.osos_sha256))
+        fw.make_room(len(osos))
+        fw.replace_image("osos", bytes(osos))
+        repack_ipsw(ipsw, fw.to_bytes(), sys.argv[3])
 
 
 if __name__ == "__main__":

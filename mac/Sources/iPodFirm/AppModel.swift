@@ -130,6 +130,11 @@ final class AppModel: ObservableObject {
     @Published var showRemoveGamesSheet = false
     /// The state of the last removal of the games.
     @Published var gameRemoveStatus = ""
+    /// The layout of the main menu. Split operates only with the Light appearance.
+    @Published var layout: Layout = Layout(rawValue: UserDefaults.standard.string(forKey: "layout") ?? "") ?? .stock {
+        didSet { UserDefaults.standard.set(layout.rawValue, forKey: "layout"); switchesChanged(oldValue != layout) }
+    }
+
     /// True if the owner changed a patch switch, an option or the appearance after the last flash, restore
     /// or read of the iPod. Then a new read of the iPod does not change the switches (`applyIPodState`).
     @Published var switchesChangedSinceSync = UserDefaults.standard.bool(forKey: "switchesChangedSinceSync") {
@@ -215,8 +220,17 @@ final class AppModel: ObservableObject {
         var title: String { self == .onIPod ? "Switch on iPod" : rawValue.capitalized }
     }
 
-    /// What the output build does with the dark theme.
+    /// The layout of the iPod software.
+    enum Layout: String, CaseIterable, Identifiable {
+        case stock, split
+        var id: String { rawValue }
+        var title: String { rawValue.capitalized }
+    }
+
+    /// What the output build does with the dark theme or the layout.
     enum AppearanceBuild {
+        /// The layout theme is in the firmware.
+        case layout(ImportedTheme)
         /// The theme is in the firmware: always dark.
         case dark(ImportedTheme)
         /// Light firmware with a Dark Mode item in Settings (DarkMode.build).
@@ -339,7 +353,7 @@ final class AppModel: ObservableObject {
             return "\(p.spec.name) \(p.spec.versionText)" + (o.map { " [\($0)]" } ?? "")
         }
         lines.append("Patches on in the app: \(on.isEmpty ? "none" : on.joined(separator: ", "))")
-        lines.append("Appearance: \(appearance.rawValue), theme: \(selectedThemeName ?? "-"), margin: \(ThemeImport.OSOSMargin.current.rawValue), test patches: \(showTestPatches)")
+        lines.append("Appearance: \(appearance.rawValue), layout: \(layout.rawValue), theme: \(selectedThemeName ?? "-"), margin: \(ThemeImport.OSOSMargin.current.rawValue), test patches: \(showTestPatches)")
         lines.append("Helper: \(helperStatus), reply: \(helperReply), Full Disk Access: \(hasFullDiskAccess), Touch ID: \(requireTouchID)")
         return AppLog.redact(lines.joined(separator: "\n"))
     }
@@ -682,8 +696,15 @@ final class AppModel: ObservableObject {
     /// The dark-mode patch: not in the list of patches, because DarkMode.build adds it.
     static let darkModePatch = Patcher.list(in: AppModel.patchesDir).first { $0.spec.name == "dark-mode" }
 
-    /// The appearance build for the output: nothing for Light.
+    /// The Split layout theme. It comes with the app and is not in the list of dark themes.
+    static let splitTheme: ImportedTheme? = Bundle.main.resourceURL
+        .flatMap { try? ImportedTheme.load($0.appendingPathComponent("Layouts/Split.ipodtheme")) }
+
+    /// The appearance build for the output: nothing for Light with the Stock layout.
     var activeAppearance: AppearanceBuild? {
+        if appearance == .light {
+            return layout == .split ? Self.splitTheme.map { .layout($0) } : nil
+        }
         guard let theme = selectedTheme?.theme else { return nil }
         switch appearance {
         case .light: return nil
@@ -1244,6 +1265,9 @@ final class AppModel: ObservableObject {
                                        version: FirmwareVersion?, list: FirmwareManifest? = nil) throws -> [UInt8] {
         var osos = editor.osos
         switch appearance {
+        case .layout(let theme):
+            AppLog.step("Build: apply the layout \(theme.name)")
+            try theme.apply(to: &osos, originalSHA256: editor.originalOSOSHash)
         case .dark(let theme):
             AppLog.step("Build: apply the dark theme \(theme.name)")
             try theme.apply(to: &osos, originalSHA256: editor.originalOSOSHash)
