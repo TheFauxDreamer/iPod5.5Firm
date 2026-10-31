@@ -84,7 +84,8 @@ struct PatchTool: View {
         case "album-thumbnails": AlbumArtSections()
         case "usb-log": USBLogSection()
         case "playlist-folders": PlaylistFoldersSection()
-        case "diagnostic-log": DiagnosticLogSection()
+        case "playback-log": PlaybackLogSection()
+        case "diagnostic-log": PlaybackLogSection(kind: .diagnostic)
         default: EmptyView()
         }
     }
@@ -131,8 +132,6 @@ struct PlaylistFoldersSection: View {
             }
         } header: {
             Text("Playlist Folders")
-        } footer: {
-            FormFooter("Put each playlist into one folder, or into no folder. A folder without playlists does not show on the iPod.")
         }
         .task(id: model.currentIPod?.disk) { await model.loadPlaylistFolders() }
     }
@@ -196,27 +195,49 @@ struct PlaylistFolderRow: View {
     }
 }
 
-// MARK: diagnostic-log
+// MARK: playback-log
 
-/// The log that the diagnostic-log patch writes on the iPod: the playback, the memory, the power, the artwork and the performance.
-struct DiagnosticLogSection: View {
-    @EnvironmentObject var model: AppModel
+/// The log that the playback-log patch or the diagnostic-log patch writes on the iPod.
+struct PlaybackLogSection: View {
+    var kind = IPodLogFile.Kind.playback
 
     var body: some View {
         Section {
+            PlaybackLogContent(kind: kind)
+        } header: {
+            Text(kind == .diagnostic ? "Diagnostic Log" : "Playback Log")
+        }
+    }
+}
+
+/// The buttons and the text of the playback log or the diagnostic log, in the Patches pane and in `IPodLogSheet`.
+struct PlaybackLogContent: View {
+    @EnvironmentObject var model: AppModel
+    var kind = IPodLogFile.Kind.playback
+    var showsRead = true
+
+    var body: some View {
+        Group {
             HStack {
-                Button("Show Diagnostic Log") { model.readDiagnosticLog() }.disabled(model.currentIPod == nil)
+                if showsRead {
+                    Button(kind == .diagnostic ? "Show Diagnostic Log" : "Show Playback Log") { model.readSongLog(kind) }.disabled(model.currentIPod == nil)
+                }
                 Spacer()
-                if let log = model.diagnosticLog, !log.isEmpty {
+                if let log = model.songLog(kind), !log.isEmpty {
                     Button("Copy Log") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(log, forType: .string)
                     }
-                    Button("Save the Log to Share…") { model.saveDiagnosticLog() }
-                    Button("Report on GitHub…") { model.reportDiagnosticLog() }
+                    Button("Save the Log to Share…") { model.saveSongLog(kind) }
+                    Button("Report on GitHub…") { model.reportSongLog(kind) }
+                        .help("Save the log as a text file and open a new issue in the browser. Then drag the file into the issue. You need a GitHub account.")
                 }
             }
-            if let log = model.diagnosticLog {
+            if let log = model.songLog(kind) {
+                if !log.isEmpty {
+                    Label("The log has the names of your songs. A GitHub issue is public.", systemImage: "exclamationmark.triangle.fill")
+                        .labelStyle(StatusLabelStyle(tint: .orange))
+                }
                 if log.isEmpty {
                     Text("The log is empty. Play music. Then press a button, so that the iPod writes the log. Wait 15 seconds before you connect the iPod.")
                         .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -229,10 +250,6 @@ struct DiagnosticLogSection: View {
                     .frame(minHeight: 80, maxHeight: 400)
                 }
             }
-        } header: {
-            Text("Diagnostic Log")
-        } footer: {
-            FormFooter("Report on GitHub saves the log as a text file and opens a new issue in the browser. Drag the file into the issue. You need a GitHub account. The file has the names of the songs in the log, and an issue is public.")
         }
     }
 }
@@ -241,12 +258,26 @@ struct DiagnosticLogSection: View {
 
 /// The log that the usb-host-probe patch writes on the iPod. Refer to USB-AUDIO-OUT.md (Stage 0).
 struct USBLogSection: View {
-    @EnvironmentObject var model: AppModel
-
     var body: some View {
         Section {
+            USBLogContent()
+        } header: {
+            Text("USB Log")
+        }
+    }
+}
+
+/// The buttons and the text of the USB log, in the Patches pane and in `IPodLogSheet`.
+struct USBLogContent: View {
+    @EnvironmentObject var model: AppModel
+    var showsRead = true
+
+    var body: some View {
+        Group {
             HStack {
-                Button("Show USB Log") { model.readUSBProbeLog() }.disabled(model.currentIPod == nil)
+                if showsRead {
+                    Button("Show USB Log") { model.readUSBProbeLog() }.disabled(model.currentIPod == nil)
+                }
                 Spacer()
                 if let log = model.usbProbeLog {
                     Button("Copy Log") {
@@ -269,8 +300,41 @@ struct USBLogSection: View {
                     .frame(minHeight: 80, maxHeight: 320)
                 }
             }
-        } header: {
-            Text("USB Log")
+        }
+    }
+}
+
+/// A log on the iPod. The iPod pane opens this sheet.
+struct IPodLogSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) var dismiss
+    let log: IPodLogFile
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(log.title).font(.title3.bold())
+            switch log.kind {
+            case .playback:
+                PlaybackLogContent(showsRead: false)
+            case .diagnostic:
+                PlaybackLogContent(kind: .diagnostic, showsRead: false)
+            case .usb:
+                USBLogContent(showsRead: false)
+            }
+            Spacer(minLength: 0)
+            HStack {
+                Spacer()
+                Button("Close") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 660, height: 600)
+        .onAppear {
+            switch log.kind {
+            case .playback: model.readSongLog(.playback)
+            case .diagnostic: model.readSongLog(.diagnostic)
+            case .usb: model.readUSBProbeLog()
+            }
         }
     }
 }
@@ -291,8 +355,6 @@ struct AlbumArtSections: View {
             if let s = model.thumbnailStatus { Label(s, systemImage: "checkmark.circle").font(.callout) }
         } header: {
             Text("Thumbnails")
-        } footer: {
-            FormFooter("You do not have to restart the iPod. The new thumbnails show after you scroll through a list.")
         }
         .task(id: model.currentIPod?.disk) { await model.loadPlaylists() }
         if !model.playlistArt.isEmpty {
@@ -304,8 +366,6 @@ struct AlbumArtSections: View {
                 ForEach(model.playlistArt) { p in PlaylistArtRow(playlist: p) }
             } header: {
                 Text("Playlist Artwork")
-            } footer: {
-                FormFooter("A playlist without a custom image shows the covers of its first four albums. To set a custom image, click Choose Image or drag an image onto the playlist. iPodFirm keeps the custom images on the iPod.")
             }
         }
     }
@@ -328,11 +388,8 @@ struct PlaylistArtRow: View {
             }
             .frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 4))
             .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(playlist.name.isEmpty ? "(No name)" : playlist.name).lineLimit(1)
-                Text(playlist.isCustom ? "Custom image" : playlist.image == nil ? "No album covers" : "Automatic")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+            Text(playlist.name.isEmpty ? "(No name)" : playlist.name).lineLimit(1)
+                .help(playlist.isCustom ? "Custom image" : playlist.image == nil ? "No album covers" : "Automatic")
             Spacer()
             Button("Choose Image…") { model.choosePlaylistArt(playlist.name) }
             Button("Use Automatic") { Task { await model.resetPlaylistArt(playlist.name) } }
@@ -390,10 +447,7 @@ struct InstallPatchSheet: View {
             if let spec = candidate.spec {
                 HStack(spacing: 14) {
                     SymbolTile(symbol: validSymbol(spec.symbol), tint: .accentColor, size: 44)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(spec.displayTitle).font(.title2.weight(.semibold))
-                        if let summary = spec.summary { Text(summary).foregroundStyle(.secondary) }
-                    }
+                    Text(spec.displayTitle).font(.title2.weight(.semibold))
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {

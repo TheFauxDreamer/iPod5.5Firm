@@ -1,15 +1,21 @@
 {
   "name": "search-5g",
   "title": "Search on the 5G",
-  "summary": "Shows the Search menu on the iPod 5G.",
+  "summary": "Shows the Search menu on the 5G.",
   "symbol": "magnifyingglass",
   "category": "display",
   "version_letter": "e",
-  "version": "1.0",
+  "version": "1.1",
   "size": 0,
-  "description": "Firmware 1.3 has the Search menu, but it shows the menu only on the 5.5G. This patch shows the Search menu on the 5G also. The idea and the byte come from RetroCux.",
-  "details": ["Music > Search is the last item of the Music menu.", "Settings > Main Menu has a Search item. Set it to On to put Search in the main menu."],
-  "notes": ["On a 5.5G, the patch changes nothing. The 5.5G already has the Search menu.", "The firmware reads the hardware revision of the iPod. Thus the patch does not need to know the model.", "After you change the Main Menu setting, put the iPod to sleep. Then the iPod saves the setting."],
+  "description": "Firmware 1.3 shows Search only on the 5.5G. The idea and the byte come from RetroCux.",
+  "details": [
+    "Music > Search is the last item of the Music menu.",
+    "Settings > Main Menu has a Search item. Set it to On to put Search in the main menu."
+  ],
+  "notes": [
+    "On a 5.5G, the patch changes nothing.",
+    "After you change the Main Menu setting, put the iPod to sleep. Then the iPod saves the setting."
+  ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }

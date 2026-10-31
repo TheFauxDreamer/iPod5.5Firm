@@ -1,16 +1,21 @@
 {
   "name": "flash-keep-awake",
   "title": "SSD Mode",
-  "summary": "Keeps flash storage on for a time that you select after each use.",
+  "summary": "Keeps flash storage on. Songs start faster.",
   "symbol": "bolt.horizontal",
   "category": "power",
   "version_letter": "k",
-  "version": "1.2",
+  "version": "1.3",
   "size": 200,
-  "description": "Makes songs start faster on an iPod with flash storage.",
-  "details": ["The iPod keeps the storage on after each use, for the time that you select. The default is 30 minutes. The Apple firmware switches it off after 1 second.", "When the iPod wakes from sleep, it starts the storage immediately.", "Thus the storage is ready when you choose a song.", "Before the iPod switches off the storage, it waits 0.5 seconds. This gives the flash card time to complete its writes."],
+  "details": [
+    "The storage stays on after each use for the time that you select. The default is 30 minutes. The Apple firmware uses 1 second.",
+    "The iPod starts the storage immediately when it wakes from sleep.",
+    "The iPod waits 0.5 seconds before it switches off the storage. The flash card can then complete its writes."
+  ],
   "requires": ["Flash storage, for example an iFlash, CompactFlash or SSD adapter. Do not use this patch with the original hard drive."],
-  "notes": ["For the fastest start after a long pause, also turn on Wake Storage on Input. Set the same Storage Time in the two patches."],
+  "notes": [
+    "For the fastest start after a long pause, also turn on Wake Storage on Input. Set the same Storage Time in the two patches."
+  ],
   "hdd_warning": "This patch is for flash storage. On the original hard drive, it keeps the disk turning for the selected time after each use. This uses more battery and causes more wear.",
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [

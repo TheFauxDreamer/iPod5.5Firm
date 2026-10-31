@@ -14,8 +14,8 @@ struct OverviewView: View {
                     LabeledContent("Partition format", value: "version \(fw.formatVersion), images at +\(fw.imageBase) bytes")
                     LabeledContent("Status", value: model.isDirty ? "Edited (not saved or flashed)" : "Unmodified")
                     if model.openedFromBackup {
-                        Text("Opened from a backup. Your edits never change the backup file itself.")
-                            .font(.callout).foregroundStyle(.secondary)
+                        LabeledContent("Opened from", value: "Backup")
+                            .help("Your edits never change the backup file itself.")
                     }
                 }
                 Section("Images") {

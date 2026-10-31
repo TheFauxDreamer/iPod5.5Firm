@@ -7,16 +7,31 @@ struct IPodView: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
+        HSplitView {
+            deviceColumn
+                .frame(minWidth: 380, idealWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
+            macColumn
+                .frame(minWidth: 340, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .onAppear { model.refreshBackups(); model.recheckFullDiskAccess(); model.refreshIPodLogs() }
+        .onChange(of: model.selectedIPod) { Task { await model.refreshIPods() } }
+    }
+
+    /// The connected iPod: its state, its patches and its logs.
+    var deviceColumn: some View {
         Form {
+            if let name = model.currentIPodName, let ipod = model.currentIPod {
+                Section {
+                    DetailHeader(title: name, symbol: Pane.ipod.symbol, tint: model.currentIPodIsUnsupported ? .gray : .blue)
+                        .help("\(ByteCountFormatter.string(fromByteCount: ipod.size, countStyle: .file)) · /dev/\(ipod.disk)")
+                }
+            }
             Section {
                 PermissionSummaryRow()
-            } header: { Text("Permission") }
-
-            Section {
                 if model.ipods.isEmpty {
                     Label("No iPod is connected. Connect the iPod. If the Mac does not find it, put it in disk mode: hold Menu and Select to reset it, then hold Select and Play.",
                           systemImage: "cable.connector.slash").foregroundStyle(.secondary)
-                } else {
+                } else if model.ipods.count > 1 {
                     Picker("iPod", selection: $model.selectedIPod) {
                         ForEach(model.ipods) { i in
                             Text("\(i.volumeName ?? i.mediaName) — \(ByteCountFormatter.string(fromByteCount: i.size, countStyle: .file)) (/dev/\(i.disk))")
@@ -29,16 +44,21 @@ struct IPodView: View {
                           systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .red))
                 }
                 HStack {
-                    Button("Refresh") { Task { await model.refreshIPods() } }
-                    Button("Eject iPod") { Task { await model.ejectIPod() } }
-                        .disabled(model.currentIPod == nil)
-                        .help("Unmount the iPod so that you can disconnect it")
-                    Spacer()
                     Button("Back Up iPod") { Task { await model.backupNow() } }
                         .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported)
                     Button("Flash to iPod…") { Task { await model.flashEdited() } }
                         .disabled(!model.canFlash)
+                        .help(model.flashBlockReason ?? "Make a backup of the iPod, then write this firmware to the iPod")
                         .buttonStyle(.borderedProminent)
+                    Spacer()
+                }
+                FlashHint()
+                HStack {
+                    Button("Refresh") { Task { await model.refreshIPods() } }
+                    Spacer()
+                    Button("Eject iPod") { Task { await model.ejectIPod() } }
+                        .disabled(model.currentIPod == nil)
+                        .help("Unmount the iPod so that you can disconnect it")
                 }
             } header: { Text("Connected iPod") }
 
@@ -46,8 +66,17 @@ struct IPodView: View {
                 Section {
                     IPodPatchesSection()
                 } header: { Text("Patches on This iPod") }
+                Section {
+                    IPodLogsSection()
+                } header: { Text("Logs on This iPod") }
             }
+        }
+        .formStyle(.grouped)
+    }
 
+    /// The items that stay on the Mac, and the help for a problem.
+    var macColumn: some View {
+        Form {
             Section {
                 if model.backups.isEmpty {
                     Text("There are no backups. iPodFirm makes a backup before each flash. You can also click Back Up iPod.")
@@ -66,20 +95,19 @@ struct IPodView: View {
             Section {
                 Label("Charge the iPod before a recovery. An iPod with an empty battery does not show disk mode.",
                       systemImage: "exclamationmark.triangle.fill").labelStyle(StatusLabelStyle(tint: .orange))
-                VStack(alignment: .leading, spacing: 6) {
-                    Step(n: 1, text: "Push and hold Menu and Select until the iPod restarts.")
-                    Step(n: 2, text: "When the Apple logo shows, push and hold Select and Play until disk mode shows.")
-                    Step(n: 3, text: "Connect the iPod to the Mac and click Refresh.")
-                    Step(n: 4, text: "Click Restore… on a backup. If the firmware on the iPod is damaged, iPodFirm does a rescue restore.")
-                }
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("If iPodFirm cannot restore a backup, restore the Apple firmware with Finder.")
-                        Text("Finder also repairs a damaged partition table. Finder erases the music on the iPod.")
-                            .font(.caption).foregroundStyle(.secondary)
+                TitleDisclosure(title: "Recovery Steps") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Step(n: 1, text: "Push and hold Menu and Select until the iPod restarts.")
+                        Step(n: 2, text: "When the Apple logo shows, push and hold Select and Play until disk mode shows.")
+                        Step(n: 3, text: "Connect the iPod to the Mac and click Refresh.")
+                        Step(n: 4, text: "Click Restore… on a backup. If the firmware on the iPod is damaged, iPodFirm does a rescue restore.")
                     }
-                    Spacer()
+                    .padding(.top, 4)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("If iPodFirm cannot restore a backup, restore the Apple firmware with Finder.")
                     Button("Restore with Finder…") { Task { await model.restoreWithFinder() } }
+                        .help("Finder also repairs a damaged partition table. Finder erases the music on the iPod.")
                 }
             } header: { Text("Recovery") }
 
@@ -94,8 +122,6 @@ struct IPodView: View {
             } header: { Text("Protections") }
         }
         .formStyle(.grouped)
-        .onAppear { model.refreshBackups(); model.recheckFullDiskAccess() }
-        .onChange(of: model.selectedIPod) { Task { await model.refreshIPods() } }
     }
 }
 
@@ -105,28 +131,34 @@ struct IPodPatchesSection: View {
 
     var body: some View {
         if let state = model.ipodState {
-            let rows = model.detectablePatches.compactMap { p -> (String, String)? in
+            let known = model.detectablePatches.compactMap { p -> (String, String)? in
                 switch state.detections[p.spec.name] ?? .absent {
-                case .installed(let v): return (p.spec.displayTitle, v.map { "Version \($0)" } ?? "Installed")
+                case .installed(let v): return (p.spec.displayTitle, v ?? "Installed")
                 case .unknown: return (p.spec.displayTitle, "Not known")
                 case .absent: return nil
                 }
             }
-            if rows.isEmpty {
+            let patches = known + state.unknownNames(known: Set(model.patches.map(\.spec.name))).map { ($0, "Not in iPodFirm") }
+            let rows = patches + listRows(state)
+            if patches.isEmpty {
                 Text("The iPod has no iPodFirm patches.").foregroundStyle(.secondary)
             }
-            ForEach(rows, id: \.0) { LabeledContent($0.0, value: $0.1) }
-            ForEach(state.unknownNames(known: Set(model.patches.map(\.spec.name))), id: \.self) { name in
-                LabeledContent(name, value: "Not in iPodFirm")
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
+                      alignment: .leading, spacing: 3) {
+                ForEach(rows, id: \.0) { name, value in
+                    HStack(spacing: 4) {
+                        Text(name).lineLimit(1)
+                        Spacer(minLength: 2)
+                        Text(value).foregroundStyle(.secondary)
+                    }
+                    .font(.caption)
+                    .help("\(name): \(value)")
+                    .accessibilityElement(children: .combine)
+                }
             }
-            if let list = state.list {
-                LabeledContent("Appearance", value: list.appearance.map { a in
-                    (AppModel.Appearance(rawValue: a)?.title ?? a) + (list.theme.map { ": \($0)" } ?? "")
-                } ?? "Not known")
-                LabeledContent("Made with", value: "iPodFirm \(list.app)")
-            } else {
-                Text("The firmware on the iPod has no iPodFirm list. iPodFirm found the patches from their changes in the firmware. The versions are not known. A flash with this version of iPodFirm adds the list.")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if state.list == nil {
+                Text("The firmware on the iPod has no iPodFirm list. The versions are not known.")
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         } else if let status = model.ipodReadStatus {
             Text(status).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -145,6 +177,35 @@ struct IPodPatchesSection: View {
     }
 }
 
+extension IPodPatchesSection {
+    /// The appearance and the app version from the iPodFirm list in the firmware.
+    func listRows(_ state: IPodPatchState) -> [(String, String)] {
+        guard let list = state.list else { return [] }
+        let appearance = list.appearance.map { a in
+            (AppModel.Appearance(rawValue: a)?.title ?? a) + (list.theme.map { ": \($0)" } ?? "")
+        } ?? "Not known"
+        return [("Appearance", appearance), ("Made with iPodFirm", list.app)]
+    }
+}
+
+/// The logs on the connected iPod. A log shows here also if its patch is off in the app.
+struct IPodLogsSection: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        if model.ipodLogs.isEmpty {
+            Text("The iPod has no logs.").foregroundStyle(.secondary)
+        }
+        ForEach(model.ipodLogs) { log in
+            HStack {
+                Text(log.title).help(log.details)
+                Spacer()
+                Button("Show Log") { model.shownLog = log }
+            }
+        }
+    }
+}
+
 struct SafetyRow: View {
     let symbol: String
     let text: String
@@ -159,28 +220,27 @@ struct BackupRow: View {
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(backup.created, format: .dateTime.year().month().day().hour().minute()).bold()
-                    if backup.isOriginal {
-                        Text("Original").font(.caption2.bold()).padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(.green.opacity(0.2), in: Capsule())
-                    }
+            HStack(spacing: 6) {
+                Text(backup.created, format: .dateTime.year().month().day().hour().minute()).bold()
+                if backup.isOriginal {
+                    Text("Original").font(.caption2.bold()).padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(.green.opacity(0.2), in: Capsule())
                 }
-                Text("\(backup.reason) · \(ByteCountFormatter.string(fromByteCount: Int64(backup.bytes), countStyle: .file)) · \(backup.model)")
-                    .font(.caption).foregroundStyle(.secondary)
             }
+            .help("\(backup.reason) · \(ByteCountFormatter.string(fromByteCount: Int64(backup.bytes), countStyle: .file)) · \(backup.model)")
             Spacer()
-            Button("Edit a Copy") { Task { await model.open(model.backupURL(backup), fromBackup: true) } }
-                .help("Open this backup for editing. The backup file itself is never changed.")
             Button("Restore…") { Task { await model.restore(backup) } }
                 .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported || backup.model == Backups.damagedModel)
                 .help(backup.model == Backups.damagedModel ? "This backup is a copy of a damaged firmware. You cannot restore it." : "")
-            Button { NSWorkspace.shared.activateFileViewerSelecting([model.backupURL(backup)]) } label: {
-                Image(systemName: "folder")
+            Menu {
+                Button("Edit a Copy") { Task { await model.open(model.backupURL(backup), fromBackup: true) } }
+                    .help("Open this backup for editing. The backup file itself is never changed.")
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([model.backupURL(backup)]) }
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
-            .help("Show in Finder")
-            .accessibilityLabel("Show in Finder")
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .accessibilityLabel("More Backup Actions")
         }
     }
 }
@@ -354,11 +414,9 @@ struct HelperRow: View {
             case .enabled:
                 switch model.helperReply {
                 case .replied(let version):
-                    VStack(alignment: .leading, spacing: 2) {
-                        Label("The Touch ID helper is on. macOS does not ask for your password.", systemImage: "touchid")
-                            .labelStyle(StatusLabelStyle(tint: .green))
-                        Text("The helper replied (protocol version \(version)).").font(.caption).foregroundStyle(.secondary)
-                    }
+                    Label("The Touch ID helper is on. macOS does not ask for your password.", systemImage: "touchid")
+                        .labelStyle(StatusLabelStyle(tint: .green))
+                        .help("The helper replied (protocol version \(version)).")
                     Spacer()
                     Button("Check Again") { model.recheckFullDiskAccess() }
                     Button("Turn Off") { model.removeHelper() }
@@ -366,13 +424,12 @@ struct HelperRow: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Label("The Touch ID helper does not reply.", systemImage: "exclamationmark.triangle.fill")
                             .labelStyle(StatusLabelStyle(tint: .orange))
-                        Text("macOS shows the helper as on, but cannot start it. iPodFirm asks for your administrator password. Click Repair to register the helper again.")
-                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         if let err = model.helperSetupError { Text(err).font(.caption).foregroundStyle(.red) }
                     }
                     Spacer()
                     Button("Check Again") { model.recheckFullDiskAccess() }
                     Button("Repair") { model.repairHelper() }.buttonStyle(.borderedProminent)
+                        .help("macOS shows the helper as on, but cannot start it. iPodFirm asks for your administrator password. Click Repair to register the helper again.")
                 case .checking, .unknown:
                     ProgressView().controlSize(.small)
                     Text("iPodFirm examines the Touch ID helper…").foregroundStyle(.secondary)
@@ -386,20 +443,16 @@ struct HelperRow: View {
                 Button("Check Again") { model.recheckFullDiskAccess() }
             // An ad-hoc build has no team identifier, and the daemon refuses to start without one.
             case _ where ownTeamIdentifier() == nil:
-                VStack(alignment: .leading, spacing: 2) {
-                    Label("This build has no developer signature. Touch ID is not available.", systemImage: "touchid")
-                    Text("iPodFirm asks for your administrator password before it writes to the iPod.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                Label("This build has no developer signature. Touch ID is not available.", systemImage: "touchid")
+                    .help("iPodFirm asks for your administrator password before it writes to the iPod.")
             default:
                 VStack(alignment: .leading, spacing: 2) {
                     Label("Use Touch ID, not your password.", systemImage: "touchid")
-                    Text("iPodFirm installs a small helper that only iPodFirm can use. You approve it one time.")
-                        .font(.caption).foregroundStyle(.secondary)
                     if let err = model.helperSetupError { Text(err).font(.caption).foregroundStyle(.red) }
                 }
                 Spacer()
                 Button("Set Up Touch ID") { model.setUpHelper() }.buttonStyle(.borderedProminent)
+                    .help("iPodFirm installs a small helper that only iPodFirm can use. You approve it one time.")
             }
         }
     }

@@ -1,7 +1,7 @@
 {
   "name": "diagnostic-log",
   "title": "Diagnostic Log",
-  "summary": "A test patch that records the playback, the memory, the power, the artwork and the performance.",
+  "summary": "A test patch that logs each area that you select.",
   "symbol": "list.bullet.rectangle",
   "category": "test",
   "ui": {
@@ -32,11 +32,11 @@
       "diagnostic-log"
     ]
   },
-  "version_letter": "g",
+  "version_letter": "d",
   "version": "2.0",
   "size": 41768,
   "description": "A test. It records what the iPod does, so that you can find the cause of a problem. Use the switches below to select the areas. All areas on gives the complete log. One area on gives a log of that area only.",
-  "caution": "Do not install this patch together with USB Host Probe. The two patches use the same hook site.",
+  "caution": "Do not install this patch together with Playback Log or USB Host Probe. These patches use the same hook sites.",
   "details": [
     "Playback: which song plays, each next song, each shuffle, each key push and release, and the reason when the music stops.",
     "Memory: each failed allocation, and each change of 64 KB or more in the free memory.",

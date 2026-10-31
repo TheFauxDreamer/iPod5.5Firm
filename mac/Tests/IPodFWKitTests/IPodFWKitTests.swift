@@ -3,6 +3,28 @@ import Foundation
 @testable import IPodFWKit
 import XCTest
 
+final class BackupFolderTests: XCTestCase {
+    func testBackupFolderCheckResolvesLinks() throws {
+        let fm = FileManager.default
+        let home = fm.temporaryDirectory.appendingPathComponent("home-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: home) }
+        let app = home.appendingPathComponent("Library/Application Support/iPodFirm")
+        let outside = home.appendingPathComponent("outside")
+        try fm.createDirectory(at: app, withIntermediateDirectories: true)
+        try fm.createDirectory(at: outside, withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: app.appendingPathComponent("link"), withDestinationURL: outside)
+
+        // A folder in the app folder is permitted. The folder need not exist.
+        XCTAssertNoThrow(try checkedBackupDirectory(app.appendingPathComponent("backups/new").path, home: home.path))
+        // The folder after the link does not exist. The check must still see the link.
+        XCTAssertThrowsError(try checkedBackupDirectory(app.appendingPathComponent("link/backups").path, home: home.path))
+        try fm.createSymbolicLink(at: app.appendingPathComponent("broken"), withDestinationURL: outside.appendingPathComponent("none"))
+        XCTAssertThrowsError(try checkedBackupDirectory(app.appendingPathComponent("broken/backups").path, home: home.path))
+        XCTAssertThrowsError(try checkedBackupDirectory(app.appendingPathComponent("../other").path, home: home.path))
+        XCTAssertThrowsError(try checkedBackupDirectory(outside.path, home: home.path))
+    }
+}
+
 final class FlasherTests: XCTestCase {
     struct FakeDisk: BlockReader {
         var bytes: [UInt8]
@@ -586,17 +608,29 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertFalse(Patcher.conflicts(pair).isEmpty)
     }
 
-    /// diagnostic-log and usb-host-probe both hook 0x1d8260 with no chain: the app must not turn on both.
-    /// diagnostic-log has no conflict with the patches that are not test or internal patches.
+    /// playback-log and usb-host-probe both hook 0x1d8260 with no chain: the app must not turn on both.
+    /// playback-log has no conflict with the patches that are not test or internal patches.
     func testDiagnosticLogConflicts() throws {
         let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
         let log = try XCTUnwrap(all.first { $0.spec.name == "diagnostic-log" })
+        let playback = try XCTUnwrap(all.first { $0.spec.name == "playback-log" })
+        let probe = try XCTUnwrap(all.first { $0.spec.name == "usb-host-probe" })
+        XCTAssertFalse(Patcher.conflicts([log, playback]).isEmpty)
+        XCTAssertFalse(Patcher.conflicts([log, probe]).isEmpty)
+        for p in all where p.spec.internal != true && !p.spec.isTest {
+            XCTAssertTrue(Patcher.conflicts([log, p]).isEmpty, "diagnostic-log conflicts with \(p.spec.name)")
+        }
+    }
+
+    func testPlaybackLogConflicts() throws {
+        let all = Patcher.list(in: Self.repo.appendingPathComponent("patches"))
+        let log = try XCTUnwrap(all.first { $0.spec.name == "playback-log" })
         let probe = try XCTUnwrap(all.first { $0.spec.name == "usb-host-probe" })
         let pair = Patcher.conflicts([log, probe])
         XCTAssertEqual(pair.count, 1)
         XCTAssertEqual(pair.first?.2, "hook at 0x1d8260")
         for p in all where p.spec.internal != true && !p.spec.isTest {
-            XCTAssertTrue(Patcher.conflicts([log, p]).isEmpty, "diagnostic-log conflicts with \(p.spec.name)")
+            XCTAssertTrue(Patcher.conflicts([log, p]).isEmpty, "playback-log conflicts with \(p.spec.name)")
         }
     }
 
@@ -683,6 +717,13 @@ final class PatchAndArtTests: XCTestCase {
     }
 
     /// The Patches pane needs a title, a summary, a category and an SF Symbol for each patch.
+    /// A row of the Patches pane has one line for the summary.
+    func testPatchSummaryLength() {
+        for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) where p.spec.internal != true {
+            XCTAssertLessThanOrEqual(p.spec.summary?.count ?? 0, 50, "\(p.spec.name): the summary is too long")
+        }
+    }
+
     func testPatchMetadata() {
         for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) where p.spec.internal != true {
             XCTAssertNotNil(p.spec.title, "\(p.spec.name) has no title in patch.json")
@@ -1186,17 +1227,17 @@ final class PatcherOptionTests: XCTestCase {
 }
 
 /// The USB log of usb-host-probe, with the root hub record that the emulator wrote (2026-10-07).
-/// The text log of diagnostic-log: the information block with the iPodFirm list, the lines, then zero bytes.
-final class DiagnosticLogTests: XCTestCase {
+/// The text log of playback-log: the information block with the iPodFirm list, the lines, then zero bytes.
+final class PlaybackLogTests: XCTestCase {
     func testText() throws {
         let list = String(decoding: try JSONEncoder().encode(FirmwareManifest(app: "0.1.180 (181)", patches: [
             .init(name: "up-next", version: "0.5", options: ["hold": 3]), .init(name: "shuffle-fixes", version: "2.2"), .init(name: "user-patch", version: "1.0")])), as: UTF8.self)
-        let info = "PL01 diagnostic-log 1.0\nram=32 MB heap=3100000 lowest=2900000 failed=0\nlines=2 dropped=0 lost=0 writes=1\nlist " + list
+        let info = "PL01 playback-log 1.0\nram=32 MB heap=3100000 lowest=2900000 failed=0\nlines=2 dropped=0 lost=0 writes=1\nlist " + list
         var d = [UInt8](info.utf8) + [UInt8](repeating: 0x20, count: 2047 - info.utf8.count) + [0x0A]
         d += [UInt8]("     0.000 shuffle start count=60\n     0.012 shuffle end result=1\n".utf8)
-        d += [UInt8](repeating: 0, count: DiagnosticLog.fileSize - d.count)
-        XCTAssertEqual(DiagnosticLog.text(d, letters: ["shuffle-fixes": "f", "up-next": "n"]), """
-            PL01 diagnostic-log 1.0
+        d += [UInt8](repeating: 0, count: PlaybackLog.fileSize - d.count)
+        XCTAssertEqual(PlaybackLog.text(d, letters: ["shuffle-fixes": "f", "up-next": "n"]), """
+            PL01 playback-log 1.0
             ram=32 MB heap=3100000 lowest=2900000 failed=0
             lines=2 dropped=0 lost=0 writes=1
             app: 0.1.180 (181)
@@ -1207,40 +1248,41 @@ final class DiagnosticLogTests: XCTestCase {
             0.000 shuffle start count=60
             0.012 shuffle end result=1
             """)
-        XCTAssertNil(DiagnosticLog.text([UInt8](repeating: 0, count: DiagnosticLog.fileSize)))
-        XCTAssertNil(DiagnosticLog.text([UInt8]("VL01".utf8)))
-        XCTAssertEqual(DiagnosticLog.text([UInt8]("PL01 diagnostic-log 1.0\nlist none\n".utf8)), "PL01 diagnostic-log 1.0\npatches: not known (none)")
-        XCTAssertEqual(DiagnosticLog.text([UInt8]("PL02 diagnostic-log 2.0\nareas playback=1 memory=0 power=0 artwork=0 performance=0\nlist none\n".utf8)), "PL02 diagnostic-log 2.0\nareas playback=1 memory=0 power=0 artwork=0 performance=0\npatches: not known (none)")
-        XCTAssertNil(DiagnosticLog.text([UInt8]("PL03 other\n".utf8)))
+        XCTAssertNil(PlaybackLog.text([UInt8](repeating: 0, count: PlaybackLog.fileSize)))
+        XCTAssertNil(PlaybackLog.text([UInt8]("VL01".utf8)))
+        XCTAssertNil(PlaybackLog.text([UInt8]("PL03 other\n".utf8)))
+        XCTAssertEqual(PlaybackLog.text([UInt8]("PL02 diagnostic-log 2.0\nareas playback=1 memory=0 power=0 artwork=0 performance=0\nlist none\n".utf8)),
+                       "PL02 diagnostic-log 2.0\nareas playback=1 memory=0 power=0 artwork=0 performance=0\npatches: not known (none)")
+        XCTAssertEqual(PlaybackLog.text([UInt8]("PL01 playback-log 1.0\nlist none\n".utf8)), "PL01 playback-log 1.0\npatches: not known (none)")
     }
 
     /// A line with a track ID gets the song, and a list at the end has each song in the log.
     func testSongs() {
-        let log = "PL01 diagnostic-log 1.1\nsettings shuffle=Songs repeat=Off hold=Play Next\n"
+        let log = "PL01 playback-log 1.1\nsettings shuffle=Songs repeat=Off hold=Play Next\n"
         let lines = "     0.033   shuffle n=2 first=1a,2b,0 heap=1\n     0.314 play from=abc5c song=1a flags=1 heap=2\n     1.000   set song failed: -50 song=99 heap=2\n"
         let d = [UInt8](log.utf8) + [UInt8](lines.utf8)
         let songs = [ITunesDB.TrackInfo(id: 1, dbidLow: 0x1a, title: "One", artist: "A", album: "B", path: ":iPod_Control:Music:F00:X.mp3"),
                      ITunesDB.TrackInfo(id: 2, dbidLow: 0x2b, title: "Two", artist: "C", album: "D", path: ":P")]
-        let text = DiagnosticLog.text(d, songs: songs) ?? ""
+        let text = PlaybackLog.text(d, songs: songs) ?? ""
         XCTAssertTrue(text.contains("0.314 play from=abc5c song=1a flags=1 heap=2 \"One\" - A"))
         XCTAssertTrue(text.contains("  ID 1a: One | A | B | :iPod_Control:Music:F00:X.mp3"))
         XCTAssertTrue(text.contains("  ID 2b: Two | C | D | :P"))
         XCTAssertTrue(text.contains("  ID 99 is not in the iTunesDB"))
         XCTAssertTrue(text.contains("set song failed: -50 song=99 heap=2 (ID 99 is not in the iTunesDB)"))
         XCTAssertFalse(text.contains("ID 0 "))
-        XCTAssertFalse((DiagnosticLog.text(d) ?? "").contains("Songs in this log"))
+        XCTAssertFalse((PlaybackLog.text(d) ?? "").contains("Songs in this log"))
     }
 
     func testFileName() {
         var c = DateComponents(); c.year = 2026; c.month = 10; c.day = 29; c.hour = 23; c.minute = 15
         let date = Calendar.current.date(from: c)!
-        XCTAssertEqual(DiagnosticLog.fileName(date: date), "iPodFirm Diagnostic Log 2026-10-29 2315.txt")
+        XCTAssertEqual(PlaybackLog.fileName(date: date), "iPodFirm Playback Log 2026-10-29 2315.txt")
     }
 
     /// The new issue has the information lines of the log, not the timed lines, and a short body.
     func testIssueURL() throws {
-        let log = "PL01 diagnostic-log 1.0\nram=32 MB heap=3100000 lowest=2900000 failed=0\npatches: 2, letters fn\n0.000 play from=ac5b8\n1.500 stop: no next song"
-        let url = DiagnosticLog.issueURL(log: log, appVersion: "0.1.180 (181)", fileName: "log.txt")
+        let log = "PL01 playback-log 1.0\nram=32 MB heap=3100000 lowest=2900000 failed=0\npatches: 2, letters fn\n0.000 play from=ac5b8\n1.500 stop: no next song"
+        let url = PlaybackLog.issueURL(log: log, appVersion: "0.1.180 (181)", fileName: "log.txt")
         let c = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
         XCTAssertEqual(c.host, "github.com")
         XCTAssertEqual(c.path, "/TheFauxDreamer/iPod5.5Firm/issues/new")
@@ -1252,7 +1294,7 @@ final class DiagnosticLogTests: XCTestCase {
         XCTAssertTrue(body.contains("\"log.txt\""))
         XCTAssertTrue(body.contains("0.1.180 (181)"))
         XCTAssertFalse(body.contains("stop: no next song"))
-        let long = DiagnosticLog.issueURL(log: String(repeating: "patch line\n", count: 1000), appVersion: "1", fileName: "f.txt")
+        let long = PlaybackLog.issueURL(log: String(repeating: "patch line\n", count: 1000), appVersion: "1", fileName: "f.txt")
         let longBody = URLComponents(url: long, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "body" }?.value ?? ""
         XCTAssertLessThanOrEqual(longBody.count, 1500)
     }

@@ -63,6 +63,8 @@ This rule is mandatory. Before you make a commit, examine each new file and each
 5. Make sure that no file is larger than 5 MB.
 6. If the hook `.githooks/pre-commit` stops the commit, correct the problem. Then make the commit again.
 
+The workflow `.github/workflows/repository-check.yml` runs `.githooks/check-repository` at each push. Keep the two scripts in agreement.
+
 Do not use `git commit --no-verify` unless the owner tells you to do it.
 
 ## Other rules

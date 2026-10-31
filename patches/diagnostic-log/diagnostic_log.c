@@ -1,5 +1,6 @@
 /* diagnostic-log: a text log of the playback, the memory, the power, the artwork and the performance.
- * Each area has an option in patch.json. An area that is off writes no lines. Refer to re/diagnostic-log.md.
+ * Each area has an option in patch.json. An area that is off writes no lines. Refer to re/diagnostic-log.md
+ * and re/playback-log.md. This patch has the hooks of playback-log, thus only one of the two can be on.
  *
  * Hooks of the shuffle:
  *  - b at 0xb40c4 (start a shuffled play list; first instruction push {r3-r5, lr}): the caller,

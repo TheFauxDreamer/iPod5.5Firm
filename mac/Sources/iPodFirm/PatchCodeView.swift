@@ -70,8 +70,6 @@ struct PatchCodeSections: View {
                     .frame(minHeight: 320)
             } header: {
                 Text("C Code")
-            } footer: {
-                FormFooter("Type or paste the C code. The code has no C library: use the functions of the firmware. iPodFirm compiles it for the ARM7TDMI CPU of the iPod.")
             }
             symbolsSection
             hooksSection
@@ -107,8 +105,6 @@ struct PatchCodeSections: View {
             Button("Add Function") { code.wrappedValue.symbols.append(.init()) }
         } header: {
             Text("Firmware Functions")
-        } footer: {
-            FormFooter("Each name is a function or data of the firmware that the C code declares. The address is the osos offset. docs/firmware-functions.md lists the known addresses.")
         }
     }
 
@@ -141,8 +137,6 @@ struct PatchCodeSections: View {
             Button("Add Hook") { code.wrappedValue.hooks.append(.init(kind: "bl", at: "", expect: "", to: "")) }
         } header: {
             Text("Hooks")
-        } footer: {
-            FormFooter("A hook changes one word of the firmware: \"bl\" calls a function of the code, \"b\" jumps to it, and \"word\" replaces a vtable slot. \"Expect\" is the word in the Apple firmware. " + readHint)
         }
     }
 
@@ -165,15 +159,9 @@ struct PatchCodeSections: View {
             Button("Add Byte Change") { code.wrappedValue.bytes.append(.init(at: "", expect: "", value: "")) }
         } header: {
             Text("Byte Changes")
-        } footer: {
-            FormFooter("Each change replaces the bytes \"expect\" at the osos offset \"at\" with the bytes \"value\", for example 0100 → 0001. " + readHint)
         }
     }
 
-    var readHint: String {
-        osos == nil ? "Open the Apple firmware 1.3 to read \"expect\" from it."
-                    : "The wand button reads \"expect\" from the open firmware."
-    }
 
     var actionsSection: some View {
         Section {

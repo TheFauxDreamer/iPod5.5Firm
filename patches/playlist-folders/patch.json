@@ -1,25 +1,23 @@
 {
   "name": "playlist-folders",
   "title": "Playlist Folders",
-  "summary": "Puts playlists into folders in the Playlists list.",
+  "summary": "Puts playlists into folders.",
   "symbol": "folder",
   "category": "display",
   "version_letter": "o",
-  "version": "0.2",
+  "version": "0.3",
   "size": 5444,
-  "description": "The Playlists list shows folders and the playlists that are not in a folder. Select a folder to see its playlists. Make the folders in the app.",
+  "description": "Make the folders in the Playlist Folders section below.",
   "details": [
-    "Make, rename and delete folders in the Playlist Folders section of this patch.",
     "Put each playlist into one folder, or into no folder.",
-    "Select the position of the folders: at the top of the list or in alphabetical order with the playlists.",
-    "On the iPod, select a folder to see its playlists. Push Menu to go back to the Playlists list.",
-    "A folder cannot contain a folder."
+    "Select the position of the folders: at the top, or in alphabetical order with the playlists.",
+    "A folder cannot contain a folder.",
+    "On the iPod, push Menu to go back to the Playlists list."
   ],
   "notes": [
     "This is a test version.",
-    "The app writes the folders into the file iPod_Control/iTunes/iPodFirmPlaylistFolders. The iTunes database does not change.",
-    "A folder opens on the same screen, without the slide animation. The title stays \"Playlists\".",
-    "A folder without playlists on the iPod does not show."
+    "A folder without playlists does not show on the iPod.",
+    "The iTunes database does not change."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [

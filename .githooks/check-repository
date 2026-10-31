@@ -1,0 +1,34 @@
+#!/bin/sh
+# The check of all the tracked files.
+#
+# The GitHub workflow .github/workflows/repository-check.yml runs this script at each
+# push. You can also run the script in the project folder. The script uses the rules
+# of .githooks/pre-commit for the names, the sizes, the absolute paths and the keys.
+
+MAX_BYTES=5242880
+fail=0
+
+problem() {
+	echo "Repository check: $1" >&2
+	fail=1
+}
+
+list=$(git ls-files)
+types=$(printf '%s\n' "$list" | grep -iE '\.(ipsw|bin|img|sidb|mid|midi|mp3|m4a|m4b|m4p|aac|wav|aiff|flac)$')
+[ -n "$types" ] && problem "a file has a type that the repository must not contain: $types"
+hits=$(printf '%s\n' "$list" | grep -iE '(^|/)(iPod_Control|backups)/|(^|/)Firmware-[^/]*$' | grep -vE '\.md$')
+[ -n "$hits" ] && problem "firmware or iPod data is in the repository: $hits"
+
+big=$(git ls-files -z | xargs -0 wc -c | awk -v m="$MAX_BYTES" '$2 != "total" && $1 > m')
+[ -n "$big" ] && problem "a file is larger than $MAX_BYTES bytes: $big"
+
+text=$(git grep -nIE '/Users/[A-Za-z0-9._-]+/|/home/[A-Za-z0-9._-]+/|[Cc]:\\Users\\[A-Za-z0-9._-]+' -- . \
+	':(exclude).githooks/*' | head -5)
+[ -n "$text" ] && problem "an absolute path is in a file: $text"
+
+keys=$(git grep -nIE 'BEGIN [A-Z ]*PRIVATE KEY|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}' -- . \
+	':(exclude).githooks/*' | head -5 | cut -d: -f1,2)
+[ -n "$keys" ] && problem "a private key or an access token is in a file: $keys"
+
+[ "$fail" -eq 0 ] && echo "Repository check: no problems."
+exit "$fail"

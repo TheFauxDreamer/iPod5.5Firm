@@ -145,7 +145,7 @@ def cmd_verify(args) -> None:
 
 def require_root() -> None:
     if os.geteuid() != 0:
-        sys.exit("Raw disk access needs root. Re-run with sudo, e.g.  sudo .venv/bin/ipodfw ...")
+        sys.exit("Raw disk access needs root. Run the command again with sudo. Example: sudo .venv/bin/ipodfw ...")
 
 
 def cmd_devices(args) -> None:

@@ -68,8 +68,6 @@ struct StringsView: View {
             }
             Divider()
             HStack {
-                Text("The text cannot use more space than the language uses now. To make one string longer, make other strings shorter.")
-                    .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Revert") { draft = [:] }.disabled(changes.isEmpty)
                 Button("Apply \(changes.count) Change\(changes.count == 1 ? "" : "s")") { apply() }
@@ -117,6 +115,6 @@ struct BudgetGauge: View {
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(over ? .red : .secondary)
         }
-        .help("Space used by this language's text: \(used) of \(available) bytes")
+        .help("Space used by this language's text: \(used) of \(available) bytes. To make one string longer, make other strings shorter.")
     }
 }

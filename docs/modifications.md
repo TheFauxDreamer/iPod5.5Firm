@@ -27,7 +27,8 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | Version 0.6.7: yes (27 October 2026). Version 0.6.8: yes (28 October 2026) |
 | [up-next](#up-next) | Code patch (extended) | Patches | 1 `bl`, 1 `b` and 2 vtable words (3 with `chain`), a Settings menu | Version 0.4: yes. Version 0.5: yes (28 October 2026) |
 | [playlist-folders](#playlist-folders) | Code patch (extended) | Patches | 4 `bl`, 2 `b` and 1 vtable word (with `chain`) | Version 0.1: emulator only (29 October 2026). Not tested on the real iPod |
-| [diagnostic-log](#diagnostic-log) | Code patch (test, extended) | Patches | 12 `bl`, 8 `b` (all 8 with `chain`), 1 `word` (`chain`) | Version 2.0: no. `playback-log` 1.3: yes (30 October 2026). Not tested in the emulator |
+| [playback-log](#playback-log) | Code patch (test, extended) | Patches | 8 `bl`, 5 `b` (all 5 with `chain`) | Version 1.0: yes (30 October 2026). Version 1.2: no. Not tested in the emulator |
+| [diagnostic-log](#diagnostic-log) | Code patch (test, extended) | Patches | 12 `bl`, 8 `b` (all 8 with `chain`), 1 `word` (`chain`) | No. Not tested in the emulator |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
@@ -128,7 +129,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 ## album-art
 
-**User interface.** Patches pane > Album Artwork, letter `a`, version 3.2. The patch has no option. Version 2.8 removed the option `source` ("Album Thumbnail Source"). `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
+**User interface.** Patches pane > Album Artwork, letter `a`, version 3.3. The patch has no option. Version 2.8 removed the option `source` ("Album Thumbnail Source"). `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
 
 - "Thumbnails": "Write Thumbnails to iPod" writes the thumbnail file for the playlists. The albums do not need this file. "Eject iPod" ejects the iPod.
 - "Playlist Artwork" sets a custom image for each playlist ("Choose Image…", "Use Automatic", or drag an image).
@@ -375,7 +376,7 @@ The unsigned subtraction is correct when the 32-bit counter wraps (each 71.6 min
 
 ## cover-flow
 
-**User interface.** Patches pane > Cover Flow, letter `c`, version 0.6.8. The patch needs no file of iPodFirm: it uses the albums, the names and the artwork that the iPod already has. The research is in [../re/cover-flow.md](../re/cover-flow.md).
+**User interface.** Patches pane > Cover Flow, letter `c`, version 0.6.9. The patch needs no file of iPodFirm: it uses the albums, the names and the artwork that the iPod already has. The research is in [../re/cover-flow.md](../re/cover-flow.md).
 
 **Effect.**
 
@@ -676,7 +677,7 @@ Thus `0xa0348` always returns 0. The other match of the iPodWizard pattern, at 0
 
 ## search-5g
 
-**User interface.** Patches pane > Display > Search on the 5G, letter `e`, version 1.0.
+**User interface.** Patches pane > Display > Search on the 5G, letter `e`, version 1.1.
 
 **Effect.** On a 5G, Music > Search is the last item of the Music menu, and Settings > Main Menu has a Search item. On a 5.5G, the patch changes nothing, because the 5.5G already shows Search.
 
@@ -697,7 +698,7 @@ Thus `0x130b30` always returns 1. The size on the iPod is 0 bytes. The pane show
 
 ## click-speaker-only
 
-**User interface.** Patches pane > Sound > Click Only on the Speaker, letter `p`, version 1.0.
+**User interface.** Patches pane > Sound > Click Only on the Speaker, letter `p`, version 1.1.
 
 **Effect.** The click of the click wheel plays only from the piezo speaker. It does not play in the headphones. Settings > Clicker continues to turn the click on and off. The other sounds of the iPod do not change.
 
@@ -949,7 +950,7 @@ Real iPod 5.5G (owner, 28 October 2026), version 1.3: the patch operates.
 
 ## up-next
 
-**User interface.** Patches pane > Playback > Up Next, letter `n`, version 0.5. The option "Hold Select" gives the value that the iPod uses before the first change in Settings: Cover Flow (default), Play Next, Play Last or On-The-Go. Without the Cover Flow patch, the value Cover Flow acts as Play Next. On the iPod: Settings > Hold Select, after Clicker. Each push of Select moves to the next value. The research is in [../re/play-next.md](../re/play-next.md).
+**User interface.** Patches pane > Playback > Up Next, letter `n`, version 0.6. The option "Hold Select" gives the value that the iPod uses before the first change in Settings: Cover Flow (default), Play Next, Play Last or On-The-Go. Without the Cover Flow patch, the value Cover Flow acts as Play Next. On the iPod: Settings > Hold Select, after Clicker. Each push of Select moves to the next value. The research is in [../re/play-next.md](../re/play-next.md).
 
 **Effect.** Hold Select on a song, an album or an artist while music plays:
 
@@ -992,7 +993,7 @@ The Settings item has the key 0x60007e0f and the label 0x7e0b (`settings_items`,
 
 ## playlist-folders
 
-**User interface.** Patches pane > Display > Playlist Folders, letter `o`, version 0.2. The section "Playlist Folders" of the patch is the editor (`ui.tools`: `playlist-folders`, `PlaylistFoldersSection` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)). It has these controls:
+**User interface.** Patches pane > Display > Playlist Folders, letter `o`, version 0.3. The section "Playlist Folders" of the patch is the editor (`ui.tools`: `playlist-folders`, `PlaylistFoldersSection` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)). It has these controls:
 
 - "Folder position": Folders First or Alphabetical.
 - One row for each folder: the name, the count of playlists and a delete button. Open the row to put playlists into the folder. A playlist is in one folder only.
@@ -1043,17 +1044,15 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 
 **Test status.** Emulator (29 October 2026, the owner in the emulator window, version 0.1): Folders First and Alphabetical, Select on a folder, a playlist in a folder, Menu back to the folder and to the top list, the next open of Playlists, and the colour squares with `album-art`. All passed. Real iPod (the owner, 29 October 2026), version 0.1: the folders operate. The colour squares did not show.
 
-## diagnostic-log
+## playback-log
 
-**User interface.** Patches pane > Diagnostic Log, letter `g`. It is a test patch: turn on **Enable Test Patches** to see it. "Clear the Diagnostic Log" writes an empty 32768-byte `iPod_Control/iTunes/iPodFirmDiagnosticLog` on the connected iPod. The tool `diagnostic-log` gives the section "Diagnostic Log" with "Show Diagnostic Log", "Copy Log", "Save the Log to Share…" and "Report on GitHub…" (`DiagnosticLog` in [DiagnosticLog.swift](../mac/Sources/IPodFWKit/DiagnosticLog.swift), `AppModel.readDiagnosticLog`, `saveDiagnosticLog`, `reportDiagnosticLog`). "Save the Log to Share…" writes the log as a `.txt` file (default name "iPodFirm Diagnostic Log yyyy-MM-dd HHmm.txt") and shows it in Finder. "Report on GitHub…" also saves the file, then opens a new issue in the browser with a title and a body (the app version and the information lines of the log). The user drags the file into the issue. This needs a GitHub account. Without an account, send the saved file in a different way.
+**User interface.** Patches pane > Playback Log, letter `g`. It is a test patch: turn on **Enable Test Patches** to see it. "Clear the Playback Log" writes an empty 32768-byte `iPod_Control/iTunes/iPodFirmPlaybackLog` on the connected iPod. The tool `playback-log` gives the section "Playback Log" with "Show Playback Log", "Copy Log", "Save the Log to Share…" and "Report on GitHub…" (`PlaybackLog` in [PlaybackLog.swift](../mac/Sources/IPodFWKit/PlaybackLog.swift), `AppModel.readPlaybackLog`, `savePlaybackLog`, `reportPlaybackLog`). "Save the Log to Share…" writes the log as a `.txt` file (default name "iPodFirm Playback Log yyyy-MM-dd HHmm.txt") and shows it in Finder. "Report on GitHub…" also saves the file, then opens a new issue in the browser with a title and a body (the app version and the information lines of the log). The user drags the file into the issue. This needs a GitHub account. Without an account, send the saved file in a different way.
 
-**Areas.** The section "Options" has one On/Off list for each area: Playback, Memory, Power and Storage, Artwork and Files, Performance. The default is On. All areas on gives the complete log. One area on gives a log of that area only. A switch stops the lines only: the hooks stay in the firmware, and the RAM use does not change. To change a switch, flash the iPod again.
+**Effect.** The iPod records each shuffle, each change of the song, each song that cannot play, each stop for "no next song" and each failed memory allocation. A button or wheel event writes the log to the file, at most one time each 5 seconds. The log starts with the RAM size, the free memory, the lowest free memory, the settings and the iPodFirm list of the build. The settings are Shuffle, Repeat and Hold Select (`up-next`). A changed setting also gives a line in the log. The app shows the patches of the list with their letters and options. `song=` is the low 32 bits of the dbid of the track (track + 0x108, mhit + 0x70). The app finds each song in the iTunesDB of the connected iPod. It shows the title and the artist in the line, and a list of the songs with the album and the file at the end. The saved file has these names, so the user must know this before they attach the file to a public issue.
 
-**Effect.** Playback: each shuffle, each change of the song, each song that cannot play, each stop for "no next song", and each key push and release. Memory: each failed allocation, and each change of 64 KB or more in the free memory. Power and Storage: each sleep and wake, each change of the storage power, and each change of the raw charger value. Artwork and Files: each artwork lookup and load, each file open of 100 ms or more, and each file read of 16 KB or more or of 100 ms or more. Performance: a sample at most each 30 seconds at a button or wheel event. A button or wheel event writes the log to the file, at most one time each 5 seconds. The iPod also writes the log before each sleep. The log starts with the RAM size, the free memory, the lowest free memory, the settings and the iPodFirm list of the build. The settings are Shuffle, Repeat and Hold Select (`up-next`). A changed setting also gives a line in the log. The app shows the patches of the list with their letters and options. `song=` is the low 32 bits of the dbid of the track (track + 0x108, mhit + 0x70). The app finds each song in the iTunesDB of the connected iPod. It shows the title and the artist in the line, and a list of the songs with the album and the file at the end. The saved file has these names, so the user must know this before they attach the file to a public issue.
+**Research.** Refer to [re/playback-log.md](../re/playback-log.md).
 
-**Research.** Refer to [re/diagnostic-log.md](../re/diagnostic-log.md).
-
-**Load address.** `extended`. The code, the data and the 32 KB log buffer (`.bss`) are 41768 bytes. The buffer is in the patch, thus the log operates also when the heap is full.
+**Load address.** `extended`. The code, the data and the 32 KB log buffer (`.bss`) are 38849 bytes. The buffer is in the patch, thus the log operates also when the heap is full.
 
 **Hooks.**
 
@@ -1070,6 +1069,27 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 | `bl` | 0xac7b4 | 0xeb017c36 | `hook_open` | `bl 0x10b894`, probably the open of the decoder |
 | `b` (`chain`) | 0xc7518, 0x11ca20 | 0xe92d4070, 0xe92d4070 | `hook_alloc`, `hook_new` | First instruction (`push {r4-r6, lr}`) of the two allocators |
 | `bl` | 0x1d8260 | 0xeb0000c2 | `hook_event` | `bl 0x1d8570` (long-push timer) in the UI event handler 0x1d81cc. The same site as `usb-host-probe` |
+
+**Caution.** Do not install this patch together with `usb-host-probe`. The two patches use the hook site 0x1d8260. `Patcher.conflicts` finds this: the app does not turn on the second patch, the Patches pane shows "Changes the same place as …", and the build fails. The test `testPlaybackLogConflicts` checks it.
+
+**Test status.** Swift and Python tests (29 October 2026): the log text, the size, each hook word and the chain wrappers. A build with the 17 patches that are not `test` or `internal` links with no conflict. Not tested in the emulator. Real iPod 5.5G (owner, 30 October 2026, version 1.0): the log operates, with 17 patches and 5202 songs. The value `track` is not correct: it is the text `FILE`. Version 1.1 removes it, adds the settings and records a song ID. Version 1.2 gave `song=0`. Version 1.3 uses the dbid. Versions 1.1 and 1.2 are not tested on the real iPod. Refer to [re/playback-log.md](../re/playback-log.md#first-log-from-a-real-ipod).
+
+## diagnostic-log
+
+**User interface.** Patches pane > Diagnostic Log, letter `d`. It is a test patch: turn on **Enable Test Patches** to see it. "Clear the Diagnostic Log" writes an empty 32768-byte `iPod_Control/iTunes/iPodFirmDiagnosticLog` on the connected iPod. The tool `diagnostic-log` gives the section "Diagnostic Log". This section has the same buttons as "Playback Log". The iPod pane lists the log if the file has data.
+
+**Areas.** The patch has one On/Off option for each area: Playback, Memory, Power and Storage, Artwork and Files, Performance. The default is On. All areas on gives the complete log. One area on gives a log of that area only. A switch stops the lines only: the hooks stay in the firmware, and the RAM use does not change. To change a switch, flash the iPod again.
+
+**Effect.** Playback: the records of `playback-log`, and each key push and release. Memory: each failed allocation, and each change of 64 KB or more in the free memory. Power and Storage: each sleep and wake, each change of the storage power, and each change of the raw charger value. Artwork and Files: each artwork lookup and load, each file open of 100 ms or more, and each file read of 16 KB or more or of 100 ms or more. Performance: a sample at most each 30 seconds at a button or wheel event. The iPod writes the log at a button or wheel event, at most one time each 5 seconds. The iPod also writes the log before each sleep.
+
+**Research.** Refer to [re/diagnostic-log.md](../re/diagnostic-log.md).
+
+**Load address.** `extended`. The code, the data and the 32 KB log buffer (`.bss`) are 41768 bytes.
+
+**Hooks.** The 13 hooks of [playback-log](#playback-log), and these 8 hooks:
+
+| Kind | At | Expect | To | Original |
+|---|---|---|---|---|
 | `bl` | 0x1d9344 | 0xeb005561 | `hook_sleep_start` | `bl 0x1ee8d0`, the sleep sequence |
 | `bl` | 0x1dfe18 | 0xebfb516f | `hook_sleep` | `bl 0xb43dc`, the sleep function |
 | `b` (`chain`) | 0x265cc8 | 0xe92d4ff8 | `hook_drive` | First instruction (`push {r3-r11, lr}`) of the storage power function |
@@ -1079,9 +1099,9 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 | `b` (`chain`) | 0x8f464 | 0xe92d4ff8 | `hook_file_read` | First instruction (`push {r3-r11, lr}`) of the file read |
 | `word` (`chain`) | 0x6701f0 | 0x001d81cc | `hook_ui` | The event method 0x1d81cc. `cover-flow` uses the same word, and this hook chains to it |
 
-**Caution.** Do not install this patch together with `usb-host-probe`. The two patches use the hook site 0x1d8260. `Patcher.conflicts` finds this: the app does not turn on the second patch, the Patches pane shows "Changes the same place as …", and the build fails. The test `testDiagnosticLogConflicts` checks it.
+**Caution.** Only one of `diagnostic-log`, `playback-log` and `usb-host-probe` can be on at a time, because they use the hook site 0x1d8260. `Patcher.conflicts` finds this: the app does not turn on the second patch, the Patches pane shows "Changes the same place as …", and the build fails. The test `testDiagnosticLogConflicts` checks it.
 
-**Test status.** Version 2.0 (30 October 2026): the Swift tests pass. A check with firmware 1.3 makes sure of the 21 hook words and of the chain wrappers. A build with the 17 patches that are not `test` or `internal` links with no conflict. Version 2.0 is not tested in the emulator or on a real iPod. Earlier results, for `playback-log` 1.x: Swift and Python tests (29 October 2026): the log text, the size, each hook word and the chain wrappers. A build with the 17 patches that are not `test` or `internal` links with no conflict. Not tested in the emulator. Real iPod 5.5G (owner, 30 October 2026, version 1.0): the log operates, with 17 patches and 5202 songs. The value `track` is not correct: it is the text `FILE`. Version 1.1 removes it, adds the settings and records a song ID. Version 1.2 gave `song=0`. Version 1.3 uses the dbid. Versions 1.1 and 1.2 are not tested on the real iPod. Refer to [re/playback-log.md](../re/playback-log.md#first-log-from-a-real-ipod).
+**Test status.** Swift and Python tests (31 October 2026): the log header, the size, each `expect` value, each hook word and the chain wrappers. A build with the 17 patches that are not `test` or `internal` links with no conflict. Not tested in the emulator or on a real iPod.
 
 ## Storage type
 
@@ -1196,7 +1216,7 @@ The XOR data switches the bytes in both directions. A change that the owner edit
 - "Size on iPod (Dark)": the theme data after 0x736800 (`ImportedTheme.addedSize`).
 - "Size on iPod (Switch on iPod)": items 1 to 4 above, with the alignment (`DarkMode.addedSize`). It needs the open firmware 1.3.
 
-The text below the two values gives the bytes inside osos that the theme changes (`ImportedTheme.changedSize`). These changes use no new space. The measured values for the theme "Dark Gray" are 38,428 bytes (Dark), 738,593 bytes (Switch on iPod) and 660,678 changed bytes. The limit of the area is 792,576 bytes (0x736800–0x7F8000; 759,808 bytes before 9 October 2026). The test `testExtendedPatchAfterSwitchBuild` makes sure that `DarkMode.addedSize` agrees with `DarkMode.build`.
+The tooltip of the row "Size on iPod (Dark)" gives the bytes inside osos that the theme changes (`ImportedTheme.changedSize`). These changes use no new space. The measured values for the theme "Dark Gray" are 38,428 bytes (Dark), 738,593 bytes (Switch on iPod) and 660,678 changed bytes. The limit of the area is 792,576 bytes (0x736800–0x7F8000; 759,808 bytes before 9 October 2026). The test `testExtendedPatchAfterSwitchBuild` makes sure that `DarkMode.addedSize` agrees with `DarkMode.build`.
 
 The new Settings menu is a copy of the Apple menu with one more item after Clicker (key 0x60006088). The new item is a copy of the Sound Check item (key 0x600060b7) with the key 0x600060e0 and the label ID 0x7e00.
 

@@ -1,13 +1,13 @@
 import Foundation
 
-/// The log that the diagnostic-log patch writes to iPod_Control/iTunes/iPodFirmDiagnosticLog: the playback,
-/// the memory, the power, the artwork and the performance. Refer to patches/diagnostic-log/diagnostic_log.c.
+/// The log that the playback-log patch writes to iPod_Control/iTunes/iPodFirmPlaybackLog: the shuffle,
+/// the playback and the failed memory allocations. Refer to patches/playback-log/playback_log.c.
 ///
 /// The format is plain text. The first `infoSize` bytes are the information block. It starts with
-/// "PL02" ("PL01" in a file of playback-log 1.x) and has the line "list <JSON>", the iPodFirm list of the build (`FirmwareManifest`). Spaces
+/// "PL01" (or "PL02" from the diagnostic-log patch) and has the line "list <JSON>", the iPodFirm list of the build (`FirmwareManifest`). Spaces
 /// fill the rest of the block. The log lines follow. Zero bytes fill the rest of the file.
-public enum DiagnosticLog {
-    /// The size of the file that the action "Clear the Diagnostic Log" makes. The patch can only write to an existing file.
+public enum PlaybackLog {
+    /// The size of the file that the action "Clear the Playback Log" makes. The patch can only write to an existing file.
     public static let fileSize = 32768
     static let infoSize = 2048
 
@@ -68,12 +68,12 @@ public enum DiagnosticLog {
     }
 
     /// The name of the text file that "Save the Log to Share…" makes, for example
-    /// "iPodFirm Diagnostic Log 2026-10-29 2315.txt".
-    public static func fileName(date: Date = Date()) -> String {
+    /// "iPodFirm Playback Log 2026-10-29 2315.txt".
+    public static func fileName(date: Date = Date(), name: String = "Playback Log") -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd HHmm"
-        return "iPodFirm Diagnostic Log \(f.string(from: date)).txt"
+        return "iPodFirm \(name) \(f.string(from: date)).txt"
     }
 
     /// The largest body of the new issue. A longer web address can fail.
@@ -82,10 +82,10 @@ public enum DiagnosticLog {
     /// A web page that opens a new issue on GitHub. The body has the app version and the information
     /// lines of the log (the lines before the first line with a time). The owner of the log attaches
     /// the text file in the browser, because a web address cannot carry a file.
-    public static func issueURL(log: String, appVersion: String, fileName: String) -> URL {
+    public static func issueURL(log: String, appVersion: String, fileName: String, diagnostic: Bool = false) -> URL {
         let info = log.split(separator: "\n").prefix { !isTimed($0) }.joined(separator: "\n")
         let head = """
-            The music stops. The diagnostic log is attached.
+            \(diagnostic ? "I have a problem. The diagnostic log is attached." : "The music stops. The playback log is attached.")
 
             Drag the file "\(fileName)" into this box.
 
@@ -97,7 +97,7 @@ public enum DiagnosticLog {
         let room = max(0, maxIssueBody - head.count - tail.count - 1)
         let body = head + "\n" + String(info.prefix(room)) + tail
         var c = URLComponents(url: UpdateCheck.repository.appendingPathComponent("issues/new"), resolvingAgainstBaseURL: false)!
-        c.queryItems = [URLQueryItem(name: "title", value: "Playback log: the music stops"),
+        c.queryItems = [URLQueryItem(name: "title", value: diagnostic ? "Diagnostic log" : "Playback log: the music stops"),
                         URLQueryItem(name: "body", value: body)]
         return c.url!
     }

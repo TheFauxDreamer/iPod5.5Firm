@@ -48,12 +48,7 @@ struct PatchEditorSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 14) {
                 SymbolTile(symbol: validSymbol(draft.symbol), tint: .accentColor, size: 44)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(isNew ? "New Patch" : "Edit \(state.patch?.spec.displayTitle ?? "")").font(.title2.weight(.semibold))
-                    Text(isNew ? "iPodFirm writes patch.json for you. Then you add the code or the byte changes."
-                               : "iPodFirm saves the text in patch.json and increases the version.")
-                        .foregroundStyle(.secondary)
-                }
+                Text(isNew ? "New Patch" : "Edit \(state.patch?.spec.displayTitle ?? "")").font(.title2.weight(.semibold))
             }
             Form {
                 Section {

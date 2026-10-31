@@ -1,15 +1,17 @@
 {
   "name": "click-speaker-only",
   "title": "Click Only on the Speaker",
-  "summary": "The click of the click wheel does not play in the headphones.",
+  "summary": "Plays the wheel click only on the speaker.",
   "symbol": "speaker.slash",
   "category": "audio",
   "version_letter": "p",
-  "version": "1.0",
+  "version": "1.1",
   "size": 0,
-  "description": "The click of the click wheel plays only from the speaker in the iPod. It does not play in the headphones.",
-  "details": ["Turn the click wheel. The click plays from the speaker in the iPod, but not in the headphones.", "Settings > Clicker continues to turn the click on and off."],
-  "notes": ["The patch changes only the click of the click wheel. The other sounds of the iPod do not change.", "This patch changes one instruction in the firmware. It has no code."],
+  "details": [
+    "The click does not play in the headphones.",
+    "Settings > Clicker continues to turn the click on and off.",
+    "The other sounds of the iPod do not change."
+  ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
     { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }

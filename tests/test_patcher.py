@@ -110,18 +110,33 @@ def test_backlight_60s():
 
 
 @pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
-def test_diagnostic_log_hooks():
+def test_playback_log_hooks():
     osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
-    out, report = patcher.apply(osos, REPO / "patches/diagnostic-log", 0x7f8000)
+    out, report = patcher.apply(osos, REPO / "patches/playback-log", 0x7f8000)
     assert report["code"][0] == "0x736800"                     # extended: after the end of osos
-    for h in json.loads((REPO / "patches/diagnostic-log/patch.json").read_text())["hooks"]:
+    for h in json.loads((REPO / "patches/playback-log/patch.json").read_text())["hooks"]:
         at, target = int(h["at"], 16), int(report["symbols"][h["to"]], 16)
-        want = target if h["kind"] == "word" else patcher.branch(h["kind"], at, target)
-        assert struct.unpack_from("<I", out, at)[0] == want
+        assert struct.unpack_from("<I", out, at)[0] == patcher.branch(h["kind"], at, target)
     # alone, each chain wrapper runs the replaced push and continues after it
     start = int(report["symbols"]["start_original"], 16)
     assert struct.unpack_from("<I", out, start)[0] == 0xe92d4038
     assert struct.unpack_from("<I", out, start + 4)[0] == patcher.branch("b", start + 4, 0xb40c8)
+
+
+@pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
+def test_diagnostic_log_hooks():
+    osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
+    out, report = patcher.apply(osos, REPO / "patches/diagnostic-log", 0x7f8000)
+    for h in json.loads((REPO / "patches/diagnostic-log/patch.json").read_text())["hooks"]:
+        at, target = int(h["at"], 16), int(report["symbols"][h["to"]], 16)
+        assert struct.unpack_from("<I", osos, at)[0] == int(h["expect"], 16)
+        want = target if h["kind"] == "word" else patcher.branch(h["kind"], at, target)
+        assert struct.unpack_from("<I", out, at)[0] == want
+    for name, word, resume in (("drive_original", 0xe92d4ff8, 0x265ccc), ("file_open_original", 0xe92d41fc, 0x8f390),
+                               ("file_read_original", 0xe92d4ff8, 0x8f468)):
+        wrapper = int(report["symbols"][name], 16)
+        assert struct.unpack_from("<I", out, wrapper)[0] == word
+        assert struct.unpack_from("<I", out, wrapper + 4)[0] == patcher.branch("b", wrapper + 4, resume)
 
 
 @pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")

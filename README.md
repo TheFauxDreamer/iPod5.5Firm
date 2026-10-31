@@ -1,6 +1,6 @@
 # iPodFirm
 
-iPodFirm is a Mac app that adds new features to the iPod Video (5th generation and 5.5th generation). Examples are Dark Mode, small album artwork in the lists, Cover Flow, an Album Artists menu, Playlist Folders, Up Next, Search on the iPod 5G, and PoC USB-C headphone support. The app can also change the pictures and the text of the firmware, and copy your purchased iPod games to the iPod.
+iPodFirm is a Mac app that adds new features to the iPod Video (5th generation and 5.5th generation). Examples are Dark Mode, small album artwork in the lists, Cover Flow and an Album Artists menu. Other examples are Playlist Folders, Up Next, Search on the iPod 5G and PoC USB-C headphone support. The app can also change the pictures and the text of the firmware, and copy your purchased iPod games to the iPod.
 
 iPodFirm changes the Apple operating system of the iPod ("RetailOS", firmware 1.3). It does not replace it, like Rockbox does. The iPod keeps its menus, its music library and its sync with Finder or iTunes.
 
@@ -59,7 +59,7 @@ The check sends no data about you or your iPod.
 1. Connect the iPod to the Mac.
 2. In iPodFirm, open the **iPod** pane. The app finds the iPod.
 3. Click **Back Up iPod**. The app keeps the first backup as "Original (first backup)".
-4. Open the Apple firmware. Select File > Download Apple Firmware 1.3, or click **Edit a Copy** on a backup.
+4. Open the Apple firmware. Select File > Download Apple Firmware 1.3, or open the **…** menu of a backup and click **Edit a Copy**.
 5. Open the **Patches** pane.
 6. Switch on the patches that you want.
 7. Open the **iPod** pane.
@@ -87,7 +87,7 @@ If you did not change a switch after the last flash, the switches go to the patc
 
 Each build adds a small iPodFirm list of the patches to the firmware (approximately 110 bytes, plus 45 bytes for each patch). The iPod does not use the list. The list is only for the app. A build with no extended patch and no theme does not get the list.
 
-Each patch has a letter. If you switch on "Add a letter for each switched-on patch" in **Software Version**, the About screen of the iPod shows the letters, for example "1.3abkw". Give this version when you report a problem.
+Each patch has a letter. You can switch on "Add a letter for each switched-on patch" in **Software Version**. The About screen of the iPod then shows the letters, for example "1.3abkw". Give this version when you report a problem.
 
 ### Appearance and version
 
@@ -119,7 +119,8 @@ The table shows the status that the test notes record. For the full test record,
 | Album Mix Shuffle | x | Adds Album Mix to Settings > Shuffle: the albums and the songs in each album play in a random order. Settings > Main Menu > Shuffle adds a main menu item that changes the Shuffle value. It needs Shuffle Fixes, and the app turns on Shuffle Fixes with it. | Yes (version 1.2) |
 | Something Comforting | m | An example patch. A Settings item plays a short song on the internal speaker of the iPod. | Yes |
 | USB-C Audio | u | Plays the music through USB-C headphones. Refer to [USB-C Audio](#usb-c-audio). | Yes (version 1.9) |
-| Diagnostic Log | g | A test patch. It records the playback, the memory, the power, the artwork and the performance in a log on the iPod. A switch selects each area. Turn on Enable Test Patches to see it. Use it to find the cause of a problem. "Save the Log to Share…" makes a text file. "Report on GitHub…" also opens a new issue (a GitHub account is necessary). | No |
+| Playback Log | g | A test patch. It records the shuffle, the playback, the memory and the installed patches in a log on the iPod. The iPod pane shows the log in the section **Logs on This iPod**. Turn on Enable Test Patches to see it. Use it when the music stops. "Save the Log to Share…" makes a text file. "Report on GitHub…" also opens a new issue (a GitHub account is necessary). | No |
+| Diagnostic Log | d | A test patch. It records the playback, the memory, the power, the artwork and the performance in a log on the iPod. A switch selects each area. Turn on Enable Test Patches to see it. Only one of Playback Log and Diagnostic Log can be on. | No |
 | USB Host Probe | h | A test patch for research only. Refer to [USB Host Probe](#usb-host-probe). | Yes (up to version 1.29) |
 
 ### The space for patches
@@ -268,6 +269,8 @@ When iPodFirm shows a fault, the alert has two more buttons:
 
 To do this with no fault, select Help > Save Log… or Help > Report a Problem on GitHub….
 
+To read the most recent log, select Help > Open Log.
+
 ### How the app protects the iPod
 
 - The app makes a backup of the firmware partition before each write or restore. It does not overwrite a backup.
@@ -357,7 +360,9 @@ For each patch, [docs/modifications.md](docs/modifications.md) gives the user in
 
 ### Turn on the commit check
 
-The script [.githooks/pre-commit](.githooks/pre-commit) examines each commit before Git makes it. It stops a commit that has a file or a text that the repository must not contain, for example Apple firmware or a file larger than 5 MB.
+The script [.githooks/pre-commit](.githooks/pre-commit) examines each commit before Git makes it. It stops a commit that has a file or a text that the repository must not contain. Examples are Apple firmware and a file larger than 5 MB.
+
+The script [.githooks/check-repository](.githooks/check-repository) examines all the tracked files with the same rules. A GitHub workflow runs it at each push.
 
 1. Open Terminal.
 2. Go to the project folder.

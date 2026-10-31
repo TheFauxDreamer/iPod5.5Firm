@@ -154,8 +154,14 @@ final class AppModel: ObservableObject {
     @Published var thumbnailStatus: String?
     /// The decoded USB log of the probe (nil: not read).
     @Published var usbProbeLog: [USBProbeLog.Entry]?
+    /// The text of the playback log (nil: not read; empty: the file has no log).
+    @Published var playbackLog: String?
     /// The text of the diagnostic log (nil: not read; empty: the file has no log).
     @Published var diagnosticLog: String?
+    /// The log files on the connected iPod.
+    @Published var ipodLogs: [IPodLogFile] = []
+    /// The log in `IPodLogSheet`.
+    @Published var shownLog: IPodLogFile?
     /// The playlists of the connected iPod and their thumbnails (album-art patch).
     @Published var playlistArt: [MusicImport.PlaylistArt] = []
     /// True after a change to a playlist image that is not yet in the thumbnail file on the iPod.
@@ -243,6 +249,9 @@ final class AppModel: ObservableObject {
     var currentIPodIsUnsupported: Bool { currentIPod.map { unsupportedIPods.contains($0) } ?? false }
 
     /// The state of the iPod in the sidebar.
+    /// The name of the connected iPod: the name in its music database, or else the name of its volume.
+    var currentIPodName: String? { currentIPod.map { ipodLibraryName ?? $0.volumeName ?? $0.mediaName } }
+
     var currentIPodStatus: String {
         guard let ipod = currentIPod else { return "Not Connected" }
         return currentIPodIsUnsupported ? "Not Supported" : ipodLibraryName ?? ipod.volumeName ?? ipod.mediaName
@@ -308,6 +317,15 @@ final class AppModel: ObservableObject {
         lines.append("Appearance: \(appearance.rawValue), theme: \(selectedThemeName ?? "-"), margin: \(ThemeImport.OSOSMargin.current.rawValue), test patches: \(showTestPatches)")
         lines.append("Helper: \(helperStatus), reply: \(helperReply), Full Disk Access: \(hasFullDiskAccess), Touch ID: \(requireTouchID)")
         return AppLog.redact(lines.joined(separator: "\n"))
+    }
+
+    /// Help > Open Log: opens the most recent log in the default app. If no app opens it, Finder shows it.
+    func openLog() {
+        guard let url = AppLog.fileURL, FileManager.default.fileExists(atPath: url.path) else {
+            alert = AlertInfo(title: "No log found", message: "iPodFirm has no log file. Restart iPodFirm. Then try again.")
+            return
+        }
+        if !NSWorkspace.shared.open(url) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
     }
 
     /// Help > Save Log…, and Save Log… in the alert of a fault. Returns the file, or nil.
@@ -501,7 +519,8 @@ final class AppModel: ObservableObject {
         return a.runModal() == .alertSecondButtonReturn
     }
 
-    func open(_ url: URL, fromBackup: Bool = false) async {
+    /// `stay`: keep the current pane. The user opened the firmware from a pane to continue the work there.
+    func open(_ url: URL, fromBackup: Bool = false, stay: Bool = false) async {
         guard confirmDiscard() else { return }
         do {
             let isIPSW = url.pathExtension.lowercased() == "ipsw"
@@ -516,18 +535,18 @@ final class AppModel: ObservableObject {
             saveURL = nil
             isDirty = false
             revision += 1
-            section = .overview
+            if !stay { section = .overview }
         } catch {
             fail("Cannot Open \(url.lastPathComponent)", error)
         }
     }
 
-    func openPanel() {
+    func openPanel(stay: Bool = false) {
         let p = NSOpenPanel()
         p.allowedContentTypes = ["ipsw", "bin"].compactMap { UTType(filenameExtension: $0) }
         p.message = "Choose an Apple .ipsw, a firmware .bin, or an iPod backup"
         p.directoryURL = Self.backupDir
-        if p.runModal() == .OK, let url = p.url { Task { await open(url) } }
+        if p.runModal() == .OK, let url = p.url { Task { await open(url, stay: stay) } }
     }
 
     /// Writes to the file of the last Save As. The first save shows the panel, because the app never
@@ -566,8 +585,8 @@ final class AppModel: ObservableObject {
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    func downloadAppleFirmware() async {
-        do { await open(try await ensureAppleIPSW()) } catch { fail("Download Failed", error) }
+    func downloadAppleFirmware(stay: Bool = false) async {
+        do { await open(try await ensureAppleIPSW(), stay: stay) } catch { fail("Download Failed", error) }
     }
 
     static func isCancellation(_ error: Error) -> Bool {
@@ -982,7 +1001,9 @@ final class AppModel: ObservableObject {
                 try w.data.write(to: url, options: .atomic)
             }
             if action.write.contains(where: { $0.path == Self.usbProbeLogFile }) { usbProbeLog = nil }
+            if action.write.contains(where: { $0.path == Self.playbackLogFile }) { playbackLog = nil }
             if action.write.contains(where: { $0.path == Self.diagnosticLogFile }) { diagnosticLog = nil }
+            refreshIPodLogs()
             patchActionStatus[patch.spec.name] = "\(action.status ?? "\(action.title): complete.") (\(Date().formatted(date: .omitted, time: .shortened)))"
         } catch { fail("Cannot Write the File on the iPod", error) }
     }
@@ -1270,6 +1291,17 @@ final class AppModel: ObservableObject {
     /// trigger file; the patch writes the log on the iPod.
     static let usbProbeLogFile = "iPod_Control/iTunes/iPodFirmUSBLog"
 
+    /// Finds the log files on the iPod. A file with no data gets no row.
+    func refreshIPodLogs() {
+        guard let volume = ipodMusicVolume() else { ipodLogs = []; return }
+        ipodLogs = IPodLogFile.Kind.allCases.compactMap { kind in
+            let path = volume.appendingPathComponent(Self.logFile(kind)).path
+            guard let info = try? FileManager.default.attributesOfItem(atPath: path),
+                  let bytes = info[.size] as? Int, bytes > 0 else { return nil }
+            return IPodLogFile(kind: kind, bytes: bytes, date: info[.modificationDate] as? Date)
+        }
+    }
+
     func readUSBProbeLog() {
         guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder, then try again.")
@@ -1282,47 +1314,65 @@ final class AppModel: ObservableObject {
         usbProbeLog = USBProbeLog.parse([UInt8](data)) ?? []
     }
 
-    /// The log of the diagnostic-log patch. The action in its patch.json makes it empty; the patch writes it on the iPod.
+    /// The logs of the playback-log and the diagnostic-log patches. The action in the patch.json makes
+    /// the file empty; the patch writes it on the iPod.
+    static let playbackLogFile = "iPod_Control/iTunes/iPodFirmPlaybackLog"
     static let diagnosticLogFile = "iPod_Control/iTunes/iPodFirmDiagnosticLog"
 
-    func readDiagnosticLog() {
+    static func logFile(_ kind: IPodLogFile.Kind) -> String {
+        switch kind {
+        case .playback: playbackLogFile
+        case .diagnostic: diagnosticLogFile
+        case .usb: usbProbeLogFile
+        }
+    }
+
+    /// The text of a log with songs: the playback log or the diagnostic log.
+    func songLog(_ kind: IPodLogFile.Kind) -> String? {
+        kind == .diagnostic ? diagnosticLog : playbackLog
+    }
+
+    func readSongLog(_ kind: IPodLogFile.Kind) {
+        let name = kind == .diagnostic ? "Diagnostic Log" : "Playback Log"
         guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
             return
         }
-        guard let data = try? Data(contentsOf: volume.appendingPathComponent(Self.diagnosticLogFile)) else {
-            alert = AlertInfo(title: "No Diagnostic Log", message: "The iPod has no diagnostic log. Click Clear the Diagnostic Log. Then do the test.")
+        guard let data = try? Data(contentsOf: volume.appendingPathComponent(Self.logFile(kind))) else {
+            alert = AlertInfo(title: "No \(name)", message: "The iPod has no \(name.lowercased()). Click Clear the \(name). Then do the test.")
             return
         }
         var letters: [String: String] = [:]
         for p in Self.patchLibrary.list() { if let l = p.spec.version_letter { letters[p.spec.name] = l } }
         let database = (try? Data(contentsOf: volume.appendingPathComponent("iPod_Control/iTunes/iTunesDB"))).map { [UInt8]($0) } ?? []
-        diagnosticLog = DiagnosticLog.text([UInt8](data), letters: letters, songs: ITunesDB.readTrackInfo(database)) ?? ""
+        let text = PlaybackLog.text([UInt8](data), letters: letters, songs: ITunesDB.readTrackInfo(database)) ?? ""
+        if kind == .diagnostic { diagnosticLog = text } else { playbackLog = text }
     }
 
-    /// Save the diagnostic log as a text file, then show the file in Finder. Returns the file, or nil.
+    /// Save a log as a text file, then show the file in Finder. Returns the file, or nil.
     @discardableResult
-    func saveDiagnosticLog() -> URL? {
-        guard let log = diagnosticLog, !log.isEmpty else { return nil }
+    func saveSongLog(_ kind: IPodLogFile.Kind) -> URL? {
+        let name = kind == .diagnostic ? "Diagnostic Log" : "Playback Log"
+        guard let log = songLog(kind), !log.isEmpty else { return nil }
         let s = NSSavePanel()
-        s.nameFieldStringValue = DiagnosticLog.fileName()
+        s.nameFieldStringValue = PlaybackLog.fileName(name: name)
         s.allowedContentTypes = [.plainText]
-        s.message = "Save the diagnostic log as a text file. Then send the file to the developer."
+        s.message = "Save the \(name.lowercased()) as a text file. Then send the file to the developer."
         guard s.runModal() == .OK, let url = s.url else { return nil }
         do {
             try ("iPodFirm on the Mac: \(version)\n" + log + "\n").write(to: url, atomically: true, encoding: .utf8)
         } catch {
-            fail("Cannot Save the Diagnostic Log", error)
+            fail("Cannot Save the \(name)", error)
             return nil
         }
         NSWorkspace.shared.activateFileViewerSelecting([url])
         return url
     }
 
-    /// Save the diagnostic log, then open a new issue on GitHub. The owner of the log drags the file into the issue.
-    func reportDiagnosticLog() {
-        guard let log = diagnosticLog, let url = saveDiagnosticLog() else { return }
-        NSWorkspace.shared.open(DiagnosticLog.issueURL(log: log, appVersion: version, fileName: url.lastPathComponent))
+    /// Save a log, then open a new issue on GitHub. The owner of the log drags the file into the issue.
+    func reportSongLog(_ kind: IPodLogFile.Kind) {
+        guard let log = songLog(kind), let url = saveSongLog(kind) else { return }
+        NSWorkspace.shared.open(PlaybackLog.issueURL(log: log, appVersion: version, fileName: url.lastPathComponent, diagnostic: kind == .diagnostic))
     }
 
     /// Read the playlists of the connected iPod and their images.
@@ -1499,6 +1549,7 @@ final class AppModel: ObservableObject {
         } catch { fail("Cannot List Disks", error) }
         refreshBackups()
         await readIPodLibraryName()
+        refreshIPodLogs()
         // A different iPod (or none): the old state is not valid. Read the new iPod.
         guard busy == nil else { return }
         guard let ipod = currentIPod, !currentIPodIsUnsupported else { ipodState = nil; ipodReadStatus = nil; return }
@@ -1616,7 +1667,16 @@ final class AppModel: ObservableObject {
     }
 
     /// true: the app can start a flash of the open firmware.
-    var canFlash: Bool { editor != nil && currentIPod != nil && !currentIPodIsUnsupported && busy == nil }
+    var canFlash: Bool { flashBlockReason == nil }
+
+    /// Why the app cannot start a flash, in words for the user. nil: the app can start a flash.
+    var flashBlockReason: String? {
+        if currentIPod == nil { return "Connect the iPod to flash it." }
+        if currentIPodIsUnsupported { return "iPodFirm cannot flash this iPod." }
+        if editor == nil { return "Open a firmware to flash the iPod." }
+        if busy != nil { return "Wait until the current operation is complete." }
+        return nil
+    }
 
     func flashEdited() async {
         guard busy == nil, let editor else { return }
