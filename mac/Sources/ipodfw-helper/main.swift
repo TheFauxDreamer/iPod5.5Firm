@@ -2,7 +2,7 @@ import Foundation
 import IPodFWKit
 
 // Privileged helper. Two modes:
-//   --daemon : launchd daemon (SMAppService) serving XPC to the signed app; Touch ID is checked in the app
+//   --daemon : launchd daemon (SMAppService) serving XPC to the signed app; the app does the Touch ID check
 //   CLI      : run via "do shell script ... with administrator privileges" (password fallback)
 //   ipodfw-helper backup --disk diskN --backup-dir DIR [--owner UID]
 //   ipodfw-helper read   --disk diskN --backup-dir DIR [--owner UID]   (read only: DIR/ipod-osos.bin)

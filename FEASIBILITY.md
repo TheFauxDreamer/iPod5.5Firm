@@ -90,7 +90,7 @@ Nothing in the resources draws a thumbnail per list row. The list widget's code 
 
 ### 3. The 2–3 s delay when pressing Play: measure first
 Plausible causes, roughly in order:
-- **Drive power-up / spin-up waits.** Stock firmware powers the "hard drive" down and waits a fixed time for it on wake, which is pointless on an iFlash/SD adapter.
+- **Drive power-up / spin-up waits.** Stock firmware stops the "hard drive" and waits a fixed time for it on wake. This wait has no use on an iFlash/SD adapter.
 - **A large pre-buffer** filled before Now Playing is shown.
 - **Now Playing artwork decode** of large embedded art. Quick check: sync smaller (≤ 300 px) artwork and see if the delay shrinks.
 - **Database lookups** with very large libraries.

@@ -15,6 +15,8 @@
 #   4. The Git e-mail address of the author, if it is not a GitHub noreply address.
 #   5. A private key or an access token.
 #
+# The names and the sizes use the same rules as .githooks/check-repository.
+#
 # The script reads the home folder and the e-mail address when it runs.
 
 MAX_BYTES=5242880
@@ -31,11 +33,19 @@ files=$(git diff --cached --name-only --diff-filter=ACMR)
 
 # 1 and 2: The names and the sizes of the files.
 echo "$files" | while IFS= read -r f; do
-	case "$f" in
-		*.ipsw|*.bin|*.img|*.sidb|*.mid|*.midi|*.mp3|*.m4a|*.aac|*.wav|*.aiff|*.flac)
+	# The check of the file type and of the folders ignores the case of a letter.
+	lower=$(printf '%s' "$f" | tr '[:upper:]' '[:lower:]')
+	case "$lower" in
+		*.ipsw|*.bin|*.img|*.sidb|*.mid|*.midi|*.mp3|*.m4a|*.m4b|*.m4p|*.aac|*.wav|*.aiff|*.flac)
 			echo "Commit check: '$f' has a file type that the repository must not contain." >&2
 			echo x ;;
-		Firmware-*|*/Firmware-*|iPod_Control/*|*/iPod_Control/*|backups/*|*/backups/*)
+		ipod_control/*|*/ipod_control/*|backups/*|*/backups/*)
+			echo "Commit check: '$f' is firmware or iPod data. Do not commit it." >&2
+			echo x ;;
+	esac
+	# This check obeys the case of a letter, because the notes re/firmware-*.md are permitted.
+	case "$f" in
+		Firmware-*|*/Firmware-*)
 			echo "Commit check: '$f' is firmware or iPod data. Do not commit it." >&2
 			echo x ;;
 	esac

@@ -1,8 +1,10 @@
 # Apple firmware and device dumps are copyrighted / personal: never commit them.
 *.ipsw
 Firmware-*
-# The pattern above also matches docs/firmware-format.md. Keep the documents.
+# The pattern above also matches docs/firmware-format.md and the notes re/firmware-*.md,
+# because Git on macOS ignores the case of a letter. Keep the documents.
 !docs/*.md
+!re/firmware-*.md
 *.bin
 *.img
 backups/
@@ -12,6 +14,16 @@ iPod_Control/
 # Music files (for example the MIDI file for re/midi-to-tones.py) are copyrighted.
 *.mid
 *.midi
+*.mp3
+*.m4a
+*.m4b
+*.m4p
+*.aac
+*.wav
+*.aiff
+*.flac
+# An iPod key file is personal.
+*.sidb
 work/
 
 # The guide that removes iPodFirm by hand is a local document. It names the files

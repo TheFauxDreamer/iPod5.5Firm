@@ -1,6 +1,6 @@
 # iPodFirm
 
-iPodFirm is a Mac app that adds new features to the iPod Video (5th generation and 5.5th generation). Examples are Dark Mode, small album artwork in the lists, Cover Flow, an Album Artists menu, Playlist Folders, Up Next, Search on the iPod 5G, and PoC USB-C headphone support. The app can also change the pictures and the text of the firmware, and copy your purchased iPod games to the iPod.
+iPodFirm is a Mac app that adds new features to the iPod Video (5th generation and 5.5th generation). Examples are Dark Mode, small album artwork in the lists, Cover Flow and an Album Artists menu. Other examples are Playlist Folders, Up Next, Search on the iPod 5G and PoC USB-C headphone support. The app can also change the pictures and the text of the firmware, and copy your purchased iPod games to the iPod.
 
 iPodFirm changes the Apple operating system of the iPod ("RetailOS", firmware 1.3). It does not replace it, like Rockbox does. The iPod keeps its menus, its music library and its sync with Finder or iTunes.
 
@@ -87,7 +87,7 @@ If you did not change a switch after the last flash, the switches go to the patc
 
 Each build adds a small iPodFirm list of the patches to the firmware (approximately 110 bytes, plus 45 bytes for each patch). The iPod does not use the list. The list is only for the app. A build with no extended patch and no theme does not get the list.
 
-Each patch has a letter. If you switch on "Add a letter for each switched-on patch" in **Software Version**, the About screen of the iPod shows the letters, for example "1.3abkw". Give this version when you report a problem.
+Each patch has a letter. You can switch on "Add a letter for each switched-on patch" in **Software Version**. The About screen of the iPod then shows the letters, for example "1.3abkw". Give this version when you report a problem.
 
 ### Appearance and version
 
@@ -268,6 +268,8 @@ When iPodFirm shows a fault, the alert has two more buttons:
 
 To do this with no fault, select Help > Save Log… or Help > Report a Problem on GitHub….
 
+To read the most recent log, select Help > Open Log.
+
 ### How the app protects the iPod
 
 - The app makes a backup of the firmware partition before each write or restore. It does not overwrite a backup.
@@ -357,7 +359,9 @@ For each patch, [docs/modifications.md](docs/modifications.md) gives the user in
 
 ### Turn on the commit check
 
-The script [.githooks/pre-commit](.githooks/pre-commit) examines each commit before Git makes it. It stops a commit that has a file or a text that the repository must not contain, for example Apple firmware or a file larger than 5 MB.
+The script [.githooks/pre-commit](.githooks/pre-commit) examines each commit before Git makes it. It stops a commit that has a file or a text that the repository must not contain. Examples are Apple firmware and a file larger than 5 MB.
+
+The script [.githooks/check-repository](.githooks/check-repository) examines all the tracked files with the same rules. A GitHub workflow runs it at each push.
 
 1. Open Terminal.
 2. Go to the project folder.

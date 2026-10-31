@@ -45,16 +45,6 @@ struct EmulatorView: View {
                         }
                         Stepper("Songs: \(songCount) (maximum 8 from each album; the audio is copied)", value: $songCount, in: 20...1000, step: 20)
                     }
-                    if model.enabledPatches.isEmpty == false {
-                        Label("Patches included: \(model.activePatches.map(\.spec.name).joined(separator: ", "))", systemImage: "puzzlepiece.extension")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    if model.appearance != .light, let t = model.selectedTheme {
-                        Label(model.appearance == .dark ? "Dark theme included: \(t.name)" : "Dark Mode item in Settings: \(t.name)", systemImage: "moon.fill")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Text("iPodFirm makes a drive from your current changes and starts it from cold in this pane. The test iPod is separate, thus your own emulator devices do not change. Run it again after each change.")
-                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Button("Open Test iPod in the Emulator Window") {
                         Task {
                             session.stop()
@@ -88,6 +78,7 @@ struct EmulatorView: View {
                         Spacer()
                         Button(emu.installedVersion == nil ? "Install Emulator" : "Update Emulator") { emu.install() }
                             .disabled(emu.installing || session.isActive)
+                            .help("iPodFirm builds the emulator from the source of siggifly/ipod-emulator. It installs Rust in your home folder if necessary. The emulator has no sound and no USB.")
                     }
                     if emu.installing || !emu.log.isEmpty {
                         ScrollViewReader { proxy in
@@ -100,9 +91,7 @@ struct EmulatorView: View {
                             .onChange(of: emu.log) { _, _ in proxy.scrollTo("end") }
                         }
                     }
-                } header: { Text("Emulator") } footer: {
-                    FormFooter("Built from siggifly/ipod-emulator's source (Rust is installed into your home folder if needed). No sound or USB.")
-                }
+                } header: { Text("Emulator") }
             }
             .formStyle(.grouped)
             .frame(minWidth: 320, idealWidth: 380, maxWidth: 520)

@@ -39,6 +39,33 @@ public enum HelperJSON {
     }
 }
 
+/// The path with all symbolic links resolved. The end of the path need not exist.
+/// Gives nil if a part of the path is a broken link.
+func resolvedPath(_ path: String) -> String? {
+    var head = URL(fileURLWithPath: path).standardizedFileURL
+    var tail: [String] = []
+    while true {
+        if let real = realpath(head.path, nil) {
+            defer { free(real) }
+            return ([String(cString: real)] + tail).joined(separator: "/")
+        }
+        var info = stat()
+        guard lstat(head.path, &info) != 0, head.path != "/" else { return nil }
+        tail.insert(head.lastPathComponent, at: 0)
+        head.deleteLastPathComponent()
+    }
+}
+
+/// The folder for backups, if it is in `~/Library/Application Support/iPodFirm` of `home`.
+/// The check resolves symbolic links. A link in the folder cannot send a write of root to a different location.
+public func checkedBackupDirectory(_ path: String, home: String) throws -> URL {
+    let appFolder = URL(fileURLWithPath: home).appendingPathComponent("Library/Application Support/iPodFirm")
+    guard let allowed = resolvedPath(appFolder.path), let real = resolvedPath(path), real.hasPrefix(allowed + "/") else {
+        throw FirmwareError("Refusing to write backups outside \(appFolder.path).")
+    }
+    return URL(fileURLWithPath: real)
+}
+
 /// True if this process can read a file that only Full Disk Access unlocks.
 public func processHasFullDiskAccess() -> Bool {
     guard let h = FileHandle(forReadingAtPath: "/Library/Application Support/com.apple.TCC/TCC.db") else { return false }

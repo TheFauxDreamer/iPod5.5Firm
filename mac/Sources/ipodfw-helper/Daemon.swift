@@ -10,11 +10,7 @@ final class HelperService: NSObject, HelperXPCProtocol {
     /// Backups may only be written inside the calling user's ~/Library/Application Support/iPodFirm.
     func checkedBackupDir(_ path: String) throws -> URL {
         guard let pw = getpwuid(uid) else { throw FirmwareError("Unknown user \(uid).") }
-        let allowed = URL(fileURLWithPath: String(cString: pw.pointee.pw_dir))
-            .appendingPathComponent("Library/Application Support/iPodFirm").standardizedFileURL.path
-        let url = URL(fileURLWithPath: path).standardizedFileURL
-        guard url.path.hasPrefix(allowed + "/") else { throw FirmwareError("Refusing to write backups outside \(allowed).") }
-        return url
+        return try checkedBackupDirectory(path, home: String(cString: pw.pointee.pw_dir))
     }
 
     func ipod(_ disk: String) throws -> IPodDisk {

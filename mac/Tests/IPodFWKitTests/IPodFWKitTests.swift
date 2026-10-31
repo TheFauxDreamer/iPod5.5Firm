@@ -3,6 +3,28 @@ import Foundation
 @testable import IPodFWKit
 import XCTest
 
+final class BackupFolderTests: XCTestCase {
+    func testBackupFolderCheckResolvesLinks() throws {
+        let fm = FileManager.default
+        let home = fm.temporaryDirectory.appendingPathComponent("home-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: home) }
+        let app = home.appendingPathComponent("Library/Application Support/iPodFirm")
+        let outside = home.appendingPathComponent("outside")
+        try fm.createDirectory(at: app, withIntermediateDirectories: true)
+        try fm.createDirectory(at: outside, withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: app.appendingPathComponent("link"), withDestinationURL: outside)
+
+        // A folder in the app folder is permitted. The folder need not exist.
+        XCTAssertNoThrow(try checkedBackupDirectory(app.appendingPathComponent("backups/new").path, home: home.path))
+        // The folder after the link does not exist. The check must still see the link.
+        XCTAssertThrowsError(try checkedBackupDirectory(app.appendingPathComponent("link/backups").path, home: home.path))
+        try fm.createSymbolicLink(at: app.appendingPathComponent("broken"), withDestinationURL: outside.appendingPathComponent("none"))
+        XCTAssertThrowsError(try checkedBackupDirectory(app.appendingPathComponent("broken/backups").path, home: home.path))
+        XCTAssertThrowsError(try checkedBackupDirectory(app.appendingPathComponent("../other").path, home: home.path))
+        XCTAssertThrowsError(try checkedBackupDirectory(outside.path, home: home.path))
+    }
+}
+
 final class FlasherTests: XCTestCase {
     struct FakeDisk: BlockReader {
         var bytes: [UInt8]

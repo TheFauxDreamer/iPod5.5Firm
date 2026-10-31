@@ -8,9 +8,6 @@ struct ThanksSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Label("Thanks", systemImage: "heart").font(.title3.bold())
-            Text("These people reported problems, supplied fixes or gave ideas for iPodFirm.")
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(Thanks.sorted) { person in

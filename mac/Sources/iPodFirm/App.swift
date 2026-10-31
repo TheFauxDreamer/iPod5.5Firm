@@ -87,6 +87,7 @@ struct IPodFirmApp: App {
                 Button("Show Disclaimer") { model.showDisclaimerReview = true }
                 Button("Thanks…") { model.showThanks = true }
                 Divider()
+                Button("Open Log") { model.openLog() }
                 Button("Save Log…") { model.saveLog() }
                 Button("Report a Problem on GitHub…") { model.reportOnGitHub(nil) }
             }
@@ -104,6 +105,7 @@ struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @State private var showHelp = false
     @AppStorage(ThemeImport.ososMarginKey) private var ososMargin = ThemeImport.OSOSMargin.current.rawValue
+    @AppStorage("showPatchSummaries") private var showPatchSummaries = true
 
     var body: some View {
         TabView {
@@ -129,9 +131,7 @@ struct SettingsView: View {
                     Picker("Empty margin below 8 MB", selection: $ososMargin) {
                         ForEach(ThemeImport.OSOSMargin.allCases) { Text($0.title).tag($0.rawValue) }
                     }
-                    Text("A theme, the Dark Mode items and the extended patches stay below this limit. The margin is a reserve: no code that iPodFirm found uses this memory, but a direct memory write by the hardware cannot be excluded. Use 16 KB if the patches do not fit. Use 64 KB to test if the margin causes a problem. The setting applies to the next build. If the patches do not fit, the Patches pane shows it.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    .help("A theme, the Dark Mode items and the extended patches stay below this limit. Use 16 KB if the patches do not fit. Use 64 KB to test if the margin causes a problem. The setting applies to the next build.")
                 } header: {
                     Text("Firmware Layout")
                 }
@@ -141,11 +141,14 @@ struct SettingsView: View {
             Form {
                 Section {
                     Toggle("Enable Test Patches", isOn: $model.showTestPatches)
-                    Text("Test patches are for research, for example the USB host probe. They have no function for normal use, and they can make the iPod unstable. When this setting is off, the Patches pane does not show them, and iPodFirm does not include them in a firmware.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .help("Test patches are for research. They can make the iPod unstable. When this setting is off, the Patches pane does not show them, and iPodFirm does not include them in a firmware.")
                 } header: {
                     Text("Test Patches")
+                }
+                Section {
+                    Toggle("Show Descriptions in the Patch List", isOn: $showPatchSummaries)
+                } header: {
+                    Text("Patch List")
                 }
             }
             .formStyle(.grouped)
@@ -153,9 +156,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     Toggle("Check for a new version at launch", isOn: $model.checkForUpdates)
-                    Text("iPodFirm asks GitHub for the number of the newest release. It sends no data about you or your iPod. If GitHub has a newer version, a notification opens the release page. iPodFirm does not download the update. To check now, select iPodFirm > Check for Updates….")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .help("iPodFirm asks GitHub for the number of the newest release. It sends no data about you or your iPod. iPodFirm does not download the update.")
                 } header: {
                     Text("Updates")
                 }
@@ -358,20 +359,17 @@ struct ContentView: View {
     }
 }
 
-/// The iPod row of the sidebar. The first line gives the state in words, so that color is not the only signal.
+/// The iPod row of the sidebar. The text gives the state in words, so that color is not the only signal.
 struct IPodSidebarRow: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         Label {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(model.currentIPodStatus).lineLimit(1)
-                Text(Pane.ipod.rawValue).font(.caption).foregroundStyle(.secondary)
-            }
+            Text(model.currentIPodStatus).lineLimit(1)
         } icon: {
             Image(systemName: Pane.ipod.symbol)
         }
         .listItemTint(model.currentIPod != nil && !model.currentIPodIsUnsupported ? ListItemTint.fixed(.green) : .monochrome)
-        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(Pane.ipod.rawValue): \(model.currentIPodStatus)")
     }
 }
 
@@ -415,8 +413,6 @@ struct WelcomeView: View {
         VStack(spacing: 22) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 112, height: 112)
             Text("Customise the Firmware of Your iPod").font(.title2.weight(.semibold))
-            Text("Open the Apple firmware or a backup of your iPod. Change the pictures and the text. Then flash the firmware to the iPod.\niPodFirm makes a backup of the iPod before each flash.")
-                .multilineTextAlignment(.center).foregroundStyle(.secondary)
             HStack(spacing: 12) {
                 Button("Open Firmware…") { model.openPanel() }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
