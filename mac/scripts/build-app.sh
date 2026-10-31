@@ -100,6 +100,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
             <key>UTTypeTagSpecification</key>
             <dict><key>public.filename-extension</key><array><string>ipodpatch</string></array></dict>
         </dict>
+        <dict>
+            <key>UTTypeIdentifier</key><string>com.thefauxdreamer.ipodfirm.eq</string>
+            <key>UTTypeDescription</key><string>iPodFirm Custom EQ</string>
+            <key>UTTypeConformsTo</key><array><string>public.json</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict><key>public.filename-extension</key><array><string>ipodeq</string></array></dict>
+        </dict>
     </array>
     <key>CFBundleDocumentTypes</key>
     <array>
@@ -108,6 +115,12 @@ cat > "$APP/Contents/Info.plist" <<PLIST
             <key>CFBundleTypeRole</key><string>Viewer</string>
             <key>LSHandlerRank</key><string>Owner</string>
             <key>LSItemContentTypes</key><array><string>com.thefauxdreamer.ipodfirm.patch</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key><string>iPodFirm Custom EQ</string>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+            <key>LSHandlerRank</key><string>Owner</string>
+            <key>LSItemContentTypes</key><array><string>com.thefauxdreamer.ipodfirm.eq</string></array>
         </dict>
     </array>
 </dict>

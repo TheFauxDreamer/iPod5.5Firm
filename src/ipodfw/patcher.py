@@ -51,7 +51,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import resources
+from . import custom_eq, resources
 
 CLANG_FLAGS = ["--target=armv4t-none-eabi", "-mcpu=arm7tdmi", "-marm", "-mfloat-abi=soft", "-O2",
                "-ffreestanding", "-fno-builtin", "-fno-pic", "-fno-exceptions", "-fno-unwind-tables",
@@ -383,6 +383,15 @@ def set_options(spec: dict, values: dict[str, int], code: bytearray, base: int, 
         if at is None or at < base or at - base + 4 > len(code) or at & 3:
             raise PatchError(f"option {o['id']!r}: {o['symbol']} is not a global 32-bit variable of the patch")
         struct.pack_into("<I", code, at - base, value & 0xFFFFFFFF)
+    editor = spec.get("eq_editor")
+    if editor:
+        data, mask = custom_eq.records(custom_eq.bands_from_options(values), values.get("precut") == 1)
+        at, mask_at = table.get(editor["records"]), table.get(editor["mask"])
+        if at is None or mask_at is None or at < base or at - base + len(data) > len(code) \
+                or mask_at < base or mask_at - base + 4 > len(code):
+            raise PatchError(f"eq_editor of {spec['name']!r}: the variables are not in the patch")
+        code[at - base:at - base + len(data)] = data
+        struct.pack_into("<I", code, mask_at - base, mask)
 
 
 def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int | None = None,

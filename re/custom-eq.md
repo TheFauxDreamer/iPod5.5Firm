@@ -1,247 +1,181 @@
 # Custom EQ: how firmware 1.3 applies the EQ
 
-This note records how the iPod Video 5.5G with RetailOS 1.3 applies an EQ preset. It is research for a possible patch "Custom EQ" (refer to [patch-ideas.md](patch-ideas.md)). No patch exists.
+This note records how the iPod Video 5.5G with RetailOS 1.3 applies an EQ preset. It is the research for the patch `custom-eq`. Refer to [docs/modifications.md](../docs/modifications.md).
 
-All addresses are osos offsets of firmware 1.3. The research used Ghidra 12.1.4 and the instrumented emulator on 20 October 2026.
+All addresses are osos offsets of firmware 1.3, unless the text says RAM or IRAM. The research used Ghidra 12.1.4, the whole decompilation and the instrumented emulator.
 
 ## Result
 
-- The EQ is a software EQ. It is not the 5-band hardware EQ of the WM8758 codec.
-- A preset is not a list of band gains. It is a list of up to 5 filter numbers. Each number selects one filter in a fixed table. The value 0 means "no filter".
-- The 22 Apple presets use 0 to 3 filters each. They use the filter numbers 1 to 54 (Flat uses none). The firmware accepts numbers up to 96.
-- The firmware sends the filter numbers to the audio engine in a message (command 0x1f). The research did not find the receiver of the message or the filter table.
+- The EQ is a software EQ. It is a chain of up to 5 biquad filters. It is not the 5-band hardware EQ of the WM8758 codec.
+- A preset is a list of up to 5 filter numbers. Each number selects one record in a fixed table. The value 0 means "no filter".
+- The table has 55 records (0 to 54). Each record has one biquad for 44100 Hz and one biquad for 48000 Hz.
+- The EQ operates in the decoder step, on 16-bit audio at 44100 Hz or 48000 Hz only.
 
-## The presets
+A patch can thus add a preset with its own filters.
 
-`FUN_000a6bd0` makes the 22 Apple presets when the music database loads. For each preset it takes:
+CAUTION: Round 4 of this research (22 October 2026) gave "3 tables of coefficients" at 0x14e3b0, 0x14e65c and 0x14e948. That result was wrong. The values are UTF-8 byte pairs (`c3 83`) and ASCII characters (`{`, `}`, `\`). These tables are a character conversion and have no relation to the EQ. This version of the note removes the result.
 
-- the name: the string ID from the table at 0x2a9cc0 (22 words, 24768 "Acoustic" … 24789 "Vocal Booster");
-- 10 float values from the table at 0x2a9d18 (0x28 bytes for each preset). It multiplies each value by 100 (0x42c80000 = 100.0) and keeps it as an i16.
+## The path from the preset to the sample
 
-The float values are small whole numbers, not gains in dB:
-
-| Preset | Values |
-|---|---|
-| Acoustic | 1, 2, 3 |
-| Bass Booster | 4 |
-| Bass Reducer | 5 |
-| Classical | 6, 7, 8 |
-| Flat | (none) |
-| Small Speakers | 46, 47 |
-| Spoken Word | 48, 49 |
-| Treble Booster | 50 |
-| Treble Reducer | 51 |
-| Vocal Booster | 52, 53, 54 |
-
-Each number is used only one time. Thus each number selects one filter, and a preset is a chain of filters.
-
-The presets are a list at library + 0xbec, sorted by name (`FUN_000d83d0` adds a node of 0x234 bytes). `FUN_000e07f4` finds a preset by name. A node has the preamp value at + 0x21c and the 10 values at + 0x21e.
-
-## The path to the audio engine
-
-| Address | Function | Evidence |
-|---|---|---|
-| 0x0a6bd0 | Makes the 22 Apple presets (names and values). | Static |
-| 0x0a6d34 | Calls 0xa6bd0, then adds a preset with an empty name. | Static |
-| 0x0e07f4 | (library, name): finds a preset in the list at library + 0xbec. | Static |
-| 0x09bf6c | (library, name, out): copies the preamp and the 10 values of a preset (11 i16). | Static |
-| 0x0e1cf0 | Applies the preset of the current settings. | Static, Emulator |
-| 0x0ace48 | (player, values, per track): copies the values to player + 0x214 and calls 0x10191c. | Static, Emulator |
-| 0x10191c | (player, 0, values): if the EQ is on (player + 0x235), it divides each value by 100, then calls 0xf4dc0, 0xe6838 and 0x106a9c. If the EQ is off, it calls 0xec450. | Static, Emulator |
-| 0x0f4dc0 | Converts the 10 values to 10 bytes and calls 0x1446e8. | Static, Emulator |
-| 0x1446e8 | Keeps the first 5 bytes and limits each to 0 … 0x60 (96). It writes command 0x1f at object + 0x24 and the 5 bytes at + 0x34. Then it sends the message. | Static, Emulator |
-| 0x14493c | (object, 2, on): command 0x1a, the EQ on or off. 0xe6838 sends "on", 0xec450 sends "off". | Static, Emulator |
-| 0x215ec0 | Sends a message object to message queue 2 (`FUN_000a6770` → system call 0x84644). | Static |
-
-The audio object is the word at 0x1081e07c + 0xc. Other commands of the same object are 0x24 (`FUN_0014499c`) and 0x31 (`FUN_00144824`).
-
-## Emulator test
-
-Test: the stock firmware 1.3, the 60-track test library, a song plays. The emulator recorded `IPODFW_MARK_AT` markers and the I²C writes.
-
-| Action | Markers | I²C writes |
-|---|---|---|
-| Start | 0xace48, 0xe1cf0, 0x10191c (2 times). No 0x1446e8: the EQ is Off. | 52 writes to the codec (address 0x34). |
-| Settings > EQ > Bass Booster | 0xace48, 0xe1cf0, 0x10191c, 0x14493c, 0x10191c, 0xf4dc0, 0x1446e8, 0x14493c | No write to the codec. Only the periodic writes to address 0x10. |
-
-Thus the firmware sends the preset to the audio engine and does not change the codec registers. The EQ is a software EQ.
-
-## The receiver (research round 2, 20 October 2026)
-
-| Address | Function | Evidence |
-|---|---|---|
-| 0x0a6770 | (queue, message, size, …): system call 4 (0x84644 → 0x27f5f0): put a message into a queue. | Static |
-| 0x0a66a4, 0x0a661c | System call 5: get a message from a queue (with and without a wait). | Static |
-| 0x163c94 | (queue, &message, …): gets a message and returns the byte at message + 0x18: the command. For the EQ messages, this is object + 0x24. | Static |
-| 0x20fcf8 | The task of queue 2. A switch (0x20fdac) on the command. Commands 0x1a and 0x1f: it copies 0x1c bytes of the message (+ 0x2c) and passes them to 0x2354cc with the object at (task + 0x3c) + 0x12b0. Command 0x24 calls 0x24b580 directly. | Static |
-| 0x2354cc | Puts an item into a ring queue (0x235548) and signals the reader. | Static |
-| 0x2355ac | Takes an item from that ring queue and calls the first method of the item. | Static |
-| 0x678074 | The vtable of the item of 0x20fcf8. Slot 0: 0x249ab8. | Static |
-| 0x249ab8 | Writes the command to state + 0x12f8 and its 0x1c data bytes to state + 0x12fc. | Static |
-
-The 5 filter numbers of an EQ preset thus go to state + 0x12fc. The code that reads this state, and the filter table, are not found yet. The callers of 0x2355ac (0x216460, 0x249390) are the next step. The emulator cannot help with a profile: with music and the profiler, it runs at approximately 0.07× and does not react (refer to [emulator.md](emulator.md#limits)).
-
-## The reader of the EQ state (research round 3, 21 October 2026)
-
-| Address | Function | Evidence |
-|---|---|---|
-| 0x249390 | The main loop of the task that reads the ring queue at state + 0x12b0 (0x2355ac). After each item, it reads the command byte state + 0x12f8 and acts only on the values 0, 1 and 3. It does not use the commands 0x1a and 0x1f. It calls code in IRAM (0x4001d724). | Static |
-| 0x24b544, 0x249fa4, 0x24b338, 0x249f48, 0x249220, 0x24b3c0, 0x24b440 | The other functions of the loop. None reads state + 0x12f8 or + 0x12fc. | Static |
-
-Only 0x249ab8 and 0x249390 use the offset 0x12f8 as a constant. The reader of the filter numbers probably uses another base pointer.
-
-### The IRAM code
-
-The FIQ vector jumps to 0x40000000 and the SWI vector to 0x40000008 (the word at osos 0xec). A dump of IRAM from the emulator after the start (`peek`, 0x30000 bytes) found these copies of osos:
-
-| IRAM | osos |
-|---|---|
-| 0x40000000–0x40000f00 | 0x71619c–0x71709c |
-| 0x40001800–0x40002500 | 0x719af8–0x71a7f8 |
-| 0x40008000–0x4000c600 | 0x71a804–0x71ee04 |
-| 0x40010000–0x40013a00 | 0x71ee84–0x722884 |
-| 0x40018800–0x40019400 | 0x72292c–0x72352c |
-| 0x4001c900–0x4001df00 | 0x7326cc–0x733ccc |
-
-The other IRAM areas were zero or data at that time (probably the code of a decoder is loaded there at playback). The 83 jumps `ldr pc, [pc, #-4]` in osos go to these areas. A search of the six areas found no `cmp` with 0x5f–0x61 and no `add` with 0x1200–0x1300. Thus the EQ code is probably in an area that is loaded at playback.
-
-### The hardware EQ of the codec
-
-The WM8758 codec has a 5-band EQ (registers 0x12–0x16: gain −12 to +12 dB, and a choice of 4 frequencies for each band). The I²C log of the emulator showed that the firmware writes only the registers 0x34–0x37, 0x31 and 0x01–0x03 at the start, and nothing at a change of the EQ preset. Thus the hardware EQ stays flat, and a patch can set it.
-
-| Method | Advantages | Disadvantages |
-|---|---|---|
-| Hardware EQ of the WM8758 | No CPU load. Free frequency and gain for 5 bands. No need for the filter table. The firmware does not write these registers. | Only the headphone and line output, not USB-C audio. A test on the real iPod is necessary for the register values and for the effect on the sound. |
-| The software EQ of Apple | Also for USB-C audio (probably). | Needs the filter table. The research found the 3 tables for the filters 32 to 63. The research did not find the table for the filters 1 to 31. |
-
-## The filter table (research round 4, 22 October 2026)
-
-The research found the filter table. The table is in the region of the code of
-the audio engine. The region is 0x14c054 to 0x14e984.
-
-### The 3 stages of the filter
-
-The function 0x14cfcc is the dispatcher of the filter. The function has 3
-stages. The stage is at the offset +0x75 of the object. The function has 2
-more bytes at the offsets +0x76 and +0x77. The function uses the bytes to know
-the state of each stage.
-
-The function 0x14cfb8 says that the number of the filter is in the range 0x20
-to 0x7f. The function is `return param_1 - 0x20U < 0x60;`. The function
-0x14cfbc says that the number is less than 0x60. The function
-0x14cfa4 says that the number of the stage is 0x10 or 0x18.
-
-The 5 small functions 0x14d5a4, 0x14d5b8, 0x14dab8, 0x14df80 and 0x14df94
-each say that the number of the stage is one of 2 numbers. The pairs are
-(0x11, 0x19), (0x12, 0x1a), (0x13, 0x1b), (0x14, 0x1c) and (0x17, 0x1f). The
-function 0x14e984 says that the number of the stage is not one of 8 pairs.
-
-### The 3 tables of the coefficients
-
-The 3 stages have each a table of 32 coefficients. The table has 4 bytes for
-each coefficient. The value is a number with a fraction. The number has 16 bits
-for the whole part and 16 bits for the fraction.
-
-| The stage | The table | The function that reads the table | The range |
+| Step | Address | Work | Evidence |
 |---|---|---|---|
-| 1 | 0x14e65c | 0x14e430 | 0x20 to 0x3f |
-| 2 | 0x14e3b0 | 0x14e184 | 0x20 to 0x3f |
-| 3 | 0x14e948 | 0x14e7a8 | 0x20 to 0x3f |
+| 1 | 0xa6d34 | At each load of the library: clears the list head (library + 0xbec), calls 0xa6bd0 at 0xa6d68, then adds a preset with an empty name. | Static, Emulator |
+| 2 | 0xa6bd0 | Makes the 22 Apple presets. The names are string IDs at 0x2a9cc0. The values are 10 floats for each preset at 0x2a9d18, multiplied by 100, as i16. | Static |
+| 3 | 0xd83d0 | (library, buffer): adds a node of 0x234 bytes, sorted by name. The buffer has 0x218 bytes. | Static |
+| 4 | 0x9df8c, 0x9cd84, 0x9b930 | The menu model: the count of nodes with a name, the name at an index, and the index of the selection. There is no fixed count of 22. | Static |
+| 5 | 0xb274c, 0xace48, 0x10191c | Select a preset. Keep the values at player + 0x214. Divide each value by 100. | Static, Emulator |
+| 6 | 0xf4dc0, 0x1446e8 | Converts the values to bytes, keeps 5 and limits each to 0 to 0x60. Sends command 0x1f to message queue 2. | Static, Emulator |
+| 7 | 0x20fcf8, 0x2354cc | The task of queue 2 puts the command into the ring queue at state + 0x12b0. | Static |
+| 8 | 0x249ab8, 0x24addc | Writes the command to state + 0x12f8 and the data to state + 0x12fc. 0x24addc has a switch on the command. Case 0x1f calls 0x23f274. Case 0x1a calls 0x23fe24. | Static |
+| 9 | 0x23f274 | Copies the 5 numbers to object + 0x650. The object is state + 0x2e5c. | Static |
+| 10 | 0x23fe24 | Sets or clears bit 1 of object + 0xcc (the EQ on or off). | Static |
+| 11 | 0x23fe3c | Loads the IRAM block. Refer to [The IRAM block](#the-iram-block). | Static |
+| 12 | 0x24ab48 → 0x2403c4 | The decoder step. If the rate is 32000 Hz or more, it calls the EQ for each block of 0x100 frames. | Static |
+| 13 | 0x71706c (IRAM 0x40000ed0) | The EQ. Refer to [The EQ function](#the-eq-function). | Static |
 
-The function 0x14e430 and the function 0x14e184 have a switch with the cases
-0x20 to 0x3f. Each case gives the address of the coefficient. The function
-0x14e7a8 has the cases 0x2e, 0x2f and 0x30 to 0x3f. The cases 0x2e and 0x2f
-have no coefficient. The function gives 0 and 2 or 6 for the 2 cases.
+The buffer of 0xd83d0:
 
-The function 0x14e7a8 reads the coefficient with the function 0x223148. The
-function 0x223148 reads 2 bytes. The function 0x14d438 applies the filter with
-the function 0x223884 and the function 0x14c374.
-
-### The values of the table of the stage 2
-
-The table of the stage 2 is at 0x14e3b0.
-
-| The filter | The address | The value |
+| Offset | Size | Content |
 |---|---|---|
-| 0x20 | 0x14e3b0 | 0x000081c3 |
-| 0x21 | 0x14e3b4 | 0x000089c3 |
-| 0x22 | 0x14e3b8 | 0x000093c3 |
-| 0x23 | 0x14e3bc | 0x00009ac3 |
-| 0x24 | 0x14e3c0 | 0x00009cc3 |
-| 0x25 | 0x14e3c4 | 0x0000bcc3 |
-| 0x26 | 0x14e3c8 | 0x009880e2 |
-| 0x27 | 0x14e3cc | 0x0000a1c2 |
-| 0x28 | 0x14e3d0 | 0x0000002a |
-| 0x29 | 0x14e3d4 | 0x00000027 |
-| 0x2a | 0x14e3d8 | 0x009480e2 |
-| 0x2b | 0x14e3dc | 0x0000a9c2 |
-| 0x2c | 0x14e3e0 | 0x00a084e2 |
-| 0x2d | 0x14e3e4 | 0x00a280e2 |
-| 0x2e | 0x14e3e8 | 0x009c80e2 |
-| 0x2f | 0x14e3ec | 0x009d80e2 |
+| +2 | 2 + 0x1fe | The name: a u16 count, then UTF-16 text. |
+| +0x202 | 2 | The preamp. Apple presets have 0. The EQ does not use it. |
+| +0x204 | 20 | 10 i16 values: the filter number × 100. Only the first 5 reach the EQ. |
 
-> The research did not find the meaning of the 2 parts of the value. The
-> research did not check the values of the tables of the stages 1 and 3. The
-> research did not find the frequency and the gain of each filter.
+## The filter table
 
-### The number of the filter
+The table is in the data of osos. The start code copies it to RAM.
 
-The function 0x1446e8 keeps the first 5 bytes of the message and limits each
-byte to the range 0 to 0x60. The number 0x60 is 96. The function 0x14cfb8
-says that the number of the filter is in the range 0x20 to 0x7f. The 3 tables
-have only the numbers 0x20 to 0x3f. The numbers 0x40 to 0x7f have no
-coefficient in the 3 tables of the research.
+| Item | osos | RAM | Evidence |
+|---|---|---|---|
+| The count (0x37 = 55) | 0x6a19f8 | 0x10823754 | Static, Emulator |
+| The table pointer | 0x6a19fc | 0x10823758 | Static, Emulator |
+| The table of codec type 3 | 0x6a1a00 | 0x1082375c | Static, Emulator |
+| The table of codec type 2 | 0x6a2298 | 0x1082375c + 0x898 | Static |
 
-> The research did not find the filter numbers 55 to 96. The tables of the
-> research have the numbers 32 to 63. The note of the earlier research has the
-> numbers 1 to 54 for the presets of Apple. The presets use the numbers 1 to
-> 54. The research did not find the table for the numbers 1 to 31.
+0xcfe9c sets the pointer. 0x265460 selects the table: codec type 2 uses the second table. The second table has records with the first word 0x7fffffff or 0x7ffffffe. These records give a bass value or a treble value for the codec, for example 0x84. The emulator has the hardware ID of type 3, and the pointer is 0x1082375c. Record 1 has b0 = 0x0100fad0 in RAM and in osos.
 
-### The functions of the audio engine
+0xf90fc returns the count. 0xdbd84 (number) returns the address of a record.
 
-| The function | The work |
-|---|---|
-| 0x14cfcc | The dispatcher of the filter. The function has 3 stages. |
-| 0x14cfb8 | Says that the number of the filter is in the range 0x20 to 0x7f. |
-| 0x14cfbc | Says that the number of the filter is less than 0x60. |
-| 0x14cfa4 | Says that the number of the stage is 0x10 or 0x18. |
-| 0x14e430 | Reads the coefficient of the stage 1. |
-| 0x14e184 | Reads the coefficient of the stage 2. |
-| 0x14e7a8 | Reads the coefficient of the stage 3. |
-| 0x14d438 | Applies the filter. |
-| 0x14d668 | Puts the filter in the state. |
-| 0x14d9b8 | Puts the filter in the state. |
-| 0x14dbe0 | Puts the filter in the state. |
-| 0x14dd30 | Reads the state of the filter. |
-| 0x14d5a4 | Says that the number of the stage is 0x14 or 0x1c. |
-| 0x14d5b8 | Says that the number of the stage is 0x17 or 0x1f. |
-| 0x14df80 | Says that the number of the stage is 0x12 or 0x1a. |
-| 0x14df94 | Says that the number of the stage is 0x13 or 0x1b. |
-| 0x14dab8 | Says that the number of the stage is 0x11 or 0x19. |
-| 0x14e984 | Says that the number of the stage is not a number of the table. The function has 8 pairs of numbers. |
-| 0x223148 | Reads 2 bytes. The function reads a coefficient. |
-| 0x223884 | Puts a value in a list. |
-| 0x14c374 | Puts a filter in the state of the audio engine. |
-| 0x26a9e8 | Selects the object of a command of the audio engine. The case 0x1f is the command of the equalizer. |
+### The record
 
-## The limits of the research
+A record has 40 bytes: 5 int32 values for 44100 Hz, then 5 int32 values for 48000 Hz. The order is b0, b1, b2, a1, a2. The format is Q24 (0x01000000 = 1.0). The transfer function is:
 
-| The limit | The result |
-|---|---|
-| The filter table | The research found the 3 tables of the coefficients of the filters 0x20 to 0x3f. The research did not find the table for the filters 1 to 31. The research did not find the meaning of the 2 parts of the value. |
-| The meaning of the number | The research did not find the frequency and the gain of each filter. The value has 16 bits for the whole part and 16 bits for the fraction. |
-| The receiver | The research did not find the function that reads the message with the command 0x1f. The research found the tables and the dispatcher of the filter. The tables are in the region 0x14c054 to 0x14e984. |
+```text
+H(z) = (b0 + b1 z⁻¹ + b2 z⁻²) / (1 + a1 z⁻¹ + a2 z⁻²)
+```
+
+A calculation with these records gives these gains for the Apple presets at 44100 Hz:
+
+| Preset | Filters | 32 Hz | 125 Hz | 500 Hz | 2 kHz | 8 kHz | 16 kHz |
+|---|---|---|---|---|---|---|---|
+| Acoustic | 1, 2, 3 | +4.8 | +3.5 | +2.3 | +2.7 | +3.6 | +1.0 |
+| Bass Booster | 4 | +5.8 | +4.0 | +0.7 | +0.1 | 0.0 | 0.0 |
+| Bass Reducer | 5 | −7.4 | −6.2 | −1.9 | −0.2 | 0.0 | 0.0 |
+| Flat | (none) | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Pop | 37, 38, 39 | −2.7 | +0.1 | +4.6 | +2.3 | −1.3 | −2.9 |
+| Treble Booster | 50 | 0.0 | 0.0 | +0.2 | +2.2 | +5.7 | +6.0 |
+| Treble Reducer | 51 | 0.0 | 0.0 | −0.2 | −3.3 | −6.8 | −7.0 |
+
+The 22 presets use a maximum of 3 filters. Filter 18 has no preset.
+
+## The IRAM block
+
+0x23fe3c writes the block at IRAM 0x40000fe4 (literal at 0x23ffbc).
+
+| Offset | Size | Content |
+|---|---|---|
+| +0x00 | 1 | The lock. 0x23fe3c waits while it is not 0. The EQ function sets it while it operates. |
+| +0x01 | 1 | The EQ is ready. |
+| +0x02 | 5 | One flag for each stage. |
+| +0x08 | 5 × 20 | The coefficients for 44100 Hz. |
+| +0x6c | 5 × 20 | The coefficients for 48000 Hz. |
+| +0xd0 | 5 × 32 | The state of each stage: 4 words for the left channel, 4 words for the right channel. |
+
+For each stage, 0x23fe3c reads the number. It skips the stage if the number is 0, or if the number is not less than the count. It negates a1 and a2 in the block, and clears the state of the stage.
+
+## The EQ function
+
+The IRAM function 0x71706c (registers r0 object, r1 flags, r2 buffer, r3 frames, then the sample size on the stack) returns with no change if one of these conditions is true:
+
+- Bit 1 of the flags is 0.
+- There are more than 0x100 frames.
+- The sample size is not 16.
+- The rate at object + 0x84 is not 44100 or 48000.
+- The byte +0x01 of the block is 0.
+
+Else it does these steps:
+
+1. 0x7164c8 copies the samples to the work buffer IRAM 0x40001154. Each sample is `sample << 9`.
+2. 0x7163b0 applies one stage to the left channel, then to the right channel. It operates on each stage with a flag.
+3. 0x7164e8 writes the samples back. Each sample is `value >> 9`, limited to the int16 range.
+
+The filter of 0x7163b0 is Direct Form I, with `smull` and `smlal`:
+
+```text
+y = (b0·x + b1·x1 + b2·x2 + A1·y1 + A2·y2) >> 24      (A1 = −a1, A2 = −a2)
+```
+
+Thus:
+
+- The work buffer has 7 bits of headroom. A stage does not overflow at normal gains.
+- Apple has no precut. A boost clips at the int16 limit in 0x7164e8.
+- The `>> 24` rounds down, inside the feedback path. Thus a low filter keeps a small negative DC value, approximately 0.5 / (1 + a1 + a2) in the units of the work buffer. A simulation of the loop gave −2 PCM counts for Bass Booster (calculated), −37 for a low shelf at 60 Hz +6 dB, and −481 for a low shelf at 20 Hz +12 dB (approximately −37 dBFS). The value does not oscillate. The patch cannot change it without a change to the IRAM code.
+- The EQ has no effect on 8-bit audio, or on a rate other than 44100 Hz or 48000 Hz.
+- The EQ changes the decoded buffer before 0xfed68 and 0x1a2d60. Thus USB-C audio from `usb-audio-out` probably has the EQ. This is not tested.
+
+## The Apple presets as bands
+
+The script [fit-apple-presets.py](fit-apple-presets.py) reads the filter records from your own osos image. It finds the band of the Custom EQ editor (low shelf, peak or high shelf) that is nearest to each filter at 44100 Hz. The app table `CustomEQ.applePresets` is the output. It has measured numbers only, and no Apple record.
+
+The error is the largest difference from the Apple curve from 20 Hz to 20 kHz, with all the filters of the preset.
+
+| Preset | Filters | Bands | Error |
+|---|---|---|---|
+| Acoustic | 1, 2, 3 | 3 | 0.18 dB |
+| Bass Booster | 4 | 1 | 0.06 dB |
+| Bass Reducer | 5 | 1 | 0.48 dB |
+| Classical | 6, 7, 8 | 3 | 0.49 dB |
+| Dance | 9, 10, 11 | 3 | 0.29 dB |
+| Deep | 12, 13, 14 | 3 | 0.39 dB |
+| Electronic | 15, 16, 17 | 3 | 0.09 dB |
+| Flat | (none) | 0 | 0.00 dB |
+| Hip Hop | 19, 20, 21 | 3 | 0.41 dB |
+| Jazz | 22, 23, 24 | 3 | 0.03 dB |
+| Latin | 25, 26, 27 | 3 | 0.38 dB |
+| Loudness | 28, 29, 30 | 3 | 0.14 dB |
+| Lounge | 31, 32, 33 | 3 | 0.11 dB |
+| Piano | 34, 35, 36 | 3 | 0.05 dB |
+| Pop | 37, 38, 39 | 3 | 0.18 dB |
+| R & B | 40, 41, 42 | 3 | 0.40 dB |
+| Rock | 43, 44, 45 | 3 | 0.39 dB |
+| Small Speakers | 46, 47 | 2 | 0.05 dB |
+| Spoken Word | 48, 49 | 2 | 0.78 dB |
+| Treble Booster | 50 | 1 | 0.05 dB |
+| Treble Reducer | 51 | 1 | 0.07 dB |
+| Vocal Booster | 52, 53, 54 | 3 | 0.11 dB |
+
+Apple possibly designed the filters with other formulas. Thus some errors stay.
+
+## The hardware EQ of the codec
+
+The WM8758 has a 5-band EQ (R18 to R22). The firmware does not use it. The test patch `hw-eq-test` is on the branch `hw-eq`. It wrote these registers and gave no audible change on the real iPod. The owner shelved the test on 22 October 2026. The patch `custom-eq` does not need the hardware EQ.
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x265e54 | (mode): sets the state of the codec. Calls 0x28386c (type 1), 0x283c30 (type 2) or 0x2839b8 (type 3, the WM8758). | Static, Emulator |
+| 0x2653a4 | The codec type from the hardware ID (0x265164, bits 16–31): 0xb gives 3; 5, 6, 8, 9 give 2; 0xc gives 2 or 1. | Static |
+| 0x2840d8 | (bytes): writes one codec register through I²C address 0x1a. | Static, Emulator |
+| 0x282f58 | (7-bit address, count, bytes): the low I²C write. | Static, Emulator |
 
 ## Consequences for a patch
 
-- A custom EQ can be a new preset with up to 5 filter numbers. But only the 54 known filters (and possibly 55–96) exist. This gives no free choice of frequency and gain.
-- A true custom EQ (frequency, gain and Q for each band) needs the filter table or the filter code of the audio engine. The research did not find them.
-- The emulator has no audio. Thus the emulator cannot test the sound of an EQ. Each test of the sound must be on the real iPod.
-- `usb-audio-out`: the EQ is in software, so it probably also changes the USB-C audio. This is not tested.
+- The patch adds a preset with the filter numbers 55 to 59. It gives 5 free biquads.
+- The menu needs no change.
+- If the patch is removed, the saved name "Custom" has no preset. 0x9421c then clears the name.
+- The app calculates the coefficients. The iPod needs no floating-point code.
+- The emulator has no audio. Each test of the sound must be on the real iPod.
 
 ## Open questions
 
-- Where is the receiver of command 0x1f? The search for a switch with the cases 0x1a, 0x1f, 0x24 and 0x31 found only 0x47ae8 and 0x4af18. These are in the obfuscated code at low addresses, and they are probably not the receiver.
-- Where is the filter table? A search for biquad coefficients (int32 and float records) found nothing.
-- What do the filter numbers 55–96 do? A test patch can make a preset with these numbers. Only a test on the real iPod can answer.
-- Is the EQ applied before the split between the codec and USB (0x1a2d60)?
+- Is the CPU sufficient for 5 stages? Apple presets use a maximum of 3.
+- Does USB-C audio have the EQ? Only a test on the real iPod can answer.

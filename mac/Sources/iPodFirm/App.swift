@@ -106,6 +106,7 @@ struct SettingsView: View {
     @State private var showHelp = false
     @AppStorage(ThemeImport.ososMarginKey) private var ososMargin = ThemeImport.OSOSMargin.current.rawValue
     @AppStorage("showPatchSummaries") private var showPatchSummaries = true
+    @AppStorage(EQColours.settingKey) private var colourfulEQCurve = true
 
     var body: some View {
         TabView {
@@ -147,6 +148,7 @@ struct SettingsView: View {
                 }
                 Section {
                     Toggle("Show Descriptions in the Patch List", isOn: $showPatchSummaries)
+                    Toggle("Colourful EQ Curve", isOn: $colourfulEQCurve)
                 } header: {
                     Text("Patch List")
                 }
@@ -180,15 +182,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard Disclaimer.accepted else { return }
         let urls = pending
         pending = []
-        for url in urls { Task { await model.installPatch(from: url) } }
+        for url in urls { Task { await open(url, in: model) } }
     }
 
-    /// A double-click on a .ipodpatch file in Finder.
+    /// A .ipodeq file, a .ipodpatch file or a patch folder.
+    @MainActor private func open(_ url: URL, in model: AppModel) async {
+        if url.pathExtension == SharedEQ.fileExtension { model.importEQ(from: url) } else { await model.installPatch(from: url) }
+    }
+
+    /// A double-click on a .ipodpatch file or a .ipodeq file in Finder.
     func application(_ application: NSApplication, open urls: [URL]) {
-        let patches = urls.filter(isPatchURL)
+        let files = urls.filter { isPatchURL($0) || $0.pathExtension == SharedEQ.fileExtension }
         Task { @MainActor in
-            guard let model, Disclaimer.accepted else { pending += patches; return }
-            for url in patches { await model.installPatch(from: url) }
+            guard let model, Disclaimer.accepted else { pending += files; return }
+            for url in files { await open(url, in: model) }
         }
     }
 
@@ -320,6 +327,7 @@ struct ContentView: View {
         .sheet(item: $model.flashPlan) { plan in FlashConfirmSheet(plan: plan) }
         .sheet(item: $model.themeReport) { t in ThemeReportSheet(theme: t) }
         .sheet(item: $model.pendingInstall) { c in InstallPatchSheet(candidate: c) }
+        .sheet(item: $model.pendingEQ) { eq in EQImportSheet(eq: eq) }
         .sheet(item: $model.patchEditor) { s in PatchEditorSheet(state: s) }
         .sheet(isPresented: $model.showFullDiskAccessHelp) { FullDiskAccessSheet() }
         .sheet(isPresented: $model.showFinderRestoreHelp) { FinderRestoreSheet() }

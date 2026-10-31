@@ -46,6 +46,8 @@ final class AppModel: ObservableObject {
     /// The firmware download. The busy overlay can cancel it.
     @Published var downloadTask: Task<(URL, URLResponse), Error>?
     @Published var alert: AlertInfo?
+    /// A `.ipodeq` file that waits for the decision of the user.
+    @Published var pendingEQ: SharedEQ?
     @Published var ipods: [IPodDisk] = []
     @Published var selectedIPod: String?
     /// iPods for which the helper gave HelperResult.unsupportedIPod (for example an iPod classic).
@@ -1075,6 +1077,106 @@ final class AppModel: ObservableObject {
 
     func setOptionValue(_ patch: PatchInfo, _ option: PatchSpec.Option, _ value: Int) {
         patchOptions[patch.spec.name, default: [:]][option.id] = value
+    }
+
+    /// The 5 bands of a patch with the EQ editor. A change goes into `patchOptions`, like an option.
+    func eqBands(_ patch: PatchInfo) -> [CustomEQ.Band] {
+        CustomEQ.bands(from: patchOptions[patch.spec.name] ?? [:])
+    }
+
+    func setEQBands(_ patch: PatchInfo, _ bands: [CustomEQ.Band]) {
+        patchOptions[patch.spec.name, default: [:]].merge(CustomEQ.values(of: bands)) { $1 }
+    }
+
+    func eqUsesAdvanced(_ patch: PatchInfo) -> Bool {
+        CustomEQ.usesAdvanced(patchOptions[patch.spec.name] ?? [:])
+    }
+
+    /// The Simple view has fixed bands. A change to it keeps only the gains.
+    func setEQUsesAdvanced(_ patch: PatchInfo, _ on: Bool) {
+        var values = patchOptions[patch.spec.name] ?? [:]
+        values["advanced"] = on ? 1 : 0
+        if !on { values.merge(CustomEQ.values(of: CustomEQ.simple(from: CustomEQ.bands(from: values)))) { $1 } }
+        patchOptions[patch.spec.name] = values
+    }
+
+    func eqUsesAllBands(_ patch: PatchInfo) -> Bool {
+        CustomEQ.usesAllBands(patchOptions[patch.spec.name] ?? [:])
+    }
+
+    /// The view asks the user to agree to `CustomEQ.allBandsWarning` before it sets this to on.
+    func setEQUsesAllBands(_ patch: PatchInfo, _ on: Bool) {
+        patchOptions[patch.spec.name, default: [:]]["all_bands"] = on ? 1 : 0
+    }
+
+    /// Start from an Apple preset. The Simple view has fixed bands, so the view changes to Advanced.
+    func applyEQPreset(_ patch: PatchInfo, _ preset: CustomEQ.Preset) {
+        setEQBands(patch, CustomEQ.bands(forPreset: preset))
+        setEQUsesAdvanced(patch, true)
+    }
+
+    func eqUsesPrecut(_ patch: PatchInfo) -> Bool {
+        CustomEQ.usesPrecut(patchOptions[patch.spec.name] ?? [:])
+    }
+
+    func setEQUsesPrecut(_ patch: PatchInfo, _ on: Bool) {
+        patchOptions[patch.spec.name, default: [:]]["precut"] = on ? 1 : 0
+    }
+
+    /// The patch that has the EQ editor.
+    var eqPatch: PatchInfo? { patches.first { $0.spec.eq_editor != nil } }
+
+    /// Write the EQ of the patch to a `.ipodeq` file. The name of the file is the name of the EQ.
+    func exportEQ(_ patch: PatchInfo) {
+        let s = NSSavePanel()
+        s.nameFieldStringValue = "Custom EQ.\(SharedEQ.fileExtension)"
+        s.allowedContentTypes = [UTType(filenameExtension: SharedEQ.fileExtension) ?? .json]
+        s.message = "The file has only the EQ settings. Send it to another iPodFirm user."
+        guard s.runModal() == .OK, let url = s.url else { return }
+        do {
+            let eq = SharedEQ(name: url.deletingPathExtension().lastPathComponent, bands: eqBands(patch),
+                              preventClipping: eqUsesPrecut(patch), advanced: eqUsesAdvanced(patch))
+            try eq.encode().write(to: url, options: .atomic)
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } catch { fail("Cannot Export the EQ", error) }
+    }
+
+    func chooseEQToImport() {
+        let p = NSOpenPanel()
+        p.allowedContentTypes = [UTType(filenameExtension: SharedEQ.fileExtension) ?? .json]
+        p.message = "Select a .\(SharedEQ.fileExtension) file."
+        if p.runModal() == .OK, let url = p.url { importEQ(from: url) }
+    }
+
+    /// Examine a `.ipodeq` file. The sheet asks the user before the bands change.
+    func importEQ(from url: URL) {
+        do {
+            let fh = try FileHandle(forReadingFrom: url)
+            defer { try? fh.close() }
+            pendingEQ = try SharedEQ.decode(try fh.read(upToCount: SharedEQ.maxFileSize + 1) ?? Data())
+        } catch {
+            // A bad file from another person is not a fault of the app.
+            alert = AlertInfo(title: "Cannot Open the EQ", message: error.localizedDescription)
+        }
+    }
+
+    /// Replace the bands with a file that the user accepted. The iPod changes only at the next flash.
+    func applyEQ(_ eq: SharedEQ) {
+        pendingEQ = nil
+        guard let patch = eqPatch else {
+            alert = AlertInfo(title: "Cannot Open the EQ", message: "The Custom EQ patch is not in this version of iPodFirm.")
+            return
+        }
+        var values = CustomEQ.values(of: eq.eqBands)
+        values["precut"] = eq.preventClipping ? 1 : 0
+        values["advanced"] = eq.usesAdvanced ? 1 : 0
+        values["all_bands"] = eq.needsAllBands || eqUsesAllBands(patch) ? 1 : 0
+        patchOptions[patch.spec.name] = values
+        setPatch(patch, on: true)
+        section = .patches
+        patchSelection = patch.spec.name
+        guard alert == nil else { return }
+        alert = AlertInfo(title: "EQ Imported", message: "\"\(eq.name)\" is now the Custom EQ. Flash the iPod to put it on the iPod.")
     }
 
     func isCompatible(_ p: PatchInfo) -> Bool {

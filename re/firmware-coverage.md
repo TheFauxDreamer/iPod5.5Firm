@@ -173,7 +173,7 @@ list is a large area of work.
 | The video processor of Broadcom | The programs are in the image `rsrc`. The `firmware-media.md` note gives the protocol of the statistics of the processor. The research did not analyse the programs. |
 | The cipher of the file systems | The `firmware-filesystems.md` note gives the code of the FAT and the code of the HFS+. The code has a cipher for the constants. The research did not decode the cipher. The research did not name the fields of the boot sector of the FAT. |
 | The power of the system | The `firmware-power.md` note gives the tasks, the registers and the chain of the functions of the state of the battery. The research did not find the register of the converter. |
-| The equalizer of the audio | The `custom-eq.md` note has 61 functions. The note gives the 3 tables of the coefficients of the filters. The research did not find the table for the filters 1 to 31. |
+| The equalizer of the audio | The `custom-eq.md` note gives the complete path, the filter table at 0x6a1a00 and the biquad code. |
 | The names of the classes of the screens | The `firmware-ui.md` note gives the 19 tables of the classes. The research did not find the names. The names are not in the image. The research looked for the names in 4 ways. |
 | The names of the methods of the modules | The `firmware-modules.md` note gives the 418 methods of the 7 modules. The names of the methods are not in the image. |
 | The library of C and the drivers of the hardware | The `firmware-library.md` note names 39 functions of the library of C. The library has about 300 functions. The drivers of the hardware have no name in the image. |
@@ -217,7 +217,7 @@ folder. The table gives what each note covers.
 | [list-rendering.md](list-rendering.md) | The picture of the album in the list of the albums. | 24 functions. |
 | [cover-flow.md](cover-flow.md) | The Cover Flow. | 51 functions. |
 | [cover-flow-loads.md](cover-flow-loads.md) | The cover loads of Cover Flow, PictureFlow, the free heap. | 3 functions. |
-| [custom-eq.md](custom-eq.md) | The equalizer of the firmware 1.3. The 3 tables of the coefficients of the filters. | 61 functions. |
+| [custom-eq.md](custom-eq.md) | The equalizer of the firmware 1.3: the path, the filter table and the biquad code. | 61 functions. |
 | [play-next.md](play-next.md) | The Play Next and the Play Last. | 41 functions. |
 | [playlist-art.md](playlist-art.md) | The playlists in RAM and the collage of a playlist. | 9 functions. |
 | [play-latency.md](play-latency.md) | The delay of the play after the idle time. | 34 functions. |

@@ -26,6 +26,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [instant-save](#instant-save) | Code patch | Patches | 1 `b` | Version 1.0: yes (28 October 2026) |
 | [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | Version 0.6.7: yes (27 October 2026). Version 0.6.8: yes (28 October 2026) |
 | [up-next](#up-next) | Code patch (extended) | Patches | 1 `bl`, 1 `b` and 2 vtable words (3 with `chain`), a Settings menu | Version 0.4: yes. Version 0.5: yes (28 October 2026) |
+| [custom-eq](#custom-eq) | Code patch (extended) | Patches | 1 `bl`, 1 `b`, 2 words (`bytes`) | Version 0.1: yes, a basic test by the owner. Version 0.2: no |
 | [playlist-folders](#playlist-folders) | Code patch (extended) | Patches | 4 `bl`, 2 `b` and 1 vtable word (with `chain`) | Version 0.1: emulator only (29 October 2026). Not tested on the real iPod |
 | [playback-log](#playback-log) | Code patch (test, extended) | Patches | 8 `bl`, 5 `b` (all 5 with `chain`) | Version 1.0: yes (30 October 2026). Version 1.2: no. Not tested in the emulator |
 | [diagnostic-log](#diagnostic-log) | Code patch (test, extended) | Patches | 12 `bl`, 8 `b` (all 8 with `chain`), 1 `word` (`chain`) | No. Not tested in the emulator |
@@ -990,6 +991,32 @@ The Settings item has the key 0x60007e0f and the label 0x7e0b (`settings_items`,
 **Limits.** An item in a group (an audiobook chapter, for example) is not changed: the patch then adds the songs to On-The-Go. The patch has no pop-up menu yet.
 
 **Test status.** Refer to [safety.md](safety.md). Emulator (2026-10-21), see the list in [../re/play-next.md](../re/play-next.md#emulator-tests-of-the-patch). Real iPod (2026-10-21), version 0.4 with `cover-flow` 0.6.4: the Settings item and its value after a restart, Play Next with Shuffle Off and Shuffle Songs (the song plays at the natural end of the current song), an album or an artist, Play Last, the hold in the Albums list with Cover Flow and with Play Next, the value On-The-Go, and a hold with no music (On-The-Go) all passed. The row blinks after a hold, Now Playing shows the new count, the artwork stays correct, and the iPod did not stop or restart. Real iPod 5.5G (owner, 28 October 2026), version 0.5: the patch operates.
+
+## custom-eq
+
+**User interface.** Patches pane > Playback > Custom EQ, letter `q`, version 0.6, 518 bytes. The section "Custom EQ" has a curve, Simple and Advanced views, Prevent Clipping and Reset Bands. Simple is the default: sliders with fixed bands, Bass (low shelf 100 Hz), Mids (peak 1000 Hz) and Treble (high shelf 8000 Hz). The default is 3 bands, because Apple presets use a maximum of 3 filters. Use All 5 Bands adds Warmth (peak 400 Hz) and Clarity (peak 3000 Hz) after the user agrees to a warning (`CustomEQ.allBandsWarning`, option `all_bands`). Without the option, `CustomEQ.bands` and Python `bands_from_options` set the gain of the 2 other bands to 0, so that the build cannot use them. An imported file that uses these bands shows the same warning. Advanced shows the type, frequency, gain and Q of each band. The two views use the same 5 bands, so the code on the iPod does not change. On the iPod, the item "Custom" shows in Settings > EQ. To change the bands, flash the iPod again.
+
+**Apple presets.** Start From Apple Preset sets the bands from `CustomEQ.applePresets`, in the 3 standard positions, and opens the Advanced view. The app asks first only if the user edited the bands (`CustomEQ.isUnedited`). The maximum difference from an Apple curve is in [re/custom-eq.md](../re/custom-eq.md#the-apple-presets-as-bands). The script `re/fit-apple-presets.py` measures the table.
+
+**Share an EQ.** Export EQ… writes a `.ipodeq` file. Import EQ… or a double-click on the file reads it. A sheet shows the name and the curve before the bands change. The file is JSON of a maximum of 4 KB with `format` (1), `name`, 5 `bands` (`type`, `frequency`, `gain`, `q`), `preventClipping` and `view`. It has no user data. `SharedEQ.decode` examines each value with the limits of the editor, because a received file is not trusted. The app uploads nothing. The name is only for the file: the item on the iPod stays "Custom".
+
+**The firmware.** A preset is a list of up to 5 filter numbers. Refer to [re/custom-eq.md](../re/custom-eq.md).
+
+| Site | Kind | Function |
+|---|---|---|
+| 0xa6d68 | `bl` | `hook_presets` calls 0xa6bd0, then adds the preset "Custom" with 0xd83d0. |
+| 0xdbd84 | `b` | `hook_filter` gives the patch records for the numbers 55 to 59, and the firmware records for the other numbers. |
+| 0xf90fc | `bytes` | The count function returns 60. |
+
+The preset has one number for each active band. A band at 0 dB is off and uses no CPU time.
+
+**The records.** `CustomEQ.records` (Python `custom_eq.records`) calculates the biquads for 44100 Hz and 48000 Hz at the build, and writes `custom_eq_records` and `custom_eq_mask`. By default there is no precut, as in Apple presets, and a strong boost can clip. If Prevent Clipping is on (option `precut` = 1), the app scales the numerator of the first active band, so that the highest point of the curve is 0 dB. The owner found that this always-on precut in version 0.1 made the music sound quiet. The limits are ±12 dB, 20 Hz to 20 kHz, and Q 0.3 to 8.
+
+**Limits.** The EQ operates only on 16-bit music at 44100 Hz or 48000 Hz. The firmware rounds down in its filter loop, so a low band gives a small DC value (−37 PCM counts at 60 Hz +6 dB, −481 at 20 Hz +12 dB). It is not audible. The name "Custom" is in English in all languages.
+
+**Removal.** After a flash without the patch, the saved name has no preset, and the firmware clears the EQ setting (0x9421c).
+
+**Test status.** Emulator, version 0.1 (31 October 2026): the firmware starts, and the list has "Custom" between "Classical" and "Dance" with the value 5500 for one band. Real iPod, version 0.1 (the owner, 31 October 2026): the patch operates. The precut made the music quieter. The band settings are not recorded. App, version 0.4 (the owner, 31 October 2026): export and import, a double-click on the file, and the rejection of a damaged file operate. Version 0.2, the CPU load with 5 bands and USB-C audio are not tested on the real iPod.
 
 ## playlist-folders
 

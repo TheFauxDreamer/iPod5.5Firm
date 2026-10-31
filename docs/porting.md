@@ -43,6 +43,7 @@ Thus, about 12,600 lines of the app are in Swift. The UI and the helper (about 6
 | `PatchCode.swift` (the code of a user patch for the patch editor) | None |
 | `USBProbeLog.swift` | None |
 | `PlaybackLog.swift` | None |
+| `CustomEQ.swift` (the coefficients of `custom-eq`) | `custom_eq.py`. `SharedEQ` (the `.ipodeq` file) and `applePresets` have no Python version. |
 | `PlaylistFolders.swift` (the folder file of `playlist-folders`) | None. `re/playlist-folders/harness/folders.py` writes the same file for the emulator tests. |
 | `HelperXPC.swift` | None. The Python tool runs with `sudo`. |
 | `UpdateCheck.swift` (the newest release on GitHub) | None. Only the app checks for updates. |

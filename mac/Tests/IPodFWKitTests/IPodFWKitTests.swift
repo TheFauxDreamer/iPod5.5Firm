@@ -1,3 +1,4 @@
+import CryptoKit
 import AppKit
 import Foundation
 @testable import IPodFWKit
@@ -597,6 +598,154 @@ final class PatchAndArtTests: XCTestCase {
         for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) {
             let measured = try Patcher.codeSize(p, symbols: ["dark_table": 0])   // the Dark Mode build gives dark_table
             XCTAssertEqual(p.spec.size, measured, "\(p.spec.name): set \"size\": \(measured) in patch.json")
+        }
+    }
+
+    static let customEQGolden = "3b42c6967ea9203f0867f660877a10c744cd9c2a6f9b8f2bb723bd176ecdd8c7"
+
+    /// The Q24 records of custom-eq give the requested gain. The bytes agree with tests/test_custom_eq.py.
+    func testCustomEQRecords() throws {
+        var bands = CustomEQ.defaults
+        bands[2].gain = -60
+        let (data, mask) = try CustomEQ.records(bands, precut: true)
+        XCTAssertEqual(mask, 1 << 2)
+        XCTAssertEqual(data.count, 200)
+        for (r, rate) in CustomEQ.rates.enumerated() {
+            let q = (0..<5).map { k -> Double in
+                let at = 40 * 2 + (r * 5 + k) * 4
+                let v = Int32(truncatingIfNeeded: (0..<4).reduce(UInt32(0)) { $0 | UInt32(data[at + $1]) << UInt32($1 * 8) })
+                return Double(v) / 16_777_216
+            }
+            XCTAssertEqual(CustomEQ.response([q], frequency: 910, rate: rate), -6, accuracy: 0.1)
+        }
+        let boost = try CustomEQ.records([CustomEQ.Band(kind: .lowShelf, frequency: 100, gain: 120, q: 71)]
+                                         + CustomEQ.defaults.dropFirst(), precut: true)
+        XCTAssertEqual(boost.mask, 1)
+        let loud = try CustomEQ.records([CustomEQ.Band(kind: .lowShelf, frequency: 100, gain: 120, q: 71)]
+                                        + CustomEQ.defaults.dropFirst())
+        let b0 = Int32(truncatingIfNeeded: (0..<4).reduce(UInt32(0)) { $0 | UInt32(loud.data[$1]) << UInt32($1 * 8) })
+        XCTAssertGreaterThan(b0, 1 << 24, "without the precut, the numerator keeps the boost")
+        XCTAssertEqual(SHA256.hash(data: boost.data).map { String(format: "%02x", $0) }.joined(), Self.customEQGolden)
+        XCTAssertEqual(try CustomEQ.records(CustomEQ.defaults).mask, 0)
+        XCTAssertEqual(CustomEQ.bands(from: CustomEQ.values(of: bands)), bands)
+        XCTAssertFalse(CustomEQ.usesPrecut(CustomEQ.values(of: bands)))
+    }
+
+    /// The Simple view of custom-eq keeps the gains and uses valid fixed bands.
+    func testCustomEQSimple() throws {
+        var bands = CustomEQ.defaults
+        bands[0].gain = 60
+        bands[4].gain = -30
+        bands[4].frequency = 5000
+        let simple = CustomEQ.simple(from: bands)
+        XCTAssertEqual(simple.map(\.gain), bands.map(\.gain))
+        XCTAssertEqual(simple[4].frequency, 8000)
+        XCTAssertEqual(CustomEQ.simpleNames.count, CustomEQ.bandCount)
+        XCTAssertEqual(try CustomEQ.records(simple).mask, 0b10001)
+        XCTAssertFalse(CustomEQ.usesAdvanced([:]))
+    }
+
+    /// A change of preset asks the user only if the user edited the bands.
+    func testCustomEQIsUnedited() {
+        XCTAssertTrue(CustomEQ.isUnedited(CustomEQ.defaults))
+        XCTAssertTrue(CustomEQ.isUnedited(CustomEQ.simpleLayout))
+        for p in CustomEQ.applePresets {
+            let bands = CustomEQ.bands(forPreset: p)
+            XCTAssertTrue(CustomEQ.isUnedited(CustomEQ.bands(from: CustomEQ.values(of: bands))), p.name)
+        }
+        var edited = CustomEQ.bands(forPreset: CustomEQ.applePresets[0])
+        edited[0].gain += 5
+        XCTAssertFalse(CustomEQ.isUnedited(edited))
+    }
+
+    /// The Apple presets are valid start points with the default 3 bands.
+    func testCustomEQApplePresets() throws {
+        XCTAssertEqual(CustomEQ.applePresets.count, 22)
+        func gain(_ name: String, at frequency: Double) throws -> Double {
+            let preset = try XCTUnwrap(CustomEQ.applePresets.first { $0.name == name })
+            let filters = preset.bands.map { CustomEQ.biquad($0, rate: 44100) }
+            return CustomEQ.response(filters, frequency: frequency, rate: 44100)
+        }
+        for p in CustomEQ.applePresets {
+            XCTAssertLessThanOrEqual(p.bands.count, 3, p.name)
+            let bands = CustomEQ.bands(forPreset: p)
+            XCTAssertEqual(try CustomEQ.records(bands).mask & 0b01010, 0, p.name)
+            XCTAssertNoThrow(try CustomEQ.records(bands, precut: true), p.name)
+            XCTAssertEqual(CustomEQ.bands(from: CustomEQ.values(of: bands)), bands, p.name)
+        }
+        XCTAssertEqual(try gain("Bass Booster", at: 32), 5.8, accuracy: 0.5)
+        XCTAssertEqual(try gain("Treble Booster", at: 16000), 6.0, accuracy: 0.5)
+        let flat = try XCTUnwrap(CustomEQ.applePresets.first { $0.name == "Flat" })
+        XCTAssertEqual(try CustomEQ.records(CustomEQ.bands(forPreset: flat)).mask, 0)
+    }
+
+    /// The colours of the curve follow the effect of each band.
+    func testCustomEQBandWeights() {
+        var bands = CustomEQ.simpleLayout
+        bands[0].gain = 90
+        let rate = CustomEQ.rates[0]
+        let low = CustomEQ.bandWeights(bands, frequency: 60, rate: rate)
+        XCTAssertGreaterThan(low[0], 6)
+        XCTAssertEqual(low[1...].reduce(0, +), 0)
+        XCTAssertEqual(CustomEQ.bandWeights(bands, frequency: 10000, rate: rate)[0], 0, accuracy: 0.1)
+        bands[0].gain = -90
+        XCTAssertEqual(CustomEQ.bandWeights(bands, frequency: 60, rate: rate)[0], low[0], accuracy: 0.001)
+    }
+
+    /// Without the agreement of the user, only 3 bands can operate.
+    func testCustomEQThreeBandsByDefault() throws {
+        var bands = CustomEQ.simpleLayout
+        for i in bands.indices { bands[i].gain = 30 }
+        var values = CustomEQ.values(of: bands)
+        XCTAssertEqual(try CustomEQ.records(CustomEQ.bands(from: values)).mask, 0b10101)
+        values["all_bands"] = 1
+        XCTAssertEqual(try CustomEQ.records(CustomEQ.bands(from: values)).mask, 0b11111)
+        XCTAssertTrue(try SharedEQ.decode(SharedEQ(name: "A", bands: bands, preventClipping: false, advanced: false).encode()).needsAllBands)
+        bands[1].gain = 0
+        bands[3].gain = 0
+        XCTAssertFalse(try SharedEQ.decode(SharedEQ(name: "A", bands: bands, preventClipping: false, advanced: false).encode()).needsAllBands)
+    }
+
+    /// A .ipodeq file gives the same EQ again, and has only the settings.
+    func testSharedEQRoundTrip() throws {
+        var bands = CustomEQ.simpleLayout
+        bands[0].gain = 60
+        let data = try SharedEQ(name: "Warm Bass", bands: bands, preventClipping: true, advanced: false).encode()
+        let eq = try SharedEQ.decode(data)
+        XCTAssertEqual(eq.name, "Warm Bass")
+        XCTAssertEqual(eq.eqBands, bands)
+        XCTAssertTrue(eq.preventClipping)
+        XCTAssertFalse(eq.usesAdvanced)
+        let keys = Set(try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any]).keys)
+        XCTAssertEqual(keys, ["format", "name", "bands", "preventClipping", "view"])
+        XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("/Users"))
+        // Bands that the Simple view does not have need the Advanced view.
+        XCTAssertTrue(try SharedEQ.decode(SharedEQ(name: "A", bands: CustomEQ.defaults, preventClipping: false, advanced: false).encode()).usesAdvanced)
+        XCTAssertEqual(try SharedEQ.decode(SharedEQ(name: "\u{7}", bands: bands, preventClipping: false, advanced: false).encode()).name, "Custom EQ")
+    }
+
+    /// A received .ipodeq file is not trusted.
+    func testSharedEQRejectsBadFiles() throws {
+        let good = try SharedEQ(name: "A", bands: CustomEQ.simpleLayout, preventClipping: false, advanced: false)
+        func edited(_ change: (inout SharedEQ) -> Void) throws -> Data {
+            var eq = good
+            change(&eq)
+            return try eq.encode()
+        }
+        let bad = [Data("{".utf8), Data("[1]".utf8), Data(count: SharedEQ.maxFileSize + 1),
+                   try edited { $0.format = 2 }, try edited { $0.bands.removeLast() },
+                   try edited { $0.bands[0].gain = 130 }, try edited { $0.bands[0].gain = Int.min },
+                   try edited { $0.bands[0].frequency = 5 }, try edited { $0.bands[0].q = 0 },
+                   try edited { $0.bands[0].type = "notch" }, try edited { $0.view = "other" }]
+        for data in bad { XCTAssertThrowsError(try SharedEQ.decode(data)) }
+    }
+
+    /// The checks of custom-eq reject bad bands.
+    func testCustomEQChecks() {
+        for bad in [CustomEQ.Band(kind: .peak, frequency: 10, gain: 10, q: 100),
+                    CustomEQ.Band(kind: .peak, frequency: 1000, gain: 130, q: 100),
+                    CustomEQ.Band(kind: .peak, frequency: 1000, gain: 10, q: 900)] {
+            XCTAssertThrowsError(try CustomEQ.records([bad] + CustomEQ.defaults.dropFirst()))
         }
     }
 
