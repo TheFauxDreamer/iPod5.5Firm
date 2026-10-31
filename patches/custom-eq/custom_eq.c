@@ -1,18 +1,18 @@
 /* custom-eq: adds the EQs of the user to Settings > EQ (RetailOS 1.3, iPod Video).
  *
  * The research is in re/custom-eq.md. A preset is a list of up to 5 filter numbers. Each number
- * selects a record in a table of 55 records. This patch adds the numbers 55 to 96, the highest
- * number that 0x1446e8 accepts. The app calculates custom_eq_records and custom_eq_list at the build.
+ * selects a record in a table of 55 records. This patch adds the numbers 55 to 79: 5 bands
+ * for each of 5 EQs. 0x1446e8 accepts numbers to 96. The app calculates custom_eq_records and custom_eq_list at the build.
  *
- * The "bytes" of patch.json change the count function 0xf90fc to 97.
+ * The "bytes" of patch.json change the count function 0xf90fc to 80.
  *
  * Hook 1: the call of 0xa6bd0 at 0xa6d68 in 0xa6d34. The hook adds the nodes after the Apple presets.
  * Hook 2: the entry of 0xdbd84. The hook gives the record of a filter number. */
 
 #define FIRST_FILTER  55
-#define FILTERS       42
-#define EQS           14
+#define EQS           5
 #define BANDS         5
+#define FILTERS       (EQS * BANDS)
 #define NAME_LENGTH   31
 #define APPLE_COUNT   55
 #define APPLE_TABLE   ((const int *)0x1082375c)

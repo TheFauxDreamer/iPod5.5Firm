@@ -169,7 +169,7 @@ The WM8758 has a 5-band EQ (R18 to R22). The firmware does not use it. The test 
 
 ## Consequences for a patch
 
-- The patch adds presets with the filter numbers 55 to 96. 0x1446e8 limits a number to 96, so there are 42 free biquads for all the presets together. Version 0.7 of the patch gives 14 presets with the maximum of 42 filters. A filter uses 40 bytes.
+- 0x1446e8 limits a filter number to 96, so 42 numbers (55 to 96) are free. Version 0.9 of the patch has 5 presets with 5 filters each. It uses the numbers 55 to 79, and it cannot reach the limit. A filter uses 40 bytes.
 - The menu needs no change.
 - If the patch is removed, a saved name has no preset. 0x9421c then clears the name.
 - The app calculates the coefficients. The iPod needs no floating-point code.

@@ -21,8 +21,8 @@ DEFAULTS = ((LOW_SHELF, 60, 0, 71), (PEAK, 230, 0, 100), (PEAK, 910, 0, 100), (P
 # The bands that operate without the option "all_bands". Apple presets use a maximum of 3 filters.
 STANDARD_BANDS = (0, 2, 4)
 FIRST_FILTER = 55
-FILTERS = 42  # numbers 55 to 96: 0x1446e8 limits a filter number to 96
-EQS = 14
+EQS = 5
+FILTERS = EQS * BANDS  # numbers 55 to 79. 0x1446e8 accepts numbers to 96.
 NAME_LENGTH = 31
 ENTRY_SIZE = 70  # custom_eq in custom_eq.c
 GRID = 512
@@ -137,6 +137,4 @@ def library(eqs: list[tuple[str, list[tuple[int, int, int, int]], bool]]) -> tup
                 numbers[i] = FIRST_FILTER + len(rows)
                 rows.append(data[i * 40:(i + 1) * 40])
         entries.append(struct.pack("<H", count) + text.ljust(NAME_LENGTH * 2, b"\0") + bytes(numbers) + b"\0")
-    if len(rows) > FILTERS:
-        raise EQError(f"the EQs use {len(rows)} filters, and the maximum is {FILTERS}")
     return b"".join(rows).ljust(FILTERS * 40, b"\0"), b"".join(entries).ljust(EQS * ENTRY_SIZE, b"\0")

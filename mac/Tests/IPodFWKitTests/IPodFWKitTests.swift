@@ -666,8 +666,8 @@ final class PatchAndArtTests: XCTestCase {
         b.bands[2].gain = 30
         b.bands[1].gain = 30    // off: this EQ has no agreement for 5 bands
         let (records, list) = try CustomEQ.library([a, b])
-        XCTAssertEqual(records.count, 1680)
-        XCTAssertEqual(list.count, 980)
+        XCTAssertEqual(records.count, 1000)
+        XCTAssertEqual(list.count, 350)
         XCTAssertEqual(Array(list[0..<4]), [3, 0, 0x43, 0])
         XCTAssertEqual(Array(list[64..<69]), [55, 0, 0, 0, 0])
         XCTAssertEqual(Array(list[(70 + 64)..<(70 + 69)]), [56, 0, 57, 0, 0])
@@ -675,19 +675,14 @@ final class PatchAndArtTests: XCTestCase {
 
         var five = NamedEQ(name: "x", allBands: true)
         for i in 0..<5 { five.bands[i].gain = 30 }
-        var eqs = (0..<8).map { i -> NamedEQ in
+        var eqs = (0..<5).map { i -> NamedEQ in
             var e = five
             e.name = "EQ \(i)"
             return e
         }
-        var two = NamedEQ(name: "Two", allBands: true)
-        two.bands[0].gain = 30
-        two.bands[1].gain = 30
-        eqs.append(two)
-        XCTAssertEqual(try CustomEQ.library(eqs).list[8 * 70 + 65], 96)
-        eqs.append(NamedEQ(name: "Three", bands: five.bands))
-        XCTAssertThrowsError(try CustomEQ.library(eqs), "43 bands")
-        XCTAssertThrowsError(try CustomEQ.library((0..<15).map { NamedEQ(name: "E\($0)") }), "15 EQs")
+        XCTAssertEqual(Array(try CustomEQ.library(eqs).list[(4 * 70 + 64)..<(4 * 70 + 69)]), [75, 76, 77, 78, 79])
+        eqs.append(NamedEQ(name: "Six"))
+        XCTAssertThrowsError(try CustomEQ.library(eqs), "6 EQs")
     }
 
     /// The saved selection on the iPod is the name, so a bad name is not possible.
@@ -716,7 +711,7 @@ final class PatchAndArtTests: XCTestCase {
         values["precut"] = 1
         let old = NamedEQ(options: values)
         XCTAssertEqual(old.name, "Custom")
-        XCTAssertEqual(old.filtersUsed, 2)
+        XCTAssertEqual(old.activeBands.filter { $0.gain != 0 }.count, 2)
         XCTAssertTrue(old.preventClipping)
         let shared = SharedEQ(name: "Custom", bands: old.activeBands, preventClipping: false, advanced: false)
         let new = NamedEQ(shared: try SharedEQ.decode(try shared.encode()), in: [old])

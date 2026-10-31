@@ -41,10 +41,10 @@ public enum CustomEQ {
                                       Band(kind: .peak, frequency: 1000, gain: 0, q: 80),
                                       Band(kind: .peak, frequency: 3000, gain: 0, q: 80),
                                       Band(kind: .highShelf, frequency: 8000, gain: 0, q: 71)]
-    /// The filter numbers 55 to 96 are free. 0x1446e8 limits a number to 96.
+    /// 5 EQs with 5 bands use the filter numbers 55 to 79. 0x1446e8 accepts numbers to 96.
     public static let firstFilter = 55
-    public static let maxFilters = 42
-    public static let maxEQs = 14
+    public static let maxEQs = 5
+    static var maxFilters: Int { maxEQs * bandCount }
     public static let maxNameLength = 31
     static let entrySize = 70   // custom_eq in custom_eq.c
 
@@ -66,9 +66,6 @@ public enum CustomEQ {
                 entry += [UInt8(truncatingIfNeeded: c), UInt8(truncatingIfNeeded: c >> 8)]
             }
             list += entry + numbers + [0]
-        }
-        guard records.count <= maxFilters * 40 else {
-            throw PatchError("The EQs use \(records.count / 40) bands, and the maximum is \(maxFilters).")
         }
         return (records + [UInt8](repeating: 0, count: maxFilters * 40 - records.count),
                 list + [UInt8](repeating: 0, count: (maxEQs - eqs.count) * entrySize))
@@ -422,8 +419,6 @@ public struct NamedEQ: Codable, Hashable, Identifiable, Sendable {
             return b
         }
     }
-
-    public var filtersUsed: Int { activeBands.filter { $0.gain != 0 }.count }
 
     public init(name: String, bands: [CustomEQ.Band] = CustomEQ.simpleLayout, preventClipping: Bool = false,
                 advanced: Bool = false, allBands: Bool = false) {

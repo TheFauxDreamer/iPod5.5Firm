@@ -126,7 +126,7 @@ extension AppModel {
                 // A list of a version before 0.7 has the single EQ in the options.
                 if patches.first(where: { $0.spec.name == e.name })?.spec.eq_editor != nil {
                     let eqs = e.eqs ?? e.options.map { [NamedEQ(options: $0)] }
-                    if let eqs, !eqs.isEmpty, customEQs != eqs { customEQs = eqs }
+                    if let eqs = eqs.map({ Array($0.prefix(CustomEQ.maxEQs)) }), !eqs.isEmpty, customEQs != eqs { customEQs = eqs }
                 } else if let o = e.options, patchOptions[e.name] != o { patchOptions[e.name] = o }
             }
             if let a = list.appearance.flatMap(Appearance.init(rawValue:)) {

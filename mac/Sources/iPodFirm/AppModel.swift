@@ -94,7 +94,7 @@ final class AppModel: ObservableObject {
     static func loadEQs() -> [NamedEQ] {
         let d = UserDefaults.standard
         if let data = d.data(forKey: "customEQs"), let eqs = try? JSONDecoder().decode([NamedEQ].self, from: data), !eqs.isEmpty {
-            return eqs
+            return Array(eqs.prefix(CustomEQ.maxEQs))
         }
         var options = d.dictionary(forKey: "patchOptions") as? [String: [String: Int]] ?? [:]
         let eq = NamedEQ(options: options["custom-eq"] ?? [:])
@@ -1106,18 +1106,9 @@ final class AppModel: ObservableObject {
     /// The EQ that the editor shows.
     var selectedEQ: NamedEQ { customEQs.first { $0.name == selectedEQName } ?? customEQs[0] }
 
-    var eqFiltersUsed: Int { customEQs.reduce(0) { $0 + $1.filtersUsed } }
-
-    /// Change the selected EQ. The change stops if the EQs need more filters than the iPod has.
     private func updateSelectedEQ(_ change: (inout NamedEQ) -> Void) {
         guard let i = customEQs.firstIndex(of: selectedEQ) else { return }
-        var eqs = customEQs
-        change(&eqs[i])
-        guard eqs.reduce(0, { $0 + $1.filtersUsed }) <= CustomEQ.maxFilters else {
-            alert = AlertInfo(title: "No More Bands", message: "All the EQs together can use \(CustomEQ.maxFilters) bands. Set a band in another EQ to 0 dB, or delete an EQ.")
-            return
-        }
-        customEQs = eqs
+        change(&customEQs[i])
     }
 
     func addEQ(named name: String) {
@@ -1228,8 +1219,8 @@ final class AppModel: ObservableObject {
             return
         }
         let new = NamedEQ(shared: eq, in: customEQs)
-        guard customEQs.count < CustomEQ.maxEQs, eqFiltersUsed + new.filtersUsed <= CustomEQ.maxFilters else {
-            alert = AlertInfo(title: "Cannot Import the EQ", message: "The iPod has room for \(CustomEQ.maxEQs) EQs and \(CustomEQ.maxFilters) bands. Delete an EQ, then try again.")
+        guard customEQs.count < CustomEQ.maxEQs else {
+            alert = AlertInfo(title: "Cannot Import the EQ", message: "The iPod has room for \(CustomEQ.maxEQs) EQs. Delete an EQ, then try again.")
             return
         }
         customEQs.append(new)

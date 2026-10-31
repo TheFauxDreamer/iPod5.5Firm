@@ -37,7 +37,6 @@ struct CustomEQView: View {
                 Button("Delete…") { confirmDelete = true }
                     .disabled(model.customEQs.count < 2)
             }
-            LabeledContent("Bands Used", value: "\(model.eqFiltersUsed) of \(CustomEQ.maxFilters)")
             if CustomEQ.nameCanFailToShow(model.selectedEQ.name) {
                 Label("The iPod possibly cannot show all the characters of this name.", systemImage: "exclamationmark.triangle.fill")
                     .labelStyle(StatusLabelStyle(tint: .orange))

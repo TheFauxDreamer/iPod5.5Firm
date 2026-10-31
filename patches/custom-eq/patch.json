@@ -5,10 +5,10 @@
   "symbol": "slider.vertical.3",
   "category": "playback",
   "version_letter": "q",
-  "version": "0.8",
-  "size": 3000,
+  "version": "0.9",
+  "size": 1690,
   "details": [
-    "Each EQ shows with its name in Settings > EQ. You can have up to 14 EQs. All the EQs together can use 42 bands.",
+    "Each EQ shows with its name in Settings > EQ. You can have up to 5 EQs.",
     "Set the sliders in this pane, then flash the iPod. The default is 3 bands, in the range of the Apple presets (−7 to +7.5 dB). Go Beyond Apple's Limits gives −12 to +12 dB after a warning. The Simple view has Bass, Mids and Treble. The Advanced view gives each band a type, a frequency and Q. To change the bands, flash the iPod again.",
     "Export EQ makes a small .ipodeq file that you can send to another person. Import EQ reads the file. The iPod changes when you flash it.",
     "Start From Apple Preset sets the bands close to an Apple preset. You can then change them.",
@@ -38,7 +38,7 @@
     { "kind": "b", "at": "0xdbd84", "expect": "0xe1a01000", "to": "hook_filter" }
   ],
   "bytes": [
-    { "at": "0xf90fc", "expect": "04009fe5", "value": "6100a0e3" },
+    { "at": "0xf90fc", "expect": "04009fe5", "value": "5000a0e3" },
     { "at": "0xf9100", "expect": "000090e5", "value": "1eff2fe1" }
   ],
   "eq_editor": { "records": "custom_eq_records", "list": "custom_eq_list" },

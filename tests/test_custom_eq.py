@@ -80,7 +80,7 @@ def test_library_gives_each_active_band_a_filter():
     a = [(eq.LOW_SHELF, 100, 30, 71), *eq.DEFAULTS[1:]]
     b = [(eq.LOW_SHELF, 100, 30, 71), eq.DEFAULTS[1], (eq.PEAK, 1000, 30, 80), *eq.DEFAULTS[3:]]
     rows, entries = eq.library([("Car", a, False), ("Rock", b, False)])
-    assert len(rows) == 1680 and len(entries) == 980
+    assert len(rows) == 1000 and len(entries) == 350
     assert entries[0:2] == b"\x03\0" and entries[2:8] == "Car".encode("utf-16-le")
     assert list(entries[64:69]) == [55, 0, 0, 0, 0]
     assert list(entries[70 + 64:70 + 69]) == [56, 0, 57, 0, 0]
@@ -88,19 +88,16 @@ def test_library_gives_each_active_band_a_filter():
     assert rows[80:120] == eq.records(b)[0][80:120]
 
 
-def test_library_reaches_filter_96():
+def test_library_maximum_is_filter_79():
     five = [(eq.PEAK, 100 * (i + 1), 30, 100) for i in range(5)]
-    eqs = [(f"E{i}", five, False) for i in range(8)] + [("Two", [five[0], five[1], *eq.DEFAULTS[2:]], False)]
-    _, entries = eq.library(eqs)
-    assert max(entries[8 * 70 + 64:8 * 70 + 69]) == 96
+    rows, entries = eq.library([(f"E{i}", five, False) for i in range(5)])
+    assert len(rows) == 1000 and len(entries) == 350
+    assert list(entries[4 * 70 + 64:4 * 70 + 69]) == [75, 76, 77, 78, 79]
 
 
 def test_library_limits():
-    five = [(eq.PEAK, 100 * (i + 1), 30, 100) for i in range(5)]
     with pytest.raises(eq.EQError):
-        eq.library([(f"E{i}", five, False) for i in range(9)])
-    with pytest.raises(eq.EQError):
-        eq.library([(f"E{i}", list(eq.DEFAULTS), False) for i in range(15)])
+        eq.library([(f"E{i}", list(eq.DEFAULTS), False) for i in range(6)])
     with pytest.raises(eq.EQError):
         eq.library([("x" * 32, list(eq.DEFAULTS), False)])
     with pytest.raises(eq.EQError):
