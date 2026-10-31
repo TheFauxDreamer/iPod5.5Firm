@@ -123,6 +123,39 @@ Thus:
 - The EQ has no effect on 8-bit audio, or on a rate other than 44100 Hz or 48000 Hz.
 - The EQ changes the decoded buffer before 0xfed68 and 0x1a2d60. Thus USB-C audio from `usb-audio-out` probably has the EQ. This is not tested.
 
+## The Apple presets as bands
+
+The script [fit-apple-presets.py](fit-apple-presets.py) reads the filter records from your own osos image. It finds the band of the Custom EQ editor (low shelf, peak or high shelf) that is nearest to each filter at 44100 Hz. The app table `CustomEQ.applePresets` is the output. It has measured numbers only, and no Apple record.
+
+The error is the largest difference from the Apple curve from 20 Hz to 20 kHz, with all the filters of the preset.
+
+| Preset | Filters | Bands | Error |
+|---|---|---|---|
+| Acoustic | 1, 2, 3 | 3 | 0.18 dB |
+| Bass Booster | 4 | 1 | 0.06 dB |
+| Bass Reducer | 5 | 1 | 0.48 dB |
+| Classical | 6, 7, 8 | 3 | 0.49 dB |
+| Dance | 9, 10, 11 | 3 | 0.29 dB |
+| Deep | 12, 13, 14 | 3 | 0.39 dB |
+| Electronic | 15, 16, 17 | 3 | 0.09 dB |
+| Flat | (none) | 0 | 0.00 dB |
+| Hip Hop | 19, 20, 21 | 3 | 0.41 dB |
+| Jazz | 22, 23, 24 | 3 | 0.03 dB |
+| Latin | 25, 26, 27 | 3 | 0.38 dB |
+| Loudness | 28, 29, 30 | 3 | 0.14 dB |
+| Lounge | 31, 32, 33 | 3 | 0.11 dB |
+| Piano | 34, 35, 36 | 3 | 0.05 dB |
+| Pop | 37, 38, 39 | 3 | 0.18 dB |
+| R&B | 40, 41, 42 | 3 | 0.40 dB |
+| Rock | 43, 44, 45 | 3 | 0.39 dB |
+| Small Speakers | 46, 47 | 2 | 0.05 dB |
+| Spoken Word | 48, 49 | 2 | 0.78 dB |
+| Treble Booster | 50 | 1 | 0.05 dB |
+| Treble Reducer | 51 | 1 | 0.07 dB |
+| Vocal Booster | 52, 53, 54 | 3 | 0.11 dB |
+
+Apple possibly designed the filters with other formulas. Thus some errors stay.
+
 ## The hardware EQ of the codec
 
 The WM8758 has a 5-band EQ (R18 to R22). The firmware does not use it. The test patch `hw-eq-test` is on the branch `hw-eq`. It wrote these registers and gave no audible change on the real iPod. The owner shelved the test on 22 October 2026. The patch `custom-eq` does not need the hardware EQ.

@@ -645,6 +645,27 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertFalse(CustomEQ.usesAdvanced([:]))
     }
 
+    /// The Apple presets are valid start points with the default 3 bands.
+    func testCustomEQApplePresets() throws {
+        XCTAssertEqual(CustomEQ.applePresets.count, 22)
+        func gain(_ name: String, at frequency: Double) throws -> Double {
+            let preset = try XCTUnwrap(CustomEQ.applePresets.first { $0.name == name })
+            let filters = preset.bands.map { CustomEQ.biquad($0, rate: 44100) }
+            return CustomEQ.response(filters, frequency: frequency, rate: 44100)
+        }
+        for p in CustomEQ.applePresets {
+            XCTAssertLessThanOrEqual(p.bands.count, 3, p.name)
+            let bands = CustomEQ.bands(forPreset: p)
+            XCTAssertEqual(try CustomEQ.records(bands).mask & 0b01010, 0, p.name)
+            XCTAssertNoThrow(try CustomEQ.records(bands, precut: true), p.name)
+            XCTAssertEqual(CustomEQ.bands(from: CustomEQ.values(of: bands)), bands, p.name)
+        }
+        XCTAssertEqual(try gain("Bass Booster", at: 32), 5.8, accuracy: 0.5)
+        XCTAssertEqual(try gain("Treble Booster", at: 16000), 6.0, accuracy: 0.5)
+        let flat = try XCTUnwrap(CustomEQ.applePresets.first { $0.name == "Flat" })
+        XCTAssertEqual(try CustomEQ.records(CustomEQ.bands(forPreset: flat)).mask, 0)
+    }
+
     /// The colours of the curve follow the effect of each band.
     func testCustomEQBandWeights() {
         var bands = CustomEQ.simpleLayout

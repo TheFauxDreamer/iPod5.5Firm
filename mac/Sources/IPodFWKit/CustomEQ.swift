@@ -41,6 +41,47 @@ public enum CustomEQ {
                                       Band(kind: .peak, frequency: 1000, gain: 0, q: 80),
                                       Band(kind: .peak, frequency: 3000, gain: 0, q: 80),
                                       Band(kind: .highShelf, frequency: 8000, gain: 0, q: 71)]
+    /// An Apple preset as bands of the editor.
+    public struct Preset: Hashable, Identifiable, Sendable {
+        public var name: String
+        public var bands: [Band]
+        public var id: String { name }
+    }
+
+    /// The bands that are nearest to the 22 Apple presets. re/fit-apple-presets.py measures them.
+    /// Only the editor uses them. The largest difference from an Apple curve is in re/custom-eq.md.
+    public static let applePresets = [
+        Preset(name: "Acoustic", bands: [Band(kind: .lowShelf, frequency: 146, gain: 50, q: 71), Band(kind: .peak, frequency: 504, gain: 20, q: 128), Band(kind: .peak, frequency: 5245, gain: 40, q: 32)]),
+        Preset(name: "Bass Booster", bands: [Band(kind: .lowShelf, frequency: 182, gain: 60, q: 50)]),
+        Preset(name: "Bass Reducer", bands: [Band(kind: .lowShelf, frequency: 340, gain: -70, q: 52)]),
+        Preset(name: "Classical", bands: [Band(kind: .lowShelf, frequency: 152, gain: 50, q: 38), Band(kind: .peak, frequency: 504, gain: -22, q: 40), Band(kind: .highShelf, frequency: 5043, gain: 40, q: 40)]),
+        Preset(name: "Dance", bands: [Band(kind: .peak, frequency: 90, gain: 65, q: 75), Band(kind: .peak, frequency: 1812, gain: 40, q: 65), Band(kind: .peak, frequency: 5352, gain: 32, q: 52)]),
+        Preset(name: "Deep", bands: [Band(kind: .lowShelf, frequency: 102, gain: 50, q: 58), Band(kind: .peak, frequency: 1403, gain: 30, q: 65), Band(kind: .highShelf, frequency: 4662, gain: -49, q: 48)]),
+        Preset(name: "Electronic", bands: [Band(kind: .lowShelf, frequency: 102, gain: 50, q: 58), Band(kind: .peak, frequency: 504, gain: -30, q: 200), Band(kind: .highShelf, frequency: 6021, gain: 50, q: 58)]),
+        Preset(name: "Flat", bands: []),
+        Preset(name: "Hip Hop", bands: [Band(kind: .lowShelf, frequency: 200, gain: 50, q: 58), Band(kind: .peak, frequency: 762, gain: -21, q: 40), Band(kind: .highShelf, frequency: 11756, gain: 43, q: 50)]),
+        Preset(name: "Jazz", bands: [Band(kind: .peak, frequency: 439, gain: 30, q: 42), Band(kind: .peak, frequency: 748, gain: -30, q: 42), Band(kind: .highShelf, frequency: 5043, gain: 40, q: 44)]),
+        Preset(name: "Latin", bands: [Band(kind: .lowShelf, frequency: 69, gain: 51, q: 50), Band(kind: .peak, frequency: 1223, gain: -20, q: 42), Band(kind: .highShelf, frequency: 6910, gain: 49, q: 50)]),
+        Preset(name: "Loudness", bands: [Band(kind: .lowShelf, frequency: 79, gain: 60, q: 71), Band(kind: .peak, frequency: 4062, gain: -60, q: 95), Band(kind: .peak, frequency: 7932, gain: 60, q: 95)]),
+        Preset(name: "Lounge", bands: [Band(kind: .peak, frequency: 602, gain: 40, q: 65), Band(kind: .peak, frequency: 4062, gain: -40, q: 95), Band(kind: .peak, frequency: 9848, gain: 30, q: 42)]),
+        Preset(name: "Piano", bands: [Band(kind: .lowShelf, frequency: 63, gain: 30, q: 71), Band(kind: .peak, frequency: 406, gain: 30, q: 75), Band(kind: .peak, frequency: 2000, gain: 40, q: 65)]),
+        Preset(name: "Pop", bands: [Band(kind: .peak, frequency: 26, gain: -30, q: 40), Band(kind: .peak, frequency: 691, gain: 50, q: 42), Band(kind: .highShelf, frequency: 8249, gain: -31, q: 55)]),
+        Preset(name: "R&B", bands: [Band(kind: .peak, frequency: 90, gain: 75, q: 65), Band(kind: .peak, frequency: 602, gain: -30, q: 75), Band(kind: .highShelf, frequency: 2296, gain: 39, q: 42)]),
+        Preset(name: "Rock", bands: [Band(kind: .lowShelf, frequency: 130, gain: 50, q: 58), Band(kind: .peak, frequency: 892, gain: -20, q: 95), Band(kind: .highShelf, frequency: 4662, gain: 49, q: 48)]),
+        Preset(name: "Small Speakers", bands: [Band(kind: .lowShelf, frequency: 200, gain: 30, q: 38), Band(kind: .highShelf, frequency: 3539, gain: -70, q: 38)]),
+        Preset(name: "Spoken Word", bands: [Band(kind: .lowShelf, frequency: 52, gain: -40, q: 50), Band(kind: .peak, frequency: 1812, gain: 55, q: 30)]),
+        Preset(name: "Treble Booster", bands: [Band(kind: .highShelf, frequency: 2484, gain: 60, q: 55)]),
+        Preset(name: "Treble Reducer", bands: [Band(kind: .highShelf, frequency: 2080, gain: -70, q: 58)]),
+        Preset(name: "Vocal Booster", bands: [Band(kind: .peak, frequency: 90, gain: -40, q: 55), Band(kind: .peak, frequency: 985, gain: 50, q: 42), Band(kind: .peak, frequency: 14034, gain: -30, q: 65)]),
+    ]
+
+    /// The 5 bands of a preset. Its bands go into the standard positions, so they need no warning.
+    public static func bands(forPreset preset: Preset) -> [Band] {
+        var out = defaults
+        for (i, band) in zip(standardBands, preset.bands) { out[i] = band }
+        return out
+    }
+
     static let grid = 512
     static let q24 = 16_777_216.0
 

@@ -1109,6 +1109,12 @@ final class AppModel: ObservableObject {
         patchOptions[patch.spec.name, default: [:]]["all_bands"] = on ? 1 : 0
     }
 
+    /// Start from an Apple preset. The Simple view has fixed bands, so the view changes to Advanced.
+    func applyEQPreset(_ patch: PatchInfo, _ preset: CustomEQ.Preset) {
+        setEQBands(patch, CustomEQ.bands(forPreset: preset))
+        setEQUsesAdvanced(patch, true)
+    }
+
     func eqUsesPrecut(_ patch: PatchInfo) -> Bool {
         CustomEQ.usesPrecut(patchOptions[patch.spec.name] ?? [:])
     }

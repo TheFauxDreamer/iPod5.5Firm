@@ -7,6 +7,7 @@ struct CustomEQView: View {
     @EnvironmentObject var model: AppModel
     let patch: PatchInfo
     @State private var confirmAllBands = false
+    @State private var confirmPreset: CustomEQ.Preset?
 
     var body: some View {
         let bands = model.eqBands(patch)
@@ -38,6 +39,20 @@ struct CustomEQView: View {
                     }))
                 }
             }
+            Menu("Start From Apple Preset") {
+                ForEach(CustomEQ.applePresets) { preset in
+                    Button(preset.name) {
+                        if bands.allSatisfy({ $0.gain == 0 }) { model.applyEQPreset(patch, preset) } else { confirmPreset = preset }
+                    }
+                }
+            }
+            .confirmationDialog("Replace the current bands?", isPresented: Binding(get: { confirmPreset != nil }, set: { if !$0 { confirmPreset = nil } }),
+                                presenting: confirmPreset) { preset in
+                Button("Replace with \(preset.name)") { model.applyEQPreset(patch, preset) }
+                Button("Cancel", role: .cancel) {}
+            } message: { preset in
+                Text("The bands change to the values that are close to the Apple preset \(preset.name).")
+            }
             Toggle("Use All 5 Bands", isOn: Binding(get: { allBands }, set: { on in
                 if on { confirmAllBands = true } else { model.setEQUsesAllBands(patch, false) }
             }))
@@ -55,7 +70,7 @@ struct CustomEQView: View {
         } header: {
             Text("Custom EQ")
         } footer: {
-            Text("The default is 3 bands. A band at 0 dB is off. Simple keeps only the slider values of Advanced bands. Prevent Clipping lowers the level by the highest boost, so that loud music does not distort. The music then sounds quieter than Flat. Without it, the EQ operates as the Apple presets do, and a strong boost can distort.")
+            Text("The default is 3 bands. A band at 0 dB is off. An Apple preset opens in Advanced, with bands that are close to the Apple curve. Simple keeps only the slider values of Advanced bands. Prevent Clipping lowers the level by the highest boost, so that loud music does not distort. The music then sounds quieter than Flat. Without it, the EQ operates as the Apple presets do, and a strong boost can distort.")
         }
         .confirmationDialog("Use All 5 Bands?", isPresented: $confirmAllBands) {
             Button("I Agree, Use All 5 Bands") { model.setEQUsesAllBands(patch, true) }
