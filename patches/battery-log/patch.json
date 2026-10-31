@@ -1,0 +1,76 @@
+{
+  "name": "battery-log",
+  "title": "Battery Log",
+  "summary": "Test patch: records the raw battery value.",
+  "symbol": "battery.100",
+  "category": "test",
+  "ui": {
+    "actions": [
+      {
+        "title": "Clear the Battery Log",
+        "write": [ { "path": "iPod_Control/iTunes/iPodFirmBatteryLog", "zeros": 262144 } ],
+        "status": "The battery log is empty. The iPod writes a line at each sample."
+      }
+    ],
+    "steps_title": "Test Procedure",
+    "steps": [
+      "Select the time between samples below. Then flash a firmware with this patch.",
+      "Click Clear the Battery Log.",
+      "Charge the iPod to full.",
+      "Click Eject iPod. Then disconnect the iPod.",
+      "Play music until the iPod stops.",
+      "Charge the iPod and connect it to the Mac.",
+      "Click Show Battery Log."
+    ],
+    "tools": ["battery-log"]
+  },
+  "version_letter": "r",
+  "version": "0.1",
+  "size": 1200,
+  "description": "A test. It records the raw battery value at regular times, so that you can see the discharge curve of the battery. The iPod does not need a button press.",
+  "details": [
+    "Each line has the seconds since the start, the raw battery value, the icon value (0 to 20) and the charger state.",
+    "The first sample comes 60 seconds after the start. Each start adds the line \"start\".",
+    "The iPod writes each sample to the disk. Thus the log loses very little when the battery becomes empty."
+  ],
+  "notes": [
+    "The log holds approximately 12,000 samples.",
+    "The firmware timer possibly stops when the iPod sleeps or when the backlight is off. A gap in the seconds shows this."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "fw_memset0": "0x07ccd0",
+    "fw_strcpy": "0x07cd6c",
+    "fw_snprintf": "0x07b240",
+    "file_open": "0x08f38c",
+    "file_open_rw": "0x08f3f8",
+    "file_read": "0x08f464",
+    "file_write": "0x08f6f4",
+    "file_seek": "0x08f5c4",
+    "file_close": "0x08f184",
+    "battery_icon": "0x1e7fe4",
+    "battery_raw": "0x09b284",
+    "battery_state": "0x09c258",
+    "__aeabi_uidiv": "0x082694"
+  },
+  "hooks": [
+    { "kind": "bl", "at": "0x1d91f8", "expect": "0xeb003b79", "to": "hook_battery_timer" }
+  ],
+  "options": [
+    {
+      "id": "interval",
+      "title": "Time Between Samples",
+      "symbol": "interval_min",
+      "default": 5,
+      "choices": [
+        { "value": 1, "title": "1 minute", "description": "The most detail. Use this for a short test." },
+        { "value": 5, "title": "5 minutes", "description": "Recommended. It shows the fast fall at the end of the battery." },
+        { "value": 30, "title": "30 minutes", "description": "The fewest disk writes. It can miss the fast fall at the end of the battery." }
+      ]
+    }
+  ]
+}

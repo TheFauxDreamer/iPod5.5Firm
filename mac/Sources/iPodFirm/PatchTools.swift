@@ -86,6 +86,7 @@ struct PatchTool: View {
         case "playlist-folders": PlaylistFoldersSection()
         case "playback-log": PlaybackLogSection()
         case "diagnostic-log": PlaybackLogSection(kind: .diagnostic)
+        case "battery-log": BatteryLogSection()
         default: EmptyView()
         }
     }
@@ -250,6 +251,43 @@ struct PlaybackLogContent: View {
                     .frame(minHeight: 80, maxHeight: 400)
                 }
             }
+        }
+    }
+}
+
+// MARK: battery-log
+
+/// The log that the battery-log patch writes on the iPod.
+struct BatteryLogSection: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        Section {
+            HStack {
+                Button("Show Battery Log") { model.readBatteryLog() }.disabled(model.currentIPod == nil)
+                Spacer()
+                if let log = model.batteryLog, !log.isEmpty {
+                    Button("Copy Log") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(log, forType: .string)
+                    }
+                }
+            }
+            if let log = model.batteryLog {
+                if log.isEmpty {
+                    Text("The log is empty. Let the iPod operate for some minutes. Then connect it again.")
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ScrollView {
+                        Text(log)
+                            .font(.caption.monospaced()).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(minHeight: 80, maxHeight: 400)
+                }
+            }
+        } header: {
+            Text("Battery Log")
         }
     }
 }

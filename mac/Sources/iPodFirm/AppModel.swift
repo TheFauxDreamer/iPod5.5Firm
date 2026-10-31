@@ -179,6 +179,7 @@ final class AppModel: ObservableObject {
     @Published var thumbnailStatus: String?
     /// The decoded USB log of the probe (nil: not read).
     @Published var usbProbeLog: [USBProbeLog.Entry]?
+    @Published var batteryLog: String?
     /// The text of the playback log (nil: not read; empty: the file has no log).
     @Published var playbackLog: String?
     /// The text of the diagnostic log (nil: not read; empty: the file has no log).
@@ -1028,6 +1029,7 @@ final class AppModel: ObservableObject {
             if action.write.contains(where: { $0.path == Self.usbProbeLogFile }) { usbProbeLog = nil }
             if action.write.contains(where: { $0.path == Self.playbackLogFile }) { playbackLog = nil }
             if action.write.contains(where: { $0.path == Self.diagnosticLogFile }) { diagnosticLog = nil }
+            if action.write.contains(where: { $0.path == Self.batteryLogFile }) { batteryLog = nil }
             refreshIPodLogs()
             patchActionStatus[patch.spec.name] = "\(action.status ?? "\(action.title): complete.") (\(Date().formatted(date: .omitted, time: .shortened)))"
         } catch { fail("Cannot Write the File on the iPod", error) }
@@ -1473,6 +1475,21 @@ final class AppModel: ObservableObject {
     /// the file empty; the patch writes it on the iPod.
     static let playbackLogFile = "iPod_Control/iTunes/iPodFirmPlaybackLog"
     static let diagnosticLogFile = "iPod_Control/iTunes/iPodFirmDiagnosticLog"
+
+    static let batteryLogFile = "iPod_Control/iTunes/iPodFirmBatteryLog"
+
+    /// Read the text of the battery log. The file has zeros after the end of the text.
+    func readBatteryLog() {
+        guard let volume = ipodMusicVolume() else {
+            alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
+            return
+        }
+        guard let data = try? Data(contentsOf: volume.appendingPathComponent(Self.batteryLogFile)) else {
+            alert = AlertInfo(title: "No Battery Log", message: "The iPod has no battery log. Click Clear the Battery Log. Then do the test.")
+            return
+        }
+        batteryLog = String(decoding: data.prefix { $0 != 0 }, as: UTF8.self)
+    }
 
     static func logFile(_ kind: IPodLogFile.Kind) -> String {
         switch kind {

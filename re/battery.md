@@ -260,3 +260,11 @@ Next steps:
 1. Do the test with the 2 files. Record the number at full and at empty.
 2. Answer the open questions.
 3. Make a test patch `battery-display` on its own branch. Make Percent first, then Icon + Percent.
+
+## The patch `battery-log` (31 October 2026)
+
+The test patch records the complete raw value and thus answers the question of the value 43.
+
+0x1d91dc is the UI timer handler that reads the icon value. It calls 0x1e7fe4 at 0x1d91f8 (`bl`, eb003b79), starts the timer at + 0xa0 again and marks the status elements. The emulator showed the battery reads approximately each 30 s. Static: 0x1d91dc has one caller, 0x1d8ebc in 0x1d8e68.
+
+Open question: does this timer run when the backlight is off, or only when the display operates? The seconds in the log show this. A gap is the answer.
