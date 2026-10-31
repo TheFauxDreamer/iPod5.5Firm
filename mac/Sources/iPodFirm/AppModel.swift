@@ -1653,7 +1653,7 @@ final class AppModel: ObservableObject {
     var flashBlockReason: String? {
         if currentIPod == nil { return "Connect the iPod to flash it." }
         if currentIPodIsUnsupported { return "iPodFirm cannot flash this iPod." }
-        if editor == nil { return "Open a firmware to flash the iPod. Your patch switches do not change." }
+        if editor == nil { return "Open a firmware to flash the iPod." }
         if busy != nil { return "Wait until the current operation is complete." }
         return nil
     }

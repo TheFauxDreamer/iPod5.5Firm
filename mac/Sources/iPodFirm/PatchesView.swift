@@ -861,22 +861,24 @@ struct VersionDetail: View {
     }
 }
 
-/// Tells the user why the flash buttons are off. If the only missing item is a firmware, it gives
-/// the commands to open one. The pane does not change, so that the user can continue the work.
+/// The status line when the iPod is ready but no firmware is open. It gives the commands to open a
+/// firmware. The pane does not change, so that the user can continue the work. The other reasons
+/// are in the tooltip of the flash buttons, because the iPod pane already shows them.
 struct FlashHint: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        if let reason = model.flashBlockReason, model.busy == nil {
-            Label(reason, systemImage: "info.circle")
+        if model.editor == nil, model.currentIPod != nil, !model.currentIPodIsUnsupported, model.busy == nil,
+           let reason = model.flashBlockReason {
+            Label(reason, systemImage: "exclamationmark.triangle.fill")
+                .labelStyle(StatusLabelStyle(tint: .orange))
                 .fixedSize(horizontal: false, vertical: true)
-            if model.editor == nil && model.currentIPod != nil && !model.currentIPodIsUnsupported {
-                HStack {
-                    Button("Download Apple Firmware 1.3") { Task { await model.downloadAppleFirmware(stay: true) } }
-                    Button("Open Firmware…") { model.openPanel(stay: true) }
-                }
-                .controlSize(.small)
+                .help("Your patch switches do not change.")
+            HStack {
+                Button("Download Apple Firmware 1.3") { Task { await model.downloadAppleFirmware(stay: true) } }
+                Button("Open Firmware…") { model.openPanel(stay: true) }
             }
+            .controlSize(.small)
         }
     }
 }
