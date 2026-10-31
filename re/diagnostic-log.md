@@ -1,6 +1,6 @@
-# The playback path and the patch playback-log
+# The diagnostic log and the playback path
 
-This note records how RetailOS 1.3 goes to the next song, how it starts a song and where the music can stop. It also records the hook sites of the test patch [playback-log](../patches/playback-log/patch.json). The aim of the patch is a log from a real iPod when the music stops, for example after the first song of a shuffle.
+This note records how RetailOS 1.3 goes to the next song, how it starts a song and where the music can stop. It also records the hook sites of the test patch [diagnostic-log](../patches/diagnostic-log/patch.json). The name of this patch was `playback-log` before version 2.0. The older sections use the old name. The aim of the patch is a log from a real iPod when the music stops, for example after the first song of a shuffle.
 
 All addresses are osos offsets of firmware 1.3. The research used the decompiled osos 1.3, a disassembly of osos 1.3 and Ghidra 12.1.4 on 29 October 2026. Evidence: Static, unless the text says something different.
 
@@ -68,7 +68,7 @@ Refer to [shuffle.md](shuffle.md#checks-of-the-shuffle-patches-with-a-large-libr
 
 ## The patch
 
-The patch is a test patch (category `test`). It has 13 hooks. No other patch on main uses these sites, except 0x1d8260 (`usb-host-probe`).
+The patch is a test patch (category `test`). Version 1.3 had the 13 hooks in this table. Version 2.0 adds 8 hooks (refer to [The areas of version 2.0](#the-areas-of-version-20)). No other patch on main uses these sites, except 0x1d8260 (`usb-host-probe`).
 
 | At | Kind | Hook | Record |
 |---|---|---|---|
@@ -88,12 +88,40 @@ The patcher writes only an unconditional `bl`. Thus the patch does not hook the 
 
 The check of repeated songs: 0xb40c4 writes the position i to `item + 0x24` of each item of the result. The hook does this write first. Then it reads each item again. An item that occurs two times keeps only its last position. Thus the count of the differences is the count of repeated songs.
 
+### The areas of version 2.0
+
+Research: Ghidra 12.1.4, osos 1.3, 30 October 2026. Evidence: Static. The patch has not run in the emulator or on a real iPod yet.
+
+Each area has one option in `patch.json`, with a global variable. An area that is off writes no lines. The hooks stay, because the patcher writes option values after the link. The information block has the line `areas ...`.
+
+| Area | Variable | Site | Result |
+|---|---|---|---|
+| Playback | `log_playback` | The current hook at 0x1d8260 | The hook gets the event. Type 4 is a key push and type 7 is a release. The key code is bits 16-23 of event + 0x10 (0x2564b0). No new hook is necessary. |
+| Memory | `log_memory` | The current hooks | A sample adds a line after a change of 64 KB or more in the free heap. |
+| Power and Storage | `log_power` | `bl` at 0x1d9344 | The only call of the sleep sequence 0x1ee8d0. The sequence writes the settings file itself (0xbbf1c), thus a file write is safe here. |
+| Power and Storage | `log_power` | `bl` at 0x1dfe18 | The only call of the sleep function 0xb43dc. The function returns after the wake. This hook does not use 0xb45f4, which `flash-keep-awake` uses. |
+| Power and Storage | `log_power` | `b` at 0x265cc8 | The storage power. The first instruction is `push {r3-r11, lr}`. The hook also sees the call through `flash-keep-awake` at 0x23344c. |
+| Power and Storage | `log_power` | 0x265164, in a sample | The raw value: the channel in the high 16 bits, the measurement in the low 16 bits. This is not a battery percentage. The function only reads RAM. |
+| Artwork and Files | `log_artwork` | `bl` at 0x2055dc, `bl` at 0x205854 | The artwork lookup 0x1f161c and the image load 0x2258a4 in ArtworkLoadTask. |
+| Artwork and Files | `log_artwork` | `b` at 0x8f38c, `b` at 0x8f464 | The file open and the file read. The hooks also time the reads of `album-art` and `cover-flow`, because these patches call the same functions. |
+| Performance | `log_performance` | Word at 0x6701f0 | The event method 0x1d81cc. `cover-flow` uses the same word with no chain. The name `cover-flow` sorts first, thus this hook chains to it. |
+| Performance | `log_performance` | RAM 0x14983040, in a sample | The idle time of each core, as in `usb-host-probe`. |
+
+Limits:
+
+- A sample runs at most each 30 s, and only at a button or wheel event. A time with no event has no sample. Do not sample more often, because each new line causes a disk write at the next event.
+- `ui=` is the longest time in 0x1d81cc. This method does not include each draw of a list.
+- The key codes of the click wheel buttons are not proved. The Simple Remote codes are in [firmware-functions.md](../docs/firmware-functions.md). The first log from a real iPod gives the wheel codes.
+- A sleep function that does not return loses the lines after the last file write. The file write before the sleep has the line `sleep start`.
+
 ### The information block
 
 The first 2048 bytes of the log have:
 
+- the header `PL02 diagnostic-log 2.0` (`PL01` in version 1.x);
 - the RAM size (0x9d9d0), the free heap, the lowest free heap and the count of failed allocations;
 - the counts of the lines;
+- the area switches (version 2.0);
 - the settings (version 1.1): Shuffle, Repeat and the Hold Select value of `up-next`;
 - the iPodFirm list of the build (`list <JSON>`). The patch finds the text `iPodFirmManifest1` on a 16-byte step from 0x736800 to 0x7f8000. osos is in RAM, so the list is in RAM too. Refer to [patch-system.md](../docs/patch-system.md#the-ipodfirm-list). The app shows the patches with their letters.
 
@@ -119,7 +147,7 @@ In version 1.3, `song=` is the low 32 bits of the dbid: item + 0x20 is the track
 
 ### Tests
 
-- Swift: `PlaybackLogTests`, `testPatchSizes` (38849 bytes), `testPatchMetadata`.
+- Swift: `PlaybackLogTests`, `testPatchSizes` (41768 bytes in version 2.0), `testPatchMetadata`.
 - Python: `test_playback_log_hooks` with the Apple firmware 1.3. Each hook word is correct, and the chain wrapper of 0xb40c4 runs `push {r3-r5, lr}` and continues at 0xb40c8.
 - A build of the 17 patches that are not `test` or `internal`, together with `playback-log`, links with no conflict (29 October 2026).
 - Not tested in the emulator. The emulator has no audio, thus each song fails there. This is a good test of the records of a failed song.

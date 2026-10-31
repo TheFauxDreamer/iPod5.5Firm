@@ -1,0 +1,343 @@
+{
+  "name": "diagnostic-log",
+  "title": "Diagnostic Log",
+  "summary": "A test patch that records the playback, the memory, the power, the artwork and the performance.",
+  "symbol": "list.bullet.rectangle",
+  "category": "test",
+  "ui": {
+    "actions": [
+      {
+        "title": "Clear the Diagnostic Log",
+        "write": [
+          {
+            "path": "iPod_Control/iTunes/iPodFirmDiagnosticLog",
+            "zeros": 32768
+          }
+        ],
+        "status": "The diagnostic log is empty. The iPod writes the log after a button press."
+      }
+    ],
+    "steps_title": "Test Procedure",
+    "steps": [
+      "Select the areas below. Then flash a firmware with this patch and the patches that you use.",
+      "Click Clear the Diagnostic Log.",
+      "Click Eject iPod. Then disconnect the iPod.",
+      "Do the steps that cause the problem, for example Shuffle Songs. Let the first song play to its end.",
+      "When the problem occurs, press a button or turn the wheel. The iPod writes the log.",
+      "Wait 15 seconds, so that the firmware writes the log to the disk.",
+      "Connect the iPod to the Mac and click Show Diagnostic Log.",
+      "Click Save the Log to Share or Report on GitHub. Then send the file to the developer."
+    ],
+    "tools": [
+      "diagnostic-log"
+    ]
+  },
+  "version_letter": "g",
+  "version": "2.0",
+  "size": 41768,
+  "description": "A test. It records what the iPod does, so that you can find the cause of a problem. Use the switches below to select the areas. All areas on gives the complete log. One area on gives a log of that area only.",
+  "caution": "Do not install this patch together with USB Host Probe. The two patches use the same hook site.",
+  "details": [
+    "Playback: which song plays, each next song, each shuffle, each key push and release, and the reason when the music stops.",
+    "Memory: each failed allocation, and each change of 64 KB or more in the free memory.",
+    "Power and Storage: each sleep and wake, each change of the storage power, and the state of the charger.",
+    "Artwork and Files: the time of each artwork load, each file open of 100 ms or more, and each file read of 16 KB or more or of 100 ms or more.",
+    "Performance: a sample at most each 30 seconds during button use: the idle time of each core, the longest UI event, the time of the last log write and the free memory.",
+    "The log always shows the RAM size, the selected areas, the settings, and the patches in the firmware.",
+    "A button press writes the log to the disk, at most one time each 5 seconds. The iPod also writes the log before it sleeps.",
+    "Click Show Diagnostic Log to see it."
+  ],
+  "notes": [
+    "A switch stops the lines of its area. The hooks stay in the firmware, and the patch uses the same memory. To change a switch, flash the iPod again.",
+    "\"key push\" and \"key release\" show the key code. A long hold of Next or Previous is a seek.",
+    "The value in the line \"power\" is a raw value. It is not a battery percentage.",
+    "Each line starts with the time in seconds since the first line.",
+    "\"song\" is the low part of the dbid of the song in iTunesDB. When the iPod is connected, the app shows the title, the artist, the album and the file of each song. Show the log before a new sync, because a sync can change the IDs.",
+    "The line \"settings\" shows Settings > Shuffle, Settings > Repeat and Settings > Hold Select. hold=not known: the iPod has no Up Next value.",
+    "\"at=3/16236\" is the position in the play list, as \"3 of 16236\" in Now Playing.",
+    "The log keeps 32 KB. When it is full, the iPod removes the oldest half of the lines and counts them as \"dropped\".",
+    "The patch uses 41768 bytes of RAM. The log buffer is 32 KB of this. Thus the free memory is approximately 41 KB less than without the patch."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    {
+      "model": "iPod Video (5G/5.5G)",
+      "firmware": "1.3",
+      "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251"
+    }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "fw_memset0": "0x07ccd0",
+    "fw_strcpy": "0x07cd6c",
+    "fw_vsnprintf": "0x07b114",
+    "fw_snprintf": "0x07b240",
+    "file_open": "0x08f38c",
+    "file_open_rw": "0x08f3f8",
+    "file_read": "0x08f464",
+    "file_write": "0x08f6f4",
+    "file_seek": "0x08f5c4",
+    "file_close": "0x08f184",
+    "fw_long_play_timer": "0x1d8570",
+    "heap_free": "0x0c7444",
+    "ram_size": "0x09d9d0",
+    "settings_object": "0x193090",
+    "get_mode": "0x09edb0",
+    "get_repeat": "0x09e96c",
+    "next_item": "0x1968c0",
+    "set_song": "0x0eb610",
+    "open_decoder": "0x10b894",
+    "shuffle": "0x094440",
+    "next_continue": "0x0ac4c8",
+    "play_continue": "0x0ac6f8",
+    "start_continue": "0x0b40c8",
+    "alloc_continue": "0x0c751c",
+    "new_continue": "0x11ca24",
+    "drive_continue": "0x265ccc",
+    "file_open_continue": "0x08f390",
+    "file_read_continue": "0x08f468",
+    "power_raw": "0x265164",
+    "sleep_sequence": "0x1ee8d0",
+    "sleep_function": "0x0b43dc",
+    "art_find": "0x1f161c",
+    "art_load": "0x2258a4",
+    "__aeabi_uidiv": "0x082694"
+  },
+  "hooks": [
+    {
+      "kind": "b",
+      "at": "0xb40c4",
+      "expect": "0xe92d4038",
+      "to": "hook_start",
+      "chain": "start_chain",
+      "chain_default": "start_original"
+    },
+    {
+      "kind": "bl",
+      "at": "0xb4128",
+      "expect": "0xebff80c4",
+      "to": "hook_shuffle"
+    },
+    {
+      "kind": "bl",
+      "at": "0xbb440",
+      "expect": "0xebff63fe",
+      "to": "hook_smart_shuffle"
+    },
+    {
+      "kind": "b",
+      "at": "0xac4c4",
+      "expect": "0xe92d4ff8",
+      "to": "hook_next",
+      "chain": "next_chain",
+      "chain_default": "next_original"
+    },
+    {
+      "kind": "bl",
+      "at": "0xac55c",
+      "expect": "0xeb03a8d7",
+      "to": "hook_next_item"
+    },
+    {
+      "kind": "bl",
+      "at": "0xac588",
+      "expect": "0xeb00fc20",
+      "to": "hook_stop"
+    },
+    {
+      "kind": "bl",
+      "at": "0xac5d4",
+      "expect": "0xeb00fc0d",
+      "to": "hook_set"
+    },
+    {
+      "kind": "b",
+      "at": "0xac6f4",
+      "expect": "0xe92d4ff0",
+      "to": "hook_play",
+      "chain": "play_chain",
+      "chain_default": "play_original"
+    },
+    {
+      "kind": "bl",
+      "at": "0xac750",
+      "expect": "0xeb00fbae",
+      "to": "hook_set"
+    },
+    {
+      "kind": "bl",
+      "at": "0xac7b4",
+      "expect": "0xeb017c36",
+      "to": "hook_open"
+    },
+    {
+      "kind": "b",
+      "at": "0xc7518",
+      "expect": "0xe92d4070",
+      "to": "hook_alloc",
+      "chain": "alloc_chain",
+      "chain_default": "alloc_original"
+    },
+    {
+      "kind": "b",
+      "at": "0x11ca20",
+      "expect": "0xe92d4070",
+      "to": "hook_new",
+      "chain": "new_chain",
+      "chain_default": "new_original"
+    },
+    {
+      "kind": "bl",
+      "at": "0x1d8260",
+      "expect": "0xeb0000c2",
+      "to": "hook_event"
+    },
+    {
+      "kind": "bl",
+      "at": "0x1d9344",
+      "expect": "0xeb005561",
+      "to": "hook_sleep_start"
+    },
+    {
+      "kind": "bl",
+      "at": "0x1dfe18",
+      "expect": "0xebfb516f",
+      "to": "hook_sleep"
+    },
+    {
+      "kind": "b",
+      "at": "0x265cc8",
+      "expect": "0xe92d4ff8",
+      "to": "hook_drive",
+      "chain": "drive_chain",
+      "chain_default": "drive_original"
+    },
+    {
+      "kind": "bl",
+      "at": "0x2055dc",
+      "expect": "0xebffb00e",
+      "to": "hook_art_find"
+    },
+    {
+      "kind": "bl",
+      "at": "0x205854",
+      "expect": "0xeb008012",
+      "to": "hook_art_load"
+    },
+    {
+      "kind": "b",
+      "at": "0x8f38c",
+      "expect": "0xe92d41fc",
+      "to": "hook_file_open",
+      "chain": "file_open_chain",
+      "chain_default": "file_open_original"
+    },
+    {
+      "kind": "b",
+      "at": "0x8f464",
+      "expect": "0xe92d4ff8",
+      "to": "hook_file_read",
+      "chain": "file_read_chain",
+      "chain_default": "file_read_original"
+    },
+    {
+      "kind": "word",
+      "at": "0x6701f0",
+      "expect": "0x001d81cc",
+      "to": "hook_ui",
+      "chain": "ui_chain"
+    }
+  ],
+  "options": [
+    {
+      "id": "playback",
+      "title": "Playback",
+      "symbol": "log_playback",
+      "default": 1,
+      "choices": [
+        {
+          "value": 1,
+          "title": "On",
+          "description": "The log records the songs, the shuffle and the keys."
+        },
+        {
+          "value": 0,
+          "title": "Off",
+          "description": "The log has no lines of this area."
+        }
+      ]
+    },
+    {
+      "id": "memory",
+      "title": "Memory",
+      "symbol": "log_memory",
+      "default": 1,
+      "choices": [
+        {
+          "value": 1,
+          "title": "On",
+          "description": "The log records the failed allocations and the free memory."
+        },
+        {
+          "value": 0,
+          "title": "Off",
+          "description": "The log has no lines of this area."
+        }
+      ]
+    },
+    {
+      "id": "power",
+      "title": "Power and Storage",
+      "symbol": "log_power",
+      "default": 1,
+      "choices": [
+        {
+          "value": 1,
+          "title": "On",
+          "description": "The log records the sleep, the wake, the storage power and the charger."
+        },
+        {
+          "value": 0,
+          "title": "Off",
+          "description": "The log has no lines of this area."
+        }
+      ]
+    },
+    {
+      "id": "artwork",
+      "title": "Artwork and Files",
+      "symbol": "log_artwork",
+      "default": 1,
+      "choices": [
+        {
+          "value": 1,
+          "title": "On",
+          "description": "The log records the artwork loads, the slow file opens and the large file reads."
+        },
+        {
+          "value": 0,
+          "title": "Off",
+          "description": "The log has no lines of this area."
+        }
+      ]
+    },
+    {
+      "id": "performance",
+      "title": "Performance",
+      "symbol": "log_performance",
+      "default": 1,
+      "choices": [
+        {
+          "value": 1,
+          "title": "On",
+          "description": "The log records the idle time, the longest UI event and the time of the log write."
+        },
+        {
+          "value": 0,
+          "title": "Off",
+          "description": "The log has no lines of this area."
+        }
+      ]
+    }
+  ]
+}

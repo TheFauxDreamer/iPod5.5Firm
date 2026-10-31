@@ -214,7 +214,7 @@ public enum ITunesDB {
     /// The text fields of one track of an iTunesDB.
     public struct TrackInfo: Equatable {
         public var id: UInt32
-        /// The low 32 bits of the dbid (mhit + 0x70). The playback log uses this value.
+        /// The low 32 bits of the dbid (mhit + 0x70). The diagnostic log uses this value.
         public var dbidLow: UInt32
         public var title = "", artist = "", album = "", path = ""
         public init(id: UInt32, dbidLow: UInt32 = 0, title: String = "", artist: String = "", album: String = "", path: String = "") {

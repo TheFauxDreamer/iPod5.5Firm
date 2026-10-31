@@ -282,9 +282,9 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x0df0c0 | Rounds the end of the RAM region down to 1 MB and subtracts 1 MB (the MMAP window at 0x18000000). | Static |
 | 0x0d2e2c | Adds a region to the heap through 0x1ac448. A heap has a maximum of 10 regions. | Static |
 | 0x0c2e0c | Makes the heap object at 0x10870154 when the firmware first needs it (0x1aca4c, then 0x1ac944). | Static |
-| 0x0c7444 | Gives the free bytes of the heap. The patch `playback-log` uses it. | Static, Patch |
-| 0x0c7518 | (size, alignment): an allocator. Calls 0xc2e0c, then 0x1ac324 with the heap. 0xa8180 (`mov r1, #4`) jumps to it. The patch `playback-log` hooks its first instruction. Refer to [../re/playback-log.md](../re/playback-log.md#the-memory). | Static, Patch |
-| 0x11ca20 | (size, flags): an allocator. Calls 0xc2e0c, then 0x1ac9b4 with the heap. 0x25a974 (`mov r1, #2`) and 0xa8178 (`mov r1, #4`) jump to it. The patch `playback-log` hooks its first instruction. | Static, Patch |
+| 0x0c7444 | Gives the free bytes of the heap. The patch `diagnostic-log` uses it. | Static, Patch |
+| 0x0c7518 | (size, alignment): an allocator. Calls 0xc2e0c, then 0x1ac324 with the heap. 0xa8180 (`mov r1, #4`) jumps to it. The patch `diagnostic-log` hooks its first instruction. Refer to [../re/diagnostic-log.md](../re/diagnostic-log.md#the-memory). | Static, Patch |
+| 0x11ca20 | (size, flags): an allocator. Calls 0xc2e0c, then 0x1ac9b4 with the heap. 0x25a974 (`mov r1, #2`) and 0xa8178 (`mov r1, #4`) jump to it. The patch `diagnostic-log` hooks its first instruction. | Static, Patch |
 | 0x0a96c0 | The block allocator of the track objects (slab at db + 0x38: element size at + 0x04, count for each chunk at + 0x08). Calls 0xa8e8c. A chunk is count × size + 0x24 bytes from 0xa8178. A track object is 272 bytes, 100 in each chunk. | Static, Emulator |
 | 0x25a944 | Allocates memory (used by 0x223420). | Static |
 | 0x25a8e4 | Frees memory to the same pool. | Patch |
@@ -312,7 +312,7 @@ RetailOS does not test the RAM. It reads the size from the SysInfo block of the 
 | 0x0013bc | The start code. Finds the SysInfo block: the tag 'SysI' (0x53797349) at 0x4001ff18, then a pointer. | Static |
 | 0x0013e8 | `ldr r3, [r0, #0xe0]` (`e0 30 90 e5`): reads the SDRAM size from SysInfo + 0xe0. `mov r3, #0x2000000` (`02 34 a0 e3`) here makes a 32 MB heap in the emulator. | Static, Emulator |
 | 0x000e6c | Converts the size to a code with the size table at 0x16d8 (0, 0x80000 … 0x8000000). | Static |
-| 0x09d9d0 | Gives the RAM size: SysInfo + 0xe0. 0x947f8 compares it with 0x3ffffff. The patch `playback-log` uses it. | Static, Patch |
+| 0x09d9d0 | Gives the RAM size: SysInfo + 0xe0. 0x947f8 compares it with 0x3ffffff. The patch `diagnostic-log` uses it. | Static, Patch |
 | 0x000df8 | Adds the sizes of the four banks and writes the RAM top to struct + 0x20. | Static |
 | 0x000c90 | Sets the image region (8 MB) and the data region (from 0x10800000, length 0x20e294). | Static |
 | 0x001658 | Copies the struct (0x90 bytes) from IRAM 0x40006000 to 0x14983060. | Static |
@@ -334,6 +334,7 @@ RetailOS does not test the RAM. It reads the size from the SysInfo block of the 
 | 0x0f3dc0 | (block): the default settings. Clears 0xb6c bytes, then sets some fields. Version 0x39. | Static |
 | 0x1a0120, 0x19ff0c, 0x19ff6c | 0x1a0120 returns the memory cache manager. 0x19ff0c(manager) sets + 0x44 = 1 and sends the event 10 ("give back the memory", 0x19f9b0) to its users until the count + 0x6c is 0. 0x19ff6c sends the event 5 at the end. 0x19fd0c (a new block) sets + 0x44 = 0. Apple calls 0x19ff0c only in 0x1ed828 (0x1ed918 then calls 0x19ff6c) and before the sleep (0xb43dc). The only caller of 0x1ed828 is the `bl` at 0x1eea00 in the sleep sequence 0x1ee8d0 (Ghidra, 27 October 2026). An earlier version of this table said "before the disk mode". No path from the disk mode start to 0x1ed828 is known. Earlier this table called 0x19ff0c a disk cache flush; that was not correct. The USB host probe called it at each log write until version 1.18 (the probable cause of the missing Now Playing art). | Static, Emulator, Real iPod |
 | 0x1ee8d0 | Sleep sequence: saves, writes the cache (0x1ed828, 0x19ff0c), then calls the sleep method. Does not sleep if external power is found. | Static, Emulator |
+| 0x1d9344, 0x1dfe18 | The only call of the sleep sequence 0x1ee8d0 (in 0x1d8cd0) and the only call of the sleep function 0xb43dc (in the sleep method 0x1dfdd4). The patch `diagnostic-log` hooks both. | Static, Patch |
 | 0x1ecc8c | External-power test, from saved copies of the power pins (vtable offset 0xb4 → 0x9e664). | Static |
 | 0x265698 | Reads the power source pins. | Static |
 | 0x1d83fc | Sleep item handler: backlight off (0xb4638), start the idle timer (controller + 0x48, 500 ms). | Static, Emulator |
@@ -466,7 +467,7 @@ Refer to [re/shuffle.md](../re/shuffle.md). The reference model [re/shuffle-mode
 | 0x0b40c4 | Starts a shuffled play list. Calls 0x94440 with settings +0x92 and +0x93. Writes the new position to the track item +0x24. | Static, Emulator |
 | 0x094440 | The music shuffle (list, current track, albums, shuffle in albums). Fisher–Yates from the end. Songs: slot 1, then the current track goes first. Albums: slot 6, groups of the same album name, then the group of the current track is swapped with group 0. | Static, Emulator |
 | 0x0d1df0 | (track list): makes a play list item. Item + 0x10 is the result of the counter 0xa01e8, not a track ID. Item + 0x20 is the track object. The dbid is at track + 0x108. Track + 0x20 was 0 at run time on the real iPod, although 0xd7888 writes mhit + 0x10 there. | Static, Patch |
-| 0x09e96c | (app): the Repeat value for the menu: settings `+0x1c`, with 1 and 2 swapped. The Settings controller keeps it at `+0x1d`. The patch `playback-log` uses it. | Static, Patch |
+| 0x09e96c | (app): the Repeat value for the menu: settings `+0x1c`, with 1 and 2 swapped. The Settings controller keeps it at `+0x1d`. The patch `diagnostic-log` uses it. | Static, Patch |
 | 0x0e5978 | Random index 0 … n − 1. Seeds itself one time after a start. Then it cuts n to 16 bits (`asr #16` at 0xe59bc) and jumps to 0xaf4b4 with the state at 0x1081e048. The patch `shuffle-fixes` removes the cut and hooks the seed call at 0xe59a0. Its only callers are in 0x94440 (0x9460c, 0x946d8, 0x94758). | Static, Emulator |
 | 0x00055c | Seed: `A XOR (B << 16)`, A and B are two reads of 0x60006038. | Static, Emulator |
 | 0x0a501c | `b 0x55c`. 0xe5978 calls the seed through this jump (`bl` at 0xe59a0). | Static |
@@ -502,7 +503,7 @@ Refer to [re/play-next.md](../re/play-next.md).
 | 0x0b0d0c | (track list, field): frees the caches of the slot of one field (+ 0x174, + 0x238, + 0x2fc, + 0x3c0, + 0x494). The shuffle uses the field 0x1000 (slot 2). | Static |
 | 0x09e57c | (item, 0x33, 0): the play position of an item. | Static, Patch |
 | 0x1968c0 | (play list, song, flags): the next item in the play order. Flag 4 writes its index to + 0x14. The "next song" action 0xac4c4 calls it at the change of song. | Static |
-| 0x0ac4c4 | (player, flags): the "next song" action. The current item is player + 0x2a4. It calls 0x1968c0 (at 0xac55c), then 0xac6f4 or 0xeb610 for each item until one plays. With no next item, it calls 0xeb610 (player, 0, 0) at 0xac588 and the player stops. Refer to [../re/playback-log.md](../re/playback-log.md). | Static, Patch |
+| 0x0ac4c4 | (player, flags): the "next song" action. The current item is player + 0x2a4. It calls 0x1968c0 (at 0xac55c), then 0xac6f4 or 0xeb610 for each item until one plays. With no next item, it calls 0xeb610 (player, 0, 0) at 0xac588 and the player stops. Refer to [../re/diagnostic-log.md](../re/diagnostic-log.md). | Static, Patch |
 | 0x0ac6f4 | (player, item, flags): plays an item. Calls 0xeb610 (at 0xac750), 0x10b894 (at 0xac7b4) and 0xd9b70. Returns 0 if the song plays. | Static, Patch |
 | 0x0eb610 | (player, item, flags): sets the current song. Item 0: no song. −0x32: the song cannot play. −0x6c: no memory (0xa8dc4 gives 0). | Static, Patch |
 | 0x10b894 | (player, item, flags, out, cache): probably the open of the decoder. Returns an error code. | Static, Patch |
@@ -630,6 +631,7 @@ Refer to [re/usb-audio.md](../re/usb-audio.md). No patch uses these functions ye
 | 0x1e2bdc | Gives a packet buffer back to the pool. |
 | 0x1e2f74 | (source): 1 if the music may go to USB. Source + 8 = 0: 0 while the byte at RAM 0x1081dff6 is 0 (an iAP "Digital Audio" accessory sets it); then the byte at 0x1081e018 = 1: the rates must be equal or ×2 or ×4 (0x1e2f38). 0x1e3064 gives silence (0x1e2c90 with r3 = 1) if it returns 0. Static, Emulator. |
 | 0x205cfc, 0x205db4 | 0x205cfc makes ArtworkLoadTask (0x11c808, stack 0x8000); 0x205db4 is its loop: the wait on task + 0x4c (0xd1e78), the gate 0x94bbc(0x19) (if 0: 0x94e6c(0x19, 0) and a sleep of 1.5 s), the lock task + 0x40 (0xd6a64), the request lookup 0x2065c4, the artwork lookup 0x1f161c (0: no art), 0x29e024, the image load 0x2258a4 and 0x225594, the release 0x94d80(0x19, 500). Static, Emulator. |
+| 0x2055dc, 0x205854 | In ArtworkLoadTask: the only call of the artwork lookup 0x1f161c, and the call of the image load 0x2258a4. 0x2258a4 has 15 calls. The patch `diagnostic-log` hooks these two calls. | Static, Patch |
 | 0x94bbc, 0x94e6c, 0x94d80 | The client requests to the kernel port 0x14 (0xa6770, the lock 0x12b): query (type 1), request (type 0), release after a delay in ms (type 2). The client is the first argument (0x19 artwork, 0x27 audio playback, 0x24 the USB audio area, 3 …). Static. |
 | 0x284b0c | The server task of the port 0x14 (receive 0xa66a4): 45 clients, a byte "active" and a release timer for each. A query is granted if the state of 0x2651e4 is set or a client is active. Static. |
 | 0x2651e4 | Reads the register 0x52 (or 0x86) of the power chip (0x282ad4) and gives a state bit to the port 0x14 server. Static. |

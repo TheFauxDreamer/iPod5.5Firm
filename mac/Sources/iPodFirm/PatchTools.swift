@@ -84,7 +84,7 @@ struct PatchTool: View {
         case "album-thumbnails": AlbumArtSections()
         case "usb-log": USBLogSection()
         case "playlist-folders": PlaylistFoldersSection()
-        case "playback-log": PlaybackLogSection()
+        case "diagnostic-log": DiagnosticLogSection()
         default: EmptyView()
         }
     }
@@ -196,27 +196,27 @@ struct PlaylistFolderRow: View {
     }
 }
 
-// MARK: playback-log
+// MARK: diagnostic-log
 
-/// The log that the playback-log patch writes on the iPod: the shuffle, the playback and the memory.
-struct PlaybackLogSection: View {
+/// The log that the diagnostic-log patch writes on the iPod: the playback, the memory, the power, the artwork and the performance.
+struct DiagnosticLogSection: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
         Section {
             HStack {
-                Button("Show Playback Log") { model.readPlaybackLog() }.disabled(model.currentIPod == nil)
+                Button("Show Diagnostic Log") { model.readDiagnosticLog() }.disabled(model.currentIPod == nil)
                 Spacer()
-                if let log = model.playbackLog, !log.isEmpty {
+                if let log = model.diagnosticLog, !log.isEmpty {
                     Button("Copy Log") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(log, forType: .string)
                     }
-                    Button("Save the Log to Share…") { model.savePlaybackLog() }
-                    Button("Report on GitHub…") { model.reportPlaybackLog() }
+                    Button("Save the Log to Share…") { model.saveDiagnosticLog() }
+                    Button("Report on GitHub…") { model.reportDiagnosticLog() }
                 }
             }
-            if let log = model.playbackLog {
+            if let log = model.diagnosticLog {
                 if log.isEmpty {
                     Text("The log is empty. Play music. Then press a button, so that the iPod writes the log. Wait 15 seconds before you connect the iPod.")
                         .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -230,7 +230,7 @@ struct PlaybackLogSection: View {
                 }
             }
         } header: {
-            Text("Playback Log")
+            Text("Diagnostic Log")
         } footer: {
             FormFooter("Report on GitHub saves the log as a text file and opens a new issue in the browser. Drag the file into the issue. You need a GitHub account. The file has the names of the songs in the log, and an issue is public.")
         }

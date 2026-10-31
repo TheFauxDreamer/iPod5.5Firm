@@ -110,13 +110,14 @@ def test_backlight_60s():
 
 
 @pytest.mark.skipif(not os.environ.get("IPODFW_IPSW"), reason="set IPODFW_IPSW=path/to/iPod_25.1.3.ipsw")
-def test_playback_log_hooks():
+def test_diagnostic_log_hooks():
     osos = FirmwarePartition(extract_firmware(os.environ["IPODFW_IPSW"])[1]).image("osos")
-    out, report = patcher.apply(osos, REPO / "patches/playback-log", 0x7f8000)
+    out, report = patcher.apply(osos, REPO / "patches/diagnostic-log", 0x7f8000)
     assert report["code"][0] == "0x736800"                     # extended: after the end of osos
-    for h in json.loads((REPO / "patches/playback-log/patch.json").read_text())["hooks"]:
+    for h in json.loads((REPO / "patches/diagnostic-log/patch.json").read_text())["hooks"]:
         at, target = int(h["at"], 16), int(report["symbols"][h["to"]], 16)
-        assert struct.unpack_from("<I", out, at)[0] == patcher.branch(h["kind"], at, target)
+        want = target if h["kind"] == "word" else patcher.branch(h["kind"], at, target)
+        assert struct.unpack_from("<I", out, at)[0] == want
     # alone, each chain wrapper runs the replaced push and continues after it
     start = int(report["symbols"]["start_original"], 16)
     assert struct.unpack_from("<I", out, start)[0] == 0xe92d4038

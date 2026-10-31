@@ -517,7 +517,7 @@ This cause is not proved. If a stop occurs, a test with the stock firmware on th
 
 ### A gap in the tests
 
-The real iPod test of `shuffle-fixes` 2.1 (28 October 2026, 50000 songs) used Next. The test steps in `patch.json` also used Next. Version 2.2 of `patch.json` adds a step that lets a song play to its end. The end of a song and Next use two different paths (refer to [playback-log.md](playback-log.md#first-log-from-a-real-ipod)). The first log, 30 October 2026: on a 64 MB iPod with 5202 songs, the second song started after each of the 3 ends of a song, with no failed allocation. A library near the limit of a 32 MB iPod is not tested.
+The real iPod test of `shuffle-fixes` 2.1 (28 October 2026, 50000 songs) used Next. The test steps in `patch.json` also used Next. Version 2.2 of `patch.json` adds a step that lets a song play to its end. The end of a song and Next use two different paths (refer to [diagnostic-log.md](diagnostic-log.md#first-log-from-a-real-ipod)). The first log, 30 October 2026: on a 64 MB iPod with 5202 songs, the second song started after each of the 3 ends of a song, with no failed allocation. A library near the limit of a 32 MB iPod is not tested.
 
 ## How to copy the algorithm exactly
 
@@ -568,7 +568,7 @@ The differences from the firmware:
 
 - Does the list of slot 1 contain the tracks with "skip when shuffling" (mhit byte 0xa5)? No code was found that reads this byte from the track data.
 - With Repeat All, does the firmware shuffle again at the end of the list? Real iPod (20 October 2026): one album with Album Mix and Repeat All plays with no end, and the songs stay shuffled. Not known: does each pass have a new order or the same order?
-- Done: when Shuffle changes during playback, 0xb0d40 calls 0xb40c4 (the call at 0xb0d88; refer to [playback-log.md](playback-log.md#first-log-from-a-real-ipod)).
+- Done: when Shuffle changes during playback, 0xb0d40 calls 0xb40c4 (the call at 0xb0d88; refer to [diagnostic-log.md](diagnostic-log.md#first-log-from-a-real-ipod)).
 - Does a 32 MB iPod near its track limit stop playback at the end of a song with shuffle on? Refer to [Checks of the shuffle patches with a large library](#checks-of-the-shuffle-patches-with-a-large-library).
 - A test on the real iPod with a large library: let a song play to its end with Shuffle Songs. Does the second song start?
 - The sort of 0xddf94 for slot 6 when the database has no album index (0x1174b4 gives the compare).
