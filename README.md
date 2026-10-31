@@ -94,7 +94,7 @@ Each patch has a letter. You can switch on "Add a letter for each switched-on pa
 | Item | Function | Tested on a real iPod |
 |---|---|---|
 | iPod Appearance | Light, Dark, or Switch on iPod. "Switch on iPod" adds a "Dark Mode" item to Settings on the iPod. You can also import a custom theme from iPodWizard. | Yes |
-| Split layout | Shows the cover and the current song beside the main menu, as on the iPod classic. It uses the Light appearance, and all other screens stay stock. | No |
+| Split layout | Shows the cover and the current song beside the main menu, as on the iPod classic. It uses the Light appearance, and all other screens stay stock. | Yes |
 | Software Version | Shows a different version on the About screen, for example 1.3.1. Finder and iTunes continue to see version 1.3. | Yes |
 
 ### Built-in patches

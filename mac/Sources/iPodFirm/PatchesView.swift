@@ -790,8 +790,6 @@ struct AppearanceDetail: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     LabeledContent("Size on iPod (Split)", value: PatchSpec.byteText(split.addedSize))
-                    Label("Split is not tested on a real iPod.", systemImage: "exclamationmark.triangle.fill")
-                        .labelStyle(StatusLabelStyle(tint: .orange))
                 }
             }
             Section("Dark Theme") {

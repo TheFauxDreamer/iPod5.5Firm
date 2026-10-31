@@ -1307,7 +1307,7 @@ This change does not exist yet. The research found a USB Audio Class 1 source in
 
 **Function.** The main menu shows the list at the left, and the cover, the song, the artist, the album and the count at the right. Stock Now Playing and all other screens stay stock. The panel needs no code: the elements get their data from the firmware.
 
-**Status.** Tested in the emulator only. Not tested on a real iPod.
+**Status.** Tested in the emulator and on a real iPod (31 October 2026). All items operate. The cover sometimes takes approximately 1 s to show, most often after Previous.
 
 **User interface.** Patches pane > iPod Appearance > Layout. Split operates only with the Light appearance. The pane shows the size.
 

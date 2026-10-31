@@ -203,9 +203,7 @@ iPodWizard is under the GPL, so use its source only for facts. Its post says tha
 
 ## The stock layout
 
-Status: emulator test open, 31 October 2026.
-
-Warning: do not write this file to a real iPod until all tests are complete and the owner agrees.
+Status: operates on a real iPod, 31 October 2026.
 
 [home-screen-views.py](home-screen-views.py) makes `home-screen-split.ipsw` from stock 1.3. The panel is only in the main menu, as on the classic. The title layers, all other lists and all shared Views stay stock.
 
@@ -236,6 +234,8 @@ Next does nothing in the emulator with stock 1.3 and with this file (report of t
 Owner test on 31 October 2026: long titles scroll, and the panel text has no overlap. The other items need a real iPod, because the emulator does not play music.
 
 Owner test of `iPodFirm Split Test` 0.1.222 on 31 October 2026: the owner reported that all looks good in the app.
+
+Real iPod test on 31 October 2026: the owner reported that everything operates as expected. The cover sometimes takes approximately 1 s to show, most often after Previous.
 
 Rejected designs: commit 3b250ed rewrote Views -285, -286 and 25532, which other screens use. Commit 704f76d put the panel behind all screens. Do not change a shared View.
 
@@ -273,6 +273,15 @@ Facts from the code (Static, not tested):
 - RetailOS reads the Views one time, at the start. The switch table of `dark-mode` applies before the first read. Thus "Switch on iPod" can possibly change the layout data too.
 - The dark theme changes 617 Views. The dark split View must start from the dark View 24430, not from stock. The panel text must use a colour that the dark theme can show.
 - Theme import refuses a View with a changed structure, and it does not apply code. Thus Contemporary Split needs a separate design. The themes rewrite shared Views, and these broke Now Playing. Credit the theme authors if the app uses their values.
+
+## Slow cover
+
+Static. Not measured. The panel uses the same firmware path as Now Playing: Draw 25543, then 0x1eb2b0 and the art cache of `ArtworkLoadTask`. Thus the panel adds no new load.
+
+- The task 0x20620c fills the request queue from the play queue, inside a budget of 1 MB. This suggests that the firmware prepares the songs in the play sequence. If this is correct, a song before the current song is possibly not in the cache. This can explain the delay after Previous.
+- The loop 0x205db4 has a gate 0x94bbc(0x19). If the gate gives 0, the task sleeps for 1.5 s. This can explain a delay of approximately 1 s. The gate is not decoded.
+
+Test: compare with stock Now Playing. If Now Playing has the same delay, the Split layout does not cause it. A shorter delay needs code.
 
 ## Next steps
 
