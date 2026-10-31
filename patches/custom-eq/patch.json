@@ -5,13 +5,19 @@
   "symbol": "slider.vertical.3",
   "category": "playback",
   "version_letter": "q",
-  "version": "0.11",
+  "version": "0.12",
   "size": 1690,
   "details": [
     "Each EQ shows with its name in Settings > EQ. To change the iPod, flash it."
   ],
   "notes": [
-    "The iPod applies the EQ only to 16-bit music at 44.1 kHz or 48 kHz. The Apple presets have the same limit."
+    "The iPod applies the EQ only to 16-bit music at 44.1 kHz or 48 kHz. The Apple presets have the same limit.",
+    "Not tested on a real iPod: the sound of this version.",
+    "Not tested on a real iPod: all 5 bands in one EQ. The music can have gaps.",
+    "Not tested on a real iPod: gains past Apple's limits. A strong boost can distort.",
+    "Not tested on a real iPod: EQs with band numbers above 59 in the firmware. This can be the second or a later EQ.",
+    "Not tested on a real iPod: USB-C audio with this EQ.",
+    "Not tested on a real iPod: a flash without this patch while one of these EQs is selected."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
