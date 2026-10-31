@@ -42,7 +42,7 @@ The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 | File | Open Firmware… (⌘O), Download Apple Firmware 1.3, Save Firmware (⌘S), Save Firmware As… (⇧⌘S), Export as .ipsw…, Export Pictures & Text…, Import Pictures & Text…, Import iPodWizard Theme…, New Patch…, Install Patch… |
 | iPod | Flash to iPod… (⇧⌘F), Back Up iPod, Eject iPod (⌘E), Run in Emulator (⌘R) |
 | View | Show Sidebar, and a command for each pane: iPod (⌘1), Firmware (⌘2), Pictures (⌘3), Text (⌘4), Patches (⌘5), Games (⌘6), Emulator (⌘7) |
-| Help | iPodFirm Documentation, Show Disclaimer, Thanks…, Save Log…, Report a Problem on GitHub… |
+| Help | iPodFirm Documentation, Show Disclaimer, Thanks…, Open Log, Save Log…, Report a Problem on GitHub… |
 
 While the app downloads the Apple firmware, the busy overlay shows a progress bar and a Cancel button. A flash has no Cancel button. The app menu has Check for Updates…. Save Firmware writes to the file of the last Save As. The first save shows the panel, because the app never overwrites the file that it opened.
 
@@ -84,7 +84,7 @@ All faults go through `AppModel.fail`. It writes the error, the last 15 steps an
 - **Save Log…** saves the state of the app and the two log files as one text file, for example `iPodFirm Log 2026-10-29 1405.txt`. Finder then shows the file.
 - **OK** closes the alert.
 
-Help > Save Log… and Help > Report a Problem on GitHub… do the same with no fault. The tests in `AppLogTests` check the file, the rotation, the redaction, the steps, the error data, `HelperResult.detail` and the issue address.
+Help > Save Log… and Help > Report a Problem on GitHub… do the same with no fault. Help > Open Log opens the most recent log, `iPodFirm.log`, in the default app for a `.log` file. On a Mac with no change to this setting, this app is Console. If no app opens the file, Finder shows it. The tests in `AppLogTests` check the file, the rotation, the redaction, the steps, the error data, `HelperResult.detail` and the issue address.
 
 The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the centre of its column. In a tall column, the iPod is larger, to a maximum of 1.4 times. The settings column has a maximum width of 520 points.
 

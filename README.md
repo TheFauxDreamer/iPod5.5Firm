@@ -268,6 +268,8 @@ When iPodFirm shows a fault, the alert has two more buttons:
 
 To do this with no fault, select Help > Save Log… or Help > Report a Problem on GitHub….
 
+To read the most recent log, select Help > Open Log.
+
 ### How the app protects the iPod
 
 - The app makes a backup of the firmware partition before each write or restore. It does not overwrite a backup.

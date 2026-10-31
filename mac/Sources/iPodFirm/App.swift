@@ -87,6 +87,7 @@ struct IPodFirmApp: App {
                 Button("Show Disclaimer") { model.showDisclaimerReview = true }
                 Button("Thanks…") { model.showThanks = true }
                 Divider()
+                Button("Open Log") { model.openLog() }
                 Button("Save Log…") { model.saveLog() }
                 Button("Report a Problem on GitHub…") { model.reportOnGitHub(nil) }
             }

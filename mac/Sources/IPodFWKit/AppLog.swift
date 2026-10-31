@@ -29,7 +29,8 @@ public enum AppLog {
     static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.thefauxdreamer.ipodfirm", category: "app")
     private static var steps: [(date: Date, text: String)] = []
 
-    static var fileURL: URL? { directory?.appendingPathComponent("iPodFirm.log") }
+    /// The most recent log. A rotation starts a new file with this name.
+    public static var fileURL: URL? { directory?.appendingPathComponent("iPodFirm.log") }
     static var oldFileURL: URL? { directory?.appendingPathComponent("iPodFirm.1.log") }
 
     public static func info(_ text: String) { write(.info, text) }
