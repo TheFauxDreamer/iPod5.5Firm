@@ -179,6 +179,20 @@ Version 1.3 on the same iPod, 30 October 2026 (app 0.1.189, 17 patches, with `fl
 
 The owner fast-forwarded some songs to the end to test the change to the next song. This explains the two short times, and it shows that a fast-forward to the end uses the path of the end of a song. The patch does not record a seek. Thus the log cannot show which songs the owner fast-forwarded.
 
+### The fifth log
+
+Version 1.4 on the same iPod, 31 October 2026 (app 0.1.199, 17 patches, with `flash-keep-awake` 1.3 and `flash-wake-on-input` 1.4). The music did not stop. The log had 21 lines, no dropped line and no failed allocation.
+
+| Item | Result |
+|---|---|
+| Shuffle Songs, 5202 songs | 28 ms, `empty=0 repeated=0`. |
+| The lowest free heap | 2,022,992 bytes. |
+| The end of the first song (position 1) | `next from=ac22c` 245.1 s after `play`. The file is 242.6 s. The cause of the 2.5 s difference is not known. Possibly the first song starts late after the `play` line, or a pause occurred. |
+| The Next button (position 2) | `next from=a9800` 106.5 s after `play`. The file is 189.9 s. |
+| The short end (position 3) | `next from=ac22c` 18.0 s after `play`. The file is 187.8 s. This agrees with a fast-forward to the end, as in the fourth log. The log cannot prove this. |
+
+The iPodFirm list has no `time` value, thus this build also used the default Storage Time of 30 minutes.
+
 ### A fault in the log
 
 Each line has `track=46494c45`. This is the text `FILE`, not a track ID. Track + 0x0c is a type word, and 0xb7858 compares it. Version 1.1 removes the value `track`.
