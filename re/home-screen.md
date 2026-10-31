@@ -203,23 +203,31 @@ iPodWizard is under the GPL, so use its source only for facts. Its post says tha
 
 ## The stock layout
 
-Status: operates in the emulator on 31 October 2026. Live data, the cover and the other title layers are not tested.
+Status: the main menu and the submenus operate in the emulator on 31 October 2026. Now Playing, live data, the cover and the 8 other title layers are not tested.
 
-[home-screen-views.py](home-screen-views.py) makes `home-screen-split.ipsw` from stock 1.3. Fonts, pictures, Types and code stay stock. No View changes size. The file changes 91 Views:
+Warning: do not write this file to a real iPod until all tests are complete and the owner agrees.
 
-| View | Change |
-|---|---|
-| 85 list Views | The right edge of the scroll bar: −107. The list ends at x = 213. |
-| 24069 | The first title layer, 24506, is 240 pixels high, not 24. The 8 other title layers stay stock. |
-| 24506 | The stock strip stays 24 pixels high. View -285 gets the full width. |
-| -277 | The content starts at y = 24 of the parent. It does not follow the title layer. The themes use a value of −240 and change all 9 title layers. |
-| -286 | Gets the stock title and clock from View -285. |
-| -285 | Holds -286 at the stock title position, the cover (-356) and the song panel (25532). |
-| 25532 | The song title, artist, album and count, from the properties 0x63bd–0x63bf and 0x63c3. |
+[home-screen-views.py](home-screen-views.py) makes `home-screen-split.ipsw` from stock 1.3. Fonts, pictures, Types and code stay stock. No View changes size. The file changes 89 Views:
 
-The file drops two stock items of View -285: text 24102 and View 24514. Their use is not known. Test for missing text in the title.
+| View | Changed bytes | Change |
+|---|---|---|
+| 85 list Views | 4 each | The right edge of the scroll bar: −107. The list ends at x = 213. |
+| 24069 | 1 | The first title layer, 24506, is 240 pixels high, not 24. The 8 other title layers stay stock. |
+| 24506 | 7 | Element 1 points to View -515, not View -285, with the full width. The stock strip stays 24 pixels high. |
+| -277 | 6 | The content starts at y = 24 of the parent. It does not follow the title layer. |
+| -515 | 145 | Rewritten: the stock title View -285, the cover View -356 and 4 text elements. |
 
-The emulator showed these items correctly: the Language menu, the main menu, the Playlists menu, the stock title and the stock battery. Each list stops at x = 213, and the panel stays on the submenus.
+Rejected design: an earlier version (commit 3b250ed) rewrote Views -285, -286 and 25532, as the themes do. Stock Now Playing uses 25532, stock View 22533 uses -286, and the title layers 15617 and 22532 use -285. The owner reported that the UI broke when a song played. Thus a changed View must have no other user. `home-screen-views.py` must not change a shared View.
+
+Audit of View -515 (Static):
+
+- No View has it as a child in stock.
+- No Menu, Type, TCmd, Bits or LDTm resource has the value −515 at a 2-byte offset.
+- No View has the value −515 at a 2-byte offset.
+- `osos` has the 32-bit value only in the resource table. The value 0xfdfd has no match.
+- The decompiled code has no match.
+
+This does not prove that View -515 is unused. Code can calculate an ID. Its text elements are 28603–28608.
 
 ## Game patch
 
@@ -229,6 +237,7 @@ The themes contain the same patch as the DRM research of this project. The resea
 
 1. The owner tests live data in the emulator: the song text, the cover and Now Playing.
 2. Find the art size of Draw 25543 and of Draw 25544. The panel is 107 pixels wide, so Draw 25544 is possibly better.
-3. Test the 8 other title layers: 24507, 10371, 17538, 15617, 19328, 22404, 22532 and 28043.
-4. Find the use of text 24102 and View 24514.
-5. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`.
+3. Test the 8 other title layers: 24507, 10371, 17538, 15617, 19328, 22404, 22532 and 28043. Each must operate at the height of 24 in a layer of the root.
+4. Examine each of the 85 lists for long text in the narrow width.
+5. Find the screen of text 28603–28608, and show that the firmware never loads View -515.
+6. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`.

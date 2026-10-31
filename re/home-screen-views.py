@@ -30,7 +30,7 @@ SCREEN_HEIGHT = 240
 SONG_COUNT, SONG_TITLE, SONG_ARTIST, SONG_ALBUM = 0x63c3, 0x63bd, 0x63be, 0x63bf
 NOW_PLAYING_TEXT_STYLE = 0x5ea30000
 TITLE_ELEMENT_PROPERTY = 0x5fbc  # the same property as the stock title
-PANEL_PROPERTY = 0x5fc2  # the same property as stock View 24514
+PANEL_VIEW = -515
 
 
 def edge(view: bytearray, element: int, offset: int, mode: int | None = None, value: int | None = None,
@@ -48,17 +48,16 @@ def rect(top: int, left: int, bottom: int, right: int) -> list[int]:
     return [v for e in (top, left, bottom, right) for v in (0, PARENT, e & 0xffffffff)]
 
 
-def group(ident: int, r: list[int], word6: int = 0xa00, prop: int = 0, tail: tuple = (0, 0, 0)) -> bytes:
+def group(ident: int, r: list[int], tail: tuple = (0, 0, 0)) -> bytes:
     """A 96-byte element that holds a View."""
-    words = [0x5c, 0x1100, 0x4e6f6e65, ident & 0xffff, 0xffffffff, prop, word6, *r, 0xffd06428, 0xffe89858, *tail]
+    words = [0x5c, 0x1100, 0x4e6f6e65, ident & 0xffff, 0xffffffff, 0, 0xa00, *r, 0xffd06428, 0xffe89858, *tail]
     return struct.pack(f"<{len(words)}I", *words)
 
 
-def text(ident: int, r: list[int], scrolls: bool = False) -> bytes:
+def text(ident: int, r: list[int]) -> bytes:
     """A text element with its text from a firmware property."""
-    extra = [0x8c, 0x1388, 4, 0x19] if scrolls else []
-    words = [0x6c if scrolls else 0x5c, 0x3180 if scrolls else 0x1580, 0x53747220, ident, 0x2b00, TITLE_ELEMENT_PROPERTY,
-             0x1000a00, *r, 0xffd06428, 0xffe89858, NOW_PLAYING_TEXT_STYLE, 0, 0xc, *extra]
+    words = [0x5c, 0x1580, 0x53747220, ident, 0x2b00, TITLE_ELEMENT_PROPERTY,
+             0x1000a00, *r, 0xffd06428, 0xffe89858, NOW_PLAYING_TEXT_STYLE, 0, 0xc]
     return struct.pack(f"<{len(words)}I", *words)
 
 
@@ -76,31 +75,26 @@ def split_views(views: dict[int, bytes]) -> dict[int, bytes]:
 
     # The title layer covers the screen. The title strip stays stock.
     edge(new[24069], 0, BOTTOM, value=SCREEN_HEIGHT)
-    edge(new[24506], 1, LEFT, value=0)
-    edge(new[24506], 1, RIGHT, value=0)
 
     # The content starts below the title, and does not follow the taller layer.
     content = next(i for i, e in enumerate(view_elements(bytes(new[-277]))) if e[3] == 24085)
     edge(new[-277], content, TOP, mode=PARENT, value=TITLE_HEIGHT, reference=0)
 
-    # View -286 gets the stock title and clock. View -285 gets the panel.
-    bar = view_elements(bytes(new[-285]))
-    new[-286] = bytearray(struct.pack("<I", 2) + b"".join(bytes(new[-285][e[0]:e[0] + e[1]]) for e in bar[:2]))
-    new[-285] = bytearray(struct.pack("<I", 4) + b"".join((
-        group(0, rect(0, 32, -187, -1)),
-        group(-286, rect(0, 40, 0, -40)),
-        group(-356, rect(TITLE_HEIGHT, PANEL_X, -96, 0), tail=(0x3e8, 0, 1)),
-        group(25532, rect(40, 0, 0, 0), prop=PANEL_PROPERTY, tail=(0x3e8, 0, 0)),
-    )))
-    edge(new[-285], 1, BOTTOM, mode=HEIGHT, value=TITLE_HEIGHT)
-
+    # View -515 has no parent in stock. It holds the title and the panel.
+    # Views -285, -356 and 25532 stay stock, because other screens use them.
+    struct.pack_into("<H", new[24506], view_elements(bytes(new[24506]))[1][0] + 12, PANEL_VIEW & 0xffff)
+    edge(new[24506], 1, LEFT, value=0)
+    edge(new[24506], 1, RIGHT, value=0)
     x, right = PANEL_X + 6, -4
-    new[25532] = bytearray(struct.pack("<I", 4) + b"".join((
-        text(SONG_COUNT, rect(120, x, 0, right)),
-        text(SONG_TITLE, rect(56, x, 0, right), scrolls=True),
-        text(SONG_ARTIST, rect(74, x, 0, right)),
-        text(SONG_ALBUM, rect(92, x, 0, right)),
+    new[PANEL_VIEW] = bytearray(struct.pack("<I", 6) + b"".join((
+        group(-285, rect(0, 40, 0, -40)),
+        group(-356, rect(TITLE_HEIGHT, PANEL_X, -96, 0), tail=(0x3e8, 0, 1)),
+        text(SONG_TITLE, rect(146, x, 0, right)),
+        text(SONG_ARTIST, rect(164, x, 0, right)),
+        text(SONG_ALBUM, rect(182, x, 0, right)),
+        text(SONG_COUNT, rect(208, x, 0, right)),
     )))
+    edge(new[PANEL_VIEW], 0, BOTTOM, mode=HEIGHT, value=TITLE_HEIGHT)
     return {k: bytes(v) for k, v in new.items() if bytes(v) != views[k]}
 
 
