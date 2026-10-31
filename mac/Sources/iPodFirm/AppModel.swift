@@ -132,7 +132,11 @@ final class AppModel: ObservableObject {
     @Published var gameRemoveStatus = ""
     /// The layout of the main menu.
     @Published var layout: Layout = Layout(rawValue: UserDefaults.standard.string(forKey: "layout") ?? "") ?? .stock {
-        didSet { UserDefaults.standard.set(layout.rawValue, forKey: "layout"); switchesChanged(oldValue != layout) }
+        didSet {
+            UserDefaults.standard.set(layout.rawValue, forKey: "layout")
+            switchesChanged(oldValue != layout)
+            if oldValue != .split && layout == .split && !mirroring { turnOnSplitPatch() }
+        }
     }
 
     /// True if the owner changed a patch switch, an option or the appearance after the last flash, restore
@@ -885,6 +889,12 @@ final class AppModel: ObservableObject {
     func conflicts(_ patch: PatchInfo) -> [(PatchInfo, String)] {
         Patcher.conflicts([patch] + activePatches.filter { $0.spec.name != patch.spec.name })
             .filter { $0.0.spec.name == patch.spec.name }.map { ($0.1, $0.2) }
+    }
+
+    /// The Split layout turns this patch on one time. The patch keeps its own switch.
+    static let splitPatch = "no-now-playing-timer"
+    private func turnOnSplitPatch() {
+        if let p = patches.first(where: { $0.spec.name == Self.splitPatch }) { setPatch(p, on: true) }
     }
 
     /// Turn a patch on or off. A patch that conflicts with a turned-on patch stays off. A patch turns

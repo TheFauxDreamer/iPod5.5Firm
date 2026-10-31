@@ -1,0 +1,23 @@
+{
+  "name": "no-now-playing-timer",
+  "title": "No Now Playing Timer",
+  "summary": "Stops the 10 second timer that opens Now Playing.",
+  "symbol": "timer",
+  "category": "display",
+  "version_letter": "t",
+  "version": "0.2",
+  "size": 0,
+  "details": [
+    "Now Playing does not open after 10 seconds with no input.",
+    "Play on a song opens Now Playing.",
+    "The Now Playing menu item opens Now Playing.",
+    "The Split layout turns this patch on."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
+  "bytes": [
+    { "at": "0x4b5e38", "expect": "96", "value": "07" }
+  ]
+}

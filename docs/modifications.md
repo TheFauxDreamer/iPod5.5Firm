@@ -19,6 +19,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [volume-unlimit](#volume-unlimit) | Data patch | Patches | 2 bytes | No |
 | [search-5g](#search-5g) | Data patch | Patches | 1 byte | No |
 | [click-speaker-only](#click-speaker-only) | Data patch | Patches | 1 instruction word | Yes (2026-10-27) |
+| [no-now-playing-timer](#no-now-playing-timer) | Data patch | Patches | 1 byte | No |
 | [shuffle-fixes](#shuffle-fixes) | Code patch (extended) | Patches | 2 `bl` and 4 instruction words | Version 2.1: yes (28 October 2026) |
 | [shuffle-album-mix](#shuffle-album-mix) | Code patch (extended) | Patches | 3 `bl`, 3 `b` and 3 vtable words (all 6 with `chain`), 1 instruction word, 2 menus | Version 1.1: partly, the order of one album. Version 1.2: yes (28 October 2026) |
 | [something-comforting](#something-comforting) | Code patch (example) | Patches | 1 `b` and 2 vtable words (all with `chain`), a Settings menu | Version 1.1: yes (28 October 2026) |
@@ -696,6 +697,14 @@ Thus `0xa0348` always returns 0. The other match of the iPodWizard pattern, at 0
 Thus `0x130b30` always returns 1. The size on the iPod is 0 bytes. The pane shows "1 byte".
 
 **Test status.** The Apple osos 1.3 has `00` at 0x130b50. Not tested in the emulator: the emulator profile is a 5.5G. Not tested on a real iPod with iPodFirm. RetroCux tested the same byte on a real 5G.
+
+## no-now-playing-timer
+
+**User interface.** Patches pane > Display > No Now Playing Timer, letter `t`, version 0.2. A change of the layout to Split turns the patch on one time. The patch keeps its own switch, and a change to Stock does not change it.
+
+This patch stops the timer that opens Now Playing after 10 seconds with no input. It changes 1 byte of the `TCmd` 9088 script, at osos 0x4b5e38: 0x07 in place of 0x96. The function 0xf84 then calls 0x1007, which starts the timer again, and does not call 0x1096, which opens Now Playing. Play on a song and the Now Playing menu item do not change. Refer to [../re/now-playing-open.md](../re/now-playing-open.md).
+
+**Test status.** Emulator: the owner tested version 0.1 with the Split themes (31 October 2026) and reported that it works well. Real iPod: not tested.
 
 ## click-speaker-only
 
