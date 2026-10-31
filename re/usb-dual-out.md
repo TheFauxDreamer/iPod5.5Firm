@@ -24,7 +24,7 @@ These are the problems:
 3. **The latency.** The USB ring is 24–40 ms in front of the USB frame. If one person hears the two outputs, that person hears an echo. For two listeners, this is not a problem.
 4. **The volume.** The click wheel sets the codec volume and the USB volume (SET_CUR). The patch must keep the two volumes correct.
 5. **The CPU.** The USB route uses about 15 % of core 0 (refer to [usb-host.md](usb-host.md)). The codec DMA adds a small load.
-6. **The EQ.** The software EQ of 1.3 is probably before 0x1a2d60. Then the two outputs get the same EQ. Refer to [custom-eq.md](custom-eq.md).
+6. **The EQ.** The software EQ of 1.3 is in the decoder step 0x24ab48, before 0x1a2d60. Then the two outputs get the same EQ. Refer to [custom-eq.md](custom-eq.md).
 
 ## Possible steps
 

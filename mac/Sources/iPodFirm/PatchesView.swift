@@ -439,6 +439,7 @@ struct PatchDetail: View {
             }
             PatchAbout(spec: patch.spec)
             PatchOptions(patch: patch)
+            if patch.spec.eq_editor != nil { CustomEQView(patch: patch) }
             PatchControls(patch: patch)
             Section("Information") {
                 Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 6) {

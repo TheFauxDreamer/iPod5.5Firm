@@ -26,6 +26,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [instant-save](#instant-save) | Code patch | Patches | 1 `b` | Version 1.0: yes (28 October 2026) |
 | [cover-flow](#cover-flow) | Code patch | Patches | 3 words (2 vtable slots and 1 literal) | Version 0.6.7: yes (27 October 2026). Version 0.6.8: yes (28 October 2026) |
 | [up-next](#up-next) | Code patch (extended) | Patches | 1 `bl`, 1 `b` and 2 vtable words (3 with `chain`), a Settings menu | Version 0.4: yes. Version 0.5: yes (28 October 2026) |
+| [custom-eq](#custom-eq) | Code patch (extended) | Patches | 1 `bl`, 1 `b`, 2 words (`bytes`) | Version 0.1: start and preset list in the emulator (31 October 2026). Not tested on the real iPod |
 | [playlist-folders](#playlist-folders) | Code patch (extended) | Patches | 4 `bl`, 2 `b` and 1 vtable word (with `chain`) | Version 0.1: emulator only (29 October 2026). Not tested on the real iPod |
 | [playback-log](#playback-log) | Code patch (test, extended) | Patches | 8 `bl`, 5 `b` (all 5 with `chain`) | Version 1.0: yes (30 October 2026). Version 1.2: no. Not tested in the emulator |
 | [diagnostic-log](#diagnostic-log) | Code patch (test, extended) | Patches | 12 `bl`, 8 `b` (all 8 with `chain`), 1 `word` (`chain`) | No. Not tested in the emulator |
@@ -990,6 +991,28 @@ The Settings item has the key 0x60007e0f and the label 0x7e0b (`settings_items`,
 **Limits.** An item in a group (an audiobook chapter, for example) is not changed: the patch then adds the songs to On-The-Go. The patch has no pop-up menu yet.
 
 **Test status.** Refer to [safety.md](safety.md). Emulator (2026-10-21), see the list in [../re/play-next.md](../re/play-next.md#emulator-tests-of-the-patch). Real iPod (2026-10-21), version 0.4 with `cover-flow` 0.6.4: the Settings item and its value after a restart, Play Next with Shuffle Off and Shuffle Songs (the song plays at the natural end of the current song), an album or an artist, Play Last, the hold in the Albums list with Cover Flow and with Play Next, the value On-The-Go, and a hold with no music (On-The-Go) all passed. The row blinks after a hold, Now Playing shows the new count, the artwork stays correct, and the iPod did not stop or restart. Real iPod 5.5G (owner, 28 October 2026), version 0.5: the patch operates.
+
+## custom-eq
+
+**User interface.** Patches pane > Playback > Custom EQ, letter `q`, version 0.1, 518 bytes. The section "Custom EQ" has a curve, 5 bands (type, frequency, gain, Q) and Reset Bands. On the iPod, the item "Custom" shows in Settings > EQ. To change the bands, flash the iPod again.
+
+**The firmware.** A preset is a list of up to 5 filter numbers. Refer to [re/custom-eq.md](../re/custom-eq.md).
+
+| Site | Kind | Function |
+|---|---|---|
+| 0xa6d68 | `bl` | `hook_presets` calls 0xa6bd0, then adds the preset "Custom" with 0xd83d0. |
+| 0xdbd84 | `b` | `hook_filter` gives the patch records for the numbers 55 to 59, and the firmware records for the other numbers. |
+| 0xf90fc | `bytes` | The count function returns 60. |
+
+The preset has one number for each active band. A band at 0 dB is off and uses no CPU time.
+
+**The records.** `CustomEQ.records` (Python `custom_eq.records`) calculates the biquads for 44100 Hz and 48000 Hz at the build, and writes `custom_eq_records` and `custom_eq_mask`. The app scales the numerator of the first active band, so that the highest point of the curve is 0 dB. Apple presets have no such precut. The limits are ±12 dB, 20 Hz to 20 kHz, and Q 0.3 to 8.
+
+**Limits.** The EQ operates only on 16-bit music at 44100 Hz or 48000 Hz. The firmware rounds down in its filter loop, so a low band gives a small DC value (−37 PCM counts at 60 Hz +6 dB, −481 at 20 Hz +12 dB). It is not audible. The name "Custom" is in English in all languages.
+
+**Removal.** After a flash without the patch, the saved name has no preset, and the firmware clears the EQ setting (0x9421c).
+
+**Test status.** Emulator, version 0.1 (31 October 2026): the firmware starts, and the list has "Custom" between "Classical" and "Dance" with the value 5500 for one band. The sound, the CPU load with 5 bands and USB-C audio are not tested on the real iPod.
 
 ## playlist-folders
 

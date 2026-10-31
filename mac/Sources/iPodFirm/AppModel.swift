@@ -1077,6 +1077,15 @@ final class AppModel: ObservableObject {
         patchOptions[patch.spec.name, default: [:]][option.id] = value
     }
 
+    /// The 5 bands of a patch with the EQ editor. A change goes into `patchOptions`, like an option.
+    func eqBands(_ patch: PatchInfo) -> [CustomEQ.Band] {
+        CustomEQ.bands(from: patchOptions[patch.spec.name] ?? [:])
+    }
+
+    func setEQBands(_ patch: PatchInfo, _ bands: [CustomEQ.Band]) {
+        patchOptions[patch.spec.name] = CustomEQ.values(of: bands)
+    }
+
     func isCompatible(_ p: PatchInfo) -> Bool {
         guard let editor else { return false }
         return Patcher.isCompatible(p, originalSHA256: editor.originalOSOSHash)

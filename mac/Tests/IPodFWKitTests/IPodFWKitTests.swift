@@ -1,3 +1,4 @@
+import CryptoKit
 import AppKit
 import Foundation
 @testable import IPodFWKit
@@ -597,6 +598,40 @@ final class PatchAndArtTests: XCTestCase {
         for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) {
             let measured = try Patcher.codeSize(p, symbols: ["dark_table": 0])   // the Dark Mode build gives dark_table
             XCTAssertEqual(p.spec.size, measured, "\(p.spec.name): set \"size\": \(measured) in patch.json")
+        }
+    }
+
+    static let customEQGolden = "3b42c6967ea9203f0867f660877a10c744cd9c2a6f9b8f2bb723bd176ecdd8c7"
+
+    /// The Q24 records of custom-eq give the requested gain. The bytes agree with tests/test_custom_eq.py.
+    func testCustomEQRecords() throws {
+        var bands = CustomEQ.defaults
+        bands[2].gain = -60
+        let (data, mask) = try CustomEQ.records(bands)
+        XCTAssertEqual(mask, 1 << 2)
+        XCTAssertEqual(data.count, 200)
+        for (r, rate) in CustomEQ.rates.enumerated() {
+            let q = (0..<5).map { k -> Double in
+                let at = 40 * 2 + (r * 5 + k) * 4
+                let v = Int32(truncatingIfNeeded: (0..<4).reduce(UInt32(0)) { $0 | UInt32(data[at + $1]) << UInt32($1 * 8) })
+                return Double(v) / 16_777_216
+            }
+            XCTAssertEqual(CustomEQ.response([q], frequency: 910, rate: rate), -6, accuracy: 0.1)
+        }
+        let boost = try CustomEQ.records([CustomEQ.Band(kind: .lowShelf, frequency: 100, gain: 120, q: 71)]
+                                         + CustomEQ.defaults.dropFirst())
+        XCTAssertEqual(boost.mask, 1)
+        XCTAssertEqual(SHA256.hash(data: boost.data).map { String(format: "%02x", $0) }.joined(), Self.customEQGolden)
+        XCTAssertEqual(try CustomEQ.records(CustomEQ.defaults).mask, 0)
+        XCTAssertEqual(CustomEQ.bands(from: CustomEQ.values(of: bands)), bands)
+    }
+
+    /// The checks of custom-eq reject bad bands.
+    func testCustomEQChecks() {
+        for bad in [CustomEQ.Band(kind: .peak, frequency: 10, gain: 10, q: 100),
+                    CustomEQ.Band(kind: .peak, frequency: 1000, gain: 130, q: 100),
+                    CustomEQ.Band(kind: .peak, frequency: 1000, gain: 10, q: 900)] {
+            XCTAssertThrowsError(try CustomEQ.records([bad] + CustomEQ.defaults.dropFirst()))
         }
     }
 

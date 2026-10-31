@@ -513,7 +513,7 @@ Refer to [re/play-next.md](../re/play-next.md).
 
 ### The EQ
 
-Refer to [re/custom-eq.md](../re/custom-eq.md). The EQ is a software EQ. A preset is a chain of up to 5 filter numbers (0 = no filter, maximum 0x60).
+Refer to [re/custom-eq.md](../re/custom-eq.md). The EQ is a software EQ. A preset is a chain of up to 5 filter numbers (0 = no filter). Each number selects a record of 2 Q24 biquads, for 44100 Hz and 48000 Hz. The table has 55 records.
 
 | Address | Function | Evidence |
 |---|---|---|
@@ -524,13 +524,27 @@ Refer to [re/custom-eq.md](../re/custom-eq.md). The EQ is a software EQ. A prese
 | 0x10191c | (player, 0, values): with the EQ on (player + 0x235), calls 0xf4dc0 and 0xe6838; with the EQ off, 0xec450. | Static, Emulator |
 | 0x1446e8 | Sends command 0x1f with the first 5 values (each 0 … 0x60) to the audio engine (message queue 2). The selection of Bass Booster in the emulator wrote nothing to the codec. | Static, Emulator |
 | 0x14493c | Sends command 0x1a: the EQ on or off. | Static, Emulator |
+| 0x0a6d34 | Clears the preset list and calls 0xa6bd0 at 0xa6d68. `custom-eq` hooks this call. | Static, Patch |
+| 0x0d83d0 | (library, buffer of 0x218 bytes): adds a preset, sorted by name. Name at +2, 10 values at +0x204. | Static, Patch |
+| 0x24addc | The switch on the command at state + 0x12f8. Case 0x1f calls 0x23f274, case 0x1a calls 0x23fe24. | Static |
+| 0x23f274 | Copies the 5 filter numbers to object + 0x650, then runs 0x23fe3c. | Static |
+| 0x23fe24 | Sets or clears bit 1 of object + 0xcc: the EQ on or off. | Static |
+| 0x23fe3c | Writes the coefficients of the 5 stages to the IRAM block 0x40000fe4. It negates a1 and a2. | Static |
+| 0x0f90fc | Returns the count of filters (RAM 0x10823754, 55). | Static, Emulator |
+| 0x0dbd84 | (number): returns the address of a filter record. The table pointer is RAM 0x10823758. | Static, Emulator |
+| 0x0cfe9c | Sets the table pointer: 0x1082375c, or + 0x898 for codec type 2. | Static, Emulator |
+| 0x6a1a00 | Data: the filter table of codec type 3. 55 records of 40 bytes. The start code copies it to RAM 0x1082375c. | Static, Emulator |
+| 0x2403c4 | Calls the EQ for each block of 0x100 frames. The decoder step 0x24ab48 calls it. | Static |
+| 0x71706c | The EQ (IRAM 0x40000ed0). Only 16-bit audio at 44100 Hz or 48000 Hz. | Static |
+| 0x7163b0 | One biquad stage, Direct Form I, Q24, for 2 channels. | Static |
+| 0x7164c8, 0x7164e8 | Copy the samples with `<< 9`, and back with `>> 9` and a limit to int16. | Static |
 | 0x265e54 | (mode): sets the state of the codec (mode 1, 2 or 3). Calls the routine of the codec type: 0x28386c (type 1), 0x283c30 (type 2) or 0x2839b8 (type 3, WM8758: R52–R55, R49, R1–R3). It runs at the start, at playback and after a wake. | Static, Emulator |
 | 0x2653a4 | Returns the codec type (1, 2 or 3). The emulator uses type 3. | Static, Emulator |
 | 0x2840d8 | (bytes): writes one codec register: I²C address 0x1a, 2 bytes ((register << 1) \| bit 8, bits 0–7). Takes the codec mutex. | Static, Emulator |
 | 0x282f58 | (7-bit address, count, bytes): the low I²C write (I²C controller 0x7000c000). | Static, Emulator |
 
-The codec functions above come from the hardware EQ test (refer to [re/custom-eq.md](../re/custom-eq.md#the-test-patch-hw-eq-test-shelved-22-october-2026)). The test patch is on the branch `hw-eq`.
-| 0x20fcf8 | The task of message queue 2. Commands 0x1a and 0x1f go through the ring queue 0x2354cc to 0x249ab8, which writes the command to state + 0x12f8 and the data to state + 0x12fc. | Static |
+The codec functions above come from the hardware EQ test (refer to [re/custom-eq.md](../re/custom-eq.md#the-hardware-eq-of-the-codec)). The test patch is on the branch `hw-eq`.
+| 0x20fcf8 | The task of message queue 2. Commands 0x1a and 0x1f go through the ring queue 0x2354cc to 0x249ab8, which writes the command to state + 0x12f8 and the data to state + 0x12fc. 0x24addc reads them. | Static |
 
 ### The browser and the menus
 
@@ -953,26 +967,6 @@ the video processor of Broadcom. The facts are Static.
 | 0x1ca110 | The names of the boxes of the MP4 for the video. |
 | 0x1ca758 | The names of the boxes of the MP4 for the audio. |
 
-### The equalizer of the audio
-
-Refer to [re/custom-eq.md](../re/custom-eq.md). The equalizer is a software
-equalizer. The facts are Static.
-
-| Address | Function |
-|---|---|
-| 0x14cfcc | The dispatcher of the filter. The function has 3 stages. |
-| 0x14cfb8 | Says that the number of the filter is in the range 0x20 to 0x7f. |
-| 0x14cfbc | Says that the number of the filter is less than 0x60. |
-| 0x14cfa4 | Says that the number of the stage is 0x10 or 0x18. |
-| 0x14e430 | Reads the coefficient of the stage 1. |
-| 0x14e184 | Reads the coefficient of the stage 2. |
-| 0x14e7a8 | Reads the coefficient of the stage 3. |
-| 0x14d438 | Applies the filter. |
-| 0x14e65c | The table of the coefficients of the stage 1. The table has 32 entries. |
-| 0x14e3b0 | The table of the coefficients of the stage 2. The table has 32 entries. |
-| 0x14e948 | The table of the coefficients of the stage 3. The table has 32 entries. |
-| 0x26a9e8 | Selects the object of a command of the audio engine. The case 0x1f is the command of the equalizer. |
-
 ### The storage and the file system
 
 Refer to [re/firmware-storage.md](../re/firmware-storage.md). The iPod has a
@@ -1363,5 +1357,5 @@ The emulator found these element IDs (view + 0x1c):
 - The function of the audio route flags at 0x1081ee48 + 0 and + 1.
 - The UIM interrupt handler that completes the periodic USB host transfers.
 - The cause of the empty artwork frame in Now Playing with the unchanged firmware in the emulator.
-- The receiver of the EQ command 0x1f and the filter table. Refer to [re/custom-eq.md](../re/custom-eq.md#open-questions).
+- The CPU load of 5 EQ stages. Refer to [re/custom-eq.md](../re/custom-eq.md#open-questions).
 - Shuffle: does the firmware remove the tracks with "skip when shuffling" (mhit byte 0xa5)? Does Repeat All shuffle again at the end of the list? On the real iPod, one album with Album Mix and Repeat All plays with no end, and the songs stay shuffled. A new order at each pass is not known yet. Refer to [re/shuffle.md](../re/shuffle.md#open-questions).

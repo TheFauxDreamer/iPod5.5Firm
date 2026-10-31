@@ -22,7 +22,7 @@ The table "Collisions with the existing patches" shows where an idea can interfe
 | 2 | Song Info | osos-lab `song_info.c` | High | Medium | Paused (21 October 2026): refer to [song-info.md](song-info.md). The track object has most fields. A patch cannot point a menu item at a new screen; a possible design uses the Main Menu screen with other texts. |
 | 3 | USB-C charge icon | slushiimusic | Low for our mod | Low to medium | Probably not necessary. Refer to the item below. |
 | 4 | Patch list in Settings > About | osos-lab `cfw_info` | Medium | Low | Find the About screen and how it gets its rows. |
-| 5 | Custom EQ | osos-lab `custom_eq.c` | High | High | Done: refer to [custom-eq.md](custom-eq.md). A software EQ with a chain of up to 5 fixed filters. The filter table is not found. |
+| 5 | Custom EQ | osos-lab `custom_eq.c` | High | High | Done: the patch `custom-eq`, branch `custom-eq`. Refer to [custom-eq.md](custom-eq.md). |
 | 6 | CJK fonts | ipod-cjk-patch | High for CJK users | Medium | Measure the free space in rsrc after the dark theme. |
 | 7 | Early cache refill | ipod-wav-fix, flashpod `flac-refill` | Medium | Medium | Play a long WAV or ALAC song without `flash-keep-awake`. Listen for a pause at the refill. |
 | 8 | Crash screen | osos-lab `panic.c` | For development | Medium | Find the crash handler of 1.3. |
@@ -51,7 +51,7 @@ In [../docs/usb-c-power-mod.md](../docs/usb-c-power-mod.md), the iPod charges th
 
 Firmware 1.3 has only fixed EQ presets. osos-lab adds a preset with three bands. Each band has a filter type, a frequency, a gain and a Q. A precut lowers the full volume to prevent clipping. The settings stay in a file on the iPod.
 
-The research found that 1.3 uses a software EQ. Each preset is a chain of up to 5 filters from a fixed table (refer to [custom-eq.md](custom-eq.md)). A free choice of frequency and gain needs the filter table, which the research did not find.
+The research found that 1.3 uses a software EQ. Each preset is a chain of up to 5 biquads from a fixed table (refer to [custom-eq.md](custom-eq.md)). The patch `custom-eq` adds 5 free biquads to this table. The app calculates them and adds a precut.
 
 ### 7. Early cache refill
 
@@ -91,7 +91,7 @@ Hook chains let two patches change the same hook word (refer to [../docs/patch-s
 | Song Info | `cover-flow`, On-The-Go | The hold of Select is already in use. | Open Song Info from Now Playing, or from the small menu of Play Next. |
 | Song Info | `dark-mode` | A new screen must use the colours of the theme. | Use the native list screen. |
 | Custom EQ | `usb-audio-out` | The USB output takes the decoder buffers before the codec (0x1a2d60). The EQ of 1.3 is a software EQ, so it probably also changes the USB-C audio. | Test on the real iPod: play with an EQ preset through USB-C. |
-| Custom EQ | `volume-unlimit` | A boost with no volume limit causes clipping. | Add a precut, as in osos-lab. |
+| Custom EQ | `volume-unlimit` | A boost with no volume limit causes clipping. | The app adds a precut. |
 | Early refill | `flash-keep-awake`, `flash-wake-on-input` | These patches hook the storage power (0x284c7c, 0x23344c, 0x1d8344). Keep-awake probably hides the pause. | Test without keep-awake first. Use a different hook word or a chain. |
 | Early refill, FLAC | `usb-audio-out` | The USB music buffers (52 KB) also use RAM. A larger cache needs more RAM. | Measure the free RAM. |
 | USB-C charge icon | the branches `usb-vbus-test` and `battery-research` | If the iPod supplies power to USB-C headphones, the battery voltage decreases. A detector that uses the voltage then gives wrong results. | Probably do not make this patch. |

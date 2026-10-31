@@ -335,6 +335,12 @@ To know which item the owner selects, hook the `activate` method of the menu lis
 
 After the link, the patcher writes the value of the selected choice into the variable (`Patcher.setOptions`, Python `set_options`). Thus a precompiled `patch.o` operates the same. The build stops if the value is not a choice, or if `symbol` is not a global 32-bit variable of the patch. The install examines the choices and the variable with a trial link. [patches/up-next/patch.json](../patches/up-next/patch.json) has an example. In [patches/flash-keep-awake/patch.json](../patches/flash-keep-awake/patch.json), the value is a time in milliseconds.
 
+### The EQ editor
+
+`eq_editor` gives a patch the editor of 5 EQ bands in the Patches pane. It has 2 keys: `records` (a global array of 50 int32 values) and `mask` (a global 32-bit variable). The band values are integers in the options of the patch: `band1_type`, `band1_freq`, `band1_gain` (tenths of a dB) and `band1_q` (hundredths), to `band5_…`. They have no entry in `options`. They use the same storage, manifest and comparison with the iPod as other options.
+
+After the link, the patcher calculates the records and writes the two variables (`Patcher.setOptions` and `CustomEQ.records`, Python `set_options` and `custom_eq.records`). The build stops if a value is out of range. [patches/custom-eq/patch.json](../patches/custom-eq/patch.json) is the only example.
+
 ## The checks before a patch is applied
 
 `Patcher.apply` stops with an error if one of these conditions is true:
@@ -384,6 +390,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `shuffle-album-mix` | `extended` | After all other data (1615 bytes), then two menus: the main menu (32 items, 1284 bytes) and Settings > Main Menu (29 items, 1164 bytes). After `shuffle-fixes`: code 0x736840–0x736e8f, menus at 0x736e90 and 0x7373a0, osos end 0x738000 | Extended patch. It needs `shuffle-fixes`. It also changes 1 word (`bytes`). |
 | `cover-flow` | `extended` | After all other data (11384 bytes; approximately 600 KB for the screen copy, the covers and the read buffer come from the allocator while Cover Flow shows) | Extended patch. |
 | `up-next` | `extended` | After all other data (1807 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736f0f, menu at 0x736f10, osos end 0x737800 | Extended patch. |
+| `custom-eq` | `extended` | After all other data (518 bytes, with 200 bytes of filter records). | Extended patch. It also changes 2 words (`bytes`). |
 | `playlist-folders` | `extended` | After all other data (5444 bytes; the 64 KB file buffer and the views come from the allocator). Alone: code 0x736800–0x737d44, osos end 0x738000 | Extended patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.

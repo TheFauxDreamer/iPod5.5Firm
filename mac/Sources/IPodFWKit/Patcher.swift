@@ -113,6 +113,12 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var menu_items: [MenuItem]?
     /// Choices that the owner makes in the Patches pane (see Option).
     public var options: [Option]?
+    /// The patch has the EQ editor of the Patches pane. The band values are in `PatchInfo.options`.
+    public var eq_editor: EQEditor?
+    public struct EQEditor: Codable, Hashable {
+        /// The variable with the records and the variable with the mask of the active bands.
+        public var records, mask: String
+    }
     /// A warning for an iPod that probably has the original hard drive (see IPodDisk.likelyOriginalHDD).
     public var hdd_warning: String?
     /// One letter a–z that the About screen can show after the version (see FirmwareVersion.letters).
@@ -619,6 +625,15 @@ public enum Patcher {
                 throw PatchError("The option \"\(o.id)\": \(o.symbol) is not a global 32-bit variable of the patch.")
             }
             put32(&code, Int(a - base), UInt32(truncatingIfNeeded: value))
+        }
+        if let editor = spec.eq_editor {
+            let (data, mask) = try CustomEQ.records(CustomEQ.bands(from: values))
+            guard let a = symbols[editor.records], let m = symbols[editor.mask], a >= base, m >= base,
+                  Int(a - base) + data.count <= code.count, Int(m - base) + 4 <= code.count else {
+                throw PatchError("eq_editor of \"\(spec.displayTitle)\": the variables are not in the patch.")
+            }
+            code.replaceSubrange(Int(a - base)..<Int(a - base) + data.count, with: data)
+            put32(&code, Int(m - base), mask)
         }
     }
 
