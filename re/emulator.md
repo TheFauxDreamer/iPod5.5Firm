@@ -49,9 +49,10 @@ RECIPE=... ipod-film run --out=_film         # one PNG for each different screen
 - The emulator has no USB. You can test `ipodfw flash` only on a real iPod.
 - The emulator answers 0 for the counter at 0x60006038. Thus the shuffle seed is 0, and the shuffle is not random. Refer to [shuffle.md](shuffle.md#emulator-tests) for a test firmware with a fixed seed.
 - The emulator keeps a restore point in its profile. A run with `--control` continues from it. Start the emulator with `--cold` to start from the drive.
-- Music playback makes the emulator very slow (measured on 21 October 2026). When a song starts, the firmware starts the second core (COP) for the decoder. The host process then uses 100 % of one CPU in the emulation of two cores. A sample (`sample PID 3`) showed most time in `Memory::fast_region`, the CPU step, `read32` and `run_cop`. The iPod time then advanced approximately 0.7 s in 120 s of host time. The firmware does not hang: when the music pauses, the speed returns to 1.00×. The screen then looks frozen, and inputs take effect much later.
+- Music plays, but the emulator has no sound output. A song advances at approximately 0.65–0.72× of real time (measured on 31 October 2026 on an M2 Pro, with the test library). The menu stays at 1.00×. The song time moves, and the next song starts at the end of a song.
 - The control socket measures `hold` and `sleep` in host time. When the emulator is slow, a hold of 900 ms can be a short push for the iPod, and a short push can arrive after the next input. Wait in emulated time (the instruction count, 75 M for each second) and make a hold longer when `realtime` is low. A push of 30 ms is a short push; a push of 120 ms or more at full speed can be a hold.
 - Pause the music directly after the start (Play/Pause) before you test other screens. Then the emulator runs at full speed. The player has a play list and a current song while it is paused.
+- A volume change on the Now Playing screen changed neither the samples nor the WM8758 registers 0x0b, 0x0c and 0x34–0x37 in the test of 31 October 2026. The cause is not known.
 
 ## The iPodFirm additions to the emulator
 
@@ -66,6 +67,31 @@ The patch `mac/Resources/emulator-patches/0001-ipodfirm-instrumentation.patch` a
 | (always on) | Records each write to the ATA taskfile (0xC30001E0–0xC30001FF), the ATA control register (0xC30003F8) and `GPO32_VAL` (0x70000080), with the instruction count, the emulated µs and the PC. The `evlog` command gives the log and clears it. Each `IPODFW_REGS_AT` record also adds a marker (address 0xFFFFFFFF) to this log. The writes to `GPO32_VAL` show only when `IPODFW_WATCH_RANGE` is set, for example `0x70000080:8`. |
 | `IPODFW_MARK_AT=ADDR,ADDR,...` | Adds a marker to the `evlog` output (address 0xFFFFFFFD, byte = index in the list) each time that one of the addresses runs. A button frame also adds a marker (address 0xFFFFFFFE, byte = buttons). The `evlog` also records writes to the I²C controller (0x7000C000–0x7000C0FF). |
 | `IPODFW_RESET_AFTER=N` | Restarts the emulated iPod when the firmware writes 4 to `DEV_RS` (0x60006004), after N instructions. |
+
+## The music playback fix
+
+The patch `mac/Resources/emulator-patches/0002-ipodfirm-music-playback.patch` makes songs play. Before this patch, the song time stayed at 0:00. The patch makes two changes in `tools/ipod-machine/src/lib.rs`:
+
+1. The COP gets its turn from `steps()`, not from `executed`. `executed` stops while the CPU sleeps. Thus the old test gave the COP 1000 instructions for each halted cycle, or no instructions for the full sleep.
+2. `Machine::QUANTUM` is 50, not 1000.
+
+The results of the song start, with change 1 in each test:
+
+| Quantum | Songs that started |
+|---|---|
+| 10000 | 0 of 4 |
+| 1000 | 1 of 4 |
+| 50 | 9 of 9 |
+
+The speed with a quantum of 50 is the same as the speed with 1000.
+
+The firmware path that the tests measured:
+
+1. The firmware sends silence on DMA channel 0x6000B000 to the I2S FIFO: 9216 bytes for each buffer, 4 or 5 buffers.
+2. It stops this channel. It then sends the music on channel 0x6000B020: 4096 bytes for each buffer.
+3. A failed start stops after step 1. The COP then waits at 0x29daa8 in a software lock between the cores, and later at 0x235310 in the queue wait 0x235250. The cause of the dependency on the quantum is not known.
+
+A test recording of these FIFO words gave 277.18 Hz for T0004 and 246.94 Hz for T0002. These are the correct frequencies. A 30 s song gave 30 s of frames. The patch does not keep this recording.
 
 The instruction count stops while the emulated iPod sleeps. Thus use the emulated µs in the `evlog` output to measure time, not the instruction count.
 
