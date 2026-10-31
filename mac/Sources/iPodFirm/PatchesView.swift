@@ -155,9 +155,9 @@ struct PatchList: View {
             IPodSyncBanner()
             List(selection: $model.patchSelection) {
                 Section("Firmware Options") {
-                    OptionRow(title: "iPod Appearance", subtitle: appearanceSummary, symbol: "circle.lefthalf.filled", tint: .indigo)
+                    OptionRow(title: "iPod Appearance", symbol: "circle.lefthalf.filled", tint: .indigo)
                         .tag("appearance")
-                    OptionRow(title: "Software Version", subtitle: versionSummary, symbol: "number", tint: .teal)
+                    OptionRow(title: "Software Version", symbol: "number", tint: .teal)
                         .tag("version")
                 }
                 ForEach(groups, id: \.title) { group in
@@ -236,35 +236,18 @@ struct PatchList: View {
     }
 
     var selectedPatch: PatchInfo? { model.patches.first { $0.spec.name == model.patchSelection } }
-
-    var appearanceSummary: String {
-        let name = model.selectedTheme?.name ?? ""
-        switch model.appearance {
-        case .light: return "Light"
-        case .dark: return "Dark: \(name)"
-        case .onIPod: return "Switch on iPod: \(name)"
-        }
-    }
-
-    var versionSummary: String {
-        model.activeVersion.map { "About shows \($0.description)" } ?? "Not changed"
-    }
 }
 
 /// A row for iPod Appearance or Software Version. It has no switch.
 struct OptionRow: View {
     let title: String
-    let subtitle: String
     let symbol: String
     let tint: Color
 
     var body: some View {
         HStack(spacing: 8) {
             SymbolTile(symbol: symbol, tint: tint, size: 20)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).lineLimit(1)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
+            Text(title).lineLimit(1)
         }
         .padding(.vertical, 1)
     }
@@ -272,6 +255,7 @@ struct OptionRow: View {
 
 struct PatchListRow: View {
     @EnvironmentObject var model: AppModel
+    @AppStorage("showPatchSummaries") private var showSummary = true
     let patch: PatchInfo
 
     var body: some View {
@@ -282,7 +266,7 @@ struct PatchListRow: View {
                     Text(patch.spec.displayTitle).lineLimit(1)
                     LetterBadge(patch: patch)
                 }
-                if let summary = patch.spec.summary {
+                if showSummary, let summary = patch.spec.summary {
                     Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if let mark = model.ipodMark(patch) { IPodMarkLabel(mark: mark) }
@@ -295,6 +279,7 @@ struct PatchListRow: View {
             PatchSwitch(patch: patch).controlSize(.small)
         }
         .padding(.vertical, 1)
+        .help(patch.spec.summary ?? "")
     }
 }
 
@@ -397,7 +382,6 @@ extension AppModel {
 /// The title row at the top of each detail.
 struct DetailHeader: View {
     let title: String
-    let subtitle: String?
     let symbol: String
     let tint: Color
     var patch: PatchInfo?
@@ -405,13 +389,8 @@ struct DetailHeader: View {
     var body: some View {
         HStack(spacing: 14) {
             SymbolTile(symbol: symbol, tint: tint, size: 44)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(title).font(.title2.weight(.semibold))
-                    if let patch { LetterBadge(patch: patch) }
-                }
-                if let subtitle { Text(subtitle).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-            }
+            Text(title).font(.title2.weight(.semibold))
+            if let patch { LetterBadge(patch: patch) }
         }
         .padding(.vertical, 4)
     }
@@ -441,7 +420,7 @@ struct PatchDetail: View {
         Form {
             Section {
                 HStack(alignment: .top) {
-                    DetailHeader(title: patch.spec.displayTitle, subtitle: patch.spec.summary,
+                    DetailHeader(title: patch.spec.displayTitle,
                                  symbol: validSymbol(patch.spec.symbol), tint: patch.tint, patch: patch)
                     Spacer()
                     PatchSwitch(patch: patch, label: "Include in Firmware")
@@ -469,27 +448,24 @@ struct PatchDetail: View {
                     }
                     GridRow {
                         InfoItem(title: "For", value: patch.spec.targetText)
-                        InfoItem(title: "Source", value: patch.source == .user ? "Installed by you" : "Included with iPodFirm")
+                        InfoItem(title: "Source", value: sourceText)
                     }
                     if let state = model.ipodState {
                         GridRow { InfoItem(title: "On the iPod", value: ipodText(state)) }
                     }
                 }
                 PatchChecks(patch: patch)
-                if patch.spec.size == 0 {
-                    Text("The patch adds no code. It changes only bytes that are already in the firmware.")
-                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
-                if patch.replacesBuiltIn {
-                    Text("This patch replaces the built-in version \(patch.builtInVersion ?? "–"). To use the built-in patch again, remove this patch.")
-                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
             }
             PatchNotes(spec: patch.spec)
             if patch.source == .user { PatchCodeSections(patch: patch) }
         }
         .formStyle(.grouped)
         .task(id: "\(patch.spec.name) \(model.currentIPod?.disk ?? "")") { model.loadPatchToggles(patch) }
+    }
+
+    var sourceText: String {
+        if patch.replacesBuiltIn { return "Replaces the built-in version \(patch.builtInVersion ?? "–")" }
+        return patch.source == .user ? "Installed by you" : "Included with iPodFirm"
     }
 
     func ipodText(_ state: IPodPatchState) -> String {
@@ -623,15 +599,10 @@ struct PatchOptions: View {
                     ForEach(o.choices, id: \.value) { c in Text(c.title).tag(c.value) }
                 }
                 .pickerStyle(.menu)
-                .help("iPodFirm uses this choice when you save, flash, export an .ipsw or run the emulator. To change the iPod, flash it again.")
-                if let c = o.choices.first(where: { $0.value == value }) {
-                    if let d = c.description {
-                        Text(d).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
-                    if let caution = c.caution {
-                        Label(caution, systemImage: "exclamationmark.triangle.fill")
-                            .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
-                    }
+                .help(o.choices.first { $0.value == value }?.description ?? "iPodFirm uses this choice when you save, flash, export an .ipsw or run the emulator. To change the iPod, flash it again.")
+                if let caution = o.choices.first(where: { $0.value == value })?.caution {
+                    Label(caution, systemImage: "exclamationmark.triangle.fill")
+                        .labelStyle(StatusLabelStyle(tint: .orange)).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -692,20 +663,6 @@ struct BulletRow: View {
             .accessibilityHidden(true)
             Text(text).fixedSize(horizontal: false, vertical: true)
         }
-    }
-}
-
-/// The text below a section of a form. It is left-aligned: macOS aligns a footer with more than one line at the right.
-struct FormFooter: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        Text(text)
-            .font(.callout).foregroundStyle(.secondary)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -792,7 +749,7 @@ struct AppearanceDetail: View {
     var body: some View {
         Form {
             Section {
-                DetailHeader(title: "iPod Appearance", subtitle: "The colours of the iPod software.",
+                DetailHeader(title: "iPod Appearance",
                              symbol: "circle.lefthalf.filled", tint: .indigo)
             }
             Section {
@@ -805,14 +762,9 @@ struct AppearanceDetail: View {
                 }
                 .frame(maxWidth: 380)
                 .accessibilityLabel("Appearance")
-                if model.appearance == .onIPod {
-                    Text("The firmware starts light. To change, select Settings > Dark Mode on the iPod. The iPod restarts in a few seconds.")
-                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
+                .help("Light uses the Apple colours. Dark uses an imported dark theme. Switch on iPod adds a \"Dark Mode\" item to Settings on the iPod. The firmware then starts light.")
             } header: {
                 Text("Appearance")
-            } footer: {
-                FormFooter("Light uses the Apple colours. Dark uses an imported dark theme. Switch on iPod adds a \"Dark Mode\" item to Settings on the iPod.")
             }
             Section("Dark Theme") {
                 if model.themes.isEmpty {
@@ -832,14 +784,9 @@ struct AppearanceDetail: View {
                         }
                     }
                     LabeledContent("Size on iPod (Dark)", value: PatchSpec.byteText(current.theme.addedSize))
+                        .help("The theme also changes \(PatchSpec.byteText(current.theme.changedSize)) of the Apple pictures and layouts. These changes use no new space.")
                     LabeledContent("Size on iPod (Switch on iPod)",
                                    value: model.switchOnIPodSize.map(PatchSpec.byteText) ?? "Open the firmware 1.3 to calculate")
-                    Text("The theme also changes \(PatchSpec.byteText(current.theme.changedSize)) of the Apple pictures and layouts. These changes use no new space. Switch on iPod adds code of \(AppModel.darkModePatch?.spec.sizeText ?? "–").")
-                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    if model.appearance != .light {
-                        Text("iPodFirm moves the rsrc image to free space in the firmware partition. It does not change aupd or hibe.")
-                            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
                     HStack {
                         Button("Show Import Report") { model.themeReport = current.theme }
                         Spacer()
@@ -849,10 +796,9 @@ struct AppearanceDetail: View {
             }
             Section {
                 Button("Import iPodWizard Theme…") { model.importTheme() }
+                    .help("Select the theme file from iPodWizard. Then select the Apple firmware that the theme came from, for example iPod_25.1.2.1.ipsw.")
             } header: {
                 Text("Import")
-            } footer: {
-                FormFooter("Select the theme file from iPodWizard. Then select the Apple firmware that the theme came from, for example iPod_25.1.2.1.ipsw.")
             }
         }
         .formStyle(.grouped)
@@ -875,11 +821,12 @@ struct VersionDetail: View {
     var body: some View {
         Form {
             Section {
-                DetailHeader(title: "Software Version", subtitle: "The version on the About screen of the iPod.",
+                DetailHeader(title: "Software Version",
                              symbol: "number", tint: .teal)
             }
             Section {
                 Toggle("Show a different version on the About screen", isOn: $model.customVersionOn)
+                    .help("This changes only the text on the iPod. iTunes and Finder continue to see version 1.3.")
                 if model.customVersionOn {
                     TextField("Version", text: $model.customVersion, prompt: Text("1.3.1"))
                     if FirmwareVersion(model.customVersion) == nil {
@@ -897,8 +844,6 @@ struct VersionDetail: View {
                 }
             } header: {
                 Text("Version")
-            } footer: {
-                FormFooter("This changes only the text on the iPod. iTunes and Finder continue to see version 1.3.")
             }
             Section("Letters") {
                 ForEach(model.patches.filter { $0.spec.version_letter != nil }) { p in

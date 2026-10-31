@@ -131,8 +131,6 @@ struct PlaylistFoldersSection: View {
             }
         } header: {
             Text("Playlist Folders")
-        } footer: {
-            FormFooter("Put each playlist into one folder, or into no folder. A folder without playlists does not show on the iPod.")
         }
         .task(id: model.currentIPod?.disk) { await model.loadPlaylistFolders() }
     }
@@ -205,16 +203,12 @@ struct PlaybackLogSection: View {
             PlaybackLogContent()
         } header: {
             Text("Playback Log")
-        } footer: {
-            FormFooter(PlaybackLogContent.footer)
         }
     }
 }
 
 /// The buttons and the text of the playback log, in the Patches pane and in `IPodLogSheet`.
 struct PlaybackLogContent: View {
-    static let footer = "Report on GitHub saves the log as a text file and opens a new issue in the browser. Drag the file into the issue. You need a GitHub account. The file has the names of the songs in the log, and an issue is public."
-
     @EnvironmentObject var model: AppModel
     var showsRead = true
 
@@ -232,9 +226,14 @@ struct PlaybackLogContent: View {
                     }
                     Button("Save the Log to Share…") { model.savePlaybackLog() }
                     Button("Report on GitHub…") { model.reportPlaybackLog() }
+                        .help("Save the log as a text file and open a new issue in the browser. Then drag the file into the issue. You need a GitHub account.")
                 }
             }
             if let log = model.playbackLog {
+                if !log.isEmpty {
+                    Label("The log has the names of your songs. A GitHub issue is public.", systemImage: "exclamationmark.triangle.fill")
+                        .labelStyle(StatusLabelStyle(tint: .orange))
+                }
                 if log.isEmpty {
                     Text("The log is empty. Play music. Then press a button, so that the iPod writes the log. Wait 15 seconds before you connect the iPod.")
                         .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -310,11 +309,9 @@ struct IPodLogSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(log.title).font(.title3.bold())
-            Text(log.details).font(.caption).foregroundStyle(.secondary)
             switch log.kind {
             case .playback:
                 PlaybackLogContent(showsRead: false)
-                FormFooter(PlaybackLogContent.footer)
             case .usb:
                 USBLogContent(showsRead: false)
             }
@@ -351,8 +348,6 @@ struct AlbumArtSections: View {
             if let s = model.thumbnailStatus { Label(s, systemImage: "checkmark.circle").font(.callout) }
         } header: {
             Text("Thumbnails")
-        } footer: {
-            FormFooter("You do not have to restart the iPod. The new thumbnails show after you scroll through a list.")
         }
         .task(id: model.currentIPod?.disk) { await model.loadPlaylists() }
         if !model.playlistArt.isEmpty {
@@ -364,8 +359,6 @@ struct AlbumArtSections: View {
                 ForEach(model.playlistArt) { p in PlaylistArtRow(playlist: p) }
             } header: {
                 Text("Playlist Artwork")
-            } footer: {
-                FormFooter("A playlist without a custom image shows the covers of its first four albums. To set a custom image, click Choose Image or drag an image onto the playlist. iPodFirm keeps the custom images on the iPod.")
             }
         }
     }
@@ -388,11 +381,8 @@ struct PlaylistArtRow: View {
             }
             .frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 4))
             .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(playlist.name.isEmpty ? "(No name)" : playlist.name).lineLimit(1)
-                Text(playlist.isCustom ? "Custom image" : playlist.image == nil ? "No album covers" : "Automatic")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+            Text(playlist.name.isEmpty ? "(No name)" : playlist.name).lineLimit(1)
+                .help(playlist.isCustom ? "Custom image" : playlist.image == nil ? "No album covers" : "Automatic")
             Spacer()
             Button("Choose Image…") { model.choosePlaylistArt(playlist.name) }
             Button("Use Automatic") { Task { await model.resetPlaylistArt(playlist.name) } }
@@ -450,10 +440,7 @@ struct InstallPatchSheet: View {
             if let spec = candidate.spec {
                 HStack(spacing: 14) {
                     SymbolTile(symbol: validSymbol(spec.symbol), tint: .accentColor, size: 44)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(spec.displayTitle).font(.title2.weight(.semibold))
-                        if let summary = spec.summary { Text(summary).foregroundStyle(.secondary) }
-                    }
+                    Text(spec.displayTitle).font(.title2.weight(.semibold))
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {

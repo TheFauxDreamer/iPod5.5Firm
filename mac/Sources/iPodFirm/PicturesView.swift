@@ -149,15 +149,10 @@ struct PictureDetail: View {
                     }
                     return true
                 }
+                .help(model.picturesDark
+                      ? "Drop a \(item.picture.width)×\(item.picture.height) PNG here. The replacement changes only the dark theme \"\(model.selectedTheme?.name ?? "")\"."
+                      : "Drop a \(item.picture.width)×\(item.picture.height) PNG here to replace the picture.")
                 .id("\(model.revision) \(model.themeRevision)")
-                Text("Drop a \(item.picture.width)×\(item.picture.height) PNG here to replace it.")
-                    .font(.caption).foregroundStyle(.secondary)
-                if model.picturesDark {
-                    Text(model.hasDarkEdit(item)
-                         ? "You replaced this picture in the dark theme. The light picture does not change."
-                         : "A replacement changes only the dark theme \"\(model.selectedTheme?.name ?? "")\". The light picture does not change.")
-                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
 
                 Grid(alignment: .leading, verticalSpacing: 4) {
                     GridRow { Text("Index").foregroundStyle(.secondary); Text("\(item.index)") }

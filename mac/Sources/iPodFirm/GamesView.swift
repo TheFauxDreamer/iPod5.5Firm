@@ -12,12 +12,9 @@ struct GamesView: View {
     var body: some View {
         Form {
             Section {
-                Label("iPodFirm and the iPod firmware do not contain the games. iPodFirm does not download them. Get the game files from an iPod that bought them, for example a backup of the folder iPod_Control. Each game is a folder with the GUID of the game, for example 11002.",
-                      systemImage: "gamecontroller")
-                    .font(.callout).foregroundStyle(.secondary)
                 HStack {
                     Button("Select Games Folder…") { model.chooseGamesFolder() }
-                        .help("Choose the folder with the games, or the folder iPod_Control of an iPod")
+                        .help("Choose the folder with the games, or the folder iPod_Control of an iPod. iPodFirm does not contain or download the games. Each game is a folder with the GUID of the game, for example 11002.")
                     Spacer()
                     if let folder = model.gamesSourceFolder {
                         Text(folder.lastPathComponent).foregroundStyle(.secondary)
@@ -43,7 +40,7 @@ struct GamesView: View {
                 }
                 HStack {
                     Button("Choose Key File…") { model.chooseGameKeyFile() }
-                        .help("Optional: choose your own file IC-Info.sidb. The install copies it to the iPod with the games.")
+                        .help("Optional: choose your own file IC-Info.sidb. The install copies it to iPod_Control/iTunes with the games. A game plays only on the iPod that bought it, and only if that iPod has this file. A restore removes the file. iPodFirm does not read, change or make a key file.")
                     Spacer()
                     if let key = model.gameKeyFile {
                         Text(key.lastPathComponent).foregroundStyle(.secondary)
@@ -53,8 +50,6 @@ struct GamesView: View {
                         Text("No key file").foregroundStyle(.secondary)
                     }
                 }
-                Text("Optional. A game plays only on the iPod that bought it, and only if that iPod has the key file IC-Info.sidb of the account that bought the game. A restore removes this file. Choose your own file, for example from a backup of the folder iPod_Control/iTunes of this iPod. iPodFirm copies the file to iPod_Control/iTunes as it is. iPodFirm does not read, change or make a key file.")
-                    .font(.callout).foregroundStyle(.secondary)
                 HStack {
                     Button("Install Games") { Task { await model.installGames() } }
                         .disabled(model.currentIPod == nil || model.selectedGameFolders.isEmpty)
@@ -64,8 +59,6 @@ struct GamesView: View {
                 if !model.gameInstallStatus.isEmpty {
                     Text(model.gameInstallStatus).foregroundStyle(.secondary)
                 }
-                Text("iPodFirm copies the selected games to the folder games_RO of the iPod. iPodFirm writes the name of the folder with small letters. iPodFirm never changes the file Manifest.plist or the file Manifest.plist.p7b.")
-                    .font(.callout).foregroundStyle(.secondary)
             } header: { Text("Install Games") }
 
             Section {
@@ -99,8 +92,6 @@ struct GamesView: View {
                     if !model.gameRemoveStatus.isEmpty {
                         Text(model.gameRemoveStatus).foregroundStyle(.secondary)
                     }
-                    Text("The removal deletes the folder of the selected game in games_RO. The folders gamedata_RW and gamestats_WO hold the saves and the scores. The removal does not touch them. The removal cannot delete a folder outside the folder of a game.")
-                        .font(.callout).foregroundStyle(.secondary)
                 }
             } header: { Text("Remove Games") }
         }
@@ -125,14 +116,8 @@ struct GamePickerRow: View {
     var toggle: () -> Void
 
     var body: some View {
-        Toggle(isOn: Binding(get: { selected }, set: { _ in toggle() })) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(game.name)
-                Text("\(game.folder)  •  platform \(game.manifest.platformID)  •  \(game.manifest.totalSize) bytes")
-                    .font(.callout).foregroundStyle(.secondary)
-            }
-        }
-        .toggleStyle(.checkbox)
-        .help(selected ? "Do not copy this game" : "Copy this game")
+        Toggle(game.name, isOn: Binding(get: { selected }, set: { _ in toggle() }))
+            .toggleStyle(.checkbox)
+            .help("\(game.folder)  •  platform \(game.manifest.platformID)  •  \(game.manifest.totalSize) bytes")
     }
 }
