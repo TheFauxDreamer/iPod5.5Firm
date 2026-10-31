@@ -1,6 +1,6 @@
 # The track limit of the 32 MB iPod Video
 
-This document is a feasibility study. A user asked how Rockbox avoids the 32 MB RAM limit on the iPod Video (30 GB models). The owner asked if iPodFirm can do the same. The solution must operate completely on the iPod. A computer tool must not change iTunesDB or prepare files.
+This document is a feasibility study. A user asked how Rockbox avoids the RAM limit on an iPod Video with 32 MB of RAM. The owner asked if iPodFirm can do the same. The solution must operate completely on the iPod. A computer tool must not change iTunesDB or prepare files.
 
 Status: research only (29 October 2026). There is no patch. The owner stopped the emulator limit tests before they gave a result. The values in this document come from Ghidra, from the Rockbox source and from emulator tests with 1,000 and 5,000 tracks.
 
@@ -35,9 +35,25 @@ These results come from user reports. We did not verify them.
   - A 32 MB board: about 17,000 to 20,000 tracks. Some reports give 25,000 to 30,000. The limit changes with the length of the metadata.
   - A 64 MB board: about 40,000 to 50,000 tracks.
   - Past the limit, the Apple logo shows again and again, the iPod starts only in disk mode, or the iPod shows no songs. A restore repairs it.
-- [iFixit: Which gen 5.5 iPod board has 64MB](https://ts.ifixit.com/Answers/View/118149/Which+gen+5.5+iPod+board+has+64MB): the 30 GB models have 32 MB. The 60 GB and 80 GB models have 64 MB.
+- [iFixit: Which gen 5.5 iPod board has 64MB](https://ts.ifixit.com/Answers/View/118149/Which+gen+5.5+iPod+board+has+64MB): users report 32 MB for the 30 GB models and 64 MB for the 60 GB and 80 GB models. Refer to [Which iPod has 32 MB](#which-ipod-has-32-mb).
 - [iFlash compatibility](https://www.iflash.xyz/store/iflash-compatibility/): 10,000 to 30,000 tracks for the 30 GB model. The limit is "a function of the iTunes database size and the RAM".
 - Apple gives "7,500 songs" for the 30 GB model. This is a storage estimate (4 minutes at 128 kbit/s), not a limit.
+
+## Which iPod has 32 MB
+
+In this repository, "a 32 MB iPod" means an iPod with 32 MB of RAM. It does not mean a specific drive size. The size of the drive does not prove the size of the RAM.
+
+The sources do not agree about the 30 GB model. We did not verify them on a real 30 GB iPod.
+
+- [EveryMac](https://everymac.com/systems/apple/ipod/specs/ipod_5thgen.html) and the iFixit answers give 32 MB for the 30 GB model.
+- The [iPodWiki](https://ipodwiki.com/wiki/IPod_video) table gives 32 MB for the 30 GB model. Its text about the September 2006 revision gives "32MB of additional RAM". Thus the two parts of that page possibly do not agree.
+- The iFixit answers say that one board part number has the two RAM sizes: 820-1763-A on the 5G and 820-1975-A on the 5.5G.
+- A board replacement can also change the RAM of an iPod.
+
+To find the RAM size of an iPod, use one of these methods:
+
+- Read the value `ram=` in the first lines of the log from `playback-log` or `diagnostic-log`.
+- Run `SDRAMQuickTest` in the diagnostic mode of the iPod. The path is NTF, then AutoTest. This path comes from iFixit users. We did not test it.
 
 ## Question 1: how RetailOS finds the RAM size
 

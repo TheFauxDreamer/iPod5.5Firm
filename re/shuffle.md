@@ -508,7 +508,7 @@ Result: the static checks found no fault in the shuffle patches for a library be
 
 ### A possible cause of a stop at the end of a song: the RAM
 
-- A 32 MB iPod (30 GB model) reaches its track limit at about 17,000 to 20,000 tracks (refer to [ram-limit.md](ram-limit.md)). A library of more than 15,000 tracks is near this limit.
+- A 32 MB iPod reaches its track limit at about 17,000 to 20,000 tracks (refer to [ram-limit.md](ram-limit.md)). A library of more than 15,000 tracks is near this limit.
 - The free heap stays at about 3 MB for all library sizes. A large buffer becomes smaller when the library becomes larger. It is probably the music buffer.
 - At the end of a song, the player loads the next song. If the load fails, playback stops.
 - A shuffle also uses heap: a copy of the list (4 bytes for each track) and the sorted arrays of slot 2. Patches such as `album-artists`, `album-art` and `cover-flow` also use heap.
