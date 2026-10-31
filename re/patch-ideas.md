@@ -86,8 +86,8 @@ The ideas in this section have no firmware research, except where a line gives a
 
 | Idea | Value | Work | Note |
 |---|---|---|---|
-| Split home screen | High | Not known | The list uses the left 2/3. The right 1/3 shows the cover, the song, the album and the artist. Research is the next task after the battery percentage. |
-| Battery percentage | Medium | Low | Research: [battery.md](battery.md). The firmware has a hidden number display. |
+| Split home screen | High | Not known | The list uses the left 2/3. The right 1/3 shows the cover, the song, the album and the artist. A mini player below the list is the fallback. Refer to [home-screen.md](home-screen.md). |
+| Battery display options | Medium | Low to medium | Icon, Icon + Percent, Percent. Research: [battery.md](battery.md). The firmware has a hidden number display. |
 | Numeric volume | Medium | Low | The firmware has the switch `_show_numeric_volume`. Refer to [device-switches.md](device-switches.md). |
 | Main menu order | High | Low | The app reorders the items of Menu 24094. Check the effect on the mask at 0x105a04. PodBox also has this. |
 | Compact lists | Medium | Low | Shows more rows. The width test of the split home screen also tells if this is possible. |
@@ -148,7 +148,7 @@ Hook chains let two patches change the same hook word (refer to [../docs/patch-s
 | FLAC | all extended patches, `dark-mode` | All use the area up to 0x7F8000 (`ThemeImport.ososLimit`). | Measure the free space with all patches. |
 | Patch list in About, crash screen | None found | — | — |
 | Split home screen | `dark-mode`, `album-art`, `cover-flow` | The theme can change the same View bytes. The panel needs the theme colours. The cover load can stop the wheel. | Check the View bytes. Use the firmware artwork task. |
-| Battery percentage | `dark-mode` | The text style must have a correct colour in the two themes. | Test the two themes. |
+| Battery display options | `dark-mode` | The text style must have a correct colour in the two themes. | Test the two themes. |
 
 ## Not recommended
 

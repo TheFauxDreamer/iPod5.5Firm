@@ -168,24 +168,87 @@ Not tested in the emulator or on a real iPod.
 - The real ADC values for a full and an empty battery. These values also show the scale.
 - The cause of the battery icon that does not change. If the number stays above the last limit for a long time, cause 1 is correct.
 
-### Patch design (proposal)
+### The 3 display options
 
-1. Set the byte at 0x1081dfe3 after 0x1d3ac4 runs. Use a wrapper on `bl` at 0xb4abc, in the database load. Then the iPod does not need the 2 files.
-2. Change the value in case 0x63fc. Use the format `%ld%%` and a percentage in place of the raw value. Before this, find all callers of method + 0xd4. If the case is the only caller, a wrapper on the vtable slot 0x6707f4 is the simplest hook.
-3. Calculate the percentage from the raw value. Use a line between the 15 limits of the table, not level × 100 / 15. The level alone gives steps of 6.7 %.
-4. Filter the value. Without a charger, let the value only fall, as rule 5 of 0x1dfe44 does.
-5. Keep the picture during a charge. The firmware probably already does this.
+The owner does not want a percentage that always replaces the icon. A patch must give 3 options:
+
+| Option | What shows | Method |
+|---|---|---|
+| Icon | The Apple icon | The patch does not set the switch. No change from Apple firmware. |
+| Icon + Percent | The icon and the percentage beside it | The patch shows 2 children of the battery view. |
+| Percent | Only the percentage | The patch sets the switch and changes the text. |
+
+The test with the 2 files is only a measurement. It replaces the icon for the test. It is not the final design.
+
+A row in Settings gives the 3 values. Use `settings_items`, as `up-next` does for Hold Select. The app gives the default with `options`. Refer to [../docs/patch-system.md](../docs/patch-system.md).
+
+During a charge, all 3 options show the charge icon and no percentage. The voltage is too high during a charge, so the value is wrong.
+
+### Hooks (Static, Ghidra `DumpCode`)
+
+| Hook | Word | Function |
+|---|---|---|
+| `bl` at 0x1e8af8 | `adr r1, 0x1e8c54` (e28f1f55) | Runs only in case 0x63fc. The earlier instruction puts the raw value in r2. The hook changes r2 to the percentage and sets r1 to `%ld%%`. The next instruction sets r0 again, so the hook can change r0. If r2 is −1, the read failed: keep the last percentage. The method 0x1dff54 does not change. |
+| `bl` at 0xb4abc | `bl 0x1d3ac4` | The hook calls 0x1d3ac4, then sets 0x1081dfe3. 0x1d3610 clears this byte at each read, thus the hook must run after the call. A change in Settings writes the byte directly. |
+| `bl` at 0x1ae6b8 | `bl 0x1ae6d0` | The only call of 0x1ae6d0 (view, index). That function makes one child visible with method + 0x9c. For Icon + Percent, the hook makes the icon child visible and also child 27. It gets the icon value with 0x1e7fe4. |
+
+Percent needs the first 2 hooks. Icon + Percent needs all 3. The firmware draws the text, so the patch does not need its own draw code. With the switch on, 0x1ed730 marks the text for a new draw.
+
+### Text style (Static)
+
+0x21a168 reads a Type record:
+
+| Offset | Content |
+|---|---|
+| +0x00 | u16: the `Str` ID of the font family list |
+| +0x04 | Size. The value 0 gives 6. |
+| +0x08 | Colour: R, G, B, A |
+| +0x0c, +0x0d | Style bytes. +0x0d goes to the view. |
+
+| Type | Font (`Str` ID) | Size |
+|---|---|---|
+| 24223 (the battery text) | Podium Sans (0x5e3c) | 18 |
+| 24197, 13719 | Espy Sans (0x5e36) | 10 |
+| 24170 | Pixo (0x5e2f) | 7 |
+
+The battery text box has a height of 13. Size 18 is probably too large, so the hidden number can be cut in the test. Report the visible digits if this occurs.
+
+The percentage needs size 10. A patch can change the style live: 0x243fb0 (label, parent, Type ID) calls 0x21a168 with the gc at label + 0x74. Static only.
+
+### Space for Icon + Percent
+
+- The icon is at x = 287–313. The title of View -285 ends at x = 280 (inset 40 at each side). Thus 6 pixels are free.
+- Size 10 needs approximately 24 pixels. This is an estimate.
+- The hook widens the battery view to the left by 30 pixels, and sets the rectangles of the 2 children (child + 0x58: top, left, bottom, right).
+- A centred title of up to 186 pixels does not touch the text. For a longer title, set the inset to 72 at each side, only with this option.
+- Views 22401 and 22157 have the same battery view. They need the same rectangles.
+
+### The percentage
+
+1. Use a line between the 15 limits of the table, not level × 100 / 15. The level alone gives steps of 6.7 %.
+2. Filter the value. Without a charger, let the value only fall, as rule 5 of 0x1dfe44 does.
 
 The percentage is an estimate, because it comes from the voltage. A load lowers the voltage for a short time.
 
-For a larger battery of the same voltage, the percentage stays correct, because the voltage curve is similar. If a battery has a higher full voltage, the value stays at 100 % for a longer time. Then the app needs a setting for the full value and the empty value. Use the real test values to decide this.
+For a larger battery of the same voltage, the voltage curve is similar. If a battery has a higher full voltage, the value stays at 100 % for a longer time. Then the app needs a setting for the full value and the empty value. Use the real test values to decide this.
+
+### Open questions
+
+1. Does the dark theme have a white version of a size 10 style? If not, the patch needs one.
+2. Does a script read 0x1081dfe3 through 0x1d3780? The effect is not checked.
+3. Does a live rectangle stay after a new layout? Only the emulator can show this. If not, use the start method of `dark-mode`: the option then needs a restart.
+4. Does size 10 fit in the box? Only a draw can show this.
 
 ### Verdict
 
-| Item | Result |
-|---|---|
-| Possible | Yes, probably. The display, the value and the refresh already exist. |
-| Risk | Low. The hook changes a text, not the power code. The width of "100%" in 27 pixels is not tested. |
-| Work | Low, after the test on the real iPod. |
-| Size | Estimate: 150–300 bytes. Measure it if a patch starts. |
-| Next step | Do the test above. Record the number at full and at empty. |
+| Option | Possible | Risk | Work | Size (estimate) |
+|---|---|---|---|---|
+| Icon | Yes | None | None | 0 bytes |
+| Percent | Probably | Low | Low | 300 bytes |
+| Icon + Percent | Probably | Medium: the rectangles and the title | Medium | 500–800 bytes |
+
+Next steps:
+
+1. Do the test with the 2 files. Record the number at full and at empty.
+2. Answer the open questions.
+3. Make a test patch `battery-display` on its own branch. Make Percent first, then Icon + Percent.
