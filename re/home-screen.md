@@ -283,6 +283,30 @@ Static. Not measured. The panel uses the same firmware path as Now Playing: Draw
 
 Test: compare with stock Now Playing. If Now Playing has the same delay, the Split layout does not cause it. A shorter delay needs code.
 
+## Stock bytes at the build
+
+Status: research, 31 October 2026. Not in the app.
+
+The aim: `Split.ipodtheme` holds none of the 204 bytes of stock View 24430. The build takes them from the open firmware.
+
+The 204 bytes are the 2 elements of View 24430 at 0x4dc7b8: offsets 4–207. Only offsets 76–79 change (the value −107). Thus the file needs 2 copy ranges: offsets 4–75 and 80–207.
+
+Recommended method: add an optional field `copy` to a theme change. Each entry has the offset in `new`, the length, the source offset in `osos` and the SHA-256 of the source bytes. The file holds zeros in these ranges. The apply step checks each hash, and copies the bytes before it writes `new`. A wrong hash is an error, and the build stops.
+
+Prototype (Python, Measured): the file with zeros in the 2 ranges gives an `osos` that is identical to the `osos` of the real iPod test.
+
+Other points:
+
+- The table change can be 8 bytes, not 12: it can omit the ID.
+- Python `Change` and Swift `ThemeChange` both need the field. `to_json`, `from_json`, `apply_theme` and `apply` change. `testSplitLayoutFile` compares the 2 languages.
+- Format 2 needs no new number, but an old app cannot apply this file. The layout theme comes with the app, so this has no effect.
+- The method needs no change to `DarkMode.swift` for Split Light.
+- For Split Dark, copy from the View after the dark theme, and do not check against the stock hash. The dark theme changes 2 runs of 7 bytes in this View. Thus the copy brings the dark values with it. Design this check when Split Dark starts.
+
+The alternative is a Swift and a Python function that make the whole View from values in code, with no theme file. It needs more code, and the app has no theme file to show as a report. Not recommended.
+
+The new elements in the file keep the stock highlight colour words 0xffd06428 and 0xffe89858. The elements need a value there. These are 2 colour values, not a copy of a record.
+
 ## Next steps
 
 Split Light is on `main` and operates on a real iPod.
