@@ -235,6 +235,8 @@ Next does nothing in the emulator with stock 1.3 and with this file (report of t
 
 Owner test on 31 October 2026: long titles scroll, and the panel text has no overlap. The other items need a real iPod, because the emulator does not play music.
 
+Owner test of `iPodFirm Split Test` 0.1.222 on 31 October 2026: the owner reported that all looks good in the app.
+
 Rejected designs: commit 3b250ed rewrote Views -285, -286 and 25532, which other screens use. Commit 704f76d put the panel behind all screens. Do not change a shared View.
 
 Rejected space: commit 8561c18 used the space of View -515. No View, resource or code refers to the ID, and no View has it as a child. But code handles its element IDs 0x6fbb–0x6fc0 (0x1db294 and 0x155320). Thus it is a real layout, and its use is not known. Do not use it. The hit of −516 at 0x4f89ec is not a reference, because that address is outside the resources. Views 13957 and 30208 have no parent, but code uses their IDs.
