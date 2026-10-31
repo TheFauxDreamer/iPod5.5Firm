@@ -337,7 +337,7 @@ After the link, the patcher writes the value of the selected choice into the var
 
 ### The EQ editor
 
-`eq_editor` gives a patch the editor of 5 EQ bands in the Patches pane. It has 2 keys: `records` (a global array of 50 int32 values) and `mask` (a global 32-bit variable). The band values are integers in the options of the patch: `band1_type`, `band1_freq`, `band1_gain` (tenths of a dB) and `band1_q` (hundredths), to `band5_…`, `precut` (1 = lower the level by the highest boost) and `advanced` (1 = show the Advanced view, only in the app). They have no entry in `options`. They use the same storage, manifest and comparison with the iPod as other options.
+`eq_editor` gives a patch the editor of 5 EQ bands in the Patches pane. It has 2 keys: `records` (a global array of 50 int32 values) and `mask` (a global 32-bit variable). The band values are integers in the options of the patch: `band1_type`, `band1_freq`, `band1_gain` (tenths of a dB) and `band1_q` (hundredths), to `band5_…`, `precut` (1 = lower the level by the highest boost), `all_bands` (1 = the user agreed to use bands 2 and 4; else their gain is 0) and `advanced` (1 = show the Advanced view, only in the app). They have no entry in `options`. They use the same storage, manifest and comparison with the iPod as other options.
 
 After the link, the patcher calculates the records and writes the two variables (`Patcher.setOptions` and `CustomEQ.records`, Python `set_options` and `custom_eq.records`). The build stops if a value is out of range. [patches/custom-eq/patch.json](../patches/custom-eq/patch.json) is the only example.
 

@@ -18,6 +18,8 @@ FREQ_RANGE = (20, 20000)
 Q_RANGE = (30, 800)  # hundredths
 # The default bands: (type, frequency in Hz, gain in tenths of a dB, Q in hundredths).
 DEFAULTS = ((LOW_SHELF, 60, 0, 71), (PEAK, 230, 0, 100), (PEAK, 910, 0, 100), (PEAK, 3600, 0, 100), (HIGH_SHELF, 14000, 0, 71))
+# The bands that operate without the option "all_bands". Apple presets use a maximum of 3 filters.
+STANDARD_BANDS = (0, 2, 4)
 GRID = 512
 
 
@@ -26,11 +28,17 @@ class EQError(ValueError):
 
 
 def bands_from_options(values: dict[str, int]) -> list[tuple[int, int, int, int]]:
-    """Read the 5 bands from the option values. A missing value uses the default."""
+    """Read the 5 bands from the option values. A missing value uses the default.
+
+    Without the option "all_bands", the 2 other bands have no gain, so that they are off.
+    """
     out = []
     for i, d in enumerate(DEFAULTS, 1):
+        gain = values.get(f"band{i}_gain", d[2])
+        if values.get("all_bands") != 1 and i - 1 not in STANDARD_BANDS:
+            gain = 0
         out.append((values.get(f"band{i}_type", d[0]), values.get(f"band{i}_freq", d[1]),
-                    values.get(f"band{i}_gain", d[2]), values.get(f"band{i}_q", d[3])))
+                    gain, values.get(f"band{i}_q", d[3])))
     return out
 
 

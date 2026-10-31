@@ -6,9 +6,12 @@ import SwiftUI
 struct CustomEQView: View {
     @EnvironmentObject var model: AppModel
     let patch: PatchInfo
+    @State private var confirmAllBands = false
 
     var body: some View {
         let bands = model.eqBands(patch)
+        let allBands = model.eqUsesAllBands(patch)
+        let shown = allBands ? Array(bands.indices) : CustomEQ.standardBands
         let usesPrecut = model.eqUsesPrecut(patch)
         let advanced = model.eqUsesAdvanced(patch)
         Section {
@@ -19,15 +22,15 @@ struct CustomEQView: View {
             .pickerStyle(.segmented)
             EQCurve(bands: bands, usesPrecut: usesPrecut).frame(height: 140)
             if advanced {
-                ForEach(bands.indices, id: \.self) { i in
-                    EQBandRow(number: i + 1, band: Binding(get: { bands[i] }, set: { b in
+                ForEach(Array(shown.enumerated()), id: \.element) { row, i in
+                    EQBandRow(number: row + 1, band: Binding(get: { bands[i] }, set: { b in
                         var all = bands
                         all[i] = b
                         model.setEQBands(patch, all)
                     }))
                 }
             } else {
-                ForEach(bands.indices, id: \.self) { i in
+                ForEach(shown, id: \.self) { i in
                     EQSimpleRow(name: CustomEQ.simpleNames[i], gain: Binding(get: { bands[i].gain }, set: { g in
                         var all = CustomEQ.simple(from: bands)
                         all[i].gain = g
@@ -35,6 +38,9 @@ struct CustomEQView: View {
                     }))
                 }
             }
+            Toggle("Use All 5 Bands", isOn: Binding(get: { allBands }, set: { on in
+                if on { confirmAllBands = true } else { model.setEQUsesAllBands(patch, false) }
+            }))
             Toggle("Prevent Clipping", isOn: Binding(get: { usesPrecut }, set: { model.setEQUsesPrecut(patch, $0) }))
             let cut = CustomEQ.precut(bands)
             if usesPrecut, cut < -0.05 {
@@ -49,7 +55,13 @@ struct CustomEQView: View {
         } header: {
             Text("Custom EQ")
         } footer: {
-            Text("A band at 0 dB is off. Simple keeps only the slider values of Advanced bands. Prevent Clipping lowers the level by the highest boost, so that loud music does not distort. The music then sounds quieter than Flat. Without it, the EQ operates as the Apple presets do, and a strong boost can distort.")
+            Text("The default is 3 bands. A band at 0 dB is off. Simple keeps only the slider values of Advanced bands. Prevent Clipping lowers the level by the highest boost, so that loud music does not distort. The music then sounds quieter than Flat. Without it, the EQ operates as the Apple presets do, and a strong boost can distort.")
+        }
+        .confirmationDialog("Use All 5 Bands?", isPresented: $confirmAllBands) {
+            Button("I Agree, Use All 5 Bands") { model.setEQUsesAllBands(patch, true) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(CustomEQ.allBandsWarning)
         }
     }
 }
@@ -59,17 +71,27 @@ struct EQImportSheet: View {
     @EnvironmentObject var model: AppModel
     let eq: SharedEQ
 
+    /// The file uses more than the 3 standard bands, and the user did not agree yet.
+    private var askAllBands: Bool {
+        eq.needsAllBands && !(model.eqPatch.map(model.eqUsesAllBands) ?? false)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Import \"\(eq.name)\"?").font(.headline)
             EQCurve(bands: eq.eqBands, usesPrecut: eq.preventClipping).frame(height: 120)
             Text("This replaces the current Custom EQ. The iPod changes when you flash it.")
                 .foregroundStyle(.secondary)
+            if askAllBands {
+                Label(CustomEQ.allBandsWarning, systemImage: "exclamationmark.triangle.fill")
+                    .labelStyle(StatusLabelStyle(tint: .orange))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { model.pendingEQ = nil }
                     .keyboardShortcut(.cancelAction)
-                Button("Import") { model.applyEQ(eq) }
+                Button(askAllBands ? "I Agree, Import" : "Import") { model.applyEQ(eq) }
                     .keyboardShortcut(.defaultAction)
             }
         }

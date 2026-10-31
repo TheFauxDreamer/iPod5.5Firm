@@ -645,6 +645,20 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertFalse(CustomEQ.usesAdvanced([:]))
     }
 
+    /// Without the agreement of the user, only 3 bands can operate.
+    func testCustomEQThreeBandsByDefault() throws {
+        var bands = CustomEQ.simpleLayout
+        for i in bands.indices { bands[i].gain = 30 }
+        var values = CustomEQ.values(of: bands)
+        XCTAssertEqual(try CustomEQ.records(CustomEQ.bands(from: values)).mask, 0b10101)
+        values["all_bands"] = 1
+        XCTAssertEqual(try CustomEQ.records(CustomEQ.bands(from: values)).mask, 0b11111)
+        XCTAssertTrue(try SharedEQ.decode(SharedEQ(name: "A", bands: bands, preventClipping: false, advanced: false).encode()).needsAllBands)
+        bands[1].gain = 0
+        bands[3].gain = 0
+        XCTAssertFalse(try SharedEQ.decode(SharedEQ(name: "A", bands: bands, preventClipping: false, advanced: false).encode()).needsAllBands)
+    }
+
     /// A .ipodeq file gives the same EQ again, and has only the settings.
     func testSharedEQRoundTrip() throws {
         var bands = CustomEQ.simpleLayout

@@ -1100,6 +1100,15 @@ final class AppModel: ObservableObject {
         patchOptions[patch.spec.name] = values
     }
 
+    func eqUsesAllBands(_ patch: PatchInfo) -> Bool {
+        CustomEQ.usesAllBands(patchOptions[patch.spec.name] ?? [:])
+    }
+
+    /// The view asks the user to agree to `CustomEQ.allBandsWarning` before it sets this to on.
+    func setEQUsesAllBands(_ patch: PatchInfo, _ on: Bool) {
+        patchOptions[patch.spec.name, default: [:]]["all_bands"] = on ? 1 : 0
+    }
+
     func eqUsesPrecut(_ patch: PatchInfo) -> Bool {
         CustomEQ.usesPrecut(patchOptions[patch.spec.name] ?? [:])
     }
@@ -1155,6 +1164,7 @@ final class AppModel: ObservableObject {
         var values = CustomEQ.values(of: eq.eqBands)
         values["precut"] = eq.preventClipping ? 1 : 0
         values["advanced"] = eq.usesAdvanced ? 1 : 0
+        values["all_bands"] = eq.needsAllBands || eqUsesAllBands(patch) ? 1 : 0
         patchOptions[patch.spec.name] = values
         setPatch(patch, on: true)
         section = .patches

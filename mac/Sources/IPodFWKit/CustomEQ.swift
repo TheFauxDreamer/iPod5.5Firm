@@ -44,13 +44,24 @@ public enum CustomEQ {
     static let grid = 512
     static let q24 = 16_777_216.0
 
+    /// The 3 bands that the user can edit by default. Apple presets use a maximum of 3 filters.
+    public static let standardBands = [0, 2, 4]
+    /// The text that the user must agree to before more than 3 bands can operate.
+    public static let allBandsWarning = "Apple never uses more than 3 bands in one EQ. With all 5 bands, performance may be degraded. The music can have gaps."
+
+    /// The option "all_bands": 1 means that the user agreed to `allBandsWarning`.
+    public static func usesAllBands(_ values: [String: Int]) -> Bool { values["all_bands"] == 1 }
+
     /// The 5 bands from the option values. A missing value uses the default.
+    /// Without the option "all_bands", the 2 other bands have no gain, so that they are off.
     public static func bands(from values: [String: Int]) -> [Band] {
         defaults.enumerated().map { i, d in
             let n = i + 1
+            var gain = values["band\(n)_gain"] ?? d.gain
+            if !usesAllBands(values), !standardBands.contains(i) { gain = 0 }
             return Band(kind: Kind(rawValue: values["band\(n)_type"] ?? d.kind.rawValue) ?? d.kind,
                         frequency: values["band\(n)_freq"] ?? d.frequency,
-                        gain: values["band\(n)_gain"] ?? d.gain,
+                        gain: gain,
                         q: values["band\(n)_q"] ?? d.q)
         }
     }
@@ -183,6 +194,11 @@ public struct SharedEQ: Codable, Equatable, Identifiable, Sendable {
     public var id: String { name }
     /// The app shows the Advanced view if the file has bands that the Simple view does not have.
     public var usesAdvanced: Bool { view == "advanced" || eqBands != CustomEQ.simple(from: eqBands) }
+
+    /// The file has a band that needs the option "all_bands".
+    public var needsAllBands: Bool {
+        eqBands.enumerated().contains { i, b in b.gain != 0 && !CustomEQ.standardBands.contains(i) }
+    }
 
     /// The bands in the form of the editor. A band with an unknown type becomes a peak: `decode` rejects it first.
     public var eqBands: [CustomEQ.Band] {

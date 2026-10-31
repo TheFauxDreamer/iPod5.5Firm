@@ -54,6 +54,12 @@ def test_no_precut_keeps_the_boost():
         assert eq.peak([row(data, 0, r)], rate) == pytest.approx(12, abs=0.1)
 
 
+def test_three_bands_by_default():
+    values = {f"band{i}_gain": 30 for i in range(1, 6)}
+    assert eq.records(eq.bands_from_options(values))[1] == 0b10101
+    assert eq.records(eq.bands_from_options({**values, "all_bands": 1}))[1] == 0b11111
+
+
 def test_flat_has_no_active_band():
     assert eq.records(list(eq.DEFAULTS)) == (bytes(200), 0)
 
