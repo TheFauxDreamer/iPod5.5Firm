@@ -46,6 +46,7 @@ struct CustomEQView: View {
                 Text("Advanced").tag(true)
             }
             .pickerStyle(.segmented)
+            .help("Simple keeps only the slider values of Advanced bands.")
             Menu("Start From Apple Preset") {
                 ForEach(CustomEQ.applePresets) { preset in
                     Button(preset.name) {
@@ -58,8 +59,6 @@ struct CustomEQView: View {
                                 presenting: confirmPreset) { preset in
                 Button("Replace with \(preset.name)") { model.applyEQPreset(patch, preset) }
                 Button("Cancel", role: .cancel) {}
-            } message: { preset in
-                Text("The bands change to the values that are close to the Apple preset \(preset.name).")
             }
             EQCurve(bands: bands, usesPrecut: usesPrecut).frame(height: 140)
             if advanced {
@@ -86,6 +85,7 @@ struct CustomEQView: View {
                 if on { confirmFullGain = true } else { model.setEQUsesFullGain(patch, false) }
             }))
             Toggle("Prevent Clipping", isOn: Binding(get: { usesPrecut }, set: { model.setEQUsesPrecut(patch, $0) }))
+                .help("Lowers the level by the highest boost, so that loud music does not distort. The music sounds quieter.")
             let cut = CustomEQ.precut(bands)
             if usesPrecut, cut < -0.05 {
                 LabeledContent("Level", value: String(format: "%.1f dB", cut))
@@ -98,22 +98,16 @@ struct CustomEQView: View {
             }
         } header: {
             Text("Custom EQ")
-        } footer: {
-            Text("The default is 3 bands, in the range of the Apple presets. A band at 0 dB is off. An Apple preset opens in Advanced, with bands that are close to the Apple curve. Simple keeps only the slider values of Advanced bands. Prevent Clipping lowers the level by the highest boost, so that loud music does not distort. The music then sounds quieter than Flat. Without it, the EQ operates as the Apple presets do, and a strong boost can distort.")
         }
         .alert("New EQ", isPresented: $askNewName) {
             TextField("Name", text: $nameText)
             Button("Add") { model.addEQ(named: nameText) }
             Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This name shows on the iPod.")
         }
         .alert("Rename EQ", isPresented: $askRename) {
             TextField("Name", text: $nameText)
             Button("Rename") { model.renameSelectedEQ(to: nameText) }
             Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This name shows on the iPod.")
         }
         .confirmationDialog("Delete \"\(model.selectedEQ.name)\"?", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive) { model.deleteSelectedEQ() }
@@ -148,8 +142,6 @@ struct EQImportSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Import \"\(eq.name)\"?").font(.headline)
             EQCurve(bands: eq.eqBands, usesPrecut: eq.preventClipping).frame(height: 120)
-            Text("This adds a new EQ to your list. The iPod changes when you flash it.")
-                .foregroundStyle(.secondary)
             ForEach(warnings, id: \.self) { warning in
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .labelStyle(StatusLabelStyle(tint: .orange))

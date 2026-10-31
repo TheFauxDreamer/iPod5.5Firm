@@ -5,22 +5,14 @@
   "symbol": "slider.vertical.3",
   "category": "playback",
   "version_letter": "q",
-  "version": "0.9",
+  "version": "0.10",
   "size": 1690,
   "details": [
-    "Each EQ shows with its name in Settings > EQ. You can have up to 5 EQs.",
-    "Set the sliders in this pane, then flash the iPod. The default is 3 bands, in the range of the Apple presets (−7 to +7.5 dB). Go Beyond Apple's Limits gives −12 to +12 dB after a warning. The Simple view has Bass, Mids and Treble. The Advanced view gives each band a type, a frequency and Q. To change the bands, flash the iPod again.",
-    "Export EQ makes a small .ipodeq file that you can send to another person. Import EQ reads the file. The iPod changes when you flash it.",
-    "Start From Apple Preset sets the bands close to an Apple preset. You can then change them.",
-    "Use All 5 Bands adds Warmth and Clarity. Apple never uses more than 3 bands in one EQ, so you must agree to a warning first.",
-    "The patch uses the EQ of the iPod. A band at 0 dB is off and uses no CPU time.",
-    "The EQ operates as the Apple presets do. A strong boost can distort loud music.",
-    "Prevent Clipping lowers the level by the highest boost. The music does not distort, but it sounds quieter."
+    "Each EQ shows with its name in Settings > EQ. To change the iPod, flash it."
   ],
   "notes": [
     "The iPod applies the EQ only to 16-bit music at 44.1 kHz or 48 kHz. The Apple presets have the same limit.",
-    "The name of an EQ is the same in all languages.",
-    "This is a test version. A setting with 4 or 5 active bands is not tested on a real iPod."
+    "This is a test version."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [
@@ -41,15 +33,5 @@
     { "at": "0xf90fc", "expect": "04009fe5", "value": "5000a0e3" },
     { "at": "0xf9100", "expect": "000090e5", "value": "1eff2fe1" }
   ],
-  "eq_editor": { "records": "custom_eq_records", "list": "custom_eq_list" },
-  "ui": {
-    "steps_title": "Test the Custom EQ",
-    "steps": [
-      "Set a strong bass boost in this pane. Flash the iPod.",
-      "On the iPod, go to Settings > EQ and select Custom.",
-      "Play a song with headphones. Change between Custom and Flat. The bass must change.",
-      "Turn on Use All 5 Bands and set all the sliders. Flash the iPod again.",
-      "Play MP3, AAC and Apple Lossless songs. Make sure that the music has no gaps."
-    ]
-  }
+  "eq_editor": { "records": "custom_eq_records", "list": "custom_eq_list" }
 }
