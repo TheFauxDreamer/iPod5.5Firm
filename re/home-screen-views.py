@@ -21,12 +21,14 @@ TOP, LEFT, BOTTOM, RIGHT = 28, 40, 52, 64  # offsets of the edges in an element
 PARENT, HEIGHT = 0x80000002, 0x80000008  # edge modes
 
 MAIN_MENU = 24430
-SPARE_VIEW = -515  # no stock View, resource or code refers to it
+VIEW_AT = 0x735c00  # in the patch area, inside the image. It must be zero in stock.
+VIEW_LIMIT = 0x736000
 PANEL_WIDTH = 107
 PANEL_X = 320 - PANEL_WIDTH
 
 COVER_VIEW = -356  # stock, shared with Now Playing
-SONG_TITLE, SONG_ARTIST = 0x63bd, 0x63be
+SONG_TITLE, SONG_ARTIST, SONG_ALBUM, SONG_COUNT = 0x63bd, 0x63be, 0x63bf, 0x63c3
+LINE_HEIGHT = 18
 NOW_PLAYING_TEXT_STYLE = 0x5ea30000
 TEXT_PROPERTY = 0x5fbc  # the same property as the stock title
 
@@ -49,43 +51,42 @@ def group(ident: int, r: list[int]) -> bytes:
     return struct.pack(f"<{len(words)}I", *words)
 
 
-def text(ident: int, r: list[int]) -> bytes:
-    """A 96-byte text element with its text from a firmware property."""
-    words = [0x5c, 0x1580, 0x53747220, ident, 0x2b00, TEXT_PROPERTY, 0x1000a00, *r,
-             0xffd06428, 0xffe89858, NOW_PLAYING_TEXT_STYLE, 0, 0xc]
+def text(ident: int, r: list[int], scrolls: bool = False) -> bytes:
+    """A text element with its text from a firmware property. A long text scrolls if `scrolls` is set."""
+    extra = [0x8c, 0x1388, 4, 0x19] if scrolls else []
+    words = [0x6c if scrolls else 0x5c, 0x3180 if scrolls else 0x1580, 0x53747220, ident, 0x2b00, TEXT_PROPERTY,
+             0x1000a00, *r, 0xffd06428, 0xffe89858, NOW_PLAYING_TEXT_STYLE, 0, 0xc, *extra]
     return struct.pack(f"<{len(words)}I", *words)
 
 
 def main_menu_view(stock: bytes) -> bytes:
-    """The stock scroll bar and list, then the cover and two lines of text."""
+    """The stock scroll bar and list, then the cover and four lines of text."""
     x, right = PANEL_X + 6, -4
-    view = bytearray(struct.pack("<I", 5) + stock[4:] + b"".join((
-        group(COVER_VIEW, rect(4, PANEL_X, -106, 0)),
-        text(SONG_TITLE, rect(120, x, 0, right)),
-        text(SONG_ARTIST, rect(144, x, 0, right)),
-    )))
-    if view_elements(bytes(view)) is None or len(view_elements(bytes(view))) != 5:
+    lines = ((SONG_TITLE, 116, True), (SONG_ARTIST, 134, False), (SONG_ALBUM, 152, False), (SONG_COUNT, 178, False))
+    view = bytearray(struct.pack("<I", 7) + stock[4:] + group(COVER_VIEW, rect(4, PANEL_X, -106, 0))
+                     + b"".join(text(i, rect(y, x, 0, right), s) for i, y, s in lines))
+    elements = view_elements(bytes(view))
+    if elements is None or len(elements) != 7:
         raise SystemExit("the new View is not valid")
     edge(view, 0, RIGHT, value=-PANEL_WIDTH)
-    edge(view, 3, BOTTOM, mode=HEIGHT, value=22)
-    edge(view, 4, BOTTOM, mode=HEIGHT, value=22)
+    for element in range(3, 7):
+        edge(view, element, BOTTOM, mode=HEIGHT, value=LINE_HEIGHT)
     return bytes(view)
 
 
 def apply(fw: FirmwarePartition) -> int:
-    """Put the new View in the space of the spare View. Change only the table entry of the main menu."""
+    """Put the new View in the patch area. Change only the table entry of the main menu."""
     osos = bytearray(fw.image("osos"))
     block = main_block(scan(bytes(osos)))
-    views = {r.id: r for r in block.of_type("View")}
-    menu, spare = views[MAIN_MENU], views[SPARE_VIEW]
+    menu = next(r for r in block.of_type("View") if r.id == MAIN_MENU)
     stock = bytes(osos[block.abs(menu):block.abs(menu) + menu.size])
-    if len(stock) != 208 or spare.size != 580:
+    if len(stock) != 208:
         raise SystemExit("this is not stock firmware 1.3")
     new = main_menu_view(stock)
-    if len(new) > spare.size:
-        raise SystemExit("the new View does not fit")
-    osos[block.abs(spare):block.abs(spare) + len(new)] = new
-    struct.pack_into("<II", osos, menu.table_pos + 4, spare.offset, len(new))
+    if VIEW_AT + len(new) > VIEW_LIMIT or any(osos[VIEW_AT:VIEW_AT + len(new)]):
+        raise SystemExit("the area for the new View is not free")
+    osos[VIEW_AT:VIEW_AT + len(new)] = new
+    struct.pack_into("<II", osos, menu.table_pos + 4, VIEW_AT - block.data_start, len(new))
     fw.replace_image("osos", bytes(osos))
     return len(new)
 

@@ -211,10 +211,10 @@ Warning: do not write this file to a real iPod until all tests are complete and 
 
 | Change | Bytes | Measured |
 |---|---|---|
-| The table entry of View 24430 points to the space of View -515 and has size 496. | 5 | Table at 0x337424 |
-| The space of View -515 holds the new main menu: the stock scroll bar (right edge −107), the stock list, the cover View -356, the song and the artist. | 245 | No other byte of `osos` changes. `rsrc` and `aupd` are stock. The `osos` checksum is correct. |
+| The table entry of View 24430 points to 0x735c00 and has size 704. | Up to 8 | Table at 0x337424 |
+| The new main menu at 0x735c00, in the patch area: the stock scroll bar (right edge −107), the stock list, the cover View -356, and the song, artist, album and count. | 704 | 279 bytes of `osos` change in total, and none outside these two places. `rsrc` and `aupd` are stock. The zero area at 0x6ca452 is the same. The `osos` checksum is correct. |
 
-The old data of View 24430 stays in the firmware, unused. The space has room for only 2 text lines.
+The old data of View 24430 stays in the firmware, unused. A final patch must get this space from the patch area, because other patches also use that area.
 
 Emulator results of earlier designs:
 
@@ -222,17 +222,11 @@ Emulator results of earlier designs:
 - A panel in the title layer shows behind Now Playing. Thus the panel must not be in the title layer.
 - A text element with a bottom edge at the parent centres itself in the whole height. Thus each line needs a fixed height.
 
+Next does nothing in the emulator with stock 1.3 and with this file (report of the owner). The emulator does not play the music. Thus the emulator cannot test a song change with Next.
+
 Rejected designs: commit 3b250ed rewrote Views -285, -286 and 25532, which other screens use. Commit 704f76d put the panel behind all screens. Do not change a shared View.
 
-Audit of View -515 (Static):
-
-- No View has it as a child in stock.
-- No Menu, Type, TCmd, Bits or LDTm resource has the value −515 at a 2-byte offset.
-- No View has the value −515 at a 2-byte offset.
-- `osos` has the 32-bit value only in the resource table. The value 0xfdfd has no match.
-- The decompiled code has no match.
-
-This does not prove that the firmware never loads View -515, because code can calculate an ID. Its text elements are 28603–28608. Views 13957 and 30208 also have no parent, but code uses their IDs. Thus they are not spare.
+Rejected space: commit 8561c18 used the space of View -515. No View, resource or code refers to the ID, and no View has it as a child. But code handles its element IDs 0x6fbb–0x6fc0 (0x1db294 and 0x155320). Thus it is a real layout, and its use is not known. Do not use it. The hit of −516 at 0x4f89ec is not a reference, because that address is outside the resources. Views 13957 and 30208 have no parent, but code uses their IDs.
 
 ## Game patch
 
@@ -241,8 +235,8 @@ The themes contain the same patch as the DRM research of this project. The resea
 ## Next steps
 
 1. The owner tests the main menu in the emulator: the cover, the text, Now Playing, and the wheel speed.
-2. Find the screen of text 28603–28608, and show that the firmware never loads View -515.
-3. Test long titles. The text does not scroll.
-4. Test the main menu with no song, and with a song that has no art.
-5. Test a main menu with more rows than the screen, for the scroll bar.
+2. Test long titles in the scrolling song line.
+3. Test the main menu with no song, and with a song that has no art.
+4. Test a main menu with more rows than the screen, for the scroll bar.
+5. Change the place of the View to a location that `patcher.py` allocates.
 6. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`. Theme import reads Views by table offset.
