@@ -31,11 +31,13 @@ A mod of 2007, "iPod Classic to iPod Video 1.0", gave the 5G and the 5.5G split 
 | Authors | bounci.rabbit.123, H3X, vettefan, matthew98, supernatural, saXas, xxDriveNxx | [iClarified](https://www.iclarified.com/109/ipod-classic-to-ipod-video-10-is-finished) |
 | Tool | iPodWizard, Windows only. This suggests a resource edit. | [Engadget](https://www.engadget.com/2007-10-15-5g-ipods-hacked-to-run-updated-interface.html) |
 | Files | `ClassicFirmwarefor5.5Gv1.0.2.zip` and a 5G file, from driven-design.net | [Applesfera](https://www.applesfera.com/ipod/convierte-la-interfaz-del-ipod-video-en-la-del-ipod-classic) |
-| Panel | The right half shows the current track. | [ifun.de](https://www.ifun.de/ipod-classic-menus-fur-die-5-generation-3764/) |
+| Panel | One report says that the right half shows the current track. | [ifun.de](https://www.ifun.de/ipod-classic-menus-fur-die-5-generation-3764/) |
+| List width | The preview version gave the menu approximately 2/3 of the screen. This agrees with our layout. A commenter says that a menu of 1/2 needs much new code. This is not proved. | [ifun.de](https://www.ifun.de/in-arbeit-classic-look-fur-den-5g-3740/) |
+| Project page | generaciondealcance.com/drivendesign/classic/. A commenter reported that it did not operate. Not examined. | ifun.de |
 | Problems | Bricked iPods, boot loops, jerky transitions, menus that jump | Engadget, ifun.de |
 | Cover | The art shows at the side only while a song plays. This is a search summary of a forum page that did not open. | MacRumors thread 368840 |
 
-The method of the mini Now Playing is not known. Refer to [Now Playing data](#now-playing-data). The forum thread was ipodwizard.net `t=30444`.
+The [iPoddities firmware archive](https://archive.org/details/ipoddities_firmware_archive) page shows no file of this mod, but the page shows only a part of the contents. The method of the mini Now Playing is not known. Refer to [Now Playing data](#now-playing-data). The forum thread was ipodwizard.net `t=30444`.
 
 ## Edge format of a View element
 
@@ -77,7 +79,7 @@ Static. An element gets its data by its ID. 0x21f254 asks the provider, and then
 
 **Hypothesis, not tested:** if the parents of the main menu lead to the main provider, a copy of these elements in the main menu shows live data with no code. This can explain the mini Now Playing of 2007. It also agrees with the report that the art shows only while a song plays.
 
-The limit is the size of the View. A new element makes View 24430 larger, and iPodFirm cannot do this now. A possible method needs no larger View: change the child ID 24430 in View 24085 to a larger View that the firmware does not use, and write the new layout there. iPodWizard can edit these links. Any such View must be proved unused.
+The limit is the size of the View. A new element makes View 24430 larger, and iPodFirm cannot do this now. A possible method needs no larger View: change the child ID 24430 in View 24085 to a larger View that the firmware does not use, and write the new layout there. The Layout editor of iPodWizard 1.3 changes values in place and has no command to add an element. Thus the 2007 mod probably changed values and links only. This is an inference. Any View that we use must be proved unused.
 
 ## Test firmware
 
@@ -127,6 +129,17 @@ The 2007 reports do not remove the main risk, because the rows of a list can sti
 
 No search result showed a theme with the exact 6G layout. The Rockbox theme manual page did not open.
 
+## iPodWizard 1.3.5
+
+The [v1.3.5 release](https://github.com/TheMetalWizard/iPodWizard/releases/tag/v1.3.5) is new. Its page has no method to add or to make larger a View element. Its source is not examined yet.
+
+| Item | Use for this research |
+|---|---|
+| Hover explanations of the layout resources | They can correct the names of the View fields. |
+| `PixoNames.txt` and the Commands menu | Readable names for commands. They can give names for functions in our notes. |
+
+iPodWizard is under the GPL, so use its source only for facts. Its post says that a brick is nearly impossible, because the tool does not touch the bootloader. The 2007 reports say that iPods bricked, so the test order does not change: use the emulator first.
+
 ## Two layouts
 
 | Layout | Description | Main risk |
@@ -140,5 +153,6 @@ No search result showed a theme with the exact 6G layout. The Rockbox theme manu
 2. If the rows do not follow, trace 0x1bb260 and 0x122b28.
 3. Find a draw hook for the main menu, and the event of a song change, if the third test file gives no data.
 4. Find a View that the firmware does not use. Make a third test file with a Draw 25544 element and the song text elements in the main menu.
-5. Read the mod files if the owner can supply them.
-6. Read the Spotish coordinates and the adwaitapod screenshots.
+5. Read the mod files if the owner can supply them. Ask in the iPoddities Discord, or look in the "MEGA iPod Archive".
+6. Read `PixoNames.txt` and the View notes in the source of iPodWizard 1.3.5.
+7. Read the Spotish coordinates and the adwaitapod screenshots.
