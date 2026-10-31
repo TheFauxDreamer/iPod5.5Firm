@@ -349,8 +349,9 @@ Design points:
 - Theme import refuses the 27 Views with a new structure. It can take the colours, the Types and the pictures of the same size.
 - The theme has no switch to dark. It is a third choice of appearance, not a layout.
 - The panel text style must be readable on the background.
+- Space: 252 pictures of the same size are 1,018,292 bytes in place. 4 larger pictures need 329,976 bytes after osos. The free space from 0x737000 to 0x7F8000 is 790,528 bytes. Patches share this space.
 
-The authors of the pictures are not known. A string in the theme has a copyright line. Do not ship the pictures with the app before the owner has a permission. An import of the owner's file does not need this, because the app then ships no picture.
+The theme text says: "Theme-specific images © 2008 3rd Party Programming, All rights reserved." The guide says that the theme comes from a file called Firebird. Do not ship the pictures with the app before the owner has a permission. An import of the owner's file does not need this, because the app then ships no picture.
 
 ## Next steps
 
