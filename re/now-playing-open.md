@@ -55,34 +55,31 @@ The timers in 0x109e, 0x10a6 and 0x10b1 do not open Now Playing. They operate on
 | 0x11b3, 0x11b4 | After 0x13c8.0x1e4 | Not known | Static |
 | 0x1096 | Event 0x42800008 | Play message from the firmware | Static. The candidate. |
 
-## The candidate for the automatic open
+## The automatic open
 
-Static, with Ghidra for 0x1e0084. The bulk decompile does not have this code.
+The owner reported that Now Playing opens after 10 seconds with no input. The chain is in the script (Static):
 
-1. 0x1e0084, method of vtable 0x670820 (slot at 0x670820) receives a message. Byte 0 is the type. The word at + 0x10 has flags.
-2. With flag 0x40 and type 8, it calls 0x1d09fc(object, 1). This sends 0x42800008. Types 7 and 10 send 0x42800009.
-3. 0x19a1dc forwards 0x42800008 to the script with 0x1d32e0.
-4. The script function 0xfd1 registers 0x1096 for this event.
-5. 0x1096 calls 0x1095, unless 0x13d5.0x2b5 is true. Then it calls 0x12b2.
+1. 0x1007 registers the input handler 0x1005 (0x13a3.0xfb), and starts the timer with 0x1008.
+2. 0x1005 runs at input, and starts the timer again.
+3. 0x1008 runs 0x100a after the time in variable 0x13a7. The default is 10,000 ms. 0xfcc and 0x10df set it to 2,000 ms one time.
+4. 0x100a calls 0xf84.
+5. 0xf84: if 0x13a4.0x13a is true, and `name 0x98` gives true, and 0x1099 is false, it calls 0x1096. If 0x1099 is true, it calls 0x10b4. If `name 0x98` gives false, it calls 0x1007.
+6. 0x1096 calls 0x1095, which opens Now Playing.
 
-Not proved: that type 8 means that play starts, and when the firmware sends it. Also, type 8 sets the sleep state with 0x184860, and 7 and 10 clear it with 0x18482c. This agrees with a start and a stop of play.
+0x1094, which builds Now Playing, calls 0x1006. This stops the timer.
 
-The evidence does not show a timer that opens Now Playing.
+An earlier version of this note said that no timer opens Now Playing. This was wrong.
 
-## Smallest change, if the test agrees
+The firmware event 0x42800008 also reaches 0x1096. It is a different path. Its meaning is not proved: 0x1e0084, flag 0x40, type 8.
 
-Change 2 bytes in 0x1096, at script offset 0x7255 (osos 0x4bb671): `true`, `return` in place of `name 0x1095`. The function then returns and does not open Now Playing. A `bytes` patch can do this, with `"size": 0`.
+## Smallest change
 
-Play from a list uses its own calls to 0x1095, so that path stays.
+Change 2 bytes in 0xf84, at script offset 0x1a1b (osos 0x4b5e37): 0x1007 in place of 0x1096. Then the timer starts again, as it does for the other case in the same function. The event path and Play from a list stay.
 
-Risks:
-
-- The Play button outside a list possibly no longer opens Now Playing.
-- The Now Playing menu item is not identified.
-- Handler 0x1028 can also open the screen.
+Status: not tested.
 
 ## Next steps
 
-1. The owner tells when the automatic open occurs: at the end of a song, after a time, or with the Play button.
+1. Test the 2 bytes in the emulator, with the stock firmware as a control.
 2. Identify 0xfe2–0xfe4, 0x11b3, 0x11b4 and the event of 0x1028.
-3. Make a test firmware with the 2 bytes.
+3. Find what `name 0x98` and 0x13a4.0x13a test.
