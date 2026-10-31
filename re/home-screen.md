@@ -247,6 +247,24 @@ The owner wants Now Playing to open only in these 2 cases:
 
 Static result: the UI script `TCmd` 9088 has the ID 24526 of the Now Playing View at the offsets 0x7175 and 0x12721. These 2 sites are not decoded. The emulator does not play music, so it possibly cannot show the automatic open.
 
+## Goal for the app
+
+The owner wants these appearances in time: Stock Light, Stock Dark, Stock Switch on iPod, Split Light, Split Dark, Split Switch on iPod, and Contemporary Split.
+
+Recommended design: two controls, because the layout and the colours are separate.
+
+- Appearance: Light, Dark or Switch on iPod. This is the present control.
+- Layout: Stock, Split or Contemporary Split.
+
+Keep the internal name of the `dark-mode` patch. It is only the mechanism of "Switch on iPod", and installed patches use the name.
+
+Facts from the code (Static, not tested):
+
+- An `.ipodtheme` file is a list of byte changes, and the theme can have data outside `osos`. Thus the split layout is possibly a theme layer, with no new patch feature. Check that a theme can change the table entry of a View.
+- RetailOS reads the Views one time, at the start. The switch table of `dark-mode` applies before the first read. Thus "Switch on iPod" can possibly change the layout data too.
+- The dark theme changes 617 Views. The dark split View must start from the dark View 24430, not from stock. The panel text must use a colour that the dark theme can show.
+- Theme import refuses a View with a changed structure, and it does not apply code. Thus Contemporary Split needs a separate design. The themes rewrite shared Views, and these broke Now Playing. Credit the theme authors if the app uses their values.
+
 ## Next steps
 
 1. The owner tests the main menu in the emulator: the cover, the text, Now Playing, and the wheel speed.
