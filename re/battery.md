@@ -160,7 +160,9 @@ The test is safe because it adds only 2 empty files. Delete the files to stop th
 
 Expected result: a number replaces the battery picture. The revision 0xb table gives approximately 283 (empty) to 454 (full).
 
-Not tested in the emulator or on a real iPod.
+Real iPod test (31 October 2026, owner, 1 TB iPod with HFS+): the display showed "43" in place of the battery picture. Thus the 2 files and the hidden display operate on a real iPod.
+
+The value 43 is not the complete number. The boot loader continues only at 0x080 (128) or more, and level 0 starts below 283. Thus a third digit is probably cut, and the value is probably 430–439 or x43. Type 24223 has size 18 in a box of width 27, and its alignment byte (+0x0d = 1) is different from the left text style 24222 (0). The alignment meaning is an estimate. The complete value needs a smaller text style.
 
 ### What the test gives
 
