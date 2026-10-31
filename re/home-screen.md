@@ -203,21 +203,26 @@ iPodWizard is under the GPL, so use its source only for facts. Its post says tha
 
 ## The stock layout
 
-Status: the main menu and the submenus operate in the emulator on 31 October 2026. Now Playing, live data, the cover and the 8 other title layers are not tested.
+Status: emulator test open, 31 October 2026.
 
 Warning: do not write this file to a real iPod until all tests are complete and the owner agrees.
 
-[home-screen-views.py](home-screen-views.py) makes `home-screen-split.ipsw` from stock 1.3. Fonts, pictures, Types and code stay stock. No View changes size. The file changes 89 Views:
+[home-screen-views.py](home-screen-views.py) makes `home-screen-split.ipsw` from stock 1.3. The panel is only in the main menu, as on the classic. The title layers, all other lists and all shared Views stay stock.
 
-| View | Changed bytes | Change |
+| Change | Bytes | Measured |
 |---|---|---|
-| 85 list Views | 4 each | The right edge of the scroll bar: −107. The list ends at x = 213. |
-| 24069 | 1 | The first title layer, 24506, is 240 pixels high, not 24. The 8 other title layers stay stock. |
-| 24506 | 7 | Element 1 points to View -515, not View -285, with the full width. The stock strip stays 24 pixels high. |
-| -277 | 6 | The content starts at y = 24 of the parent. It does not follow the title layer. |
-| -515 | 145 | Rewritten: the stock title View -285, the cover View -356 and 4 text elements. |
+| The table entry of View 24430 points to the space of View -515 and has size 496. | 5 | Table at 0x337424 |
+| The space of View -515 holds the new main menu: the stock scroll bar (right edge −107), the stock list, the cover View -356, the song and the artist. | 245 | No other byte of `osos` changes. `rsrc` and `aupd` are stock. The `osos` checksum is correct. |
 
-Rejected design: an earlier version (commit 3b250ed) rewrote Views -285, -286 and 25532, as the themes do. Stock Now Playing uses 25532, stock View 22533 uses -286, and the title layers 15617 and 22532 use -285. The owner reported that the UI broke when a song played. Thus a changed View must have no other user. `home-screen-views.py` must not change a shared View.
+The old data of View 24430 stays in the firmware, unused. The space has room for only 2 text lines.
+
+Emulator results of earlier designs:
+
+- The cover and the live song text show with no code. This confirms that a menu element reaches the main provider. The owner saw this on 31 October 2026, with the FolderLibrary.
+- A panel in the title layer shows behind Now Playing. Thus the panel must not be in the title layer.
+- A text element with a bottom edge at the parent centres itself in the whole height. Thus each line needs a fixed height.
+
+Rejected designs: commit 3b250ed rewrote Views -285, -286 and 25532, which other screens use. Commit 704f76d put the panel behind all screens. Do not change a shared View.
 
 Audit of View -515 (Static):
 
@@ -227,7 +232,7 @@ Audit of View -515 (Static):
 - `osos` has the 32-bit value only in the resource table. The value 0xfdfd has no match.
 - The decompiled code has no match.
 
-This does not prove that View -515 is unused. Code can calculate an ID. Its text elements are 28603–28608.
+This does not prove that the firmware never loads View -515, because code can calculate an ID. Its text elements are 28603–28608. Views 13957 and 30208 also have no parent, but code uses their IDs. Thus they are not spare.
 
 ## Game patch
 
@@ -235,10 +240,9 @@ The themes contain the same patch as the DRM research of this project. The resea
 
 ## Next steps
 
-1. The owner tests live data in the emulator: the song text, the cover and Now Playing.
-2. Find the art size of Draw 25543 and of Draw 25544. The panel is 107 pixels wide, so Draw 25544 is possibly better.
-3. Test the 8 other title layers: 24507, 10371, 17538, 15617, 19328, 22404, 22532 and 28043. Each must operate at the height of 24 in a layer of the root.
-4. Examine each of the 85 lists for long text in the narrow width.
-5. Find the screen of text 28603–28608, and show that the firmware never loads View -515.
-6. Find the users of title layer 24070. It has height 0, so stock content starts at y = 0 with it. The change to View -277 puts this content at y = 24. Static result: no match in `TCmd`, not proved. The full-screen screens are siblings of -277 in View -276, so this change does not touch them.
-7. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`.
+1. The owner tests the main menu in the emulator: the cover, the text, Now Playing, and the wheel speed.
+2. Find the screen of text 28603–28608, and show that the firmware never loads View -515.
+3. Test long titles. The text does not scroll.
+4. Test the main menu with no song, and with a song that has no art.
+5. Test a main menu with more rows than the screen, for the scroll bar.
+6. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`. Theme import reads Views by table offset.
