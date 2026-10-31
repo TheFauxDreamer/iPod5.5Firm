@@ -66,7 +66,7 @@ public enum CustomEQ {
         Preset(name: "Lounge", bands: [Band(kind: .peak, frequency: 602, gain: 40, q: 65), Band(kind: .peak, frequency: 4062, gain: -40, q: 95), Band(kind: .peak, frequency: 9848, gain: 30, q: 42)]),
         Preset(name: "Piano", bands: [Band(kind: .lowShelf, frequency: 63, gain: 30, q: 71), Band(kind: .peak, frequency: 406, gain: 30, q: 75), Band(kind: .peak, frequency: 2000, gain: 40, q: 65)]),
         Preset(name: "Pop", bands: [Band(kind: .peak, frequency: 26, gain: -30, q: 40), Band(kind: .peak, frequency: 691, gain: 50, q: 42), Band(kind: .highShelf, frequency: 8249, gain: -31, q: 55)]),
-        Preset(name: "R&B", bands: [Band(kind: .peak, frequency: 90, gain: 75, q: 65), Band(kind: .peak, frequency: 602, gain: -30, q: 75), Band(kind: .highShelf, frequency: 2296, gain: 39, q: 42)]),
+        Preset(name: "R & B", bands: [Band(kind: .peak, frequency: 90, gain: 75, q: 65), Band(kind: .peak, frequency: 602, gain: -30, q: 75), Band(kind: .highShelf, frequency: 2296, gain: 39, q: 42)]),
         Preset(name: "Rock", bands: [Band(kind: .lowShelf, frequency: 130, gain: 50, q: 58), Band(kind: .peak, frequency: 892, gain: -20, q: 95), Band(kind: .highShelf, frequency: 4662, gain: 49, q: 48)]),
         Preset(name: "Small Speakers", bands: [Band(kind: .lowShelf, frequency: 200, gain: 30, q: 38), Band(kind: .highShelf, frequency: 3539, gain: -70, q: 38)]),
         Preset(name: "Spoken Word", bands: [Band(kind: .lowShelf, frequency: 52, gain: -40, q: 50), Band(kind: .peak, frequency: 1812, gain: 55, q: 30)]),

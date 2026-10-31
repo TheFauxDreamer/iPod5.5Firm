@@ -146,7 +146,7 @@ The error is the largest difference from the Apple curve from 20 Hz to 20 kHz, w
 | Lounge | 31, 32, 33 | 3 | 0.11 dB |
 | Piano | 34, 35, 36 | 3 | 0.05 dB |
 | Pop | 37, 38, 39 | 3 | 0.18 dB |
-| R&B | 40, 41, 42 | 3 | 0.40 dB |
+| R & B | 40, 41, 42 | 3 | 0.40 dB |
 | Rock | 43, 44, 45 | 3 | 0.39 dB |
 | Small Speakers | 46, 47 | 2 | 0.05 dB |
 | Spoken Word | 48, 49 | 2 | 0.78 dB |

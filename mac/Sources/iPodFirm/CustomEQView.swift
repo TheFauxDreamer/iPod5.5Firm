@@ -21,6 +21,21 @@ struct CustomEQView: View {
                 Text("Advanced").tag(true)
             }
             .pickerStyle(.segmented)
+            Menu("Start From Apple Preset") {
+                ForEach(CustomEQ.applePresets) { preset in
+                    Button(preset.name) {
+                        if bands.allSatisfy({ $0.gain == 0 }) { model.applyEQPreset(patch, preset) } else { confirmPreset = preset }
+                    }
+                }
+            }
+            .menuStyle(.button)
+            .confirmationDialog("Replace the current bands?", isPresented: Binding(get: { confirmPreset != nil }, set: { if !$0 { confirmPreset = nil } }),
+                                presenting: confirmPreset) { preset in
+                Button("Replace with \(preset.name)") { model.applyEQPreset(patch, preset) }
+                Button("Cancel", role: .cancel) {}
+            } message: { preset in
+                Text("The bands change to the values that are close to the Apple preset \(preset.name).")
+            }
             EQCurve(bands: bands, usesPrecut: usesPrecut).frame(height: 140)
             if advanced {
                 ForEach(Array(shown.enumerated()), id: \.element) { row, i in
@@ -38,20 +53,6 @@ struct CustomEQView: View {
                         model.setEQBands(patch, all)
                     }))
                 }
-            }
-            Menu("Start From Apple Preset") {
-                ForEach(CustomEQ.applePresets) { preset in
-                    Button(preset.name) {
-                        if bands.allSatisfy({ $0.gain == 0 }) { model.applyEQPreset(patch, preset) } else { confirmPreset = preset }
-                    }
-                }
-            }
-            .confirmationDialog("Replace the current bands?", isPresented: Binding(get: { confirmPreset != nil }, set: { if !$0 { confirmPreset = nil } }),
-                                presenting: confirmPreset) { preset in
-                Button("Replace with \(preset.name)") { model.applyEQPreset(patch, preset) }
-                Button("Cancel", role: .cancel) {}
-            } message: { preset in
-                Text("The bands change to the values that are close to the Apple preset \(preset.name).")
             }
             Toggle("Use All 5 Bands", isOn: Binding(get: { allBands }, set: { on in
                 if on { confirmAllBands = true } else { model.setEQUsesAllBands(patch, false) }

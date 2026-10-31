@@ -19,7 +19,7 @@ TABLE = 0x6a1a00
 PRESETS = 0x2a9d18
 RATE = 44100
 NAMES = ("Acoustic", "Bass Booster", "Bass Reducer", "Classical", "Dance", "Deep", "Electronic", "Flat",
-         "Hip Hop", "Jazz", "Latin", "Loudness", "Lounge", "Piano", "Pop", "R&B", "Rock", "Small Speakers",
+         "Hip Hop", "Jazz", "Latin", "Loudness", "Lounge", "Piano", "Pop", "R & B", "Rock", "Small Speakers",
          "Spoken Word", "Treble Booster", "Treble Reducer", "Vocal Booster")
 KINDS = (".lowShelf", ".peak", ".highShelf")
 FREQS = [20 * 1000 ** (i / 47) for i in range(48)]
