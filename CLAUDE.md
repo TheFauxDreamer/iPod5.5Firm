@@ -67,6 +67,15 @@ The workflow `.github/workflows/repository-check.yml` runs `.githooks/check-repo
 
 Do not use `git commit --no-verify` unless the owner tells you to do it.
 
+## Do not close the running app
+
+This rule is mandatory. The owner can start a flash at any time. If the app closes during a flash, the iPod can get a partial firmware.
+
+- Never quit or stop an iPodFirm app, or a copy with a different name, unless the owner tells you to do it.
+- Before you run `mac/scripts/build-app.sh`, examine if the app is open. Use `pgrep -f "/Applications/iPodFirm"`.
+- If the app is open, tell the owner and wait. Do not start the build.
+- `mac/scripts/build-app.sh` does not quit the app. It waits, and then it stops with an error. Keep this behaviour.
+
 ## Other rules
 
 - Each feature that operates on the iPod or on the firmware must have a user interface in the iPodFirm app. A command-line tool alone is not sufficient.
