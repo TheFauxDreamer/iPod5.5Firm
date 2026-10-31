@@ -162,7 +162,9 @@ Expected result: a number replaces the battery picture. The revision 0xb table g
 
 Real iPod test (31 October 2026, owner, 1 TB iPod with HFS+): the display showed "43" in place of the battery picture. Thus the 2 files and the hidden display operate on a real iPod.
 
-The value 43 is not the complete number. The boot loader continues only at 0x080 (128) or more, and level 0 starts below 283. Thus a third digit is probably cut, and the value is probably 430–439 or x43. Type 24223 has size 18 in a box of width 27, and its alignment byte (+0x0d = 1) is different from the left text style 24222 (0). The alignment meaning is an estimate. The complete value needs a smaller text style.
+The owner reports (31 October 2026): the battery is almost full, "43" is complete and clear with no cut digit, and a restart showed "43" again.
+
+The value is not explained yet. Static: method + 0xd4 is 0x1dff54 → 0x9b284 → 0x265fd8 → 0x28341c(3, 0, out), and the text is `%ld` of that value. No step divides it. A true value of 43 is below the first limit of each table, and below the boot limit 0x080, so the icon would show empty. The owner's iPod is almost full. Thus the display possibly drops a complete third digit that does not fit, which gives 430–439. This agrees with an almost full battery (level 13 of the 0xb table starts at 436). 0x2438bc does not prove this: the part that was read does not show a drop of a character. The element flags (0x1000208) has the bit 0x1000000 (centre) and not 0x8000000. Other explanations are not excluded.
 
 ### What the test gives
 
