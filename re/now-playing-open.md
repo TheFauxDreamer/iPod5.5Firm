@@ -74,12 +74,12 @@ The firmware event 0x42800008 also reaches 0x1096. It is a different path. Its m
 
 ## Smallest change
 
-Change 2 bytes in 0xf84, at script offset 0x1a1b (osos 0x4b5e37): 0x1007 in place of 0x1096. Then the timer starts again, as it does for the other case in the same function. The event path and Play from a list stay.
+Change 1 byte in 0xf84, at script offset 0x1a1c (osos 0x4b5e38): 0x07 in place of 0x96. This changes the call from 0x1096 to 0x1007. Then the timer starts again, as it does for the other case in the same function. The event path and Play from a list stay.
 
-Status: not tested.
+Status: not tested. The owner reported on 31 October 2026 that the emulator cannot test it, because it does not play music. The test needs a real iPod.
 
 ## Next steps
 
-1. Test the 2 bytes in the emulator, with the stock firmware as a control.
+1. Test the 1 byte on a real iPod.
 2. Identify 0xfe2–0xfe4, 0x11b3, 0x11b4 and the event of 0x1028.
 3. Find what `name 0x98` and 0x13a4.0x13a test.
