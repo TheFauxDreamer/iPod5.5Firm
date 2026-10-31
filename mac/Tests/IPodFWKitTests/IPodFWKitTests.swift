@@ -168,6 +168,29 @@ final class ModelCheckTests: XCTestCase {
         XCTAssertTrue(Backups.list(in: tmp).isEmpty)
     }
 
+    /// A backup records the name of the volume. A partition with no iPodFirm list has no patches.
+    func testBackupRecordsIPodName() throws {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("ipodfw-name-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        var named = ipod
+        named.volumeName = "Test Volume"
+        try Backups.save(partition(vers: 0xB001), ipod: named, reason: "test", in: tmp, owner: nil)
+        let saved = Backups.list(in: tmp)
+        XCTAssertEqual(saved.count, 2)                          // the backup and the original
+        XCTAssertEqual(saved.map(\.ipodName), ["Test Volume", "Test Volume"])
+        XCTAssertEqual(saved.map(\.patches), [nil, nil])
+    }
+
+    /// A sidecar file of an older version has no name and no patches.
+    func testOldBackupMetadataDecodes() throws {
+        let json = #"{"file":"a.bin","created":"2026-01-01T00:00:00Z","reason":"manual backup","model":"Video","mediaName":"iPod","bytes":1,"sha256":"00","isOriginal":false}"#
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        let info = try dec.decode(BackupInfo.self, from: Data(json.utf8))
+        XCTAssertNil(info.ipodName)
+        XCTAssertNil(info.patches)
+    }
+
     /// A different model with an incorrect checksum is "unsupported", not "damaged": no rescue restore.
     func testOtherModelWithBadChecksumIsRefused() {
         var data = partition(vers: 0x1301)
@@ -2403,6 +2426,7 @@ final class FirmwareManifestTests: XCTestCase {
         osos += bytes
         osos += [UInt8](repeating: 0, count: 0x800 - osos.count % 0x800)
         XCTAssertEqual(FirmwareManifest.read(osos: osos), Self.list)
+        XCTAssertEqual(Backups.patchNames(osos: osos), ["shuffle-fixes 2.1", "usb-audio-out 1.9"])
         // no list: an image that ends before the extended area, and an image with only zeros after it
         XCTAssertNil(FirmwareManifest.read(osos: [UInt8](repeating: 0, count: 0x736000)))
         XCTAssertNil(FirmwareManifest.read(osos: [UInt8](repeating: 0, count: Patcher.maxOSOSSize + 0x1000)))
