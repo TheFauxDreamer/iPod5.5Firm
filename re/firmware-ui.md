@@ -262,7 +262,7 @@ of the application object at 0x66a510.
 |---|---|
 | The names of the 19 classes of the screens | The names of the classes of the screens are not in the strings of the image. The research gives the tables of the classes and the number of the types of each table. |
 | The name of each type | The research did not find the name of each of the 158 types. The types are named by their number. |
-| The elements of a screen | The research found the header of a screen and the 7 kinds of the elements. The research did not decode the layout of the elements. |
+| The elements of a screen | The research found the header of a screen and the 7 kinds of the elements. The positions of the elements are decoded in [home-screen.md](home-screen.md#edge-format-of-a-view-element). |
 | The menus | The research found the header of a menu and the numbers of the menus. The research did not decode the items of a menu. |
 | The 158 `Type` resources | The research found the table of the class of each type. The research did not find the meaning of the number of the elements and of the flags. |
 | The names of the modules of the screen | The research found the 6 names of the modules in the strings. The research did not find the table of the modules. |

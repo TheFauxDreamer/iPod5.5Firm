@@ -233,6 +233,9 @@ folder. The table gives what each note covers.
 | [ghidra.md](ghidra.md) | The load of the image in Ghidra. | The method. |
 | [ipod-classic-6g.md](ipod-classic-6g.md) | The firmware 1.1.2 of the iPod classic. | 3 functions. |
 | [patch-ideas.md](patch-ideas.md) | The ideas for the patches. | A list, not a research. |
+| [battery.md](battery.md) | The battery gauge and the hidden battery number. | Static. No test on a real iPod. |
+| [home-screen.md](home-screen.md) | The split home screen: known facts and 2 layouts. | Static. No test. |
+| [device-switches.md](device-switches.md) | The hidden switch files in `iPod_Control/Device/`. | Static. No test on a real iPod. |
 
 The guide of the use of Ghidra is in [../docs/ghidra-guide.md](../docs/ghidra-guide.md).
 The list of the addresses of the firmware is in

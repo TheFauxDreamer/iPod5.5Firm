@@ -1152,6 +1152,26 @@ final class MP4TagsTests: XCTestCase {
 
 /// makeRoom, the flash rules for a moved rsrc, and the theme import. Needs IPODFW_IPSW (1.3).
 final class ThemeTests: XCTestCase {
+    /// The Split layout: two changes, the new View after the patch area. With IPODFW_SPLIT_OSOS
+    /// (stock osos) and IPODFW_SPLIT_RESULT (the Python result), the two languages must agree.
+    func testSplitLayoutFile() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let theme = try ImportedTheme.load(root.appendingPathComponent("themes/layouts/Split.ipodtheme"))
+        XCTAssertEqual(theme.format, ThemeImport.formatStripped)
+        XCTAssertEqual(theme.changes.count, 2)
+        XCTAssertEqual(theme.changes[0].offset, 0x736800)
+        XCTAssertEqual(theme.changes[1].new.count, 12)
+        let env = ProcessInfo.processInfo.environment
+        if let stock = env["IPODFW_SPLIT_OSOS"], let result = env["IPODFW_SPLIT_RESULT"] {
+            var osos = [UInt8](try Data(contentsOf: URL(fileURLWithPath: stock)))
+            let done = try theme.apply(to: &osos, originalSHA256: ThemeImport.sha256(osos))
+            XCTAssertEqual(done.applied, 2)
+            XCTAssertEqual(done.conflicts, 0)
+            XCTAssertEqual(osos, [UInt8](try Data(contentsOf: URL(fileURLWithPath: result))))
+        }
+    }
+
     var stock: [UInt8] = []
 
     override func setUpWithError() throws {

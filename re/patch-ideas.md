@@ -78,6 +78,55 @@ The bytes are for a different firmware, so we cannot use them. A FLAC patch for 
 
 An easier alternative: the iPodFirm app converts each FLAC file to ALAC at import. ALAC is also lossless, and 1.3 already plays it. This needs no change to the firmware.
 
+## Ideas from the review of 31 October 2026
+
+The ideas in this section have no firmware research, except where a line gives a note. The fit and the work values are estimates.
+
+### New ideas
+
+| Idea | Value | Work | Note |
+|---|---|---|---|
+| Split home screen | High | Low to medium | The Firebird themes do this on firmware 1.3 with resource edits. The list uses the left 2/3. The right 1/3 shows the cover, the song, the album and the artist. A mini player below the list is the fallback. Refer to [home-screen.md](home-screen.md). |
+| No automatic Now Playing | Medium | Not known | Future change, requested by the owner. Now Playing opens only when the owner presses Play on a song or selects the Now Playing menu item. It must not open by itself. Refer to [home-screen.md](home-screen.md#automatic-now-playing). |
+| Battery display options | Medium | Low to medium | Icon, Icon + Percent, Percent. Research: [battery.md](battery.md). The firmware has a hidden number display. |
+| Numeric volume | Medium | Low | The firmware has the switch `_show_numeric_volume`. Refer to [device-switches.md](device-switches.md). |
+| Main menu order | High | Low | The app reorders the items of Menu 24094. Check the effect on the mask at 0x105a04. PodBox also has this. |
+| Compact lists | Medium | Low | Shows more rows. The width test of the split home screen also tells if this is possible. |
+| Large cover in Now Playing | High | Medium | A key shows the 200 × 200 cover on a full screen. |
+| Scrobble log | High | Medium | Records the time of each play for Last.fm. `playback-log` has most of the hooks. |
+| On-device statistics | Medium | Medium | Most played songs, from the track object. |
+
+### Ideas from Rockbox and from custom Rockbox builds
+
+PodBox and Rockpod use GPL-2.0. Use only the ideas. Do not copy their code.
+
+| Idea | Source | Value | Fit to RetailOS | Work | First research step |
+|---|---|---|---|---|---|
+| Art in the Artists list | PodBox | High | Good. `album-art` has the row hook. | Medium | Select a cover for each artist. |
+| Theme colours from the cover | Rockpod, PodBox | High | Partly. Views copy the colours at the start, thus a live change must write to each view. | High | Find if a change of the highlight colour in a live view has an effect. |
+| Forgotten albums, Recently Played, Most Played | PodBox | High | Good. The track object has the play count and the last-played date. | Medium | Find how to fill a list with a new order. |
+| Listening report | PodBox | High | Good, in the app. The iPod records. The app shows the year summary. | Medium | Use the scrobble log as the data. |
+| Sleep timer from Now Playing | PodBox, Rockbox | Medium | Good. `sleep-now` has the sleep call. | Low to medium | Find a free key action in Now Playing. |
+| Sort of albums by year or by artist | PodBox | Medium | Not known. The firmware keeps sort indexes. | Medium | Read the sort indexes in [firmware-library.md](firmware-library.md). |
+| Remove "feat." and the remaster text from titles | PodBox | Medium | Good. The app can do this at sync, or a label hook can do it. | Low | Decide: app or firmware. |
+| Random Album item | PodBox | Medium | Good. It can reuse `shuffle-album-mix`. | Low to medium | Add a main menu action item. |
+| Audiobook: mark as finished | PodBox | Low | Probably good. | Medium | Find the bookmark field. |
+| Crossfade | Rockbox | High | Poor. It needs two decoders at the same time. | Very high | Find if the decoder task can run two times. |
+| Crossfeed, stereo width | Rockbox | Medium | Not known. `custom-eq` filters each channel, but these need a mix of the 2 channels. | High | Read [custom-eq.md](custom-eq.md). |
+| Dynamic range compressor | Rockbox | Medium | Not known. It adds CPU load in the audio path. | High | Find a hook in the audio path. |
+| Variable speed with the same pitch | Rockbox | Medium | Poor. It needs much CPU. | Very high | Measure the free CPU first. |
+| Faster wake with flash storage | Rockpod | Medium | Rockpod does this only on the Classic. `flash-keep-awake` and `flash-wake-on-input` already do part of this. | Medium | Measure the wake time. |
+| Do not count a weak USB source as a charger | Rockpod | Low | Rockpod does this only on the Classic. It can apply to USB-C mods. | Medium | Read [firmware-power.md](firmware-power.md). |
+| Cover Flow song menu | RepriseOS wishlist | Medium | Not known. | Medium | Read the `up-next` hold code. |
+| Apple debug menu, with a disk log | RepriseOS wishlist | For development | Not known. | Medium | Find the debug menu in 1.3. |
+| Fonts and resources from files | RepriseOS wishlist | Medium | Not known. It can help the CJK fonts. | High | Find the font load path. |
+
+Not useful for this project: Bluetooth (no source found), 192 kHz audio (the output is 44.1 kHz, 16 bits), Music Quiz, games, and the image and text viewers. `search-5g` already gives the Search screen.
+
+Limits of the search: the Rockbox plugin index, the Foxbox page and one Reddit copy did not open. The Rockbox facts come from copies of the manual, not from the current manual.
+
+Sources: [PodBox](https://github.com/anthonyfletcher/podbox), [Rockpod](https://github.com/nuxcodes/rockpod), [osos-lab](https://github.com/lgreitis/osos-lab), [osos-lab wishlist](https://raw.githubusercontent.com/lgreitis/osos-lab/main/PATCH-WISHLIST.md), [Rockbox playback options](https://repo.or.cz/Rockbox.git/blob/HEAD:/manual/configure_rockbox/playback_options.tex), [Rockbox sound settings](https://git.lenord.me/devs/foxbox/raw/commit/2306433eb70628d2f9c042ced7ea0d2912e31cc9/manual/configure_rockbox/sound_settings.tex), [Rockbox 4.0 report](https://www.howtogeek.com/rockbox-4-0-custom-firmware-mp3-players-old-ipods/).
+
 ## Collisions with the existing patches
 
 Hook chains let two patches change the same hook word (refer to [../docs/patch-system.md](../docs/patch-system.md), "Hook chains"). Thus most collisions are in the behaviour, not in the hooks.
@@ -99,6 +148,8 @@ Hook chains let two patches change the same hook word (refer to [../docs/patch-s
 | Boot logo | `dark-mode` | The dark theme can change pictures in rsrc. | Find if the theme changes the Apple logo. |
 | FLAC | all extended patches, `dark-mode` | All use the area up to 0x7F8000 (`ThemeImport.ososLimit`). | Measure the free space with all patches. |
 | Patch list in About, crash screen | None found | — | — |
+| Split home screen | `dark-mode`, `album-art`, `cover-flow` | The theme can change the same View bytes. The panel needs the theme colours. The cover load can stop the wheel. | Check the View bytes. Use the firmware artwork task. |
+| Battery display options | `dark-mode` | The text style must have a correct colour in the two themes. | Test the two themes. |
 
 ## Not recommended
 

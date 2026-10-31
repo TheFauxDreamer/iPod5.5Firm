@@ -179,6 +179,8 @@ method, the limits and the whole table.
 | 0x255ac4 | Gets the rectangle of a view: {top, left, bottom, right}. | Patch |
 | 0x21a27c | Prepares the graphics context of a view: origin and clip. | Patch |
 | 0x21a4f4 | Makes a view from a View resource. Copies the positions, heights and highlight colours of the elements. | Static |
+| 0x21a5e4 | Calculates the rectangle of a View element from its 4 edges. | Static |
+| 0x21a80c | Calculates one edge of a View element from the reference, the mode and the value. Refer to [../re/home-screen.md](../re/home-screen.md#edge-format-of-a-view-element). | Static |
 | 0x17def4 | Makes the child views. | Static |
 | 0x2445d4 | Method 0xd0 of a view: applies a layout again, but only the text styles (calls 0x243f60). | Static |
 | 0x1bccfc | Loads picture 24351 for the rating row. | Static |
@@ -935,6 +937,12 @@ the power chip of the PP5020 of Apple. The facts are Static.
 | 0x265a74 | Gives the state of the battery. The function gives 1 when the channel is 10, 11 or 12. |
 | 0x264fa4 | Gives the state of the power. The function has a switch with the cases 4 to 0xc. |
 | 0x265abc | Gives the state of the audio. The function has a switch with the cases 4 to 0xc. |
+| 0x1ae774 | Selects the element of the battery view (View 25599): the icon value + 4, or 0x1b for the text 0x63fc. Refer to [re/battery.md](../re/battery.md). |
+| 0x1ae6d0 | (view, index): makes one child of the battery view visible, with method + 0x9c. One caller: 0x1ae6b8. |
+| 0x1ebfec | Reads the switch byte 0x1081dfe3 (`_show_voltage`). If it is set, marks the battery text 0x63fc for a new draw. |
+| 0x21a168 | (view, Type record, gc, out): applies a text style. Type + 0 is the font `Str` ID, + 4 the size, + 8 the colour. Static. |
+| 0x243fb0 | (label, parent, Type ID): gives a label a text style. Static. |
+| 0x1d3ac4 | Reads the hidden switch files in `iPod_Control/Device/`. Refer to [re/device-switches.md](../re/device-switches.md). |
 | 0x175818 | Reads the state of the battery and the state of the charger. The states are at +0x1bc and at +0x1be. |
 | 0x2823bc | Starts the driver of the general purpose input and output. |
 | 0x1fcf50 | The table of the clock. The table has 11 registers from 0x60004000 to 0x60004030. |

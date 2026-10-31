@@ -28,7 +28,9 @@ Results with RetailOS 1.3:
    uv run ipodfw pack-ipsw iPod_25.1.3.ipsw custom.bin -o custom.ipsw
    ```
 
-3. Drag `custom.ipsw` onto the emulator window. The emulator makes a drive from it and starts.
+3. Drag `custom.ipsw` onto the emulator window. The emulator adds the file to its list as an installer.
+
+Caution: a drag does not change the current drive. The emulator can resume the stock firmware from its snapshot. Measured on 31 October 2026: `disk.0.installed` in `settings.txt` stayed "Apple's software". To run a custom firmware, use **Run in Emulator** in iPodFirm, or use Method 3 with a separate profile folder in `IPOD_EMULATOR_DATA`.
 
 ## Method 3: the command line (a Rust toolchain is necessary)
 
