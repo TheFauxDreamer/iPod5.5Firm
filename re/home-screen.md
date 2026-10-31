@@ -353,6 +353,26 @@ Design points:
 
 The theme text says: "Theme-specific images © 2008 3rd Party Programming, All rights reserved." The guide says that the theme comes from a file called Firebird. Do not ship the pictures with the app before the owner has a permission. An import of the owner's file does not need this, because the app then ships no picture.
 
+### Contemporary feasibility
+
+Result: feasible on stock 1.3 through the import route. Tested in the emulator only (31 October 2026).
+
+| Item | Result |
+|---|---|
+| Import | 949 resources, 2 Views refused (15617 and 25522). `resources.scan` needs to accept a removed picture. |
+| Refused Views | Base and target are both 1.3, so the theme View can go in whole. Both are the same size. |
+| Highlight rule | `_keep_highlight` changed all 619 Views, and it corrupted the Views with a new structure. Now Playing froze. With the rule off, 618 Views equal the theme. View 14025 is different, and the cause is not known. |
+| Progress bar | `KEEP_APPLE` keeps the thick Apple bar. This theme needs its own bar. |
+| Space | The data ends at 0x78822C. Approximately 458 KB stay for patches. |
+| Code | Stock. The game patch is not applied. |
+| Removed pictures | The import keeps them. In the theme image, Views 20505 and 22070–22074 point to removed pictures. |
+| Now Playing with art | Correct in the theme (owner, FolderLibrary). |
+| Now Playing with no art | View 25531 puts the song behind the title. This fault is in the theme. Correct it with a View edit. |
+| Strings | 11 changes, none for the layout. |
+| Fonts | The glyphs are the same. 8 bytes differ in each font of `rsrc`: the checksums of 2 table entries. The theme image shows a thinner text than a build with stock `rsrc`. The cause is not proved. |
+
+Open: the owner chooses the font. iPodFirm does not change `rsrc` now.
+
 ## Next steps
 
 Split Light is on `main` and operates on a real iPod.
