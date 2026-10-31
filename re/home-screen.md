@@ -317,6 +317,13 @@ Type 24227 stays black in the dark theme. Dark Now Playing uses Types 24222 and 
 
 Status: on branch `split-switch`. Not tested on a real iPod.
 
+Measured on 31 October 2026:
+
+- Python and Swift give the same osos.
+- In the light mode, the View is the same as Split Light. After the switch table, it is the same as Split Dark. Only 10 bytes are different.
+- The switch table goes back to the same osos when it runs 2 times.
+- In the emulator, a start with no setting file showed the light main menu. A start with the setting file showed the dark main menu with white text. The Settings item and the restart are not tested.
+
 The patch `dark-mode` applies the switch table at the first View lookup. It can change any address, so it needs no change. The build puts the light View after the theme data and changes the table entry in the 2 modes. The switch table has extra runs for the 6 colour bytes and the 4 text style values.
 
 ## Next steps
