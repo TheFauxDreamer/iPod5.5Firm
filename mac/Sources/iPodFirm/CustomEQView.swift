@@ -8,6 +8,11 @@ struct CustomEQView: View {
     let patch: PatchInfo
     @State private var confirmAllBands = false
     @State private var confirmPreset: CustomEQ.Preset?
+    @State private var confirmDelete = false
+    @State private var confirmFullGain = false
+    @State private var askNewName = false
+    @State private var askRename = false
+    @State private var nameText = ""
 
     var body: some View {
         let bands = model.eqBands(patch)
@@ -16,11 +21,32 @@ struct CustomEQView: View {
         let usesPrecut = model.eqUsesPrecut(patch)
         let advanced = model.eqUsesAdvanced(patch)
         Section {
+            HStack {
+                Picker("EQ", selection: Binding(get: { model.selectedEQ.name }, set: { model.selectedEQName = $0 })) {
+                    ForEach(model.customEQs) { Text($0.name).tag($0.name) }
+                }
+                Button("Add…") {
+                    nameText = CustomEQ.uniqueName("My EQ", in: model.customEQs)
+                    askNewName = true
+                }
+                .disabled(model.customEQs.count >= CustomEQ.maxEQs)
+                Button("Rename…") {
+                    nameText = model.selectedEQ.name
+                    askRename = true
+                }
+                Button("Delete…") { confirmDelete = true }
+                    .disabled(model.customEQs.count < 2)
+            }
+            if CustomEQ.nameCanFailToShow(model.selectedEQ.name) {
+                Label("The iPod possibly cannot show all the characters of this name.", systemImage: "exclamationmark.triangle.fill")
+                    .labelStyle(StatusLabelStyle(tint: .orange))
+            }
             Picker("View", selection: Binding(get: { advanced }, set: { model.setEQUsesAdvanced(patch, $0) })) {
                 Text("Simple").tag(false)
                 Text("Advanced").tag(true)
             }
             .pickerStyle(.segmented)
+            .help("Simple keeps only the slider values of Advanced bands.")
             Menu("Start From Apple Preset") {
                 ForEach(CustomEQ.applePresets) { preset in
                     Button(preset.name) {
@@ -33,13 +59,11 @@ struct CustomEQView: View {
                                 presenting: confirmPreset) { preset in
                 Button("Replace with \(preset.name)") { model.applyEQPreset(patch, preset) }
                 Button("Cancel", role: .cancel) {}
-            } message: { preset in
-                Text("The bands change to the values that are close to the Apple preset \(preset.name).")
             }
             EQCurve(bands: bands, usesPrecut: usesPrecut).frame(height: 140)
             if advanced {
                 ForEach(Array(shown.enumerated()), id: \.element) { row, i in
-                    EQBandRow(number: row + 1, colour: i, band: Binding(get: { bands[i] }, set: { b in
+                    EQBandRow(number: row + 1, colour: i, range: model.selectedEQ.gainRange, band: Binding(get: { bands[i] }, set: { b in
                         var all = bands
                         all[i] = b
                         model.setEQBands(patch, all)
@@ -47,7 +71,7 @@ struct CustomEQView: View {
                 }
             } else {
                 ForEach(shown, id: \.self) { i in
-                    EQSimpleRow(name: CustomEQ.simpleNames[i], colour: i, gain: Binding(get: { bands[i].gain }, set: { g in
+                    EQSimpleRow(name: CustomEQ.simpleNames[i], colour: i, range: model.selectedEQ.gainRange, gain: Binding(get: { bands[i].gain }, set: { g in
                         var all = CustomEQ.simple(from: bands)
                         all[i].gain = g
                         model.setEQBands(patch, all)
@@ -57,7 +81,11 @@ struct CustomEQView: View {
             Toggle("Use All 5 Bands", isOn: Binding(get: { allBands }, set: { on in
                 if on { confirmAllBands = true } else { model.setEQUsesAllBands(patch, false) }
             }))
+            Toggle("Go Beyond Apple's Limits", isOn: Binding(get: { model.eqUsesFullGain(patch) }, set: { on in
+                if on { confirmFullGain = true } else { model.setEQUsesFullGain(patch, false) }
+            }))
             Toggle("Prevent Clipping", isOn: Binding(get: { usesPrecut }, set: { model.setEQUsesPrecut(patch, $0) }))
+                .help("Lowers the level by the highest boost, so that loud music does not distort. The music sounds quieter.")
             let cut = CustomEQ.precut(bands)
             if usesPrecut, cut < -0.05 {
                 LabeledContent("Level", value: String(format: "%.1f dB", cut))
@@ -70,8 +98,26 @@ struct CustomEQView: View {
             }
         } header: {
             Text("Custom EQ")
-        } footer: {
-            Text("The default is 3 bands. A band at 0 dB is off. An Apple preset opens in Advanced, with bands that are close to the Apple curve. Simple keeps only the slider values of Advanced bands. Prevent Clipping lowers the level by the highest boost, so that loud music does not distort. The music then sounds quieter than Flat. Without it, the EQ operates as the Apple presets do, and a strong boost can distort.")
+        }
+        .alert("New EQ", isPresented: $askNewName) {
+            TextField("Name", text: $nameText)
+            Button("Add") { model.addEQ(named: nameText) }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert("Rename EQ", isPresented: $askRename) {
+            TextField("Name", text: $nameText)
+            Button("Rename") { model.renameSelectedEQ(to: nameText) }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog("Delete \"\(model.selectedEQ.name)\"?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) { model.deleteSelectedEQ() }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog("Go Beyond Apple's Limits?", isPresented: $confirmFullGain) {
+            Button("I Agree, Go Beyond the Limits") { model.setEQUsesFullGain(patch, true) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(CustomEQ.fullGainWarning)
         }
         .confirmationDialog("Use All 5 Bands?", isPresented: $confirmAllBands) {
             Button("I Agree, Use All 5 Bands") { model.setEQUsesAllBands(patch, true) }
@@ -87,19 +133,17 @@ struct EQImportSheet: View {
     @EnvironmentObject var model: AppModel
     let eq: SharedEQ
 
-    /// The file uses more than the 3 standard bands, and the user did not agree yet.
-    private var askAllBands: Bool {
-        eq.needsAllBands && !(model.eqPatch.map(model.eqUsesAllBands) ?? false)
+    /// The warnings of the file. The agreement is for each EQ.
+    private var warnings: [String] {
+        (eq.needsAllBands ? [CustomEQ.allBandsWarning] : []) + (eq.needsFullGain ? [CustomEQ.fullGainWarning] : [])
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Import \"\(eq.name)\"?").font(.headline)
             EQCurve(bands: eq.eqBands, usesPrecut: eq.preventClipping).frame(height: 120)
-            Text("This replaces the current Custom EQ. The iPod changes when you flash it.")
-                .foregroundStyle(.secondary)
-            if askAllBands {
-                Label(CustomEQ.allBandsWarning, systemImage: "exclamationmark.triangle.fill")
+            ForEach(warnings, id: \.self) { warning in
+                Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .labelStyle(StatusLabelStyle(tint: .orange))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -107,7 +151,7 @@ struct EQImportSheet: View {
                 Spacer()
                 Button("Cancel", role: .cancel) { model.pendingEQ = nil }
                     .keyboardShortcut(.cancelAction)
-                Button(askAllBands ? "I Agree, Import" : "Import") { model.applyEQ(eq) }
+                Button(warnings.isEmpty ? "Import" : "I Agree, Import") { model.applyEQ(eq) }
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -120,13 +164,15 @@ struct EQImportSheet: View {
 private struct EQSimpleRow: View {
     let name: String
     let colour: Int
+    let range: ClosedRange<Int>
     @Binding var gain: Int
 
     var body: some View {
         HStack {
             EQBandDot(index: colour)
             Text(name).frame(width: 64, alignment: .leading)
-            Slider(value: Binding(get: { Double(gain) / 10 }, set: { gain = Int(($0 * 10).rounded()) }), in: -12...12, step: 0.5) {
+            Slider(value: Binding(get: { Double(gain) / 10 }, set: { gain = Int(($0 * 10).rounded()) }),
+                   in: Double(range.lowerBound) / 10...Double(range.upperBound) / 10, step: 0.5) {
                 Text(name)
             }
             .labelsHidden()
@@ -141,6 +187,7 @@ private struct EQSimpleRow: View {
 private struct EQBandRow: View {
     let number: Int
     let colour: Int
+    let range: ClosedRange<Int>
     @Binding var band: CustomEQ.Band
 
     var body: some View {
@@ -162,7 +209,7 @@ private struct EQBandRow: View {
                 Text("Q").foregroundStyle(.secondary)
             }
             HStack {
-                Slider(value: gain, in: -12...12, step: 0.5) { Text("Gain") }
+                Slider(value: gain, in: Double(range.lowerBound) / 10...Double(range.upperBound) / 10, step: 0.5) { Text("Gain") }
                     .labelsHidden()
                 Text(String(format: "%+.1f dB", Double(band.gain) / 10))
                     .monospacedDigit()

@@ -3,7 +3,7 @@ import Foundation
 /// The coefficients of the patch custom-eq. `src/ipodfw/custom_eq.py` has the same code.
 /// Refer to re/custom-eq.md for the format of a record.
 public enum CustomEQ {
-    public enum Kind: Int, CaseIterable, Identifiable, Sendable {
+    public enum Kind: Int, CaseIterable, Identifiable, Codable, Sendable {
         case lowShelf = 0, peak = 1, highShelf = 2
         public var id: Int { rawValue }
         public var title: String {
@@ -16,7 +16,7 @@ public enum CustomEQ {
     }
 
     /// One band. The gain is in tenths of a dB and Q is in hundredths, so that the values are options.
-    public struct Band: Hashable, Sendable {
+    public struct Band: Hashable, Codable, Sendable {
         public var kind: Kind
         public var frequency, gain, q: Int
         public init(kind: Kind, frequency: Int, gain: Int, q: Int) {
@@ -41,6 +41,76 @@ public enum CustomEQ {
                                       Band(kind: .peak, frequency: 1000, gain: 0, q: 80),
                                       Band(kind: .peak, frequency: 3000, gain: 0, q: 80),
                                       Band(kind: .highShelf, frequency: 8000, gain: 0, q: 71)]
+    /// 5 EQs with 5 bands use the filter numbers 55 to 79. 0x1446e8 accepts numbers to 96.
+    public static let firstFilter = 55
+    public static let maxEQs = 5
+    static var maxFilters: Int { maxEQs * bandCount }
+    public static let maxNameLength = 31
+    static let entrySize = 70   // custom_eq in custom_eq.c
+
+    /// custom_eq_records and custom_eq_list. Each active band of each EQ gets the next filter number.
+    public static func library(_ eqs: [NamedEQ]) throws -> (records: [UInt8], list: [UInt8]) {
+        guard eqs.count <= maxEQs else { throw PatchError("The iPod can have a maximum of \(maxEQs) EQs.") }
+        var records = [UInt8](), list = [UInt8]()
+        for eq in eqs {
+            if let problem = nameProblem(eq.name, in: [], excluding: nil) { throw PatchError(problem) }
+            let (data, mask) = try Self.records(eq.activeBands, precut: eq.preventClipping)
+            var numbers = [UInt8](repeating: 0, count: bandCount)
+            for i in 0..<bandCount where mask >> UInt32(i) & 1 == 1 {
+                numbers[i] = UInt8(firstFilter + records.count / 40)
+                records += data[i * 40..<(i + 1) * 40]
+            }
+            let name = Array(eq.name.utf16)
+            var entry = [UInt8(truncatingIfNeeded: name.count), 0]
+            for c in name + [UInt16](repeating: 0, count: maxNameLength - name.count) {
+                entry += [UInt8(truncatingIfNeeded: c), UInt8(truncatingIfNeeded: c >> 8)]
+            }
+            list += entry + numbers + [0]
+        }
+        return (records + [UInt8](repeating: 0, count: maxFilters * 40 - records.count),
+                list + [UInt8](repeating: 0, count: (maxEQs - eqs.count) * entrySize))
+    }
+
+    /// The reason that a name is not valid, or nil. The saved selection on the iPod is the name, so
+    /// each name must be different. `excluding` is the present name in a rename.
+    public static func nameProblem(_ name: String, in eqs: [NamedEQ], excluding: String?) -> String? {
+        let key = name.lowercased()
+        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return "An EQ must have a name." }
+        guard name == name.trimmingCharacters(in: .whitespaces) else { return "A name cannot start or end with a space." }
+        guard name.utf16.count <= maxNameLength else { return "A name can have a maximum of \(maxNameLength) characters." }
+        guard !name.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+            return "The name has a character that is not valid."
+        }
+        if key == "off" || applePresets.contains(where: { $0.name.lowercased() == key }) {
+            return "The iPod already has an item with the name \"\(name)\"."
+        }
+        if key != excluding?.lowercased(), eqs.contains(where: { $0.name.lowercased() == key }) {
+            return "You already have an EQ with the name \"\(name)\"."
+        }
+        return nil
+    }
+
+    /// true: the iPod font possibly cannot show the name, for example because it has an emoji.
+    public static func nameCanFailToShow(_ name: String) -> Bool {
+        name.unicodeScalars.contains { $0.value > 0xFFFF || $0.properties.isEmojiPresentation }
+    }
+
+    /// The start of `name` with a maximum of `limit` UTF-16 units. The iPod counts these units.
+    public static func shortened(_ name: String, to limit: Int) -> String {
+        var out = ""
+        for c in name where out.utf16.count + c.utf16.count <= limit { out.append(c) }
+        return out.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// A name that no EQ has: `name`, or `name` with a number.
+    public static func uniqueName(_ name: String, in eqs: [NamedEQ]) -> String {
+        if nameProblem(name, in: eqs, excluding: nil) == nil { return name }
+        let base = shortened(name, to: maxNameLength - 3)
+        var n = 2
+        while nameProblem("\(base) \(n)", in: eqs, excluding: nil) != nil { n += 1 }
+        return "\(base) \(n)"
+    }
+
     /// An Apple preset as bands of the editor.
     public struct Preset: Hashable, Identifiable, Sendable {
         public var name: String
@@ -74,6 +144,15 @@ public enum CustomEQ {
         Preset(name: "Treble Reducer", bands: [Band(kind: .highShelf, frequency: 2080, gain: -70, q: 58)]),
         Preset(name: "Vocal Booster", bands: [Band(kind: .peak, frequency: 90, gain: -40, q: 55), Band(kind: .peak, frequency: 985, gain: 50, q: 42), Band(kind: .peak, frequency: 14034, gain: -30, q: 65)]),
     ]
+
+    /// The range of gain, in tenths of a dB, that the Apple presets use. It is the default range of a band.
+    public static let appleGainRange: ClosedRange<Int> = {
+        let gains = applePresets.flatMap { $0.bands.map(\.gain) }
+        return (gains.min() ?? 0)...(gains.max() ?? 0)
+    }()
+    public static let fullGainRange = -gainLimit...gainLimit
+    /// The text that the user must agree to before a band can go past `appleGainRange`.
+    public static let fullGainWarning = "Going higher than Apple's limits may negatively impact sound quality."
 
     /// The 5 bands of a preset. Its bands go into the standard positions, so they need no warning.
     public static func bands(forPreset preset: Preset) -> [Band] {
@@ -247,6 +326,9 @@ public struct SharedEQ: Codable, Equatable, Identifiable, Sendable {
     /// The app shows the Advanced view if the file has bands that the Simple view does not have.
     public var usesAdvanced: Bool { view == "advanced" || eqBands != CustomEQ.simple(from: eqBands) }
 
+    /// The file has a band outside the range of the Apple presets.
+    public var needsFullGain: Bool { eqBands.contains { !CustomEQ.appleGainRange.contains($0.gain) } }
+
     /// The file has a band that needs the option "all_bands".
     public var needsAllBands: Bool {
         eqBands.enumerated().contains { i, b in b.gain != 0 && !CustomEQ.standardBands.contains(i) }
@@ -308,5 +390,52 @@ public struct SharedEQ: Codable, Equatable, Identifiable, Sendable {
         _ = try CustomEQ.records(eq.eqBands, precut: eq.preventClipping)
         eq.name = clean(eq.name)
         return eq
+    }
+}
+
+/// One EQ of the user. The app keeps a list of these. The name shows on the iPod.
+public struct NamedEQ: Codable, Hashable, Identifiable, Sendable {
+    public var name: String
+    public var bands: [CustomEQ.Band]
+    public var preventClipping: Bool
+    public var advanced: Bool
+    /// The user agreed to `CustomEQ.allBandsWarning` for this EQ.
+    public var allBands: Bool
+    /// The user agreed to `CustomEQ.fullGainWarning` for this EQ. Older lists do not have this value.
+    public var fullGain: Bool?
+
+    public var id: String { name }
+
+    /// The range of gain of each band of this EQ.
+    public var gainRange: ClosedRange<Int> { fullGain == true ? CustomEQ.fullGainRange : CustomEQ.appleGainRange }
+
+    /// The bands that the build uses: without `allBands`, only the standard bands have a gain.
+    /// Without `fullGain`, each gain stays in the range of the Apple presets.
+    public var activeBands: [CustomEQ.Band] {
+        bands.enumerated().map { i, band in
+            var b = band
+            if !allBands, !CustomEQ.standardBands.contains(i) { b.gain = 0 }
+            b.gain = min(max(b.gain, gainRange.lowerBound), gainRange.upperBound)
+            return b
+        }
+    }
+
+    public init(name: String, bands: [CustomEQ.Band] = CustomEQ.simpleLayout, preventClipping: Bool = false,
+                advanced: Bool = false, allBands: Bool = false) {
+        self.name = name; self.bands = bands; self.preventClipping = preventClipping
+        self.advanced = advanced; self.allBands = allBands
+    }
+
+    /// The single EQ "Custom" of patch versions before 0.7, from the option values.
+    public init(options values: [String: Int]) {
+        self.init(name: "Custom", bands: CustomEQ.bands(from: values), preventClipping: CustomEQ.usesPrecut(values),
+                  advanced: CustomEQ.usesAdvanced(values), allBands: CustomEQ.usesAllBands(values))
+    }
+
+    /// An EQ from a file, with a name that no other EQ has.
+    public init(shared eq: SharedEQ, in eqs: [NamedEQ]) {
+        self.init(name: CustomEQ.uniqueName(CustomEQ.shortened(eq.name, to: CustomEQ.maxNameLength), in: eqs), bands: eq.eqBands,
+                  preventClipping: eq.preventClipping, advanced: eq.usesAdvanced, allBands: eq.needsAllBands)
+        fullGain = eq.needsFullGain ? true : nil
     }
 }

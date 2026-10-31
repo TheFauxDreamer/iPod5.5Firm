@@ -88,7 +88,8 @@ extension AppModel {
     var activeList: FirmwareManifest {
         FirmwareManifest(app: version,
                          patches: activePatches.map { .init(name: $0.spec.name, version: $0.spec.version,
-                                                            options: $0.options.isEmpty ? nil : $0.options) },
+                                                            options: $0.options.isEmpty ? nil : $0.options,
+                                                            eqs: $0.customEQs.isEmpty ? nil : $0.customEQs) },
                          appearance: appearance.rawValue,
                          theme: appearance == .light ? nil : selectedTheme?.name)
     }
@@ -122,7 +123,11 @@ extension AppModel {
         if mirrored != enabledPatches { enabledPatches = mirrored }
         if let list = state.list {
             for e in list.patches where known.contains(e.name) {
-                if let o = e.options, patchOptions[e.name] != o { patchOptions[e.name] = o }
+                // A list of a version before 0.7 has the single EQ in the options.
+                if patches.first(where: { $0.spec.name == e.name })?.spec.eq_editor != nil {
+                    let eqs = e.eqs ?? e.options.map { [NamedEQ(options: $0)] }
+                    if let eqs = eqs.map({ Array($0.prefix(CustomEQ.maxEQs)) }), !eqs.isEmpty, customEQs != eqs { customEQs = eqs }
+                } else if let o = e.options, patchOptions[e.name] != o { patchOptions[e.name] = o }
             }
             if let a = list.appearance.flatMap(Appearance.init(rawValue:)) {
                 if a != .light, let t = list.theme, themes.contains(where: { $0.name == t }) { selectedThemeName = t }

@@ -658,6 +658,91 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertFalse(CustomEQ.isUnedited(edited))
     }
 
+    /// Each active band of each EQ gets the next filter number, to a maximum of 96.
+    func testCustomEQLibrary() throws {
+        var a = NamedEQ(name: "Car"), b = NamedEQ(name: "Rock Out")
+        a.bands[0].gain = 30
+        b.bands[0].gain = 30
+        b.bands[2].gain = 30
+        b.bands[1].gain = 30    // off: this EQ has no agreement for 5 bands
+        let (records, list) = try CustomEQ.library([a, b])
+        XCTAssertEqual(records.count, 1000)
+        XCTAssertEqual(list.count, 350)
+        XCTAssertEqual(Array(list[0..<4]), [3, 0, 0x43, 0])
+        XCTAssertEqual(Array(list[64..<69]), [55, 0, 0, 0, 0])
+        XCTAssertEqual(Array(list[(70 + 64)..<(70 + 69)]), [56, 0, 57, 0, 0])
+        XCTAssertEqual(Array(records[0..<40]), Array(try CustomEQ.records(a.activeBands).data[0..<40]))
+
+        var five = NamedEQ(name: "x", allBands: true)
+        for i in 0..<5 { five.bands[i].gain = 30 }
+        var eqs = (0..<5).map { i -> NamedEQ in
+            var e = five
+            e.name = "EQ \(i)"
+            return e
+        }
+        XCTAssertEqual(Array(try CustomEQ.library(eqs).list[(4 * 70 + 64)..<(4 * 70 + 69)]), [75, 76, 77, 78, 79])
+        eqs.append(NamedEQ(name: "Six"))
+        XCTAssertThrowsError(try CustomEQ.library(eqs), "6 EQs")
+    }
+
+    /// The saved selection on the iPod is the name, so a bad name is not possible.
+    func testCustomEQNames() {
+        let eqs = [NamedEQ(name: "Car")]
+        XCTAssertNil(CustomEQ.nameProblem("Headphones", in: eqs, excluding: nil))
+        for bad in ["", " ", " A", String(repeating: "x", count: 32), "car", "rock", "OFF", "a\u{7}"] {
+            XCTAssertNotNil(CustomEQ.nameProblem(bad, in: eqs, excluding: nil), bad)
+        }
+        XCTAssertNil(CustomEQ.nameProblem("CAR", in: eqs, excluding: "Car"))
+        XCTAssertEqual(CustomEQ.uniqueName("Car", in: eqs), "Car 2")
+        XCTAssertEqual(CustomEQ.uniqueName("Rock", in: eqs), "Rock 2")
+        XCTAssertLessThanOrEqual(CustomEQ.uniqueName(String(repeating: "😀", count: 30), in: []).utf16.count, 31)
+        XCTAssertNil(CustomEQ.nameProblem(CustomEQ.uniqueName(String(repeating: "😀", count: 30), in: []), in: [], excluding: nil))
+        XCTAssertTrue(CustomEQ.nameCanFailToShow("Car 😀"))
+        XCTAssertFalse(CustomEQ.nameCanFailToShow("Café"))
+    }
+
+    /// The single EQ of an older version becomes the EQ "Custom", and a file becomes a new EQ.
+    func testCustomEQMoves() throws {
+        var bands = CustomEQ.simpleLayout
+        bands[0].gain = 60
+        bands[1].gain = 30
+        var values = CustomEQ.values(of: bands)
+        values["all_bands"] = 1
+        values["precut"] = 1
+        let old = NamedEQ(options: values)
+        XCTAssertEqual(old.name, "Custom")
+        XCTAssertEqual(old.activeBands.filter { $0.gain != 0 }.count, 2)
+        XCTAssertTrue(old.preventClipping)
+        let shared = SharedEQ(name: "Custom", bands: old.activeBands, preventClipping: false, advanced: false)
+        let new = NamedEQ(shared: try SharedEQ.decode(try shared.encode()), in: [old])
+        XCTAssertEqual(new.name, "Custom 2")
+        XCTAssertTrue(new.allBands)
+    }
+
+    /// A band stays in the range of the Apple presets until the user agrees to more.
+    func testCustomEQGainRange() throws {
+        XCTAssertEqual(CustomEQ.appleGainRange, -70...75)
+        var eq = NamedEQ(name: "A")
+        eq.bands[0].gain = 120
+        eq.bands[2].gain = -120
+        XCTAssertEqual(eq.activeBands[0].gain, 75)
+        XCTAssertEqual(eq.activeBands[2].gain, -70)
+        eq.fullGain = true
+        XCTAssertEqual(eq.activeBands[0].gain, 120)
+        XCTAssertEqual(eq.activeBands[2].gain, -120)
+        for p in CustomEQ.applePresets {
+            let bands = CustomEQ.bands(forPreset: p)
+            XCTAssertEqual(NamedEQ(name: "B", bands: bands).activeBands, bands, p.name)
+        }
+        let loud = try SharedEQ.decode(try SharedEQ(name: "L", bands: eq.activeBands, preventClipping: false, advanced: false).encode())
+        XCTAssertTrue(loud.needsFullGain)
+        XCTAssertEqual(NamedEQ(shared: loud, in: []).activeBands[0].gain, 120)
+        // A list from version 0.7 has no value "fullGain".
+        var old = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(NamedEQ(name: "C"))) as? [String: Any])
+        old["fullGain"] = nil
+        XCTAssertNil(try JSONDecoder().decode(NamedEQ.self, from: JSONSerialization.data(withJSONObject: old)).fullGain)
+    }
+
     /// The Apple presets are valid start points with the default 3 bands.
     func testCustomEQApplePresets() throws {
         XCTAssertEqual(CustomEQ.applePresets.count, 22)

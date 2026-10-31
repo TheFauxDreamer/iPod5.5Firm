@@ -81,6 +81,29 @@ final class AppModel: ObservableObject {
         didSet { UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches"); switchesChanged(oldValue != enabledPatches) }
     }
     /// The selected choice of each patch option: patch name -> option id -> value (see PatchSpec.Option).
+    /// The EQs of the patch custom-eq. Keep this before `patchOptions`: the first load moves the
+    /// bands of an older version from the options to this list.
+    @Published var customEQs: [NamedEQ] = AppModel.loadEQs() {
+        didSet {
+            UserDefaults.standard.set(try? JSONEncoder().encode(customEQs), forKey: "customEQs")
+            switchesChanged(oldValue != customEQs)
+        }
+    }
+    @Published var selectedEQName = ""
+
+    static func loadEQs() -> [NamedEQ] {
+        let d = UserDefaults.standard
+        if let data = d.data(forKey: "customEQs"), let eqs = try? JSONDecoder().decode([NamedEQ].self, from: data), !eqs.isEmpty {
+            return Array(eqs.prefix(CustomEQ.maxEQs))
+        }
+        var options = d.dictionary(forKey: "patchOptions") as? [String: [String: Int]] ?? [:]
+        let eq = NamedEQ(options: options["custom-eq"] ?? [:])
+        options["custom-eq"] = nil
+        d.set(options, forKey: "patchOptions")
+        d.set(try? JSONEncoder().encode([eq]), forKey: "customEQs")
+        return [eq]
+    }
+
     @Published var patchOptions: [String: [String: Int]] =
         (UserDefaults.standard.dictionary(forKey: "patchOptions") as? [String: [String: Int]]) ?? [:] {
         didSet { UserDefaults.standard.set(patchOptions, forKey: "patchOptions"); switchesChanged(oldValue != patchOptions) }
@@ -1065,6 +1088,7 @@ final class AppModel: ObservableObject {
         patches.filter { enabledPatches.contains($0.spec.name) }.map { p in
             var p = p
             p.options = patchOptions[p.spec.name] ?? [:]
+            if p.spec.eq_editor != nil { p.customEQs = customEQs }
             return p
         }
     }
@@ -1079,49 +1103,76 @@ final class AppModel: ObservableObject {
         patchOptions[patch.spec.name, default: [:]][option.id] = value
     }
 
-    /// The 5 bands of a patch with the EQ editor. A change goes into `patchOptions`, like an option.
-    func eqBands(_ patch: PatchInfo) -> [CustomEQ.Band] {
-        CustomEQ.bands(from: patchOptions[patch.spec.name] ?? [:])
+    /// The EQ that the editor shows.
+    var selectedEQ: NamedEQ { customEQs.first { $0.name == selectedEQName } ?? customEQs[0] }
+
+    private func updateSelectedEQ(_ change: (inout NamedEQ) -> Void) {
+        guard let i = customEQs.firstIndex(of: selectedEQ) else { return }
+        change(&customEQs[i])
     }
 
-    func setEQBands(_ patch: PatchInfo, _ bands: [CustomEQ.Band]) {
-        patchOptions[patch.spec.name, default: [:]].merge(CustomEQ.values(of: bands)) { $1 }
+    func addEQ(named name: String) {
+        if let problem = CustomEQ.nameProblem(name, in: customEQs, excluding: nil) {
+            alert = AlertInfo(title: "Cannot Add the EQ", message: problem)
+        } else if customEQs.count >= CustomEQ.maxEQs {
+            alert = AlertInfo(title: "Cannot Add the EQ", message: "The iPod can have a maximum of \(CustomEQ.maxEQs) EQs.")
+        } else {
+            customEQs.append(NamedEQ(name: name))
+            selectedEQName = name
+        }
     }
 
-    func eqUsesAdvanced(_ patch: PatchInfo) -> Bool {
-        CustomEQ.usesAdvanced(patchOptions[patch.spec.name] ?? [:])
+    func renameSelectedEQ(to name: String) {
+        if let problem = CustomEQ.nameProblem(name, in: customEQs, excluding: selectedEQ.name) {
+            alert = AlertInfo(title: "Cannot Rename the EQ", message: problem)
+            return
+        }
+        updateSelectedEQ { $0.name = name }
+        selectedEQName = name
     }
+
+    func deleteSelectedEQ() {
+        guard customEQs.count > 1 else { return }
+        customEQs.removeAll { $0.name == selectedEQ.name }
+        selectedEQName = customEQs[0].name
+    }
+
+    /// The 5 bands of the selected EQ, as the build uses them.
+    func eqBands(_ patch: PatchInfo) -> [CustomEQ.Band] { selectedEQ.activeBands }
+
+    func setEQBands(_ patch: PatchInfo, _ bands: [CustomEQ.Band]) { updateSelectedEQ { $0.bands = bands } }
+
+    func eqUsesAdvanced(_ patch: PatchInfo) -> Bool { selectedEQ.advanced }
 
     /// The Simple view has fixed bands. A change to it keeps only the gains.
     func setEQUsesAdvanced(_ patch: PatchInfo, _ on: Bool) {
-        var values = patchOptions[patch.spec.name] ?? [:]
-        values["advanced"] = on ? 1 : 0
-        if !on { values.merge(CustomEQ.values(of: CustomEQ.simple(from: CustomEQ.bands(from: values)))) { $1 } }
-        patchOptions[patch.spec.name] = values
+        updateSelectedEQ {
+            $0.advanced = on
+            if !on { $0.bands = CustomEQ.simple(from: $0.bands) }
+        }
     }
 
-    func eqUsesAllBands(_ patch: PatchInfo) -> Bool {
-        CustomEQ.usesAllBands(patchOptions[patch.spec.name] ?? [:])
-    }
+    func eqUsesAllBands(_ patch: PatchInfo) -> Bool { selectedEQ.allBands }
 
     /// The view asks the user to agree to `CustomEQ.allBandsWarning` before it sets this to on.
-    func setEQUsesAllBands(_ patch: PatchInfo, _ on: Bool) {
-        patchOptions[patch.spec.name, default: [:]]["all_bands"] = on ? 1 : 0
-    }
+    func setEQUsesAllBands(_ patch: PatchInfo, _ on: Bool) { updateSelectedEQ { $0.allBands = on } }
 
     /// Start from an Apple preset. The Simple view has fixed bands, so the view changes to Advanced.
     func applyEQPreset(_ patch: PatchInfo, _ preset: CustomEQ.Preset) {
-        setEQBands(patch, CustomEQ.bands(forPreset: preset))
-        setEQUsesAdvanced(patch, true)
+        updateSelectedEQ {
+            $0.bands = CustomEQ.bands(forPreset: preset)
+            $0.advanced = true
+        }
     }
 
-    func eqUsesPrecut(_ patch: PatchInfo) -> Bool {
-        CustomEQ.usesPrecut(patchOptions[patch.spec.name] ?? [:])
-    }
+    func eqUsesFullGain(_ patch: PatchInfo) -> Bool { selectedEQ.fullGain == true }
 
-    func setEQUsesPrecut(_ patch: PatchInfo, _ on: Bool) {
-        patchOptions[patch.spec.name, default: [:]]["precut"] = on ? 1 : 0
-    }
+    /// The view asks the user to agree to `CustomEQ.fullGainWarning` before it sets this to on.
+    func setEQUsesFullGain(_ patch: PatchInfo, _ on: Bool) { updateSelectedEQ { $0.fullGain = on ? true : nil } }
+
+    func eqUsesPrecut(_ patch: PatchInfo) -> Bool { selectedEQ.preventClipping }
+
+    func setEQUsesPrecut(_ patch: PatchInfo, _ on: Bool) { updateSelectedEQ { $0.preventClipping = on } }
 
     /// The patch that has the EQ editor.
     var eqPatch: PatchInfo? { patches.first { $0.spec.eq_editor != nil } }
@@ -1129,13 +1180,13 @@ final class AppModel: ObservableObject {
     /// Write the EQ of the patch to a `.ipodeq` file. The name of the file is the name of the EQ.
     func exportEQ(_ patch: PatchInfo) {
         let s = NSSavePanel()
-        s.nameFieldStringValue = "Custom EQ.\(SharedEQ.fileExtension)"
+        s.nameFieldStringValue = "\(selectedEQ.name).\(SharedEQ.fileExtension)"
         s.allowedContentTypes = [UTType(filenameExtension: SharedEQ.fileExtension) ?? .json]
         s.message = "The file has only the EQ settings. Send it to another iPodFirm user."
         guard s.runModal() == .OK, let url = s.url else { return }
         do {
-            let eq = SharedEQ(name: url.deletingPathExtension().lastPathComponent, bands: eqBands(patch),
-                              preventClipping: eqUsesPrecut(patch), advanced: eqUsesAdvanced(patch))
+            let eq = SharedEQ(name: url.deletingPathExtension().lastPathComponent, bands: selectedEQ.activeBands,
+                              preventClipping: selectedEQ.preventClipping, advanced: selectedEQ.advanced)
             try eq.encode().write(to: url, options: .atomic)
             NSWorkspace.shared.activateFileViewerSelecting([url])
         } catch { fail("Cannot Export the EQ", error) }
@@ -1167,16 +1218,18 @@ final class AppModel: ObservableObject {
             alert = AlertInfo(title: "Cannot Open the EQ", message: "The Custom EQ patch is not in this version of iPodFirm.")
             return
         }
-        var values = CustomEQ.values(of: eq.eqBands)
-        values["precut"] = eq.preventClipping ? 1 : 0
-        values["advanced"] = eq.usesAdvanced ? 1 : 0
-        values["all_bands"] = eq.needsAllBands || eqUsesAllBands(patch) ? 1 : 0
-        patchOptions[patch.spec.name] = values
+        let new = NamedEQ(shared: eq, in: customEQs)
+        guard customEQs.count < CustomEQ.maxEQs else {
+            alert = AlertInfo(title: "Cannot Import the EQ", message: "The iPod has room for \(CustomEQ.maxEQs) EQs. Delete an EQ, then try again.")
+            return
+        }
+        customEQs.append(new)
+        selectedEQName = new.name
         setPatch(patch, on: true)
         section = .patches
         patchSelection = patch.spec.name
         guard alert == nil else { return }
-        alert = AlertInfo(title: "EQ Imported", message: "\"\(eq.name)\" is now the Custom EQ. Flash the iPod to put it on the iPod.")
+        alert = AlertInfo(title: "EQ Imported", message: "\"\(new.name)\" is now in your list of EQs. Flash the iPod to put it on the iPod.")
     }
 
     func isCompatible(_ p: PatchInfo) -> Bool {
