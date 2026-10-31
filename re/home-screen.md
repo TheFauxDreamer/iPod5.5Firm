@@ -60,6 +60,22 @@ The directory of the image is different from stock. The last field of `osos` and
 
 The guide lists a View for each screen in `Find.txt`. It gives 24430 as the main menu.
 
+The title bar trick: View 24069 makes its child 24506 240 pixels high, not 24. Stock View -285 is the title bar. The themes rewrite it, so the title bar becomes a full-screen backdrop that holds the panel. Thus the panel shows on each menu.
+
+The theme look is separate from the layout. The themes change 29 Type resources (for example the menu text from size 18 to 16), 307 pictures and a left-aligned title. The themes remove 46 pictures with the offset 0xFFFFFFFE. Thus `resources.scan` refuses the images.
+
+The author reports that horizontal scroll does not operate on 1.3, and that the menus respond differently from 1.2.1.
+
+Copy tests on stock 1.3 (Emulator, 31 October 2026):
+
+| Test | Result |
+|---|---|
+| `home-screen-narrow-list.ipsw` | Correct. Rows, arrows and highlight stop at x = 213. Stock fonts. The right area is white. |
+| 5 Views of the theme | The main menu is white. The title bar parents are missing. |
+| All 292 changed Views | The list operates, with stock fonts. The title is white on white, and bars show across the title. Not acceptable. |
+
+Decision of the owner: stay as close to stock as possible, with only the layout change. Thus do not copy the theme Views. Write a small set of our own View values.
+
 Caution: the guide says that an edit with no "Fix Checksum" can brick the iPod. iPodFirm calculates the checksum, but use the emulator first.
 
 ## The 2007 mod
@@ -187,8 +203,6 @@ iPodWizard is under the GPL, so use its source only for facts. Its post says tha
 
 ## Next steps
 
-1. The owner examines the `osos` of `MLCV2- Normal` in the emulator: the live data, the cover, the transitions and a restart.
-2. Find if `themeimport` can apply these View values to firmware 1.3 with the patches.
-3. Make the list of the Views to change, and decide which layouts the app offers.
-4. Find why `resources.scan` fails on these images.
-5. Compare the 42 changed code bytes with the game patch.
+1. Write our own layout: stock narrow list, then a panel with the title bar at its stock position.
+2. Test live data of the panel in the emulator.
+3. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`.
