@@ -30,7 +30,7 @@ Measured against stock 1.3:
 |---|---|
 | Views changed | 292 of 619 in 12 images, and 619 in the 2 `Contemporary` images. No View changes size. No View has a new ID. |
 | Code changed | 42 bytes at 0x131918–0x131b7f in the 2 images that were compared. Their names say "GamePatch", so this is probably the game patch. Not proved. |
-| `osos` checksum | Correct. |
+| Checksums | `osos` and `rsrc` are correct. `aupd` is wrong. |
 | `rsrc` | Different from stock. The difference is not examined. |
 | Scanner | `resources.scan` finds no main block in these images. The table at 0x331da0 is the same, so a direct read operates. The cause is not known. |
 
@@ -48,6 +48,15 @@ This gives 3 results:
 - The list narrows with the same edit as `home-screen-narrow-list.ipsw`.
 - A menu View can hold the Now Playing elements. This confirms the hypothesis in [Now Playing data](#now-playing-data) statically. A code change for the panel is not necessary.
 - The method to get more elements is to rewrite an existing View in place. A larger View and an unused View are not necessary.
+
+Emulator results on 31 October 2026, with `MLCV2- Normal`:
+
+| Test | Result |
+|---|---|
+| The image as supplied | The emulator did not start it (report of the owner). |
+| Stock 1.3 with only the `osos` of the image | It starts. The Language menu shows the narrow list and the panel at the right. |
+
+The directory of the image is different from stock. The last field of `osos` and of `rsrc` is 0xffffffff, not 0x187c0008. The ID of `aupd` is 1, not 0. The checksum of `aupd` is wrong. Thus the image is possibly a dump of a real iPod. The test did not isolate the cause: the directory, `rsrc` or `aupd`. The themes do not need the `rsrc` of the image to start.
 
 The guide lists a View for each screen in `Find.txt`. It gives 24430 as the main menu.
 
@@ -137,7 +146,7 @@ Examine these items in the emulator:
 
 ## Feasibility
 
-Result: feasible as a resource-only change, on firmware 1.3. The Firebird themes show this. The emulator test of the theme is open.
+Result: feasible as a resource-only change, on firmware 1.3. The Firebird themes show this. The panel shows in the emulator. Its live data is not tested yet.
 
 Recommended method: apply our own View values as an iPodFirm theme or as `patch.json` edits. Do not copy the images. Then measure the conflicts with `dark-mode`, `album-art` and `cover-flow`.
 
@@ -178,7 +187,7 @@ iPodWizard is under the GPL, so use its source only for facts. Its post says tha
 
 ## Next steps
 
-1. The owner examines the `MLCV2- Normal` image in the emulator: the panel, the cover, the transitions and a restart.
+1. The owner examines the `osos` of `MLCV2- Normal` in the emulator: the live data, the cover, the transitions and a restart.
 2. Find if `themeimport` can apply these View values to firmware 1.3 with the patches.
 3. Make the list of the Views to change, and decide which layouts the app offers.
 4. Find why `resources.scan` fails on these images.
