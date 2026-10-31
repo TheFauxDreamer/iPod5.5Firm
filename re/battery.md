@@ -166,6 +166,10 @@ The owner reports (31 October 2026): the battery is almost full, "43" is complet
 
 The value is not explained yet. Static: method + 0xd4 is 0x1dff54 → 0x9b284 → 0x265fd8 → 0x28341c(3, 0, out), and the text is `%ld` of that value. No step divides it. A true value of 43 is below the first limit of each table, and below the boot limit 0x080, so the icon would show empty. The owner's iPod is almost full. Thus the display possibly drops a complete third digit that does not fit, which gives 430–439. This agrees with an almost full battery (level 13 of the 0xb table starts at 436). 0x2438bc does not prove this: the part that was read does not show a drop of a character. The element flags (0x1000208) has the bit 0x1000000 (centre) and not 0x8000000. Other explanations are not excluded.
 
+Owner report (31 October 2026): since the battery mod (a larger battery), the icon never operated correctly. It looks almost full, and then it goes directly to flat.
+
+This agrees with a value of 430–439: level 13 of the 0xb table starts at 436, and it gives an icon value of 17 from 20. It suggests that the voltage of this battery stays nearly constant for most of the discharge and then falls quickly. This is an estimate. A record of the value over one complete discharge will show the real curve. If the curve is this flat, a percentage from the voltage alone stays near one value for most of the time. Then the patch needs a table from the real curve, or a different method.
+
 ### What the test gives
 
 - The width: if the number fits in 27 pixels, "100%" possibly also fits.
