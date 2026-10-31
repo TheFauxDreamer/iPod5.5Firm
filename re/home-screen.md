@@ -240,4 +240,5 @@ The themes contain the same patch as the DRM research of this project. The resea
 3. Test the 8 other title layers: 24507, 10371, 17538, 15617, 19328, 22404, 22532 and 28043. Each must operate at the height of 24 in a layer of the root.
 4. Examine each of the 85 lists for long text in the narrow width.
 5. Find the screen of text 28603–28608, and show that the firmware never loads View -515.
-6. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`.
+6. Find the users of title layer 24070. It has height 0, so stock content starts at y = 0 with it. The change to View -277 puts this content at y = 24. Static result: no match in `TCmd`, not proved. The full-screen screens are siblings of -277 in View -276, so this change does not touch them.
+7. Test the conflicts with `dark-mode`, `album-art` and `cover-flow`.
