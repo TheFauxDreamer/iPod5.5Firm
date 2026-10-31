@@ -631,6 +631,20 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertFalse(CustomEQ.usesPrecut(CustomEQ.values(of: bands)))
     }
 
+    /// The Simple view of custom-eq keeps the gains and uses valid fixed bands.
+    func testCustomEQSimple() throws {
+        var bands = CustomEQ.defaults
+        bands[0].gain = 60
+        bands[4].gain = -30
+        bands[4].frequency = 5000
+        let simple = CustomEQ.simple(from: bands)
+        XCTAssertEqual(simple.map(\.gain), bands.map(\.gain))
+        XCTAssertEqual(simple[4].frequency, 8000)
+        XCTAssertEqual(CustomEQ.simpleNames.count, CustomEQ.bandCount)
+        XCTAssertEqual(try CustomEQ.records(simple).mask, 0b10001)
+        XCTAssertFalse(CustomEQ.usesAdvanced([:]))
+    }
+
     /// The checks of custom-eq reject bad bands.
     func testCustomEQChecks() {
         for bad in [CustomEQ.Band(kind: .peak, frequency: 10, gain: 10, q: 100),

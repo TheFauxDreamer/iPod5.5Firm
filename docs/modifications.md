@@ -994,7 +994,7 @@ The Settings item has the key 0x60007e0f and the label 0x7e0b (`settings_items`,
 
 ## custom-eq
 
-**User interface.** Patches pane > Playback > Custom EQ, letter `q`, version 0.2, 518 bytes. The section "Custom EQ" has a curve, 5 bands (type, frequency, gain, Q), Prevent Clipping and Reset Bands. On the iPod, the item "Custom" shows in Settings > EQ. To change the bands, flash the iPod again.
+**User interface.** Patches pane > Playback > Custom EQ, letter `q`, version 0.3, 518 bytes. The section "Custom EQ" has a curve, Simple and Advanced views, Prevent Clipping and Reset Bands. Simple is the default: 5 sliders with fixed bands, Bass (low shelf 100 Hz), Warmth (peak 400 Hz), Mids (peak 1000 Hz), Clarity (peak 3000 Hz) and Treble (high shelf 8000 Hz). Advanced shows the type, frequency, gain and Q of each band. The two views use the same 5 bands, so the code on the iPod does not change. On the iPod, the item "Custom" shows in Settings > EQ. To change the bands, flash the iPod again.
 
 **The firmware.** A preset is a list of up to 5 filter numbers. Refer to [re/custom-eq.md](../re/custom-eq.md).
 

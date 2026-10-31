@@ -10,26 +10,61 @@ struct CustomEQView: View {
     var body: some View {
         let bands = model.eqBands(patch)
         let usesPrecut = model.eqUsesPrecut(patch)
+        let advanced = model.eqUsesAdvanced(patch)
         Section {
+            Picker("View", selection: Binding(get: { advanced }, set: { model.setEQUsesAdvanced(patch, $0) })) {
+                Text("Simple").tag(false)
+                Text("Advanced").tag(true)
+            }
+            .pickerStyle(.segmented)
             EQCurve(bands: bands, usesPrecut: usesPrecut).frame(height: 140)
-            ForEach(bands.indices, id: \.self) { i in
-                EQBandRow(number: i + 1, band: Binding(get: { bands[i] }, set: { b in
-                    var all = bands
-                    all[i] = b
-                    model.setEQBands(patch, all)
-                }))
+            if advanced {
+                ForEach(bands.indices, id: \.self) { i in
+                    EQBandRow(number: i + 1, band: Binding(get: { bands[i] }, set: { b in
+                        var all = bands
+                        all[i] = b
+                        model.setEQBands(patch, all)
+                    }))
+                }
+            } else {
+                ForEach(bands.indices, id: \.self) { i in
+                    EQSimpleRow(name: CustomEQ.simpleNames[i], gain: Binding(get: { bands[i].gain }, set: { g in
+                        var all = CustomEQ.simple(from: bands)
+                        all[i].gain = g
+                        model.setEQBands(patch, all)
+                    }))
+                }
             }
             Toggle("Prevent Clipping", isOn: Binding(get: { usesPrecut }, set: { model.setEQUsesPrecut(patch, $0) }))
             let cut = CustomEQ.precut(bands)
             if usesPrecut, cut < -0.05 {
                 LabeledContent("Level", value: String(format: "%.1f dB", cut))
             }
-            Button("Reset Bands") { model.setEQBands(patch, CustomEQ.defaults) }
-                .disabled(bands == CustomEQ.defaults)
+            Button("Reset Bands") { model.setEQBands(patch, advanced ? CustomEQ.defaults : CustomEQ.simpleLayout) }
+                .disabled(advanced ? bands == CustomEQ.defaults : bands.allSatisfy { $0.gain == 0 })
         } header: {
             Text("Custom EQ")
         } footer: {
-            Text("A band at 0 dB is off. Prevent Clipping lowers the level by the highest boost, so that loud music does not distort. The music then sounds quieter than Flat. Without it, the EQ operates as the Apple presets do, and a strong boost can distort.")
+            Text("A band at 0 dB is off. Simple keeps only the slider values of Advanced bands. Prevent Clipping lowers the level by the highest boost, so that loud music does not distort. The music then sounds quieter than Flat. Without it, the EQ operates as the Apple presets do, and a strong boost can distort.")
+        }
+    }
+}
+
+/// One slider of the Simple view.
+private struct EQSimpleRow: View {
+    let name: String
+    @Binding var gain: Int
+
+    var body: some View {
+        HStack {
+            Text(name).frame(width: 64, alignment: .leading)
+            Slider(value: Binding(get: { Double(gain) / 10 }, set: { gain = Int(($0 * 10).rounded()) }), in: -12...12, step: 0.5) {
+                Text(name)
+            }
+            .labelsHidden()
+            Text(String(format: "%+.1f dB", Double(gain) / 10))
+                .monospacedDigit()
+                .frame(width: 64, alignment: .trailing)
         }
     }
 }

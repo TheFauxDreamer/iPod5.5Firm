@@ -34,6 +34,13 @@ public enum CustomEQ {
                                   Band(kind: .peak, frequency: 910, gain: 0, q: 100),
                                   Band(kind: .peak, frequency: 3600, gain: 0, q: 100),
                                   Band(kind: .highShelf, frequency: 14000, gain: 0, q: 71)]
+    /// The fixed bands of the Simple view, with the name of each slider. The gain comes from the slider.
+    public static let simpleNames = ["Bass", "Warmth", "Mids", "Clarity", "Treble"]
+    public static let simpleLayout = [Band(kind: .lowShelf, frequency: 100, gain: 0, q: 71),
+                                      Band(kind: .peak, frequency: 400, gain: 0, q: 80),
+                                      Band(kind: .peak, frequency: 1000, gain: 0, q: 80),
+                                      Band(kind: .peak, frequency: 3000, gain: 0, q: 80),
+                                      Band(kind: .highShelf, frequency: 8000, gain: 0, q: 71)]
     static let grid = 512
     static let q24 = 16_777_216.0
 
@@ -50,6 +57,18 @@ public enum CustomEQ {
 
     /// The option "precut": 1 lowers the level by the highest boost. Apple presets do not do this.
     public static func usesPrecut(_ values: [String: Int]) -> Bool { values["precut"] == 1 }
+
+    /// The option "advanced": 1 shows all the controls of each band. The default is the Simple view.
+    public static func usesAdvanced(_ values: [String: Int]) -> Bool { values["advanced"] == 1 }
+
+    /// The bands of the Simple view, with the gains of `bands`.
+    public static func simple(from bands: [Band]) -> [Band] {
+        zip(simpleLayout, bands).map { layout, band in
+            var b = layout
+            b.gain = band.gain
+            return b
+        }
+    }
 
     /// The option values of the bands.
     public static func values(of bands: [Band]) -> [String: Int] {

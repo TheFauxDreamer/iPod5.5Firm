@@ -1086,6 +1086,18 @@ final class AppModel: ObservableObject {
         patchOptions[patch.spec.name, default: [:]].merge(CustomEQ.values(of: bands)) { $1 }
     }
 
+    func eqUsesAdvanced(_ patch: PatchInfo) -> Bool {
+        CustomEQ.usesAdvanced(patchOptions[patch.spec.name] ?? [:])
+    }
+
+    /// The Simple view has fixed bands. A change to it keeps only the gains.
+    func setEQUsesAdvanced(_ patch: PatchInfo, _ on: Bool) {
+        var values = patchOptions[patch.spec.name] ?? [:]
+        values["advanced"] = on ? 1 : 0
+        if !on { values.merge(CustomEQ.values(of: CustomEQ.simple(from: CustomEQ.bands(from: values)))) { $1 } }
+        patchOptions[patch.spec.name] = values
+    }
+
     func eqUsesPrecut(_ patch: PatchInfo) -> Bool {
         CustomEQ.usesPrecut(patchOptions[patch.spec.name] ?? [:])
     }
