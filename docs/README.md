@@ -23,7 +23,7 @@ All data is for Apple RetailOS 1.3 (`iPod_25.1.3.ipsw`). Other firmware versions
 
 The research notes in [../re/](../re/) record the experiments in the sequence that they occurred. This reference collects their results. When the two do not agree, the source code is correct.
 
-The note [../re/games.md](../re/games.md) gives the research of the iPod games. The note [../re/retailos-decompile.md](../re/retailos-decompile.md) gives the decompilation of the whole image `osos` of RetailOS 1.3. The note [../re/firmware-coverage.md](../re/firmware-coverage.md) gives the index of all the research of the firmware. The note lists every part of the firmware and gives the state of the research for each part.
+The note [../re/device-switches.md](../re/device-switches.md) lists the hidden switch files of firmware 1.3 and tells how to use them. The note [../re/games.md](../re/games.md) gives the research of the iPod games. The note [../re/retailos-decompile.md](../re/retailos-decompile.md) gives the decompilation of the whole image `osos` of RetailOS 1.3. The note [../re/firmware-coverage.md](../re/firmware-coverage.md) gives the index of all the research of the firmware. The note lists every part of the firmware and gives the state of the research for each part.
 
 ## Where to start
 
