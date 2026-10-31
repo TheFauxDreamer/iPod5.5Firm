@@ -78,8 +78,39 @@ Change 1 byte in 0xf84, at script offset 0x1a1c (osos 0x4b5e38): 0x07 in place o
 
 Status: the owner tested it in the emulator. It is not tested on a real iPod. Refer to [emulator.md](emulator.md).
 
+## The timer cycle with the patch
+
+The emulator recorded each native call at 0x120bec during idle playback, on the main menu, with version 0.2 of the byte change (31 October 2026). Three cycles had the same 30 calls. Each cycle ran approximately 342,000 instructions, from the first call to the last call. This is approximately 4.6 ms of one core in each 10 s.
+
+| Script method | Native | Result | Status |
+|---|---|---|---|
+| 0x13a4.0x13a | 0x1e798c | The player state from 0x9ba00 is 1. It is true during playback. A test with Pause was not made. | Static, Emulator |
+| 0x13de.0x25c | 0x22c500 | Reads the switch byte 0x1081dfdc. | Static, Emulator |
+| 0x13df.0x2c4 | 0x12d890 | Reads + 0xd4 of the object. 0x1d81cc uses it to find an active modal screen. | Static, Emulator |
+| 0x13dd.0x256 | 0x18145c | Reads + 0x38 of the object. The meaning is not known. | Static, Emulator |
+| 0x1392.0x92 | 0x1d2d90 | Tells if a screen is in the stack. | Emulator |
+| 0x1392.0x93 | 0x1d2d80 | Tells if a screen is the current screen. | Emulator |
+| 0x13b3.0x199 | 0x156ec4 | Reads a value: arguments 0x6005 and 0x6000. | Static, Emulator |
+| 0x13a3.0xfb | 0x1d8cb0 | `str r1, [r0, #0x118]`. It stores the handler in one field. | Static, Emulator |
+| 0x1392.0x75 | 0x1d2778 | Starts a timer: time, key. | Static, Emulator |
+| 0x13d5.0x2b5 | 0x248138 | Object + 0x174 is 2. | Static, Emulator |
+
+The order of the native calls gives the three rows 0x25c, 0x2c4 and 0x256. The order agrees with the script.
+
+## Answers to the open questions
+
+**The input handler cannot accumulate.** 0x1d8cb0 stores one word. A second call replaces the first value.
+
+**The timers cannot accumulate.** 0x1d2778 first calls vtable + 0xa4 (0x1d2524). 0x1d2524 finds the old timer by its key, removes it from the map at + 0xb4, and calls its method + 4, which is probably the delete. Then 0x1d2778 allocates a new timer of 0x30 bytes. The stock firmware runs the same path at each input.
+
+**`name 0x98` tells if the firmware can interrupt the screen.** It gives false if a modal or another state in 0xf83 or 0x13dd.0x256 is active, or if one of 24 listed screens is in the stack or is current. 0xf84 then calls 0x1007. Thus the stock firmware already runs the same 10 s loop while one of these screens is open during playback. The patch makes the main path the same as this path.
+
+**The second action of 0x1096 is for video.** If 0x13d5.0x2b5 is true, 0x1096 calls 0x12b2 and not 0x1095. 0x12b2 pushes the video Now Playing screen 0x12f4 with 0x12f2. Thus object + 0x174 = 2 is probably a video mode. This meaning comes from the script, and no video test was made. With the patch, the video Now Playing screen also does not open by itself. The video path does not operate on the owner's iPod (refer to [video-player.md](video-player.md)).
+
+**0x1099 does not change.** It compares the value from 0x13b3.0x199 with 0x602e. The path to 0x10b4 can still call 0x1096. This path needs that value, and the meaning of the value is not known.
+
 ## Next steps
 
 1. Test the 1 byte on a real iPod.
 2. Identify 0xfe2–0xfe4, 0x11b3, 0x11b4 and the event of 0x1028.
-3. Find what `name 0x98` and 0x13a4.0x13a test.
+3. Find the meaning of 0x18145c, the switch byte 0x1081dfdc and the value 0x602e.
