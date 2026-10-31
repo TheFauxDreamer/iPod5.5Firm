@@ -1014,7 +1014,7 @@ The preset has one number for each active band. A band at 0 dB is off and uses n
 
 **Removal.** After a flash without the patch, the saved name has no preset, and the firmware clears the EQ setting (0x9421c).
 
-**Test status.** Emulator, version 0.1 (31 October 2026): the firmware starts, and the list has "Custom" between "Classical" and "Dance" with the value 5500 for one band. Real iPod, version 0.1 (the owner, 31 October 2026): the patch operates. The precut made the music quieter. The band settings are not recorded. Version 0.2, the CPU load with 5 bands and USB-C audio are not tested on the real iPod.
+**Test status.** Emulator, version 0.1 (31 October 2026): the firmware starts, and the list has "Custom" between "Classical" and "Dance" with the value 5500 for one band. Real iPod, version 0.1 (the owner, 31 October 2026): the patch operates. The precut made the music quieter. The band settings are not recorded. App, version 0.4 (the owner, 31 October 2026): export and import, a double-click on the file, and the rejection of a damaged file operate. Version 0.2, the CPU load with 5 bands and USB-C audio are not tested on the real iPod.
 
 ## playlist-folders
 
