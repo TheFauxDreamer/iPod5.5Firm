@@ -328,7 +328,11 @@ struct PatchSwitch: View {
                 model.setPatch(patch, on: v)
             })
         if let label {
-            Toggle(label, isOn: on).toggleStyle(.switch)
+            // A Form puts the label of a Toggle far from the switch. Show the text here to keep the two together.
+            HStack(spacing: 8) {
+                Text(label)
+                Toggle(label, isOn: on).toggleStyle(.switch).labelsHidden()
+            }
         } else {
             Toggle(patch.spec.displayTitle, isOn: on).toggleStyle(.switch).labelsHidden()
         }
@@ -419,7 +423,7 @@ struct PatchDetail: View {
     var body: some View {
         Form {
             Section {
-                HStack(alignment: .top) {
+                HStack {
                     DetailHeader(title: patch.spec.displayTitle,
                                  symbol: validSymbol(patch.spec.symbol), tint: patch.tint, patch: patch)
                     Spacer()
