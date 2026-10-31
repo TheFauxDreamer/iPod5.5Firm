@@ -4,7 +4,7 @@ import Foundation
 /// The playlist folders of the playlist-folders patch: the file iPod_Control/iTunes/iPodFirmPlaylistFolders.
 /// The format is in patches/playlist-folders/playlist_folders.c. All values are little-endian and
 /// each part starts at a multiple of 4 bytes:
-///   "IFPF", u16 version (1), u16 flags (bit 0: alphabetical), u16 folder count, u16 0
+///   "IFPF", u16 version (1), u16 flags (bit 0: alphabetical, bit 1: no folder icons), u16 folder count, u16 0
 ///   each folder: u16 colour (RGB565), u16 name units, u16 member count, u16 0,
 ///                the name (UTF-16, padded to 4 bytes), the members (u64 persistent IDs)
 public struct PlaylistFolders: Equatable {
@@ -29,6 +29,8 @@ public struct PlaylistFolders: Equatable {
     public var folders: [Folder] = []
     /// true: the folders are in alphabetical order with the playlists. false: the folders come first.
     public var alphabetical = false
+    /// true: each folder row shows the folder icon. The album-art patch draws the icon.
+    public var folderIcons = true
 
     public static let fileName = "iPodFirmPlaylistFolders"
     public static let path = "iPod_Control/iTunes/" + fileName
@@ -39,9 +41,10 @@ public struct PlaylistFolders: Equatable {
     /// Apple blue.
     public static let defaultColour: UInt16 = rgb565(red: 0x1a, green: 0x6f, blue: 0xe0)
 
-    public init(folders: [Folder] = [], alphabetical: Bool = false) {
+    public init(folders: [Folder] = [], alphabetical: Bool = false, folderIcons: Bool = true) {
         self.folders = folders
         self.alphabetical = alphabetical
+        self.folderIcons = folderIcons
     }
 
     // MARK: the file
@@ -49,7 +52,7 @@ public struct PlaylistFolders: Equatable {
     public func encode() -> [UInt8] {
         var b = [UInt8]("IFPF".utf8)
         func u16(_ v: Int) { b += [UInt8(v & 0xFF), UInt8(v >> 8 & 0xFF)] }
-        u16(1); u16(alphabetical ? 1 : 0); u16(folders.count); u16(0)
+        u16(1); u16((alphabetical ? 1 : 0) | (folderIcons ? 0 : 2)); u16(folders.count); u16(0)
         for f in folders {
             let units = Array(f.name.utf16)
             u16(Int(f.colour)); u16(units.count); u16(f.members.count); u16(0)
@@ -66,7 +69,7 @@ public struct PlaylistFolders: Equatable {
     public static func decode(_ b: [UInt8]) -> PlaylistFolders? {
         func u16(_ o: Int) -> Int { Int(b[o]) | Int(b[o + 1]) << 8 }
         guard b.count >= 12, Array(b[0..<4]) == Array("IFPF".utf8), u16(4) == 1 else { return nil }
-        var out = PlaylistFolders(alphabetical: u16(6) & 1 != 0)
+        var out = PlaylistFolders(alphabetical: u16(6) & 1 != 0, folderIcons: u16(6) & 2 == 0)
         var at = 12
         for _ in 0..<u16(8) {
             guard at + 8 <= b.count else { return nil }

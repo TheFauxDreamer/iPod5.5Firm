@@ -99,6 +99,8 @@ struct PlaylistFoldersSection: View {
 
     var body: some View {
         Section {
+            Toggle("Folder Icons", isOn: $model.playlistFolders.folderIcons)
+                .disabled(model.currentIPod == nil || model.playlistFolders.folders.isEmpty)
             if model.currentIPod == nil {
                 Text("Connect the iPod.").foregroundStyle(.secondary)
             } else if model.folderPlaylists.isEmpty {

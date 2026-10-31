@@ -26,6 +26,8 @@
  *    albums of the playlist that have a thumbnail, in a 2 x 2 square, as iPodFirm makes it. With
  *    1 to 3 albums, the first thumbnail alone. The patch finds the playlist by the hash of its
  *    name in the list at db + 0x2c (re/playlist-art.md). On-The-Go also gets a collage.
+ *  - A folder of the patch playlist-folders gets a fixed folder icon (version 3.4). The patch reads
+ *    the folder names from iPodFirmPlaylistFolders (re/playlist-folders.md, "Folder icon").
  * The order for an album (version 2.9): the file of iPodFirm, then a valid cache, then the
  * artwork. Thus the file that the owner wrote comes first, and the patch fills the gaps. The
  * cache always has all albums with artwork, thus it is complete also without the file.
@@ -99,6 +101,7 @@ void view_invalidate(void *view);
 #define FILE_PATH   "iPod_Control\\iTunes\\iPodFirmAlbumArt"
 #define ART_DB_PATH "iPod_Control\\Artwork\\ArtworkDB"
 #define ITHMB_PATH  "iPod_Control\\Artwork\\F1028_"   /* + N + ".ithmb" */
+#define FOLDERS_PATH "iPod_Control\\iTunes\\iPodFirmPlaylistFolders"   /* of playlist-folders */
 #define MODE_DATA   0x64617461u           /* 'data' */
 #define MAX_SIZE    32
 #define CACHE_SLOTS 64
@@ -142,6 +145,13 @@ void view_invalidate(void *view);
 #define COLLAGE_SLOTS  16
 #define WALK_MAX       4000               /* the most items that one walk reads */
 #define NAME_BYTES     512                /* UTF-16 bytes of an album name that the patch reads */
+/* The folders of the patch playlist-folders. The same limits as playlist_folders.c. */
+#define FOLDERS_MAX    64
+#define FOLDER_NAME_MAX 63
+#define FOLDERS_FILE_MAX 0x10000
+#define READ_EOF       (-0x27)            /* 0x8f464: the file has fewer bytes than asked */
+#define FOLDERS_NO_ICONS 2                /* the flags of the file: the switch Folder Icons is off */
+#define FOLDER_KEY     0xf81f             /* a transparent pixel of folder_px */
 
 /* The artwork. */
 #define ART_FORMAT     1028               /* 100 x 100 RGB565 */
@@ -538,16 +548,11 @@ COLD static unsigned fnv_byte(unsigned h, unsigned b)
     return (h ^ (b & 0xff)) * FNV_PRIME;
 }
 
-/* The FNV-1a hash (from `h`) of the UTF-8 form of a name in a pool, as the label text gives it.
- * Returns 0 for an empty name. */
-COLD static unsigned pool_hash(void *pool, int pool_index, unsigned h, unsigned short *name)
+/* The FNV-1a hash (from `h`) of the UTF-8 form of a UTF-16 name, as the label text gives it. */
+COLD static unsigned name_hash(const unsigned short *name, int n, unsigned h)
 {
     unsigned c;
-    int length = 0, n, k;
-    pool_copy(pool, pool_index, name, &length, NAME_BYTES);
-    n = length >> 1;
-    if (n <= 0)
-        return 0;
+    int k;
     for (k = 0; k < n; k++) {
         c = name[k];
         if (c >= 0xd800 && c < 0xdc00 && k + 1 < n && name[k + 1] >= 0xdc00 && name[k + 1] < 0xe000) {
@@ -571,6 +576,15 @@ COLD static unsigned pool_hash(void *pool, int pool_index, unsigned h, unsigned 
         }
     }
     return h;
+}
+
+/* The same hash of a name in a pool. Returns 0 for an empty name. */
+COLD static unsigned pool_hash(void *pool, int pool_index, unsigned h, unsigned short *name)
+{
+    int length = 0, n;
+    pool_copy(pool, pool_index, name, &length, NAME_BYTES);
+    n = length >> 1;
+    return n > 0 ? name_hash(name, n, h) : 0;
 }
 
 /* The hash of an album name in the album pool of the database. */
@@ -1201,11 +1215,89 @@ COLD static int fill_has_work(void)
     return art_state == 1 && (slot_owner[art_next] == NO_SLOT || (!cache_written && cache_state != 1));
 }
 
+/* ---------- the folders of playlist-folders ---------- */
+
+/* The icon of a folder row. Source: re/playlist-folders/folder-icon.png. The script
+ * re/playlist-folders/make-folder-icon.py writes this array. */
+static const unsigned short folder_px[TH * TH] __attribute__((aligned(4))) = {
+    0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f,
+    0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f,
+    0xf81f, 0xf81f, 0xf81f, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f,
+    0xf81f, 0xf81f, 0x1af5, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x1af5, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f,
+    0xf81f, 0x1af5, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0xf81f, 0xf81f,
+    0xf81f, 0x1af5, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x245b, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0xdf7f, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0xbeff, 0x455d, 0x455d, 0x455d, 0x455d, 0x455d, 0x455d, 0x455d, 0x455d, 0x455d, 0x455d, 0x455d, 0x455d, 0x455d, 0x455d, 0x455d, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0xbeff, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0xbeff, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x555d, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0xbeff, 0x655d, 0x655d, 0x655d, 0x655d, 0x655d, 0x655d, 0x655d, 0x655d, 0x655d, 0x655d, 0x655d, 0x655d, 0x655d, 0x655d, 0x655d, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0xbeff, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x65dd, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0xbeff, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0xbeff, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x75dd, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0xbeff, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x8e7d, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0xbeff, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x8e7f, 0x1af5, 0xf81f,
+    0xf81f, 0x1af5, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0xaeff, 0x1af5, 0xf81f,
+    0xf81f, 0xf81f, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0x1af5, 0xf81f, 0xf81f,
+    0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f,
+};
+
+static unsigned folder_hash[FOLDERS_MAX];
+static int folder_total;
+static int folders_read;                  /* 1: folder_hash agrees with the file */
+
+/* Keeps the hash of each folder name, as a playlist row gives it. The format is in
+ * playlist_folders.c. With no file, or with the switch Folder Icons off, no row is a folder here. */
+COLD static void load_folders(void)
+{
+    unsigned fh[0x30 / 4], got = FOLDERS_FILE_MAX, at = 12, k, n;
+    unsigned char *b;
+    int rc;
+
+    folders_read = 1;
+    folder_total = 0;
+    if (open_path(fh, FOLDERS_PATH, 0) != 0)
+        return;
+    b = alloc(FOLDERS_FILE_MAX, 131072);
+    rc = b ? file_read(fh, &got, b) : -1;
+    file_close(fh);
+    if (b && (rc == 0 || rc == READ_EOF) && got >= 12 && got <= FOLDERS_FILE_MAX
+        && b[0] == 'I' && b[1] == 'F' && b[2] == 'P' && b[3] == 'F' && *(unsigned short *)(b + 4) == 1) {
+        n = *(unsigned short *)(b + 6) & FOLDERS_NO_ICONS ? 0 : *(unsigned short *)(b + 8);
+        for (k = 0; k < n && k < FOLDERS_MAX; k++) {
+            unsigned units, members, name_bytes;
+            if (at + 8 > got)
+                break;
+            units = *(unsigned short *)(b + at + 2);
+            members = *(unsigned short *)(b + at + 4);
+            name_bytes = (units * 2 + 3) & ~3u;
+            if (units == 0 || units > FOLDER_NAME_MAX || at + 8 + name_bytes + members * 8 > got)
+                break;
+            folder_hash[folder_total++] = name_hash((const unsigned short *)(b + at + 8), (int)units, PLAYLIST_BASIS);
+            at += 8 + name_bytes + members * 8;
+        }
+    }
+    fw_free(b);
+}
+
+/* 1: the playlist row with the hash `h` is a folder. */
+COLD static int is_folder(unsigned h)
+{
+    int i;
+    if (!folders_read)
+        load_folders();
+    for (i = 0; i < folder_total; i++)
+        if (folder_hash[i] == h)
+            return 1;
+    return 0;
+}
+
 /* ---------- the draw ---------- */
 
-/* Draws the thumbnail with runs of pixels that have the same colour. Used only if the target
- * bitmap is not RGB565. */
-COLD static void draw_runs(void *gc, const unsigned short *px, int ts, int top, int left)
+/* Draws the thumbnail with runs of pixels that have the same colour. The runs of the colour `key`
+ * stay transparent (key -1: no transparent colour). The patch uses this only for the folder icon,
+ * and if the target bitmap is not RGB565. */
+COLD static void draw_runs(void *gc, const unsigned short *px, int ts, int top, int left, int key)
 {
     unsigned char rgba[4];
     int y, x;
@@ -1217,6 +1309,10 @@ COLD static void draw_runs(void *gc, const unsigned short *px, int ts, int top, 
             Rect r;
             while (end < ts && px[y * ts + end] == c)
                 end++;
+            if (c == key) {
+                x = end;
+                continue;
+            }
             rgba[0] = (unsigned char)(((c >> 11) & 31) << 3 | ((c >> 13) & 7));
             rgba[1] = (unsigned char)(((c >> 5) & 63) << 2 | ((c >> 9) & 3));
             rgba[2] = (unsigned char)((c & 31) << 3 | ((c >> 2) & 7));
@@ -1248,7 +1344,7 @@ COLD static void draw_thumbnail(void *gc, const unsigned short *px, int ts, int 
        thumbnail is not visible. */
     gc_set_mode(gc, 0);
     if (!target || target[3] != 16 || (target[5] & 0xdfff) != 0x565 || ((unsigned)px & 3) || (ts & 1)) {
-        draw_runs(gc, px, ts, top, left);
+        draw_runs(gc, px, ts, top, left, -1);
         STAT_ADD(T_RUNS, t0);
         return;
     }
@@ -1588,7 +1684,7 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
     const unsigned short *px = 0;
     const Entry *e;
     unsigned h = 0;
-    int height, *left, i, n, ts = 0, wait = 0, busy;
+    int height, *left, i, n, ts = 0, wait = 0, busy, icon = 0;
     unsigned id = *(unsigned short *)((char *)view + VIEW_ELEMENT_ID);
     unsigned t0 = STAT_NOW(), t1;
 
@@ -1604,6 +1700,7 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
         free_art();
         free_cache();
         free_collages();
+        folders_read = 0;
         cache_written = 0;
         free_album_hashes();
         if (state == 1)
@@ -1648,6 +1745,12 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
             wait = 1;
         else
             px = pixels(e);
+    }
+    /* A folder of playlist-folders is not a playlist: it gets the folder icon (version 3.4). */
+    if (h && !px && !wait && id == PLAYLIST_NAME_ID && is_folder(h)) {
+        px = folder_px;
+        ts = TH;
+        icon = 1;
     }
     /* A playlist that is not in the file gets the collage of its albums (version 3.0). */
     if (h && !px && !wait && id == PLAYLIST_NAME_ID) {
@@ -1696,7 +1799,10 @@ COLD static void draw_with_thumbnail(draw_fn original, void *view, const char *t
         STAT_ADD(T_ORIGINAL_SHIFTED, t1);
         *left -= ts + GAP;
         gc_prepare(view, gc);             /* set the origin and the clip for the original bounds */
-        if (px)
+        if (icon) {
+            gc_set_mode(gc, 0);           /* the blit cannot leave a pixel transparent */
+            draw_runs(gc, px, ts, r.top + ((height - ts) >> 1), r.left + 1, FOLDER_KEY);
+        } else if (px)
             draw_thumbnail(gc, px, ts, r.top + ((height - ts) >> 1), r.left + 1);
         else
             draw_empty(gc, ts, r.top + ((height - ts) >> 1), r.left + 1);

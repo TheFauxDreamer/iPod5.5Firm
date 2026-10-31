@@ -131,7 +131,7 @@ if __name__ == "__main__":
         named = [a for a in args if "=" in a]
         spec = [(a.split("=")[0], colours[i % 4][0], [ids[m] for m in a.split("=")[1].split(",") if m])
                 for i, a in enumerate(named)]
-        extra["iPod_Control/iTunes/iPodFirmPlaylistFolders"] = fmod.build(spec, "--alpha" in args)
+        extra["iPod_Control/iTunes/iPodFirmPlaylistFolders"] = fmod.build(spec, "--alpha" in args, "--no-icons" not in args)
         if "--art" in args:
             # the colour squares of the folders in the album-art file, as the app writes them
             from PIL import Image

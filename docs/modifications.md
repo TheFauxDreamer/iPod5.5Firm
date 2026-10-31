@@ -130,7 +130,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 ## album-art
 
-**User interface.** Patches pane > Album Artwork, letter `a`, version 3.3. The patch has no option. Version 2.8 removed the option `source` ("Album Thumbnail Source"). `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
+**User interface.** Patches pane > Album Artwork, letter `a`, version 3.5. The patch has no option. Version 2.8 removed the option `source` ("Album Thumbnail Source"). `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
 
 - "Thumbnails": "Write Thumbnails to iPod" writes the thumbnail file for the playlists. The albums do not need this file. "Eject iPod" ejects the iPod.
 - "Playlist Artwork" sets a custom image for each playlist ("Choose Image…", "Use Automatic", or drag an image).
@@ -144,6 +144,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 - The stamp of the cache is the FNV-1a hash of the first 0x40 bytes of `ArtworkDB` and of the album names of all tracks (the album pool db + 0x138; version 3.1). Versions 2.8–3.0 used the album list of the library, which exists only after the first open of the Albums list. A sync that changes the artwork or the albums gives a different stamp. Then the patch does not use the old cache, fills the covers again and writes a new cache. The patch writes the stamp last, thus a write that stops leaves a cache that the patch does not use.
 - The patch writes the cache only if all albums fit in the 1 MB of thumbnails (1310 albums). With more albums, it operates as version 2.7.
 - A playlist gets its thumbnail from the file `iPodFirmAlbumArt`, if the file has it (a custom image or the collage of iPodFirm). Else the patch makes a collage (version 3.0): the first 4 different albums of the playlist that have a thumbnail, in a 2 × 2 square, as iPodFirm does. With 1 to 3 albums, the first thumbnail alone. On-The-Go also gets a collage. The patch finds the playlist by the hash of its name in the list at db + 0x2c, and makes the collage again when the item count changes. Refer to [../re/playlist-art.md](../re/playlist-art.md).
+- A folder of the patch [playlist-folders](#playlist-folders) gets a fixed folder icon (version 3.4). The icon is in the patch, so it needs no thumbnail file. Refer to [../re/playlist-folders.md](../re/playlist-folders.md#folder-icon).
 - An album without artwork on the iPod also uses the file, if the file has it.
 - The file is optional. Without the file, the albums show their thumbnails and the playlists show their collages.
 - The order for an album (version 2.9): the file, then a valid cache, then the artwork. Thus the file that the owner wrote comes first, and the patch fills the gaps. The cache always has all albums with artwork. If a cover changes in iTunes and the file is not written again, the old cover in the file comes first. Version 2.8 used the order: a valid cache, the artwork, the file.
@@ -154,7 +155,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 The research is in [../re/album-art-v2.md](../re/album-art-v2.md).
 
-**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 14848 bytes. Version 3.2 switches the measurement off (`ALBUM_ART_STATS` 0); with it, version 3.1 was 16552 bytes. To measure again, refer to [../re/album-art-v2.md](../re/album-art-v2.md#the-measurement-how-to-switch-it-on-again). Version 1.0 used the fixed area 0x7358d0–0x73658c (3080 bytes). Thus a build with this patch moves rsrc.
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 16668 bytes. Version 3.2 switches the measurement off (`ALBUM_ART_STATS` 0); with it, version 3.1 was 16552 bytes. To measure again, refer to [../re/album-art-v2.md](../re/album-art-v2.md#the-measurement-how-to-switch-it-on-again). Version 1.0 used the fixed area 0x7358d0–0x73658c (3080 bytes). Thus a build with this patch moves rsrc.
 
 **Hooks.**
 
@@ -1024,9 +1025,10 @@ Each active band of each EQ gets the next filter number (`CustomEQ.library`). 5 
 
 ## playlist-folders
 
-**User interface.** Patches pane > Display > Playlist Folders, letter `o`, version 0.3. The section "Playlist Folders" of the patch is the editor (`ui.tools`: `playlist-folders`, `PlaylistFoldersSection` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)). It has these controls:
+**User interface.** Patches pane > Display > Playlist Folders, letter `o`, version 0.5. The section "Playlist Folders" of the patch is the editor (`ui.tools`: `playlist-folders`, `PlaylistFoldersSection` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)). It has these controls:
 
 - "Folder position": Folders First or Alphabetical.
+- "Folder Icons": a switch for the folder icon of all folders. The default is on. The switch always shows. It operates only if the connected iPod has folders, because the folder file on the iPod keeps the value.
 - One row for each folder: the name, the count of playlists and a delete button. Open the row to put playlists into the folder. A playlist is in one folder only.
 - "Add Folder" and "Write Folders to iPod".
 
@@ -1038,10 +1040,12 @@ The app does not write the folders if a folder has no name, a name of more than 
 
 | Part | Content |
 |---|---|
-| Header, 12 bytes | `IFPF`, u16 version (1), u16 flags (bit 0: alphabetical), u16 folder count, u16 0 |
+| Header, 12 bytes | `IFPF`, u16 version (1), u16 flags (bit 0: alphabetical; bit 1: no folder icons), u16 folder count, u16 0 |
 | Each folder | u16 colour (RGB565), u16 name units, u16 member count, u16 0, the name (UTF-16, padded to 4 bytes), the members (u64 each) |
 
 A member is the persistent ID of a playlist (`mhyp` +0x1c). The firmware keeps it at playlist + 0x18. A persistent ID does not change when the playlist gets a new name. The patch reads at most 64 folders and 64 KB.
+
+**The folder icon.** If `album-art` 3.4 or later is installed, each folder row shows a 20 × 20 blue folder icon. The switch "Folder Icons" in the section "Playlist Folders" sets the icon on or off for all folders (`album-art` 3.5, bit 1 of the flags in the folder file). The default is on. `album-art` draws the icon, and `playlist-folders` has no icon code. Without `album-art`, a folder row has only text. Refer to [../re/playlist-folders.md](../re/playlist-folders.md#folder-icon).
 
 **The colour.** The firmware does not use the colour. Version 0.2 of the app does not show the colour picker and does not write colour squares. The colour squares did not show on the real iPod. The code stays in the app as comments, for later work. Refer to [../re/playlist-folders.md](../re/playlist-folders.md#folder-colours). The file keeps the colour field. The app writes the default colour into it.
 

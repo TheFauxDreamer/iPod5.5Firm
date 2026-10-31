@@ -18,8 +18,9 @@ def playlist_ids(db: bytes) -> dict[str, int]:
     return out
 
 
-def build(folders: list[tuple[str, int, list[int]]], alphabetical: bool) -> bytes:
-    b = bytearray(b"IFPF" + struct.pack("<HHHH", 1, 1 if alphabetical else 0, len(folders), 0))
+def build(folders: list[tuple[str, int, list[int]]], alphabetical: bool, icons: bool = True) -> bytes:
+    flags = (1 if alphabetical else 0) | (0 if icons else 2)
+    b = bytearray(b"IFPF" + struct.pack("<HHHH", 1, flags, len(folders), 0))
     for name, colour, ids in folders:
         text = name.encode("utf-16-le")
         b += struct.pack("<HHHH", colour, len(text) // 2, len(ids), 0) + text + bytes(-len(text) % 4)

@@ -1311,6 +1311,7 @@ The image ends at 0x7358c0. The region from 0x10800000 (8 MB) has the pool. No c
 | BMap 24351 | An 11 × 11 blue gradient in the rating row. It is not the fill of the stars. |
 | BMap 24268 | The ">" arrow (8 × 11). |
 | BMap 24273 | The speaker icon of the song that plays. |
+| BMap 30240 to 30250 | 16 × 16 blue list icons (ARGB4444). The folder icon of `album-art` uses their colours. Refer to [re/playlist-folders.md](../re/playlist-folders.md#folder-icon). |
 | Str −4 | "iPod", the title of the main menu. |
 | Str −139 to −145 | The Backlight Timer items. |
 | Str 0x602e, 0x602f | "On" and "Off". |

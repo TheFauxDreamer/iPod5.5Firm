@@ -5,18 +5,20 @@
   "symbol": "folder",
   "category": "display",
   "version_letter": "o",
-  "version": "0.3",
+  "version": "0.5",
   "size": 5444,
   "description": "Make the folders in the Playlist Folders section below.",
   "details": [
     "Put each playlist into one folder, or into no folder.",
     "Select the position of the folders: at the top, or in alphabetical order with the playlists.",
+    "Set Folder Icons on or off.",
     "A folder cannot contain a folder.",
     "On the iPod, push Menu to go back to the Playlists list."
   ],
   "notes": [
     "This is a test version.",
     "A folder without playlists does not show on the iPod.",
+    "Folder Icons operate only if Album Artwork is also installed.",
     "The iTunes database does not change."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",

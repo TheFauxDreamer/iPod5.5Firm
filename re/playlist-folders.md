@@ -113,6 +113,32 @@ The owner stopped this work. The patch uses the method of experiment 3.
 - The patch makes the view (the top list or one folder) from the array and the file. It makes the view again when the array pointer or the count changes (a new database).
 - Hooks: the four call sites above, the list event (0x6772c0, chain) and the UI handler (0x6701f0, chain).
 - The album-art patch draws the square of a row from the hash of the row text. The app writes a colour square for each folder name into `iPodFirmAlbumArt`. Thus the colour needs no firmware code. Version 0.2 turns off this step (refer to [Folder colours](#folder-colours)).
+- The album-art patch 3.4 draws one fixed icon on each folder row (refer to [Folder icon](#folder-icon)).
+
+## Folder icon
+
+Status (31 October 2026): made. Not tested in the emulator or on the real iPod.
+
+**The method.** `album-art` 3.4 keeps the icon in the array `folder_px`. It reads the file `iPodFirmPlaylistFolders` one time and keeps the hash of each folder name. The patch reads the file again after a USB session. A playlist row whose hash agrees with a folder name gets the icon. This step comes before the collage step.
+
+**The switch.** The section "Playlist Folders" of the app has the switch "Folder Icons". The default is on. The switch always shows, but it operates only if the connected iPod has folders. If the switch is off, the app sets bit 1 of the flags in the folder file. Then `album-art` keeps no folder names, and a folder row has only text. "Write Folders to iPod" sends the change. A flash is not necessary. The patch `options` list cannot do this, because `album-art` cannot read an option of a different patch.
+
+**Why this method.**
+
+- The icon does not use the thumbnail file. Thus the app writes nothing, and the probable causes of the colour failure do not apply.
+- The patch finds a folder from the folder file. The other method, "no playlist has this name", can give an icon to a playlist whose name the patch cannot match.
+- `album-art` already moves the row text and draws the thumbnails. A copy of this code in `playlist-folders` needs more hooks.
+
+**The transparent pixels.** The blit 0x210114 copies all pixels. Thus the icon uses `draw_runs`, which skips the value `FOLDER_KEY` (0xf81f). A pixel is solid or transparent. The draw does not blend, so the edge of the icon is not soft.
+
+**The colours.** The firmware has 16 × 16 list icons, BMap 30240 to 30250, in ARGB4444. Measurements of BMap 30244: the gradient goes from 0x3399ee at the top to 0x99ccff at the bottom, with a highlight of 0xddeeff. The folder icon uses these colours. The dark outline (0x1b5fae) is not a stock colour. The outline keeps the icon visible on a highlighted row.
+
+**To change the icon.**
+
+1. Edit [folder-icon.png](playlist-folders/folder-icon.png). The PNG must be 20 × 20 pixels.
+2. Run [make-folder-icon.py](playlist-folders/make-folder-icon.py).
+3. Put the output into `folder_px` in `album_art.c`.
+4. Increase the `version` in `patch.json`.
 
 ## Folder colours
 
@@ -135,7 +161,7 @@ Status (29 October 2026): stopped. The code stays in the app as comments, for la
 
 These parts stay active: the colour field in the folder file, `PlaylistFolders.rgb565`, `components`, `tile` and `artEntries`, and the test `testColour`.
 
-**Possible causes (not examined).**
+**Possible causes (not examined).** The first cause is the most probable.
 
 - The thumbnail file on the iPod did not have the squares. "Write Folders to iPod" writes the thumbnail file again only if the file is already on the iPod.
 - The album-art patch on the iPod keeps its own cache (album-art 2.9 and later). A cache entry from before the folder file can hide the new square.
