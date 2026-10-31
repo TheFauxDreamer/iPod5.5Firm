@@ -307,7 +307,7 @@ The new elements in the file keep the stock highlight colour words 0xffd06428 an
 
 ## Split Dark
 
-Status: built on branch `split-dark`. Emulator only.
+Status: built on branch `split-dark`. The owner reported on 31 October 2026 that it looks good in the emulator (0.1.227). Not tested on a real iPod.
 
 Measured: Dark Gray puts picture 21997 at 0x736800, so the View of the layout moves after the theme data (0x740000 with Dark Gray). The theme changes 6 bytes in View 24430 (offsets 84–86 and 192–194): colours. These bytes copy with no hash. The arrow shows only on the selected row in plain Dark too, so this is not a Split fault.
 
