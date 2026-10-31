@@ -28,7 +28,7 @@ PANEL_X = 320 - PANEL_WIDTH
 
 COVER_VIEW = -356  # stock, shared with Now Playing
 SONG_TITLE, SONG_ARTIST, SONG_ALBUM, SONG_COUNT = 0x63bd, 0x63be, 0x63bf, 0x63c3
-LINE_HEIGHT = 18
+LINE_HEIGHT = 22
 NOW_PLAYING_TEXT_STYLE = 0x5ea30000
 TEXT_PROPERTY = 0x5fbc  # the same property as the stock title
 
@@ -62,7 +62,7 @@ def text(ident: int, r: list[int], scrolls: bool = False) -> bytes:
 def main_menu_view(stock: bytes) -> bytes:
     """The stock scroll bar and list, then the cover and four lines of text."""
     x, right = PANEL_X + 6, -4
-    lines = ((SONG_TITLE, 116, True), (SONG_ARTIST, 134, False), (SONG_ALBUM, 152, False), (SONG_COUNT, 178, False))
+    lines = ((SONG_TITLE, 116, True), (SONG_ARTIST, 138, False), (SONG_ALBUM, 160, False), (SONG_COUNT, 188, False))
     view = bytearray(struct.pack("<I", 7) + stock[4:] + group(COVER_VIEW, rect(4, PANEL_X, -106, 0))
                      + b"".join(text(i, rect(y, x, 0, right), s) for i, y, s in lines))
     elements = view_elements(bytes(view))

@@ -214,6 +214,8 @@ Warning: do not write this file to a real iPod until all tests are complete and 
 | The table entry of View 24430 points to 0x735c00 and has size 704. | Up to 8 | Table at 0x337424 |
 | The new main menu at 0x735c00, in the patch area: the stock scroll bar (right edge −107), the stock list, the cover View -356, and the song, artist, album and count. | 704 | 279 bytes of `osos` change in total, and none outside these two places. `rsrc` and `aupd` are stock. The zero area at 0x6ca452 is the same. The `osos` checksum is correct. |
 
+The text lines are at y = 116, 138, 160 and 188 in the content area, each 22 pixels high.
+
 The old data of View 24430 stays in the firmware, unused. A final patch must get this space from the patch area, because other patches also use that area.
 
 Emulator results of earlier designs:
