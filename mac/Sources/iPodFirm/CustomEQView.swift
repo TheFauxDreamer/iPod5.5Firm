@@ -23,7 +23,7 @@ struct CustomEQView: View {
             EQCurve(bands: bands, usesPrecut: usesPrecut).frame(height: 140)
             if advanced {
                 ForEach(Array(shown.enumerated()), id: \.element) { row, i in
-                    EQBandRow(number: row + 1, band: Binding(get: { bands[i] }, set: { b in
+                    EQBandRow(number: row + 1, colour: i, band: Binding(get: { bands[i] }, set: { b in
                         var all = bands
                         all[i] = b
                         model.setEQBands(patch, all)
@@ -31,7 +31,7 @@ struct CustomEQView: View {
                 }
             } else {
                 ForEach(shown, id: \.self) { i in
-                    EQSimpleRow(name: CustomEQ.simpleNames[i], gain: Binding(get: { bands[i].gain }, set: { g in
+                    EQSimpleRow(name: CustomEQ.simpleNames[i], colour: i, gain: Binding(get: { bands[i].gain }, set: { g in
                         var all = CustomEQ.simple(from: bands)
                         all[i].gain = g
                         model.setEQBands(patch, all)
@@ -103,10 +103,12 @@ struct EQImportSheet: View {
 /// One slider of the Simple view.
 private struct EQSimpleRow: View {
     let name: String
+    let colour: Int
     @Binding var gain: Int
 
     var body: some View {
         HStack {
+            EQBandDot(index: colour)
             Text(name).frame(width: 64, alignment: .leading)
             Slider(value: Binding(get: { Double(gain) / 10 }, set: { gain = Int(($0 * 10).rounded()) }), in: -12...12, step: 0.5) {
                 Text(name)
@@ -122,11 +124,13 @@ private struct EQSimpleRow: View {
 /// One band: the type, the frequency, the gain and Q.
 private struct EQBandRow: View {
     let number: Int
+    let colour: Int
     @Binding var band: CustomEQ.Band
 
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
+                EQBandDot(index: colour)
                 Text("Band \(number)").frame(width: 56, alignment: .leading)
                 Picker("Type", selection: $band.kind) {
                     ForEach(CustomEQ.Kind.allCases) { Text($0.title).tag($0) }
@@ -168,8 +172,52 @@ private struct EQBandRow: View {
     }
 }
 
+/// The colours of the curve. They are only visual: the firmware and the files do not use them.
+enum EQColours {
+    static let settingKey = "colourfulEQCurve"
+    /// Bass, Warmth, Mids, Clarity and Treble: red, orange, green, blue and purple.
+    static let bands: [(red: Double, green: Double, blue: Double)] = [(0.93, 0.20, 0.25), (0.98, 0.58, 0.12), (0.20, 0.75, 0.35),
+                                                                      (0.15, 0.50, 0.95), (0.65, 0.30, 0.90)]
+    static let full = 12.0
+    static let minimumStrength = 0.45
+
+    static func band(_ index: Int) -> Color {
+        let c = bands[index % bands.count]
+        return Color(red: c.red, green: c.green, blue: c.blue)
+    }
+
+    /// The mix of the band colours by their weights, and the strength from 0 to 1.
+    /// The total change in dB gives the strength. With no change, the colour is grey.
+    static func mix(_ weights: [Double]) -> (color: Color, strength: Double) {
+        let total = weights.reduce(0, +)
+        guard total > 0.05 else { return (.secondary, 0) }
+        var red = 0.0, green = 0.0, blue = 0.0
+        for (i, w) in weights.enumerated() {
+            let c = bands[i % bands.count]
+            red += c.red * w
+            green += c.green * w
+            blue += c.blue * w
+        }
+        return (Color(red: red / total, green: green / total, blue: blue / total), min(total / full, 1))
+    }
+}
+
+/// The colour of a band, beside its slider.
+private struct EQBandDot: View {
+    @AppStorage(EQColours.settingKey) private var colourful = true
+    let index: Int
+
+    var body: some View {
+        if colourful {
+            Circle().fill(EQColours.band(index)).frame(width: 8, height: 8).accessibilityHidden(true)
+        }
+    }
+}
+
 /// The curve of the active bands at 44.1 kHz, with the level change if it is on. The range is ±18 dB.
+/// With the setting Colourful EQ Curve, each point has the mix of the colours of the bands.
 struct EQCurve: View {
+    @AppStorage(EQColours.settingKey) private var colourful = true
     let bands: [CustomEQ.Band]
     let usesPrecut: Bool
 
@@ -186,13 +234,31 @@ struct EQCurve: View {
             let filters = bands.filter { $0.gain != 0 }.map { CustomEQ.biquad($0, rate: rate) }
             let cut = usesPrecut ? CustomEQ.precut(bands, rate: rate) : 0
             var curve = Path()
+            var last: CGPoint?
             for x in stride(from: 0, through: Int(size.width), by: 2) {
                 let f = 20 * pow(1000, Double(x) / Double(size.width))
                 let db = min(max(CustomEQ.response(filters, frequency: f, rate: rate) + cut, -range), range)
                 let p = CGPoint(x: CGFloat(x), y: y(db))
-                if x == 0 { curve.move(to: p) } else { curve.addLine(to: p) }
+                if colourful {
+                    if let last {
+                        let (colour, strength) = EQColours.mix(CustomEQ.bandWeights(bands, frequency: f, rate: rate))
+                        var fill = Path()
+                        fill.addLines([last, p, CGPoint(x: p.x, y: y(0)), CGPoint(x: last.x, y: y(0))])
+                        context.fill(fill, with: .color(colour.opacity(0.35 * strength)))
+                        var line = Path()
+                        line.move(to: last)
+                        line.addLine(to: p)
+                        let opacity = strength == 0 ? 0.8 : EQColours.minimumStrength + (1 - EQColours.minimumStrength) * strength
+                        context.stroke(line, with: .color(colour.opacity(opacity)), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    }
+                    last = p
+                } else if x == 0 {
+                    curve.move(to: p)
+                } else {
+                    curve.addLine(to: p)
+                }
             }
-            context.stroke(curve, with: .color(.accentColor), lineWidth: 2)
+            if !colourful { context.stroke(curve, with: .color(.accentColor), lineWidth: 2) }
         }
         .accessibilityLabel("EQ curve")
     }

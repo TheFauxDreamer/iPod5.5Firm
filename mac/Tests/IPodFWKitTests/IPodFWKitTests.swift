@@ -645,6 +645,19 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertFalse(CustomEQ.usesAdvanced([:]))
     }
 
+    /// The colours of the curve follow the effect of each band.
+    func testCustomEQBandWeights() {
+        var bands = CustomEQ.simpleLayout
+        bands[0].gain = 90
+        let rate = CustomEQ.rates[0]
+        let low = CustomEQ.bandWeights(bands, frequency: 60, rate: rate)
+        XCTAssertGreaterThan(low[0], 6)
+        XCTAssertEqual(low[1...].reduce(0, +), 0)
+        XCTAssertEqual(CustomEQ.bandWeights(bands, frequency: 10000, rate: rate)[0], 0, accuracy: 0.1)
+        bands[0].gain = -90
+        XCTAssertEqual(CustomEQ.bandWeights(bands, frequency: 60, rate: rate)[0], low[0], accuracy: 0.001)
+    }
+
     /// Without the agreement of the user, only 3 bands can operate.
     func testCustomEQThreeBandsByDefault() throws {
         var bands = CustomEQ.simpleLayout

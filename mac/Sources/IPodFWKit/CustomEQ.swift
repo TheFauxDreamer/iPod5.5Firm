@@ -135,6 +135,12 @@ public enum CustomEQ {
         return 20 * log10(max(h, 1e-9))
     }
 
+    /// How much each band changes the sound at one frequency, in dB, with no sign. Only the curve
+    /// of the editor uses this. A band at 0 dB gives 0.
+    public static func bandWeights(_ bands: [Band], frequency: Double, rate: Double) -> [Double] {
+        bands.map { $0.gain == 0 ? 0 : abs(response([biquad($0, rate: rate)], frequency: frequency, rate: rate)) }
+    }
+
     /// The highest gain in dB of a chain, from 20 Hz to 20 kHz.
     public static func peak(_ filters: [[Double]], rate: Double) -> Double {
         (0..<grid).map { response(filters, frequency: 20 * pow(1000, Double($0) / Double(grid - 1)), rate: rate) }.max() ?? 0

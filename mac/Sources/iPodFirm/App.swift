@@ -106,6 +106,7 @@ struct SettingsView: View {
     @State private var showHelp = false
     @AppStorage(ThemeImport.ososMarginKey) private var ososMargin = ThemeImport.OSOSMargin.current.rawValue
     @AppStorage("showPatchSummaries") private var showPatchSummaries = true
+    @AppStorage(EQColours.settingKey) private var colourfulEQCurve = true
 
     var body: some View {
         TabView {
@@ -147,6 +148,7 @@ struct SettingsView: View {
                 }
                 Section {
                     Toggle("Show Descriptions in the Patch List", isOn: $showPatchSummaries)
+                    Toggle("Colourful EQ Curve", isOn: $colourfulEQCurve)
                 } header: {
                     Text("Patch List")
                 }
