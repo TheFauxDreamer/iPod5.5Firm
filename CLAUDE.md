@@ -79,6 +79,7 @@ This rule is mandatory. The owner can start a flash at any time. If the app clos
 ## Other rules
 
 - Each feature that operates on the iPod or on the firmware must have a user interface in the iPodFirm app. A command-line tool alone is not sufficient.
+- Do not add subtitles or subtext to the user interface of the iPodFirm app unless the owner explicitly asks for them. This includes captions and help text below a title or a control.
 - Each build of the iPodFirm app must increase the version number and the build number. `mac/scripts/build-app.sh` does this.
 - Give each new patch a `version_letter` in its `patch.json`. Use one letter a–z that no other patch uses. An `internal` patch does not get a letter. The test `testPatchVersionLetters` makes sure of this.
 - Give each patch a `version` in its `patch.json`, for example `"1.0"`. Use one to three numbers with dots. The test `testPatchVersions` makes sure of this.

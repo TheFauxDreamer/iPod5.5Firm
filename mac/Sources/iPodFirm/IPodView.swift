@@ -222,12 +222,13 @@ struct BackupRow: View {
         HStack {
             HStack(spacing: 6) {
                 Text(backup.created, format: .dateTime.year().month().day().hour().minute()).bold()
-                if backup.isOriginal {
-                    Text("Original").font(.caption2.bold()).padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(.green.opacity(0.2), in: Capsule())
+                if let name = backup.ipodName { BackupTag(text: name, tint: .secondary) }
+                if let patches = backup.patches, !patches.isEmpty {
+                    BackupTag(text: patches.count == 1 ? "1 Patch" : "\(patches.count) Patches", tint: .blue)
                 }
+                if backup.isOriginal { BackupTag(text: "Original", tint: .green) }
             }
-            .help("\(backup.reason) · \(ByteCountFormatter.string(fromByteCount: Int64(backup.bytes), countStyle: .file)) · \(backup.model)")
+            .help(help)
             Spacer()
             Button("Restore…") { Task { await model.restore(backup) } }
                 .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported || backup.model == Backups.damagedModel)
@@ -242,6 +243,22 @@ struct BackupRow: View {
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .accessibilityLabel("More Backup Actions")
         }
+    }
+
+    private var help: String {
+        let summary = "\(backup.reason) · \(ByteCountFormatter.string(fromByteCount: Int64(backup.bytes), countStyle: .file)) · \(backup.model)"
+        return ([summary] + (backup.patches ?? [])).joined(separator: "\n")
+    }
+}
+
+/// A small tag in a row of the backup list.
+struct BackupTag: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Text(text).font(.caption2.bold()).lineLimit(1).padding(.horizontal, 5).padding(.vertical, 1)
+            .background(tint.opacity(0.2), in: Capsule())
     }
 }
 

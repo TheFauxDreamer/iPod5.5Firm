@@ -14,12 +14,22 @@ public struct BackupInfo: Codable, Identifiable, Hashable {
     public var isOriginal: Bool
     /// The size of the iPod disk in bytes. Backups from iPodFirm 0.1.28 and earlier do not have it.
     public var diskSize: Int64?
+    /// The name of the iPod volume. It is nil if the volume was not mounted, and in older backups.
+    public var ipodName: String?
+    /// The patches in the iPodFirm list, for example "album-art 3.2". It is nil if the firmware has no
+    /// list, and in older backups.
+    public var patches: [String]?
 }
 
 public enum Backups {
     public static let originalName = "Original (first backup).bin"
     /// `BackupInfo.model` of a backup taken from a damaged partition. Such a backup cannot be restored.
     public static let damagedModel = "damaged"
+
+    /// The names and the versions of the patches in the iPodFirm list of `osos`, or nil if it has no list.
+    public static func patchNames(osos: [UInt8]) -> [String]? {
+        FirmwareManifest.read(osos: osos)?.patches.map { [$0.name, $0.version].compactMap { $0 }.joined(separator: " ") }
+    }
 
     public static func list(in dir: URL) -> [BackupInfo] {
         let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
@@ -37,10 +47,12 @@ public enum Backups {
     public static func save(_ data: [UInt8], ipod: IPodDisk, reason: String, in dir: URL, owner: uid_t?,
                             damaged: Bool = false) throws -> BackupInfo {
         var model = damagedModel
+        var patches: [String]?
         if !damaged {
             let partition = try FirmwarePartition(data: data)
             guard partition.isVideo else { throw Operations.unsupported(partition.model) }
             model = partition.model
+            patches = (try? partition.image("osos")).flatMap(patchNames)
         }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let stamp = DateFormatter()
@@ -63,7 +75,8 @@ public enum Backups {
             guard try Data(contentsOf: url) == Data(data) else { throw FirmwareError("Backup \(name) did not read back correctly.") }
             let info = BackupInfo(file: name, created: now, reason: name == originalName ? "original" : reason,
                                   model: model, mediaName: ipod.mediaName, bytes: data.count, sha256: sha,
-                                  isOriginal: name == originalName, diskSize: ipod.size)
+                                  isOriginal: name == originalName, diskSize: ipod.size,
+                                  ipodName: ipod.volumeName, patches: patches)
             let meta = dir.appendingPathComponent(name + ".json")
             try enc.encode(info).write(to: meta, options: .atomic)
             if let owner {

@@ -382,6 +382,8 @@ Refer to [re/volume-limit.md](../re/volume-limit.md).
 | Address | Function | Evidence |
 |---|---|---|
 | 0x1d2ee8 | (ID): posts an event of type 8 with the ID (0x2141fc, 0x2141a0, 0x13d6d4). Native code asks the script for a screen with it. | Static |
+| 0x1e0084 | Method of a player object (vtable slot 0x670820). Receives a message: byte 0 the type, + 0x10 the flags. With flag 0x40, type 8 sends the event 0x42800008. The script then opens Now Playing. Refer to [../re/now-playing-open.md](../re/now-playing-open.md). | Static |
+| 0x1d09fc | (object, on): posts 0x42800008 if `on`, else 0x42800009. | Static |
 | 0x1d81cc | UI event handler. Runs in the UI task for each button and wheel event. It adds 1 to the byte UI + 0x44 at a key push (type 4) and subtracts 1 at the release (type 7). `playlist-folders` hooks its first instruction (`push {r4-r8, lr}`). | Static, Emulator, Patch |
 | 0x1d813c | Starts the idle timer again and turns the display on. Called at 0x1d8344 for a button event, not for the wheel events 0x10 and 0x1c. | Emulator |
 | 0x1d8264 | UI event handler part: calls 0x94bbc(4) and then 0x94d80(4, 3000) while the storage is on. | Static |

@@ -81,7 +81,7 @@ iPodFirm writes only the blocks that changed.
 2. Write `<date> <reason>.bin` in `~/Library/Application Support/iPodFirm/Backups/`.
 3. If `Original (first backup).bin` does not exist, write it too. A damaged partition never becomes the original.
 4. Read each file again and compare it with the data.
-5. Write the metadata `<name>.bin.json`: date, reason, model, media name, size, SHA-256, disk size.
+5. Write the metadata `<name>.bin.json`: date, reason, model, media name, size, SHA-256, disk size, volume name and the patches in the iPodFirm list.
 
 The helper saves a backup before each flash, each restore and each rescue restore. iPodFirm never deletes or overwrites a backup.
 
