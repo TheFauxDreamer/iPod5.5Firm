@@ -1,6 +1,6 @@
 # Split home screen: research notes
 
-Status (31 October 2026): research only, on branch `home-screen`. There is no patch. The narrow list and the short list wait for the emulator test.
+Status (31 October 2026): research only, on branch `home-screen`. There is no patch. A resource-only split home screen for firmware 1.3 exists. Refer to [The Firebird themes](#the-firebird-themes).
 
 The owner wants the main menu of the iPod classic 6G/7G: the list at the left, and the cover and the current song at the right.
 
@@ -19,6 +19,39 @@ Known problems:
 
 - The first open of the 104 MB `F1028_1.ithmb` takes approximately 0.93 s on the owner's iPod. The load must not stop the wheel.
 - The panel gives approximately 99 pixels for text.
+
+## The Firebird themes
+
+The owner supplied a folder of 14 firmware images, 5.5G firmware 1.3, with a guide. The guide says that they come from a theme called Firebird in the iPod firmware archives. The author of the guide is not the first modder. The images are not in this repository, because they contain Apple firmware.
+
+Measured against stock 1.3:
+
+| Item | Result |
+|---|---|
+| Views changed | 292 of 619 in 12 images, and 619 in the 2 `Contemporary` images. No View changes size. No View has a new ID. |
+| Code changed | 42 bytes at 0x131918–0x131b7f in the 2 images that were compared. Their names say "GamePatch", so this is probably the game patch. Not proved. |
+| `osos` checksum | Correct. |
+| `rsrc` | Different from stock. The difference is not examined. |
+| Scanner | `resources.scan` finds no main block in these images. The table at 0x331da0 is the same, so a direct read operates. The cause is not known. |
+
+Main menu layout, from `MLCV2- Normal`:
+
+| View | Change |
+|---|---|
+| 24430 | Scroll bar: right −160, width 5, top 24, bottom −1. List: bottom −1. |
+| -285 | Rewritten in place, same size. It holds a background element, the title (-286), the cover (-356) and the song panel (25532). |
+| -356 | Holds 25525, the View of Draw 25543, the cover. Stock has this in Now Playing. |
+| 25532 | Rewritten in place. Text at x = 180, y = 47, 78, 110 and 145. |
+
+This gives 3 results:
+
+- The list narrows with the same edit as `home-screen-narrow-list.ipsw`.
+- A menu View can hold the Now Playing elements. This confirms the hypothesis in [Now Playing data](#now-playing-data) statically. A code change for the panel is not necessary.
+- The method to get more elements is to rewrite an existing View in place. A larger View and an unused View are not necessary.
+
+The guide lists a View for each screen in `Find.txt`. It gives 24430 as the main menu.
+
+Caution: the guide says that an edit with no "Fix Checksum" can brick the iPod. iPodFirm calculates the checksum, but use the emulator first.
 
 ## The 2007 mod
 
@@ -90,7 +123,7 @@ The limit is the size of the View. A new element makes View 24430 larger, and iP
 | `home-screen-narrow-list.ipsw` | Right edge of the scroll bar: −107. The scroll bar goes to x = 202–213, and the list ends at 202. | 4 |
 | `home-screen-short-list.ipsw` | Bottom edge of the scroll bar and of the list: −64. | 8 |
 
-Status: Not tested. Measured: the byte counts, and the `osos` checksum is correct in the two files.
+Status: the owner reported on 31 October 2026 that the last test operated. Measured: the byte counts, and the `osos` checksum is correct in the two files.
 
 The first test on 31 October 2026 gave no result. The files were dragged onto the emulator, so the stock firmware ran. Refer to [emulator.md](emulator.md). Each file now has its own profile and drive: `make-disk`, `fix_osos_length`, `put-files`, then a start with `--cold`.
 
@@ -104,15 +137,9 @@ Examine these items in the emulator:
 
 ## Feasibility
 
-Status: a provisional decision. It depends on the emulator tests.
+Result: feasible as a resource-only change, on firmware 1.3. The Firebird themes show this. The emulator test of the theme is open.
 
-| Result of the tests | Method |
-|---|---|
-| The rows follow, and a menu element gets live data | A resource-only theme, with no code. |
-| The rows follow, and a menu element gets no data | A View edit and a small patch that draws the panel with the firmware cover source. |
-| The rows do not follow, and the short list operates | The mini player. |
-
-The 2007 reports do not remove the main risk, because the rows of a list can still fail. They do show the items to test: the transitions, the jumps and the restart.
+Recommended method: apply our own View values as an iPodFirm theme or as `patch.json` edits. Do not copy the images. Then measure the conflicts with `dark-mode`, `album-art` and `cover-flow`.
 
 ## Sources for the layout
 
@@ -151,10 +178,8 @@ iPodWizard is under the GPL, so use its source only for facts. Its post says tha
 
 ## Next steps
 
-1. The owner tests the two files in the emulator.
-2. If the rows do not follow, trace 0x1bb260 and 0x122b28.
-3. Find a draw hook for the main menu, and the event of a song change, if the third test file gives no data.
-4. Find a View that the firmware does not use. Make a third test file with a Draw 25544 element and the song text elements in the main menu.
-5. Read the mod files if the owner can supply them. Ask in the iPoddities Discord, or look in the "MEGA iPod Archive".
-6. Read `PixoNames.txt` and the View notes in the source of iPodWizard 1.3.5.
-7. Read the Spotish coordinates and the adwaitapod screenshots.
+1. The owner examines the `MLCV2- Normal` image in the emulator: the panel, the cover, the transitions and a restart.
+2. Find if `themeimport` can apply these View values to firmware 1.3 with the patches.
+3. Make the list of the Views to change, and decide which layouts the app offers.
+4. Find why `resources.scan` fails on these images.
+5. Compare the 42 changed code bytes with the game patch.
