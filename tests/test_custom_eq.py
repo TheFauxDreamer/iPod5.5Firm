@@ -76,6 +76,37 @@ def test_all_five_bands_are_stable():
         assert max(tail) - min(tail) <= 1 and max(abs(s) for s in tail) <= 500
 
 
+def test_library_gives_each_active_band_a_filter():
+    a = [(eq.LOW_SHELF, 100, 30, 71), *eq.DEFAULTS[1:]]
+    b = [(eq.LOW_SHELF, 100, 30, 71), eq.DEFAULTS[1], (eq.PEAK, 1000, 30, 80), *eq.DEFAULTS[3:]]
+    rows, entries = eq.library([("Car", a, False), ("Rock", b, False)])
+    assert len(rows) == 1680 and len(entries) == 980
+    assert entries[0:2] == b"\x03\0" and entries[2:8] == "Car".encode("utf-16-le")
+    assert list(entries[64:69]) == [55, 0, 0, 0, 0]
+    assert list(entries[70 + 64:70 + 69]) == [56, 0, 57, 0, 0]
+    assert rows[:40] == eq.records(a)[0][:40]
+    assert rows[80:120] == eq.records(b)[0][80:120]
+
+
+def test_library_reaches_filter_96():
+    five = [(eq.PEAK, 100 * (i + 1), 30, 100) for i in range(5)]
+    eqs = [(f"E{i}", five, False) for i in range(8)] + [("Two", [five[0], five[1], *eq.DEFAULTS[2:]], False)]
+    _, entries = eq.library(eqs)
+    assert max(entries[8 * 70 + 64:8 * 70 + 69]) == 96
+
+
+def test_library_limits():
+    five = [(eq.PEAK, 100 * (i + 1), 30, 100) for i in range(5)]
+    with pytest.raises(eq.EQError):
+        eq.library([(f"E{i}", five, False) for i in range(9)])
+    with pytest.raises(eq.EQError):
+        eq.library([(f"E{i}", list(eq.DEFAULTS), False) for i in range(15)])
+    with pytest.raises(eq.EQError):
+        eq.library([("x" * 32, list(eq.DEFAULTS), False)])
+    with pytest.raises(eq.EQError):
+        eq.library([("", list(eq.DEFAULTS), False)])
+
+
 @pytest.mark.parametrize("band", [(eq.PEAK, 10, 10, 100), (eq.PEAK, 1000, 130, 100), (eq.PEAK, 1000, 10, 900), (9, 100, 10, 100)])
 def test_bad_bands(band):
     with pytest.raises(eq.EQError):

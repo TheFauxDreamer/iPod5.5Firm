@@ -20,6 +20,11 @@ Q_RANGE = (30, 800)  # hundredths
 DEFAULTS = ((LOW_SHELF, 60, 0, 71), (PEAK, 230, 0, 100), (PEAK, 910, 0, 100), (PEAK, 3600, 0, 100), (HIGH_SHELF, 14000, 0, 71))
 # The bands that operate without the option "all_bands". Apple presets use a maximum of 3 filters.
 STANDARD_BANDS = (0, 2, 4)
+FIRST_FILTER = 55
+FILTERS = 42  # numbers 55 to 96: 0x1446e8 limits a filter number to 96
+EQS = 14
+NAME_LENGTH = 31
+ENTRY_SIZE = 70  # custom_eq in custom_eq.c
 GRID = 512
 
 
@@ -113,3 +118,25 @@ def records(bands: list[tuple[int, int, int, int]], precut: bool = False) -> tup
                 raise EQError(f"the band {i + 1} is out of range")
             out[i][r * 5:r * 5 + 5] = q
     return b"".join(struct.pack("<10i", *row) for row in out), mask
+
+
+def library(eqs: list[tuple[str, list[tuple[int, int, int, int]], bool]]) -> tuple[bytes, bytes]:
+    """Return custom_eq_records and custom_eq_list for a list of (name, bands, precut)."""
+    if len(eqs) > EQS:
+        raise EQError(f"the iPod can have a maximum of {EQS} EQs")
+    rows, entries = [], []
+    for name, bands, precut in eqs:
+        text = name.encode("utf-16-le")
+        count = len(text) // 2
+        if not 0 < count <= NAME_LENGTH:
+            raise EQError(f"the name {name!r} must have 1 to {NAME_LENGTH} characters")
+        data, mask = records(bands, precut)
+        numbers = [0] * BANDS
+        for i in range(BANDS):
+            if mask >> i & 1:
+                numbers[i] = FIRST_FILTER + len(rows)
+                rows.append(data[i * 40:(i + 1) * 40])
+        entries.append(struct.pack("<H", count) + text.ljust(NAME_LENGTH * 2, b"\0") + bytes(numbers) + b"\0")
+    if len(rows) > FILTERS:
+        raise EQError(f"the EQs use {len(rows)} filters, and the maximum is {FILTERS}")
+    return b"".join(rows).ljust(FILTERS * 40, b"\0"), b"".join(entries).ljust(EQS * ENTRY_SIZE, b"\0")

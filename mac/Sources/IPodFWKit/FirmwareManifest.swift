@@ -12,8 +12,10 @@ public struct FirmwareManifest: Codable, Equatable {
         public var version: String?
         /// The value of each option (patch.json "options"), if it is not empty.
         public var options: [String: Int]?
-        public init(name: String, version: String?, options: [String: Int]? = nil) {
-            self.name = name; self.version = version; self.options = options
+        /// The EQs of a patch with `eq_editor`, if the list is not empty.
+        public var eqs: [NamedEQ]?
+        public init(name: String, version: String?, options: [String: Int]? = nil, eqs: [NamedEQ]? = nil) {
+            self.name = name; self.version = version; self.options = options; self.eqs = eqs
         }
     }
 

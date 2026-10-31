@@ -116,8 +116,8 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     /// The patch has the EQ editor of the Patches pane. The band values are in `PatchInfo.options`.
     public var eq_editor: EQEditor?
     public struct EQEditor: Codable, Hashable {
-        /// The variable with the records and the variable with the mask of the active bands.
-        public var records, mask: String
+        /// The variable with the filter records and the variable with the list of EQs.
+        public var records, list: String
     }
     /// A warning for an iPod that probably has the original hard drive (see IPodDisk.likelyOriginalHDD).
     public var hdd_warning: String?
@@ -309,6 +309,8 @@ public struct PatchInfo: Identifiable, Hashable {
     public var builtInVersion: String?
     /// The selected value of each option, by option id. A missing option uses its default.
     public var options: [String: Int] = [:]
+    /// The EQs of a patch with `eq_editor`. If the list is empty, the options give one EQ "Custom".
+    public var customEQs: [NamedEQ] = []
     public init(spec: PatchSpec, folder: URL, source: Source = .builtIn) {
         self.spec = spec
         self.folder = folder
@@ -576,7 +578,7 @@ public enum Patcher {
                 for h in chained { fw[h.chain!] = try chainTarget(h, in: current, patchSymbols: first) }
             }
             (code, table) = try link(object, base: base, firmware: fw)
-            try setOptions(spec, values: patch.options, in: &code, base: base, symbols: table)
+            try setOptions(spec, values: patch.options, eqs: patch.customEQs, in: &code, base: base, symbols: table)
         }
         let end = Int(base) + code.count
         guard end <= maxSize else {
@@ -614,7 +616,7 @@ public enum Patcher {
     }
 
     /// Write the selected value of each option into its variable in the linked code.
-    static func setOptions(_ spec: PatchSpec, values: [String: Int], in code: inout [UInt8], base: UInt32,
+    static func setOptions(_ spec: PatchSpec, values: [String: Int], eqs: [NamedEQ] = [], in code: inout [UInt8], base: UInt32,
                            symbols: [String: UInt32]) throws {
         for o in spec.options ?? [] {
             let value = values[o.id] ?? o.defaultValue
@@ -627,13 +629,13 @@ public enum Patcher {
             put32(&code, Int(a - base), UInt32(truncatingIfNeeded: value))
         }
         if let editor = spec.eq_editor {
-            let (data, mask) = try CustomEQ.records(CustomEQ.bands(from: values), precut: CustomEQ.usesPrecut(values))
-            guard let a = symbols[editor.records], let m = symbols[editor.mask], a >= base, m >= base,
-                  Int(a - base) + data.count <= code.count, Int(m - base) + 4 <= code.count else {
-                throw PatchError("eq_editor of \"\(spec.displayTitle)\": the variables are not in the patch.")
+            let library = try CustomEQ.library(eqs.isEmpty ? [NamedEQ(options: values)] : eqs)
+            for (symbol, data) in [(editor.records, library.records), (editor.list, library.list)] {
+                guard let a = symbols[symbol], a >= base, Int(a - base) + data.count <= code.count else {
+                    throw PatchError("eq_editor of \"\(spec.displayTitle)\": \(symbol) is not in the patch.")
+                }
+                code.replaceSubrange(Int(a - base)..<Int(a - base) + data.count, with: data)
             }
-            code.replaceSubrange(Int(a - base)..<Int(a - base) + data.count, with: data)
-            put32(&code, Int(m - base), mask)
         }
     }
 

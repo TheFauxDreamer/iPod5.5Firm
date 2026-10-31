@@ -1,14 +1,14 @@
 {
   "name": "custom-eq",
   "title": "Custom EQ",
-  "summary": "Adds your own EQ to Settings > EQ.",
+  "summary": "Adds your own named EQs to Settings > EQ.",
   "symbol": "slider.vertical.3",
   "category": "playback",
   "version_letter": "q",
-  "version": "0.6",
-  "size": 518,
+  "version": "0.7",
+  "size": 3000,
   "details": [
-    "A new item \"Custom\" shows in Settings > EQ.",
+    "Each EQ shows with its name in Settings > EQ. You can have up to 14 EQs. All the EQs together can use 42 bands.",
     "Set the sliders in this pane, then flash the iPod. The default is 3 bands. The Simple view has Bass, Mids and Treble. The Advanced view gives each band a type, a frequency and Q. To change the bands, flash the iPod again.",
     "Export EQ makes a small .ipodeq file that you can send to another person. Import EQ reads the file. The iPod changes when you flash it.",
     "Start From Apple Preset sets the bands close to an Apple preset. You can then change them.",
@@ -19,7 +19,7 @@
   ],
   "notes": [
     "The iPod applies the EQ only to 16-bit music at 44.1 kHz or 48 kHz. The Apple presets have the same limit.",
-    "The name \"Custom\" is in English in all languages.",
+    "The name of an EQ is the same in all languages.",
     "This is a test version. A setting with 4 or 5 active bands is not tested on a real iPod."
   ],
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
@@ -38,10 +38,10 @@
     { "kind": "b", "at": "0xdbd84", "expect": "0xe1a01000", "to": "hook_filter" }
   ],
   "bytes": [
-    { "at": "0xf90fc", "expect": "04009fe5", "value": "3c00a0e3" },
+    { "at": "0xf90fc", "expect": "04009fe5", "value": "6100a0e3" },
     { "at": "0xf9100", "expect": "000090e5", "value": "1eff2fe1" }
   ],
-  "eq_editor": { "records": "custom_eq_records", "mask": "custom_eq_mask" },
+  "eq_editor": { "records": "custom_eq_records", "list": "custom_eq_list" },
   "ui": {
     "steps_title": "Test the Custom EQ",
     "steps": [

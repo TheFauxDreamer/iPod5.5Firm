@@ -3,7 +3,7 @@ import Foundation
 /// The coefficients of the patch custom-eq. `src/ipodfw/custom_eq.py` has the same code.
 /// Refer to re/custom-eq.md for the format of a record.
 public enum CustomEQ {
-    public enum Kind: Int, CaseIterable, Identifiable, Sendable {
+    public enum Kind: Int, CaseIterable, Identifiable, Codable, Sendable {
         case lowShelf = 0, peak = 1, highShelf = 2
         public var id: Int { rawValue }
         public var title: String {
@@ -16,7 +16,7 @@ public enum CustomEQ {
     }
 
     /// One band. The gain is in tenths of a dB and Q is in hundredths, so that the values are options.
-    public struct Band: Hashable, Sendable {
+    public struct Band: Hashable, Codable, Sendable {
         public var kind: Kind
         public var frequency, gain, q: Int
         public init(kind: Kind, frequency: Int, gain: Int, q: Int) {
@@ -41,6 +41,79 @@ public enum CustomEQ {
                                       Band(kind: .peak, frequency: 1000, gain: 0, q: 80),
                                       Band(kind: .peak, frequency: 3000, gain: 0, q: 80),
                                       Band(kind: .highShelf, frequency: 8000, gain: 0, q: 71)]
+    /// The filter numbers 55 to 96 are free. 0x1446e8 limits a number to 96.
+    public static let firstFilter = 55
+    public static let maxFilters = 42
+    public static let maxEQs = 14
+    public static let maxNameLength = 31
+    static let entrySize = 70   // custom_eq in custom_eq.c
+
+    /// custom_eq_records and custom_eq_list. Each active band of each EQ gets the next filter number.
+    public static func library(_ eqs: [NamedEQ]) throws -> (records: [UInt8], list: [UInt8]) {
+        guard eqs.count <= maxEQs else { throw PatchError("The iPod can have a maximum of \(maxEQs) EQs.") }
+        var records = [UInt8](), list = [UInt8]()
+        for eq in eqs {
+            if let problem = nameProblem(eq.name, in: [], excluding: nil) { throw PatchError(problem) }
+            let (data, mask) = try Self.records(eq.activeBands, precut: eq.preventClipping)
+            var numbers = [UInt8](repeating: 0, count: bandCount)
+            for i in 0..<bandCount where mask >> UInt32(i) & 1 == 1 {
+                numbers[i] = UInt8(firstFilter + records.count / 40)
+                records += data[i * 40..<(i + 1) * 40]
+            }
+            let name = Array(eq.name.utf16)
+            var entry = [UInt8(truncatingIfNeeded: name.count), 0]
+            for c in name + [UInt16](repeating: 0, count: maxNameLength - name.count) {
+                entry += [UInt8(truncatingIfNeeded: c), UInt8(truncatingIfNeeded: c >> 8)]
+            }
+            list += entry + numbers + [0]
+        }
+        guard records.count <= maxFilters * 40 else {
+            throw PatchError("The EQs use \(records.count / 40) bands, and the maximum is \(maxFilters).")
+        }
+        return (records + [UInt8](repeating: 0, count: maxFilters * 40 - records.count),
+                list + [UInt8](repeating: 0, count: (maxEQs - eqs.count) * entrySize))
+    }
+
+    /// The reason that a name is not valid, or nil. The saved selection on the iPod is the name, so
+    /// each name must be different. `excluding` is the present name in a rename.
+    public static func nameProblem(_ name: String, in eqs: [NamedEQ], excluding: String?) -> String? {
+        let key = name.lowercased()
+        guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return "An EQ must have a name." }
+        guard name == name.trimmingCharacters(in: .whitespaces) else { return "A name cannot start or end with a space." }
+        guard name.utf16.count <= maxNameLength else { return "A name can have a maximum of \(maxNameLength) characters." }
+        guard !name.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+            return "The name has a character that is not valid."
+        }
+        if key == "off" || applePresets.contains(where: { $0.name.lowercased() == key }) {
+            return "The iPod already has an item with the name \"\(name)\"."
+        }
+        if key != excluding?.lowercased(), eqs.contains(where: { $0.name.lowercased() == key }) {
+            return "You already have an EQ with the name \"\(name)\"."
+        }
+        return nil
+    }
+
+    /// true: the iPod font possibly cannot show the name, for example because it has an emoji.
+    public static func nameCanFailToShow(_ name: String) -> Bool {
+        name.unicodeScalars.contains { $0.value > 0xFFFF || $0.properties.isEmojiPresentation }
+    }
+
+    /// The start of `name` with a maximum of `limit` UTF-16 units. The iPod counts these units.
+    public static func shortened(_ name: String, to limit: Int) -> String {
+        var out = ""
+        for c in name where out.utf16.count + c.utf16.count <= limit { out.append(c) }
+        return out.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// A name that no EQ has: `name`, or `name` with a number.
+    public static func uniqueName(_ name: String, in eqs: [NamedEQ]) -> String {
+        if nameProblem(name, in: eqs, excluding: nil) == nil { return name }
+        let base = shortened(name, to: maxNameLength - 3)
+        var n = 2
+        while nameProblem("\(base) \(n)", in: eqs, excluding: nil) != nil { n += 1 }
+        return "\(base) \(n)"
+    }
+
     /// An Apple preset as bands of the editor.
     public struct Preset: Hashable, Identifiable, Sendable {
         public var name: String
@@ -308,5 +381,46 @@ public struct SharedEQ: Codable, Equatable, Identifiable, Sendable {
         _ = try CustomEQ.records(eq.eqBands, precut: eq.preventClipping)
         eq.name = clean(eq.name)
         return eq
+    }
+}
+
+/// One EQ of the user. The app keeps a list of these. The name shows on the iPod.
+public struct NamedEQ: Codable, Hashable, Identifiable, Sendable {
+    public var name: String
+    public var bands: [CustomEQ.Band]
+    public var preventClipping: Bool
+    public var advanced: Bool
+    /// The user agreed to `CustomEQ.allBandsWarning` for this EQ.
+    public var allBands: Bool
+
+    public var id: String { name }
+
+    /// The bands that the build uses: without `allBands`, only the standard bands have a gain.
+    public var activeBands: [CustomEQ.Band] {
+        bands.enumerated().map { i, band in
+            var b = band
+            if !allBands, !CustomEQ.standardBands.contains(i) { b.gain = 0 }
+            return b
+        }
+    }
+
+    public var filtersUsed: Int { activeBands.filter { $0.gain != 0 }.count }
+
+    public init(name: String, bands: [CustomEQ.Band] = CustomEQ.simpleLayout, preventClipping: Bool = false,
+                advanced: Bool = false, allBands: Bool = false) {
+        self.name = name; self.bands = bands; self.preventClipping = preventClipping
+        self.advanced = advanced; self.allBands = allBands
+    }
+
+    /// The single EQ "Custom" of patch versions before 0.7, from the option values.
+    public init(options values: [String: Int]) {
+        self.init(name: "Custom", bands: CustomEQ.bands(from: values), preventClipping: CustomEQ.usesPrecut(values),
+                  advanced: CustomEQ.usesAdvanced(values), allBands: CustomEQ.usesAllBands(values))
+    }
+
+    /// An EQ from a file, with a name that no other EQ has.
+    public init(shared eq: SharedEQ, in eqs: [NamedEQ]) {
+        self.init(name: CustomEQ.uniqueName(CustomEQ.shortened(eq.name, to: CustomEQ.maxNameLength), in: eqs), bands: eq.eqBands,
+                  preventClipping: eq.preventClipping, advanced: eq.usesAdvanced, allBands: eq.needsAllBands)
     }
 }

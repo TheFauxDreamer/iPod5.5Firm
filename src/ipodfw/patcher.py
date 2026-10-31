@@ -385,13 +385,13 @@ def set_options(spec: dict, values: dict[str, int], code: bytearray, base: int, 
         struct.pack_into("<I", code, at - base, value & 0xFFFFFFFF)
     editor = spec.get("eq_editor")
     if editor:
-        data, mask = custom_eq.records(custom_eq.bands_from_options(values), values.get("precut") == 1)
-        at, mask_at = table.get(editor["records"]), table.get(editor["mask"])
-        if at is None or mask_at is None or at < base or at - base + len(data) > len(code) \
-                or mask_at < base or mask_at - base + 4 > len(code):
-            raise PatchError(f"eq_editor of {spec['name']!r}: the variables are not in the patch")
-        code[at - base:at - base + len(data)] = data
-        struct.pack_into("<I", code, mask_at - base, mask)
+        # The Python build has one EQ. The app has the list of named EQs.
+        records, entries = custom_eq.library([("Custom", custom_eq.bands_from_options(values), values.get("precut") == 1)])
+        for symbol, data in ((editor["records"], records), (editor["list"], entries)):
+            at = table.get(symbol)
+            if at is None or at < base or at - base + len(data) > len(code):
+                raise PatchError(f"eq_editor of {spec['name']!r}: {symbol} is not in the patch")
+            code[at - base:at - base + len(data)] = data
 
 
 def apply(osos: bytes, patch_dir: str | Path, max_size: int, load_address: int | None = None,

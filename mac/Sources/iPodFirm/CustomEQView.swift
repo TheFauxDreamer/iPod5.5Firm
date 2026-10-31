@@ -8,6 +8,10 @@ struct CustomEQView: View {
     let patch: PatchInfo
     @State private var confirmAllBands = false
     @State private var confirmPreset: CustomEQ.Preset?
+    @State private var confirmDelete = false
+    @State private var askNewName = false
+    @State private var askRename = false
+    @State private var nameText = ""
 
     var body: some View {
         let bands = model.eqBands(patch)
@@ -16,6 +20,27 @@ struct CustomEQView: View {
         let usesPrecut = model.eqUsesPrecut(patch)
         let advanced = model.eqUsesAdvanced(patch)
         Section {
+            HStack {
+                Picker("EQ", selection: Binding(get: { model.selectedEQ.name }, set: { model.selectedEQName = $0 })) {
+                    ForEach(model.customEQs) { Text($0.name).tag($0.name) }
+                }
+                Button("Add…") {
+                    nameText = CustomEQ.uniqueName("My EQ", in: model.customEQs)
+                    askNewName = true
+                }
+                .disabled(model.customEQs.count >= CustomEQ.maxEQs)
+                Button("Rename…") {
+                    nameText = model.selectedEQ.name
+                    askRename = true
+                }
+                Button("Delete…") { confirmDelete = true }
+                    .disabled(model.customEQs.count < 2)
+            }
+            LabeledContent("Bands Used", value: "\(model.eqFiltersUsed) of \(CustomEQ.maxFilters)")
+            if CustomEQ.nameCanFailToShow(model.selectedEQ.name) {
+                Label("The iPod possibly cannot show all the characters of this name.", systemImage: "exclamationmark.triangle.fill")
+                    .labelStyle(StatusLabelStyle(tint: .orange))
+            }
             Picker("View", selection: Binding(get: { advanced }, set: { model.setEQUsesAdvanced(patch, $0) })) {
                 Text("Simple").tag(false)
                 Text("Advanced").tag(true)
@@ -73,6 +98,24 @@ struct CustomEQView: View {
         } footer: {
             Text("The default is 3 bands. A band at 0 dB is off. An Apple preset opens in Advanced, with bands that are close to the Apple curve. Simple keeps only the slider values of Advanced bands. Prevent Clipping lowers the level by the highest boost, so that loud music does not distort. The music then sounds quieter than Flat. Without it, the EQ operates as the Apple presets do, and a strong boost can distort.")
         }
+        .alert("New EQ", isPresented: $askNewName) {
+            TextField("Name", text: $nameText)
+            Button("Add") { model.addEQ(named: nameText) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This name shows on the iPod.")
+        }
+        .alert("Rename EQ", isPresented: $askRename) {
+            TextField("Name", text: $nameText)
+            Button("Rename") { model.renameSelectedEQ(to: nameText) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This name shows on the iPod.")
+        }
+        .confirmationDialog("Delete \"\(model.selectedEQ.name)\"?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) { model.deleteSelectedEQ() }
+            Button("Cancel", role: .cancel) {}
+        }
         .confirmationDialog("Use All 5 Bands?", isPresented: $confirmAllBands) {
             Button("I Agree, Use All 5 Bands") { model.setEQUsesAllBands(patch, true) }
             Button("Cancel", role: .cancel) {}
@@ -87,16 +130,16 @@ struct EQImportSheet: View {
     @EnvironmentObject var model: AppModel
     let eq: SharedEQ
 
-    /// The file uses more than the 3 standard bands, and the user did not agree yet.
+    /// The file uses more than the 3 standard bands. The agreement is for each EQ.
     private var askAllBands: Bool {
-        eq.needsAllBands && !(model.eqPatch.map(model.eqUsesAllBands) ?? false)
+        eq.needsAllBands
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Import \"\(eq.name)\"?").font(.headline)
             EQCurve(bands: eq.eqBands, usesPrecut: eq.preventClipping).frame(height: 120)
-            Text("This replaces the current Custom EQ. The iPod changes when you flash it.")
+            Text("This adds a new EQ to your list. The iPod changes when you flash it.")
                 .foregroundStyle(.secondary)
             if askAllBands {
                 Label(CustomEQ.allBandsWarning, systemImage: "exclamationmark.triangle.fill")
