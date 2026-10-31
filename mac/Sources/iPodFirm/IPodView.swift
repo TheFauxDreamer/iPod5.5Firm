@@ -48,9 +48,11 @@ struct IPodView: View {
                         .disabled(model.currentIPod == nil || model.currentIPodIsUnsupported)
                     Button("Flash to iPod…") { Task { await model.flashEdited() } }
                         .disabled(!model.canFlash)
+                        .help(model.flashBlockReason ?? "Make a backup of the iPod, then write this firmware to the iPod")
                         .buttonStyle(.borderedProminent)
                     Spacer()
                 }
+                FlashHint()
                 HStack {
                     Button("Refresh") { Task { await model.refreshIPods() } }
                     Spacer()

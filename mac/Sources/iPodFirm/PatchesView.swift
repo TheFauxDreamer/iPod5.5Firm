@@ -544,9 +544,10 @@ struct IPodSyncBanner: View {
                                 .help("Set the switches to the patches on the iPod.")
                             Button("Flash to iPod…") { model.section = .ipod; Task { await model.flashEdited() } }
                                 .disabled(!model.canFlash)
-                                .help(model.editor == nil ? "Open a firmware first." : "Write the firmware with the current switches to the iPod.")
+                                .help(model.flashBlockReason ?? "Write the firmware with the current switches to the iPod.")
                         }
                         .controlSize(.small)
+                        FlashHint()
                     }
                     let unknown = state.unknownNames(known: Set(model.patches.map(\.spec.name)))
                     if !unknown.isEmpty {
@@ -857,6 +858,28 @@ struct VersionDetail: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// The status line when the iPod is ready but no firmware is open. It gives the commands to open a
+/// firmware. The pane does not change, so that the user can continue the work. The other reasons
+/// are in the tooltip of the flash buttons, because the iPod pane already shows them.
+struct FlashHint: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        if model.editor == nil, model.currentIPod != nil, !model.currentIPodIsUnsupported, model.busy == nil,
+           let reason = model.flashBlockReason {
+            Label(reason, systemImage: "exclamationmark.triangle.fill")
+                .labelStyle(StatusLabelStyle(tint: .orange))
+                .fixedSize(horizontal: false, vertical: true)
+                .help("Your patch switches do not change.")
+            HStack {
+                Button("Download Apple Firmware 1.3") { Task { await model.downloadAppleFirmware(stay: true) } }
+                Button("Open Firmware…") { model.openPanel(stay: true) }
+            }
+            .controlSize(.small)
+        }
     }
 }
 
