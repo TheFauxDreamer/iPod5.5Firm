@@ -92,6 +92,8 @@ The limit is the size of the View. A new element makes View 24430 larger, and iP
 
 Status: Not tested. Measured: the byte counts, and the `osos` checksum is correct in the two files.
 
+The first test on 31 October 2026 gave no result. The files were dragged onto the emulator, so the stock firmware ran. Refer to [emulator.md](emulator.md). Each file now has its own profile and drive: `make-disk`, `fix_osos_length`, `put-files`, then a start with `--cold`.
+
 Examine these items in the emulator:
 
 - Do the rows, the arrows and the highlight follow the narrow width?
