@@ -1,6 +1,6 @@
 # Now Playing: what opens the screen
 
-Status (31 October 2026): research only. There is no patch.
+Status (31 October 2026): the patch `no-now-playing-timer` has the change. The owner tested version 0.1 in the emulator with the Split themes and reported that it works well. It is not tested on a real iPod.
 
 The owner wants Now Playing to open only in 2 cases:
 
@@ -76,7 +76,7 @@ The firmware event 0x42800008 also reaches 0x1096. It is a different path. Its m
 
 Change 1 byte in 0xf84, at script offset 0x1a1c (osos 0x4b5e38): 0x07 in place of 0x96. This changes the call from 0x1096 to 0x1007. Then the timer starts again, as it does for the other case in the same function. The event path and Play from a list stay.
 
-Status: not tested. The owner reported on 31 October 2026 that the emulator cannot test it, because it does not play music. The test needs a real iPod.
+Status: the owner tested it in the emulator. It is not tested on a real iPod. Refer to [emulator.md](emulator.md).
 
 ## Next steps
 
