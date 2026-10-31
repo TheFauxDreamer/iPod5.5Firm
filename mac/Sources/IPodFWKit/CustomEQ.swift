@@ -85,7 +85,7 @@ public enum CustomEQ {
 
     static func check(_ b: Band) throws {
         guard frequencyRange.contains(b.frequency) else { throw PatchError("The frequency \(b.frequency) Hz is out of range.") }
-        guard abs(b.gain) <= gainLimit else { throw PatchError("The gain of a band must be −12 to +12 dB.") }
+        guard (-gainLimit...gainLimit).contains(b.gain) else { throw PatchError("The gain of a band must be −12 to +12 dB.") }
         guard qRange.contains(b.q) else { throw PatchError("The Q of a band must be 0.3 to 8.") }
     }
 
@@ -158,5 +158,87 @@ public enum CustomEQ {
             }
         }
         return (out.flatMap { v in (0..<4).map { UInt8(truncatingIfNeeded: v >> ($0 * 8)) } }, mask)
+    }
+}
+
+/// A Custom EQ in a `.ipodeq` file, so that people can share it. The file is short JSON. It has no
+/// user data. A received file is not trusted: `decode` examines all of it.
+public struct SharedEQ: Codable, Equatable, Identifiable, Sendable {
+    public struct Band: Codable, Equatable, Sendable {
+        public var type: String
+        public var frequency, gain, q: Int
+    }
+
+    public static let fileExtension = "ipodeq"
+    public static let maxFileSize = 4096
+    public static let maxNameLength = 64
+    static let format = 1
+
+    public var format: Int
+    public var name: String
+    public var bands: [Band]
+    public var preventClipping: Bool
+    public var view: String
+
+    public var id: String { name }
+    /// The app shows the Advanced view if the file has bands that the Simple view does not have.
+    public var usesAdvanced: Bool { view == "advanced" || eqBands != CustomEQ.simple(from: eqBands) }
+
+    /// The bands in the form of the editor. A band with an unknown type becomes a peak: `decode` rejects it first.
+    public var eqBands: [CustomEQ.Band] {
+        bands.map { CustomEQ.Band(kind: Self.kind($0.type) ?? .peak, frequency: $0.frequency, gain: $0.gain, q: $0.q) }
+    }
+
+    public init(name: String, bands: [CustomEQ.Band], preventClipping: Bool, advanced: Bool) {
+        format = Self.format
+        self.name = Self.clean(name)
+        self.bands = bands.map { Band(type: Self.typeName($0.kind), frequency: $0.frequency, gain: $0.gain, q: $0.q) }
+        self.preventClipping = preventClipping
+        view = advanced ? "advanced" : "simple"
+    }
+
+    static func kind(_ name: String) -> CustomEQ.Kind? {
+        switch name {
+        case "lowShelf": .lowShelf
+        case "peak": .peak
+        case "highShelf": .highShelf
+        default: nil
+        }
+    }
+
+    static func typeName(_ kind: CustomEQ.Kind) -> String {
+        switch kind {
+        case .lowShelf: "lowShelf"
+        case .peak: "peak"
+        case .highShelf: "highShelf"
+        }
+    }
+
+    /// Removes the control characters and limits the length. An empty name becomes "Custom EQ".
+    static func clean(_ name: String) -> String {
+        let text = String(String.UnicodeScalarView(name.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }))
+            .trimmingCharacters(in: .whitespaces)
+        return text.isEmpty ? "Custom EQ" : String(text.prefix(maxNameLength))
+    }
+
+    public func encode() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        return try encoder.encode(self)
+    }
+
+    /// The EQ of a file. It throws if the file is not a valid EQ of this format.
+    public static func decode(_ data: Data) throws -> SharedEQ {
+        guard data.count <= maxFileSize else { throw PatchError("The file is too large for an EQ.") }
+        guard var eq = try? JSONDecoder().decode(SharedEQ.self, from: data) else {
+            throw PatchError("The file is not a Custom EQ file.")
+        }
+        guard eq.format == format else { throw PatchError("The EQ file has a different format. Update iPodFirm, then try again.") }
+        guard eq.bands.count == CustomEQ.bandCount else { throw PatchError("An EQ file must have \(CustomEQ.bandCount) bands.") }
+        guard eq.bands.allSatisfy({ kind($0.type) != nil }) else { throw PatchError("The EQ file has an unknown band type.") }
+        guard ["simple", "advanced"].contains(eq.view) else { throw PatchError("The EQ file has an unknown view.") }
+        _ = try CustomEQ.records(eq.eqBands, precut: eq.preventClipping)
+        eq.name = clean(eq.name)
+        return eq
     }
 }

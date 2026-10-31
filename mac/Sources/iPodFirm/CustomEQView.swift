@@ -42,11 +42,39 @@ struct CustomEQView: View {
             }
             Button("Reset Bands") { model.setEQBands(patch, advanced ? CustomEQ.defaults : CustomEQ.simpleLayout) }
                 .disabled(advanced ? bands == CustomEQ.defaults : bands.allSatisfy { $0.gain == 0 })
+            HStack {
+                Button("Import EQ…") { model.chooseEQToImport() }
+                Button("Export EQ…") { model.exportEQ(patch) }
+            }
         } header: {
             Text("Custom EQ")
         } footer: {
             Text("A band at 0 dB is off. Simple keeps only the slider values of Advanced bands. Prevent Clipping lowers the level by the highest boost, so that loud music does not distort. The music then sounds quieter than Flat. Without it, the EQ operates as the Apple presets do, and a strong boost can distort.")
         }
+    }
+}
+
+/// Asks the user before an EQ from a file replaces the bands.
+struct EQImportSheet: View {
+    @EnvironmentObject var model: AppModel
+    let eq: SharedEQ
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Import \"\(eq.name)\"?").font(.headline)
+            EQCurve(bands: eq.eqBands, usesPrecut: eq.preventClipping).frame(height: 120)
+            Text("This replaces the current Custom EQ. The iPod changes when you flash it.")
+                .foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { model.pendingEQ = nil }
+                    .keyboardShortcut(.cancelAction)
+                Button("Import") { model.applyEQ(eq) }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 400)
     }
 }
 
@@ -119,7 +147,7 @@ private struct EQBandRow: View {
 }
 
 /// The curve of the active bands at 44.1 kHz, with the level change if it is on. The range is ±18 dB.
-private struct EQCurve: View {
+struct EQCurve: View {
     let bands: [CustomEQ.Band]
     let usesPrecut: Bool
 

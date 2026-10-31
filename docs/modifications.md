@@ -994,7 +994,9 @@ The Settings item has the key 0x60007e0f and the label 0x7e0b (`settings_items`,
 
 ## custom-eq
 
-**User interface.** Patches pane > Playback > Custom EQ, letter `q`, version 0.3, 518 bytes. The section "Custom EQ" has a curve, Simple and Advanced views, Prevent Clipping and Reset Bands. Simple is the default: 5 sliders with fixed bands, Bass (low shelf 100 Hz), Warmth (peak 400 Hz), Mids (peak 1000 Hz), Clarity (peak 3000 Hz) and Treble (high shelf 8000 Hz). Advanced shows the type, frequency, gain and Q of each band. The two views use the same 5 bands, so the code on the iPod does not change. On the iPod, the item "Custom" shows in Settings > EQ. To change the bands, flash the iPod again.
+**User interface.** Patches pane > Playback > Custom EQ, letter `q`, version 0.4, 518 bytes. The section "Custom EQ" has a curve, Simple and Advanced views, Prevent Clipping and Reset Bands. Simple is the default: 5 sliders with fixed bands, Bass (low shelf 100 Hz), Warmth (peak 400 Hz), Mids (peak 1000 Hz), Clarity (peak 3000 Hz) and Treble (high shelf 8000 Hz). Advanced shows the type, frequency, gain and Q of each band. The two views use the same 5 bands, so the code on the iPod does not change. On the iPod, the item "Custom" shows in Settings > EQ. To change the bands, flash the iPod again.
+
+**Share an EQ.** Export EQ… writes a `.ipodeq` file. Import EQ… or a double-click on the file reads it. A sheet shows the name and the curve before the bands change. The file is JSON of a maximum of 4 KB with `format` (1), `name`, 5 `bands` (`type`, `frequency`, `gain`, `q`), `preventClipping` and `view`. It has no user data. `SharedEQ.decode` examines each value with the limits of the editor, because a received file is not trusted. The app uploads nothing. The name is only for the file: the item on the iPod stays "Custom".
 
 **The firmware.** A preset is a list of up to 5 filter numbers. Refer to [re/custom-eq.md](../re/custom-eq.md).
 

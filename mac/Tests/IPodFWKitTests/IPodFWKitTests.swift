@@ -645,6 +645,40 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertFalse(CustomEQ.usesAdvanced([:]))
     }
 
+    /// A .ipodeq file gives the same EQ again, and has only the settings.
+    func testSharedEQRoundTrip() throws {
+        var bands = CustomEQ.simpleLayout
+        bands[0].gain = 60
+        let data = try SharedEQ(name: "Warm Bass", bands: bands, preventClipping: true, advanced: false).encode()
+        let eq = try SharedEQ.decode(data)
+        XCTAssertEqual(eq.name, "Warm Bass")
+        XCTAssertEqual(eq.eqBands, bands)
+        XCTAssertTrue(eq.preventClipping)
+        XCTAssertFalse(eq.usesAdvanced)
+        let keys = Set(try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any]).keys)
+        XCTAssertEqual(keys, ["format", "name", "bands", "preventClipping", "view"])
+        XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("/Users"))
+        // Bands that the Simple view does not have need the Advanced view.
+        XCTAssertTrue(try SharedEQ.decode(SharedEQ(name: "A", bands: CustomEQ.defaults, preventClipping: false, advanced: false).encode()).usesAdvanced)
+        XCTAssertEqual(try SharedEQ.decode(SharedEQ(name: "\u{7}", bands: bands, preventClipping: false, advanced: false).encode()).name, "Custom EQ")
+    }
+
+    /// A received .ipodeq file is not trusted.
+    func testSharedEQRejectsBadFiles() throws {
+        let good = try SharedEQ(name: "A", bands: CustomEQ.simpleLayout, preventClipping: false, advanced: false)
+        func edited(_ change: (inout SharedEQ) -> Void) throws -> Data {
+            var eq = good
+            change(&eq)
+            return try eq.encode()
+        }
+        let bad = [Data("{".utf8), Data("[1]".utf8), Data(count: SharedEQ.maxFileSize + 1),
+                   try edited { $0.format = 2 }, try edited { $0.bands.removeLast() },
+                   try edited { $0.bands[0].gain = 130 }, try edited { $0.bands[0].gain = Int.min },
+                   try edited { $0.bands[0].frequency = 5 }, try edited { $0.bands[0].q = 0 },
+                   try edited { $0.bands[0].type = "notch" }, try edited { $0.view = "other" }]
+        for data in bad { XCTAssertThrowsError(try SharedEQ.decode(data)) }
+    }
+
     /// The checks of custom-eq reject bad bands.
     func testCustomEQChecks() {
         for bad in [CustomEQ.Band(kind: .peak, frequency: 10, gain: 10, q: 100),
