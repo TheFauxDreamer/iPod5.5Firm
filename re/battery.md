@@ -170,6 +170,8 @@ Owner report (31 October 2026): since the battery mod (a larger battery), the ic
 
 This agrees with a value of 430–439: level 13 of the 0xb table starts at 436, and it gives an icon value of 17 from 20. It suggests that the voltage of this battery stays nearly constant for most of the discharge and then falls quickly. This is an estimate. A record of the value over one complete discharge will show the real curve. If the curve is this flat, a percentage from the voltage alone stays near one value for most of the time. Then the patch needs a table from the real curve, or a different method.
 
+Owner report (31 October 2026): during the music test, the display went from "43" to "44". Thus the display follows the value, and a fixed text is excluded. The charger state during the rise is not recorded. A rise without a charger can be a recovery of the voltage after a load, for example after the start.
+
 ### What the test gives
 
 - The width: if the number fits in 27 pixels, "100%" possibly also fits.
