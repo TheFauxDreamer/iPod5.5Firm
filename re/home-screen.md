@@ -326,6 +326,32 @@ Measured on 31 October 2026:
 
 The patch `dark-mode` applies the switch table at the first View lookup. It can change any address, so it needs no change. The build puts the light View after the theme data and changes the table entry in the 2 modes. The switch table has extra runs for the 6 colour bytes and the 4 text style values.
 
+## Contemporary Split
+
+Status: research only, on branch `contemporary-split`. Nothing is in the app.
+
+The theme `Contemporary- Normal` is a picture theme. Emulator result, with the `osos` and `rsrc` of the image on a stock directory: a pink wave background, frosted panels, a dusty pink highlight (0xffaba9cd in the View colour words) and a black battery. The Split main menu is 160 pixels wide, and the right side has a framed panel.
+
+Measured against stock 1.3:
+
+| Item | Result |
+|---|---|
+| Views | 619 changed. 1,649 elements have the new highlight colours. The layout values of 24430 and -285 are the same as `MLCV2- Normal`. |
+| Types | 29 changed, the same as `MLCV2- Normal`. The menu text changes from size 18 to 16. |
+| Pictures | 307 changed. 243 are different from `MLCV2- Normal`. 46 are removed (offset 0xFFFFFFFE). |
+| Text | 11 strings changed. The About screen shows the name "Glass V2". |
+| Code | The game patch only. Do not use it. |
+
+Design points:
+
+- The themes put the background behind all screens in the title layer. Plain Dark does this with Draw 21997 and an element height of 240. This method operates on the real iPod, so use it, and do not copy the rewrite of the shared Views.
+- The background has the panel frame in the picture. The Split layout of this project has the panel only on the main menu. Thus the frame shows on other screens. The choices are a background with no frame, or a narrow list on each of the 85 lists.
+- Theme import refuses the 27 Views with a new structure. It can take the colours, the Types and the pictures of the same size.
+- The theme has no switch to dark. It is a third choice of appearance, not a layout.
+- The panel text style must be readable on the background.
+
+The authors of the pictures are not known. A string in the theme has a copyright line. Do not ship the pictures with the app before the owner has a permission. An import of the owner's file does not need this, because the app then ships no picture.
+
 ## Next steps
 
 Split Light is on `main` and operates on a real iPod.
