@@ -49,7 +49,7 @@ mkdir -p "$APP/Contents/Library/LaunchDaemons"
 cp Resources/com.thefauxdreamer.ipodfirm.helper.plist "$APP/Contents/Library/LaunchDaemons/"
 cp Resources/install-emulator.sh "$APP/Contents/Resources/"
 cp -R Resources/emulator-patches "$APP/Contents/Resources/"
-# The built-in themes. Format 2 holds no byte of the Apple firmware, so the app
+# The built-in themes. Format 2 does not store the bytes that a theme replaces, so the app
 # can ship them (refer to re/dark-theme.md).
 mkdir -p "$APP/Contents/Resources/Themes"
 for t in ../themes/*.ipodtheme; do

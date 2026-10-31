@@ -37,8 +37,8 @@ from .partition import FirmwarePartition
 
 FORMAT = 1
 # Format 2 stores, for each change, the SHA-256 of the old bytes in place of
-# the old bytes. A theme in format 2 holds no byte of the Apple firmware, so
-# the app can ship it. Both formats apply the same.
+# the old bytes. Thus a theme in format 2 does not store the bytes that it
+# replaces, so the app can ship it. Both formats apply the same.
 FORMAT_STRIPPED = 2
 RUN_GAP = 16              # join two changed runs if fewer bytes than this separate them
 ID_SHIFTS = range(-8, 9)  # the IDs of a type move by a small amount between versions
@@ -69,6 +69,9 @@ class Change:
     old: bytes
     new: bytes
     old_sha256: str = ""   # format 2: the hash of the old bytes, in place of the old bytes
+    # Bytes to take from the firmware at the build: {"at", "length", "source", "sha256"}.
+    # The file holds zeros at "at" in `new`. Thus the file holds none of these bytes.
+    copy: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -87,6 +90,8 @@ class Theme:
         fmt = FORMAT_STRIPPED if stripped else FORMAT
         def one(c: Change):
             out = {"resource": c.resource, "offset": c.offset, "new": base64.b64encode(c.new).decode()}
+            if c.copy:
+                out["copy"] = c.copy
             if stripped and c.old:
                 out["old_sha256"] = c.old_sha256 or _sha256(c.old)
             elif stripped:
@@ -115,7 +120,7 @@ class Theme:
             for c in items:
                 old = base64.b64decode(c["old"]) if "old" in c else b""
                 out.append(Change(c["resource"], c["offset"], old, base64.b64decode(c["new"]),
-                                  c.get("old_sha256", "")))
+                                  c.get("old_sha256", ""), c.get("copy", [])))
             return out
         return cls(d["name"], d["source_sha256"], d["osos_sha256"], changes(d["changes"]),
                    [(s["resource"], s["reason"]) for s in d["skipped"]], d["imported"], changes(d.get("edits", [])))
@@ -166,7 +171,7 @@ class Theme:
                 # the new bytes, a conflict in every other case. The step never
                 # writes the change, so the owner's edit stays.
                 old = bytes([c.new[0] ^ 0x80]) + c.new[1:]
-            out.changes.append(Change(c.resource, c.offset, old, c.new, c.old_sha256))
+            out.changes.append(Change(c.resource, c.offset, old, c.new, c.old_sha256, c.copy))
         return out
 
 
@@ -178,7 +183,20 @@ def _keep_highlight(c: Change) -> Change:
     for i in range(-c.offset % 4, len(c.old) - 3, 4):
         if struct.unpack_from("<I", c.old, i)[0] in APPLE_HIGHLIGHT:
             new[i:i + 4] = c.old[i:i + 4]
-    return Change(c.resource, c.offset, c.old, bytes(new))
+    return Change(c.resource, c.offset, c.old, bytes(new), c.old_sha256, c.copy)
+
+
+def _with_copied_bytes(c: Change, osos: bytes) -> Change:
+    """The change with the bytes of its "copy" list, taken from osos. A wrong hash stops the build."""
+    if not c.copy:
+        return c
+    new = bytearray(c.new)
+    for e in c.copy:
+        data = bytes(osos[e["source"]:e["source"] + e["length"]])
+        if _sha256(data) != e["sha256"]:
+            raise ThemeError(f"{c.resource}: the firmware does not have the expected bytes.")
+        new[e["at"]:e["at"] + e["length"]] = data
+    return replace(c, new=bytes(new), copy=[])
 
 
 def _sha256(b: bytes) -> str:
@@ -502,7 +520,7 @@ def apply_theme(theme: Theme, osos: bytearray, original_sha256: str) -> tuple[in
         raise ThemeError(f"The theme \"{theme.name}\" is for a different firmware.")
     theme = theme.with_old_bytes(osos)
     done = conflicts = 0
-    changes = theme.effective_changes()
+    changes = [_with_copied_bytes(c, osos) for c in theme.effective_changes()]
     end = max((c.offset + len(c.new) for c in changes), default=0)
     if end > len(osos):
         osos.extend(bytes((end + 0x7FF) // 0x800 * 0x800 - len(osos)))

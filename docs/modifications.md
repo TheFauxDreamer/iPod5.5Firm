@@ -1314,8 +1314,10 @@ This change does not exist yet. The research found a USB Audio Class 1 source in
 **Data.** `themes/layouts/Split.ipodtheme` is a theme in format 2. `re/home-screen-views.py` makes it. The build copies it to `Contents/Resources/Layouts`, so it is not in the list of dark themes. It has 2 changes:
 
 1. A new View of 704 bytes at 0x736800, after the patch area.
-2. The table entry of View 24430 (0x337424): the new offset and size.
+2. The offset and the size in the table entry of View 24430 (0x337428, 8 bytes).
+
+The first change has a `copy` list. The file holds zeros in these ranges: the 200 bytes of the stock scroll bar and list. At the build, the app takes the bytes from the open firmware and checks each SHA-256. A wrong hash stops the build. Thus the file holds none of these bytes.
 
 The osos becomes 0x737000 bytes, and rsrc moves, as with the dark theme. The research is in [../re/home-screen.md](../re/home-screen.md).
 
-**Limits.** The new View holds a copy of the stock scroll bar and list elements (204 bytes). The Split layout operates only on the original Apple firmware 1.3.
+**Limits.** The Split layout operates only on the original Apple firmware 1.3.

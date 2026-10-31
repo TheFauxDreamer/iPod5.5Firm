@@ -1161,7 +1161,10 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(theme.format, ThemeImport.formatStripped)
         XCTAssertEqual(theme.changes.count, 2)
         XCTAssertEqual(theme.changes[0].offset, 0x736800)
-        XCTAssertEqual(theme.changes[1].new.count, 12)
+        XCTAssertEqual(theme.changes[1].new.count, 8)
+        XCTAssertEqual(theme.changes[0].copy?.count, 2)
+        var wrong = [UInt8](repeating: 0, count: 0x736000)
+        XCTAssertThrowsError(try theme.apply(to: &wrong, originalSHA256: theme.osos_sha256))
         let env = ProcessInfo.processInfo.environment
         if let stock = env["IPODFW_SPLIT_OSOS"], let result = env["IPODFW_SPLIT_RESULT"] {
             var osos = [UInt8](try Data(contentsOf: URL(fileURLWithPath: stock)))

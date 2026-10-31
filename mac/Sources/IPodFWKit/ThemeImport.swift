@@ -38,10 +38,12 @@ public struct ThemeChange: Codable, Equatable {
     public var old: Data
     public var new: Data
     /// Format 2: the hash of the old bytes, in place of the old bytes. The theme
-    /// then holds no byte of the Apple firmware.
+    /// then does not store the bytes that it replaces.
     public var oldSHA256: String?
+    /// Bytes to take from the firmware at the build. The file holds zeros there.
+    public var copy: [ThemeCopy]?
 
-    enum CodingKeys: String, CodingKey { case resource, offset, old, new, old_sha256 }
+    enum CodingKeys: String, CodingKey { case resource, offset, old, new, old_sha256, copy }
 
     public init(resource: String, offset: Int, old: Data, new: Data, oldSHA256: String? = nil) {
         self.resource = resource
@@ -58,6 +60,7 @@ public struct ThemeChange: Codable, Equatable {
         old = try c.decodeIfPresent(Data.self, forKey: .old) ?? Data()
         new = try c.decode(Data.self, forKey: .new)
         oldSHA256 = try c.decodeIfPresent(String.self, forKey: .old_sha256)
+        copy = try c.decodeIfPresent([ThemeCopy].self, forKey: .copy)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -67,7 +70,33 @@ public struct ThemeChange: Codable, Equatable {
         try c.encode(new, forKey: .new)
         if let h = oldSHA256, !h.isEmpty, old.isEmpty { try c.encode(h, forKey: .old_sha256) }
         else { try c.encode(old, forKey: .old) }
+        try c.encodeIfPresent(copy, forKey: .copy)
     }
+
+    /// The change with the bytes of its `copy` list, taken from osos. A wrong hash stops the build.
+    func withCopiedBytes(_ osos: [UInt8]) throws -> ThemeChange {
+        guard let copy else { return self }
+        var bytes = [UInt8](new)
+        for e in copy {
+            guard e.source + e.length <= osos.count,
+                  ThemeImport.sha256(Array(osos[e.source..<e.source + e.length])) == e.sha256 else {
+                throw ThemeError("\(resource): the firmware does not have the expected bytes.")
+            }
+            bytes.replaceSubrange(e.at..<e.at + e.length, with: osos[e.source..<e.source + e.length])
+        }
+        var out = self
+        out.new = Data(bytes)
+        out.copy = nil
+        return out
+    }
+}
+
+/// A part of a theme change that comes from the firmware at the build.
+public struct ThemeCopy: Codable, Equatable {
+    public var at: Int              // in `new`
+    public var length: Int
+    public var source: Int          // in osos
+    public var sha256: String
 }
 
 extension ThemeChange {
@@ -130,7 +159,7 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
     }
 
     /// Write the theme in format 2: each change holds the hash of the old bytes in
-    /// place of the old bytes. The file holds no byte of the Apple firmware.
+    /// place of the old bytes. The file does not store the bytes that the theme replaces.
     public func writeStripped(to url: URL) throws {
         var out = self
         out.format = ThemeImport.formatStripped
@@ -154,7 +183,7 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
     public func apply(to osos: inout [UInt8], originalSHA256: String) throws -> (applied: Int, conflicts: Int) {
         guard originalSHA256 == osos_sha256 else { throw ThemeError("The theme \"\(name)\" is for a different firmware.") }
         let theme = withOldBytes(osos)
-        let changes = theme.effectiveChanges
+        let changes = try theme.effectiveChanges.map { try $0.withCopiedBytes(osos) }
         let end = changes.map { $0.offset + $0.new.count }.max() ?? 0
         if end > osos.count { osos += [UInt8](repeating: 0, count: (end + 0x7FF) / 0x800 * 0x800 - osos.count) }
         var done = 0, conflicts = 0

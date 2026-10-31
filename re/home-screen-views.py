@@ -23,6 +23,7 @@ PARENT, HEIGHT = 0x80000002, 0x80000008  # edge modes
 
 MAIN_MENU = 24430
 VIEW_AT = 0x736800  # the start of rsrc in stock: the first address after the patch area
+STOCK_RANGES = ((4, 72), (80, 128))  # in View 24430, around the value of the right edge of the scroll bar
 PANEL_WIDTH = 107
 PANEL_X = 320 - PANEL_WIDTH
 
@@ -81,14 +82,21 @@ def split_theme(fw: FirmwarePartition) -> Theme:
     stock = bytes(osos[block.abs(menu):block.abs(menu) + menu.size])
     if len(stock) != 208:
         raise SystemExit("this is not stock firmware 1.3")
-    new = main_menu_view(stock)
-    entry = bytes(osos[menu.table_pos:menu.table_pos + 12])
-    new_entry = entry[:4] + struct.pack("<II", VIEW_AT - block.data_start, len(new))
+    new = bytearray(main_menu_view(stock))
+    # The stock elements come from the firmware at the build. The list width stays in the file.
+    at = block.abs(menu)
+    copy = [{"at": a, "length": n, "source": at + a, "sha256": _sha256(stock[a:a + n])} for a, n in STOCK_RANGES]
+    if any(bytes(new[a:a + n]) != stock[a:a + n] for a, n in STOCK_RANGES):
+        raise SystemExit("the stock ranges are not correct")
+    for a, n in STOCK_RANGES:
+        new[a:a + n] = bytes(n)
+    entry = bytes(osos[menu.table_pos + 4:menu.table_pos + 12])
+    new_entry = struct.pack("<II", VIEW_AT - block.data_start, len(new))
     digest = _sha256(osos)
     label = f"View {MAIN_MENU}"
     return Theme("Split", digest, digest, [
-        Change(label, VIEW_AT, b"", new),
-        Change(label, menu.table_pos, entry, new_entry, _sha256(entry)),
+        Change(label, VIEW_AT, b"", bytes(new), copy=copy),
+        Change(label, menu.table_pos + 4, entry, new_entry, _sha256(entry)),
     ], imported=[label])
 
 

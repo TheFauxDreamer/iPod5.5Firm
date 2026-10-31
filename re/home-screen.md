@@ -285,20 +285,18 @@ Test: compare with stock Now Playing. If Now Playing has the same delay, the Spl
 
 ## Stock bytes at the build
 
-Status: research, 31 October 2026. Not in the app.
+Status: in the app, 31 October 2026.
 
-The aim: `Split.ipodtheme` holds none of the 204 bytes of stock View 24430. The build takes them from the open firmware.
+`Split.ipodtheme` holds none of the stock bytes of View 24430. The build takes them from the open firmware.
 
-The 204 bytes are the 2 elements of View 24430 at 0x4dc7b8: offsets 4–207. Only offsets 76–79 change (the value −107). Thus the file needs 2 copy ranges: offsets 4–75 and 80–207.
+The bytes are the 2 elements of View 24430 at 0x4dc7b8: offsets 4–207. Only offsets 76–79 change (the value −107). Thus the file has 2 copy ranges: offsets 4–75 and 80–207, 200 bytes.
 
-Recommended method: add an optional field `copy` to a theme change. Each entry has the offset in `new`, the length, the source offset in `osos` and the SHA-256 of the source bytes. The file holds zeros in these ranges. The apply step checks each hash, and copies the bytes before it writes `new`. A wrong hash is an error, and the build stops.
-
-Prototype (Python, Measured): the file with zeros in the 2 ranges gives an `osos` that is identical to the `osos` of the real iPod test.
+Method: a theme change has an optional field `copy`. Each entry has the offset in `new`, the length, the source offset in `osos` and the SHA-256 of the source bytes. The file holds zeros in these ranges. The apply step checks each hash, and copies the bytes before it writes `new`. A wrong hash is an error, and the build stops.
 
 Other points:
 
-- The table change can be 8 bytes, not 12: it can omit the ID.
-- Python `Change` and Swift `ThemeChange` both need the field. `to_json`, `from_json`, `apply_theme` and `apply` change. `testSplitLayoutFile` compares the 2 languages.
+- The table change is 8 bytes: it omits the ID.
+- `testSplitLayoutFile` compares Python and Swift.
 - Format 2 needs no new number, but an old app cannot apply this file. The layout theme comes with the app, so this has no effect.
 - The method needs no change to `DarkMode.swift` for Split Light.
 - For Split Dark, copy from the View after the dark theme, and do not check against the stock hash. The dark theme changes 2 runs of 7 bytes in this View. Thus the copy brings the dark values with it. Design this check when Split Dark starts.
@@ -313,9 +311,8 @@ Split Light is on `main` and operates on a real iPod.
 
 Decisions for the owner:
 
-1. Keep the 204 bytes of stock View data in the theme, or make them from the open firmware at the build.
-2. Name a person for the Thanks list, or give no credit.
-3. Compare the cover delay with stock Now Playing. Keep the delay if they are the same.
+1. Name a person for the Thanks list, or give no credit.
+2. Compare the cover delay with stock Now Playing. Keep the delay if they are the same.
 
 Work:
 
