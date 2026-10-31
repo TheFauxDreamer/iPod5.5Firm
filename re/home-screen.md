@@ -234,6 +234,17 @@ Rejected space: commit 8561c18 used the space of View -515. No View, resource or
 
 The themes contain the same patch as the DRM research of this project. The research is in the history before commit ca0da76. The patch changes 6 conditional branches to `nop` in 0x131874, the DRM check of a game. Each branch goes to the failure address 0x131b84. The layout does not need the patch. The file of this research does not contain it.
 
+## Automatic Now Playing
+
+Status: a note for a future change. There is no patch.
+
+The owner wants Now Playing to open only in these 2 cases:
+
+- The owner presses Play on a song.
+- The owner selects the Now Playing menu item.
+
+Static result: the UI script `TCmd` 9088 has the ID 24526 of the Now Playing View at the offsets 0x7175 and 0x12721. These 2 sites are not decoded. The emulator does not play music, so it possibly cannot show the automatic open.
+
 ## Next steps
 
 1. The owner tests the main menu in the emulator: the cover, the text, Now Playing, and the wheel speed.

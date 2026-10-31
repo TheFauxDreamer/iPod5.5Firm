@@ -87,6 +87,7 @@ The ideas in this section have no firmware research, except where a line gives a
 | Idea | Value | Work | Note |
 |---|---|---|---|
 | Split home screen | High | Low to medium | The Firebird themes do this on firmware 1.3 with resource edits. The list uses the left 2/3. The right 1/3 shows the cover, the song, the album and the artist. A mini player below the list is the fallback. Refer to [home-screen.md](home-screen.md). |
+| No automatic Now Playing | Medium | Not known | Future change, requested by the owner. Now Playing opens only when the owner presses Play on a song or selects the Now Playing menu item. It must not open by itself. Refer to [home-screen.md](home-screen.md#automatic-now-playing). |
 | Battery display options | Medium | Low to medium | Icon, Icon + Percent, Percent. Research: [battery.md](battery.md). The firmware has a hidden number display. |
 | Numeric volume | Medium | Low | The firmware has the switch `_show_numeric_volume`. Refer to [device-switches.md](device-switches.md). |
 | Main menu order | High | Low | The app reorders the items of Menu 24094. Check the effect on the mask at 0x105a04. PodBox also has this. |
