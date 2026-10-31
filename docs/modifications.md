@@ -1309,14 +1309,16 @@ This change does not exist yet. The research found a USB Audio Class 1 source in
 
 **Status.** Tested in the emulator and on a real iPod (31 October 2026). All items operate. The cover sometimes takes approximately 1 s to show, most often after Previous.
 
-**User interface.** Patches pane > iPod Appearance > Layout. Split operates only with the Light appearance. The pane shows the size.
+**User interface.** Patches pane > iPod Appearance > Layout. Split operates with the Light and Dark appearances, not with Switch on iPod. The pane shows the size.
 
 **Data.** `themes/layouts/Split.ipodtheme` is a theme in format 2. `re/home-screen-views.py` makes it. The build copies it to `Contents/Resources/Layouts`, so it is not in the list of dark themes. It has 2 changes:
 
 1. A new View of 704 bytes at 0x736800, after the patch area.
 2. The offset and the size in the table entry of View 24430 (0x337428, 8 bytes).
 
-The first change has a `copy` list. The file holds zeros in these ranges: the 200 bytes of the stock scroll bar and list. At the build, the app takes the bytes from the open firmware and checks each SHA-256. A wrong hash stops the build. Thus the file holds none of these bytes.
+The first change has a `copy` list. The file holds zeros in these ranges: the 200 bytes of the stock scroll bar and list. At the build, the app takes the bytes from the open firmware and checks each SHA-256. A wrong hash stops the build. Thus the file holds none of these bytes. Six colour bytes have no hash, because a dark theme changes them.
+
+With Dark, the build puts the View after the theme data (`movedLayout`), because the dark background is at 0x736800. The panel text uses Type 24223 (size 18) in place of Type 24227 (size 16), because the dark theme makes only the styles of size 18 white.
 
 The osos becomes 0x737000 bytes, and rsrc moves, as with the dark theme. The research is in [../re/home-screen.md](../re/home-screen.md).
 

@@ -130,7 +130,7 @@ final class AppModel: ObservableObject {
     @Published var showRemoveGamesSheet = false
     /// The state of the last removal of the games.
     @Published var gameRemoveStatus = ""
-    /// The layout of the main menu. Split operates only with the Light appearance.
+    /// The layout of the main menu. Split operates with Light and Dark.
     @Published var layout: Layout = Layout(rawValue: UserDefaults.standard.string(forKey: "layout") ?? "") ?? .stock {
         didSet { UserDefaults.standard.set(layout.rawValue, forKey: "layout"); switchesChanged(oldValue != layout) }
     }
@@ -231,8 +231,8 @@ final class AppModel: ObservableObject {
     enum AppearanceBuild {
         /// The layout theme is in the firmware.
         case layout(ImportedTheme)
-        /// The theme is in the firmware: always dark.
-        case dark(ImportedTheme)
+        /// The theme is in the firmware: always dark. The layout can follow it.
+        case dark(ImportedTheme, layout: ImportedTheme?)
         /// Light firmware with a Dark Mode item in Settings (DarkMode.build).
         case switchOnIPod(ImportedTheme, PatchInfo)
     }
@@ -708,7 +708,7 @@ final class AppModel: ObservableObject {
         guard let theme = selectedTheme?.theme else { return nil }
         switch appearance {
         case .light: return nil
-        case .dark: return .dark(theme)
+        case .dark: return .dark(theme, layout: layout == .split ? Self.splitTheme : nil)
         case .onIPod: return Self.darkModePatch.map { .switchOnIPod(theme, $0) }
         }
     }
@@ -1268,9 +1268,13 @@ final class AppModel: ObservableObject {
         case .layout(let theme):
             AppLog.step("Build: apply the layout \(theme.name)")
             try theme.apply(to: &osos, originalSHA256: editor.originalOSOSHash)
-        case .dark(let theme):
+        case .dark(let theme, let layout):
             AppLog.step("Build: apply the dark theme \(theme.name)")
             try theme.apply(to: &osos, originalSHA256: editor.originalOSOSHash)
+            if let layout {
+                AppLog.step("Build: apply the layout \(layout.name)")
+                try layout.movedLayout(after: osos, dark: true).apply(to: &osos, originalSHA256: editor.originalOSOSHash)
+            }
         case .switchOnIPod(let theme, let patch):
             AppLog.step("Build: add Dark Mode with the theme \(theme.name) and the patch \(patch.spec.name) \(patch.spec.versionText)")
             osos = try DarkMode.build(partition: editor.partition, osos: osos, theme: theme, patch: patch,

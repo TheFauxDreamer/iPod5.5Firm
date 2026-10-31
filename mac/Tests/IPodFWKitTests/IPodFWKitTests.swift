@@ -1162,7 +1162,11 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(theme.changes.count, 2)
         XCTAssertEqual(theme.changes[0].offset, 0x736800)
         XCTAssertEqual(theme.changes[1].new.count, 8)
-        XCTAssertEqual(theme.changes[0].copy?.count, 2)
+        XCTAssertEqual(theme.changes[0].copy?.count, 6)
+        let moved = theme.movedLayout(after: [UInt8](repeating: 0, count: 0x73fe1d))
+        XCTAssertEqual(moved.changes[0].offset, 0x73fe20)
+        let dark = [UInt8](theme.movedLayout(after: [], dark: true).changes[0].new)
+        XCTAssertEqual(stride(from: 0, to: dark.count - 3, by: 4).filter { dark[$0..<$0 + 4].elementsEqual([0, 0, 0x9F, 0x5E]) }.count, 4)
         var wrong = [UInt8](repeating: 0, count: 0x736000)
         XCTAssertThrowsError(try theme.apply(to: &wrong, originalSHA256: theme.osos_sha256))
         let env = ProcessInfo.processInfo.environment

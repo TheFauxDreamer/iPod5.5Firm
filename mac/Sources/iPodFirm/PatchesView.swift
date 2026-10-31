@@ -778,10 +778,10 @@ struct AppearanceDetail: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 380)
-                .disabled(model.appearance != .light || AppModel.splitTheme == nil)
+                .disabled(model.appearance == .onIPod || AppModel.splitTheme == nil)
                 .help("Split shows the cover and the current song beside the main menu. All other screens stay stock.")
-                if model.appearance != .light {
-                    Label("Split operates only with the Light appearance.", systemImage: "info.circle")
+                if model.appearance == .onIPod {
+                    Label("Split does not operate with Switch on iPod yet.", systemImage: "info.circle")
                         .foregroundStyle(.secondary)
                 } else if let split = AppModel.splitTheme {
                     if model.editor != nil, !model.isCompatible(split) {

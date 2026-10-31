@@ -79,7 +79,7 @@ public struct ThemeChange: Codable, Equatable {
         var bytes = [UInt8](new)
         for e in copy {
             guard e.source + e.length <= osos.count,
-                  ThemeImport.sha256(Array(osos[e.source..<e.source + e.length])) == e.sha256 else {
+                  e.sha256.isEmpty || ThemeImport.sha256(Array(osos[e.source..<e.source + e.length])) == e.sha256 else {
                 throw ThemeError("\(resource): the firmware does not have the expected bytes.")
             }
             bytes.replaceSubrange(e.at..<e.at + e.length, with: osos[e.source..<e.source + e.length])
@@ -96,7 +96,7 @@ public struct ThemeCopy: Codable, Equatable {
     public var at: Int              // in `new`
     public var length: Int
     public var source: Int          // in osos
-    public var sha256: String
+    public var sha256: String       // empty: colours that a dark theme changes, with no check
 }
 
 extension ThemeChange {
@@ -172,6 +172,28 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
                         oldSHA256: c.old.isEmpty ? "" : (c.oldSHA256 ?? ThemeImport.sha256([UInt8](c.old))))
         }
         try out.write(to: url)
+    }
+
+    /// The layout with its View after the data in osos, and text for a dark theme if `dark`.
+    /// The first change is the View, and the second change is the offset and the size in the
+    /// table entry. A dark theme makes only the styles of size 18 white.
+    public func movedLayout(after osos: [UInt8], dark: Bool = false) -> ImportedTheme {
+        guard changes.count == 2 else { return self }
+        var out = self
+        let delta = max(0, (osos.count + 15) / 16 * 16 - changes[0].offset)
+        out.changes[0].offset += delta
+        var entry = [UInt8](changes[1].new)
+        let value = entry[0..<4].reversed().reduce(0) { $0 << 8 | Int($1) } + delta
+        entry.replaceSubrange(0..<4, with: (0..<4).map { UInt8(value >> ($0 * 8) & 0xFF) })
+        out.changes[1].new = Data(entry)
+        if dark {
+            var view = [UInt8](changes[0].new)
+            for i in stride(from: 0, to: view.count - 3, by: 1) where view[i..<i + 4].elementsEqual([0, 0, 0xA3, 0x5E]) {
+                view[i + 2] = 0x9F
+            }
+            out.changes[0].new = Data(view)
+        }
+        return out
     }
 
     /// Apply the theme to osos. Returns (changes applied, changes not applied because of other edits).

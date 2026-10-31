@@ -71,6 +71,7 @@ class Change:
     old_sha256: str = ""   # format 2: the hash of the old bytes, in place of the old bytes
     # Bytes to take from the firmware at the build: {"at", "length", "source", "sha256"}.
     # The file holds zeros at "at" in `new`. Thus the file holds none of these bytes.
+    # An empty "sha256" is for colours that a dark theme changes: they get no check.
     copy: list[dict] = field(default_factory=list)
 
 
@@ -193,7 +194,7 @@ def _with_copied_bytes(c: Change, osos: bytes) -> Change:
     new = bytearray(c.new)
     for e in c.copy:
         data = bytes(osos[e["source"]:e["source"] + e["length"]])
-        if _sha256(data) != e["sha256"]:
+        if e["sha256"] and _sha256(data) != e["sha256"]:
             raise ThemeError(f"{c.resource}: the firmware does not have the expected bytes.")
         new[e["at"]:e["at"] + e["length"]] = data
     return replace(c, new=bytes(new), copy=[])
@@ -507,6 +508,26 @@ def make_theme(theme_fw: FirmwarePartition, base_fw: FirmwarePartition, target_f
             theme.changes.extend(changes)
             theme.imported.append(label)
     return theme
+
+
+# The text style of the Split panel, and the style for a dark theme. A dark theme makes
+# only the styles of size 18 white, for example the title in Now Playing.
+LAYOUT_TEXT_STYLE = 0x5EA30000
+LAYOUT_DARK_TEXT_STYLE = 0x5E9F0000
+
+
+def moved_layout(theme: Theme, osos: bytes, dark: bool = False) -> Theme:
+    """The layout with its View after the data in osos, and text for a dark theme if `dark`.
+    The first change is the View, and the second change is the offset and the size in the
+    table entry."""
+    view, entry = theme.changes
+    delta = max(0, ((len(osos) + 15) & ~15) - view.offset)
+    value = struct.unpack_from("<I", entry.new)[0] + delta
+    new = view.new
+    if dark:
+        new = new.replace(struct.pack("<I", LAYOUT_TEXT_STYLE), struct.pack("<I", LAYOUT_DARK_TEXT_STYLE))
+    return replace(theme, changes=[replace(view, offset=view.offset + delta, new=new),
+                                   replace(entry, new=struct.pack("<I", value) + entry.new[4:])])
 
 
 def apply_theme(theme: Theme, osos: bytearray, original_sha256: str) -> tuple[int, int]:

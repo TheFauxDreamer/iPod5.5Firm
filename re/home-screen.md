@@ -305,6 +305,14 @@ The alternative is a Swift and a Python function that make the whole View from v
 
 The new elements in the file keep the stock highlight colour words 0xffd06428 and 0xffe89858. The elements need a value there. These are 2 colour values, not a copy of a record.
 
+## Split Dark
+
+Status: built on branch `split-dark`. Emulator only.
+
+Measured: Dark Gray puts picture 21997 at 0x736800, so the View of the layout moves after the theme data (0x740000 with Dark Gray). The theme changes 6 bytes in View 24430 (offsets 84–86 and 192–194): colours. These bytes copy with no hash. The arrow shows only on the selected row in plain Dark too, so this is not a Split fault.
+
+Type 24227 stays black in the dark theme. Dark Now Playing uses Types 24222 and 24223, which the theme makes white. Thus the panel uses Type 24223 in Dark.
+
 ## Next steps
 
 Split Light is on `main` and operates on a real iPod.
@@ -316,7 +324,7 @@ Decisions for the owner:
 
 Work:
 
-1. Split Dark: start from the dark View 24430, and test the panel text colour.
+1. Split Dark: in the app on branch `split-dark`. Test the panel with a song.
 2. Split Switch on iPod: add the layout to the switch table, and measure the space.
 3. Contemporary Split: a separate design on the main menu method. Do not rewrite shared Views.
 4. Change the labels in the app, if the owner wants the names Stock and Split.
