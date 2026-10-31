@@ -724,6 +724,30 @@ final class PatchAndArtTests: XCTestCase {
         XCTAssertTrue(new.allBands)
     }
 
+    /// A band stays in the range of the Apple presets until the user agrees to more.
+    func testCustomEQGainRange() throws {
+        XCTAssertEqual(CustomEQ.appleGainRange, -70...75)
+        var eq = NamedEQ(name: "A")
+        eq.bands[0].gain = 120
+        eq.bands[2].gain = -120
+        XCTAssertEqual(eq.activeBands[0].gain, 75)
+        XCTAssertEqual(eq.activeBands[2].gain, -70)
+        eq.fullGain = true
+        XCTAssertEqual(eq.activeBands[0].gain, 120)
+        XCTAssertEqual(eq.activeBands[2].gain, -120)
+        for p in CustomEQ.applePresets {
+            let bands = CustomEQ.bands(forPreset: p)
+            XCTAssertEqual(NamedEQ(name: "B", bands: bands).activeBands, bands, p.name)
+        }
+        let loud = try SharedEQ.decode(try SharedEQ(name: "L", bands: eq.activeBands, preventClipping: false, advanced: false).encode())
+        XCTAssertTrue(loud.needsFullGain)
+        XCTAssertEqual(NamedEQ(shared: loud, in: []).activeBands[0].gain, 120)
+        // A list from version 0.7 has no value "fullGain".
+        var old = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(NamedEQ(name: "C"))) as? [String: Any])
+        old["fullGain"] = nil
+        XCTAssertNil(try JSONDecoder().decode(NamedEQ.self, from: JSONSerialization.data(withJSONObject: old)).fullGain)
+    }
+
     /// The Apple presets are valid start points with the default 3 bands.
     func testCustomEQApplePresets() throws {
         XCTAssertEqual(CustomEQ.applePresets.count, 22)

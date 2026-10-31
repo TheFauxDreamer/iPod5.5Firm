@@ -148,6 +148,15 @@ public enum CustomEQ {
         Preset(name: "Vocal Booster", bands: [Band(kind: .peak, frequency: 90, gain: -40, q: 55), Band(kind: .peak, frequency: 985, gain: 50, q: 42), Band(kind: .peak, frequency: 14034, gain: -30, q: 65)]),
     ]
 
+    /// The range of gain, in tenths of a dB, that the Apple presets use. It is the default range of a band.
+    public static let appleGainRange: ClosedRange<Int> = {
+        let gains = applePresets.flatMap { $0.bands.map(\.gain) }
+        return (gains.min() ?? 0)...(gains.max() ?? 0)
+    }()
+    public static let fullGainRange = -gainLimit...gainLimit
+    /// The text that the user must agree to before a band can go past `appleGainRange`.
+    public static let fullGainWarning = "Going higher than Apple's limits may negatively impact sound quality."
+
     /// The 5 bands of a preset. Its bands go into the standard positions, so they need no warning.
     public static func bands(forPreset preset: Preset) -> [Band] {
         var out = defaults
@@ -320,6 +329,9 @@ public struct SharedEQ: Codable, Equatable, Identifiable, Sendable {
     /// The app shows the Advanced view if the file has bands that the Simple view does not have.
     public var usesAdvanced: Bool { view == "advanced" || eqBands != CustomEQ.simple(from: eqBands) }
 
+    /// The file has a band outside the range of the Apple presets.
+    public var needsFullGain: Bool { eqBands.contains { !CustomEQ.appleGainRange.contains($0.gain) } }
+
     /// The file has a band that needs the option "all_bands".
     public var needsAllBands: Bool {
         eqBands.enumerated().contains { i, b in b.gain != 0 && !CustomEQ.standardBands.contains(i) }
@@ -392,14 +404,21 @@ public struct NamedEQ: Codable, Hashable, Identifiable, Sendable {
     public var advanced: Bool
     /// The user agreed to `CustomEQ.allBandsWarning` for this EQ.
     public var allBands: Bool
+    /// The user agreed to `CustomEQ.fullGainWarning` for this EQ. Older lists do not have this value.
+    public var fullGain: Bool?
 
     public var id: String { name }
 
+    /// The range of gain of each band of this EQ.
+    public var gainRange: ClosedRange<Int> { fullGain == true ? CustomEQ.fullGainRange : CustomEQ.appleGainRange }
+
     /// The bands that the build uses: without `allBands`, only the standard bands have a gain.
+    /// Without `fullGain`, each gain stays in the range of the Apple presets.
     public var activeBands: [CustomEQ.Band] {
         bands.enumerated().map { i, band in
             var b = band
             if !allBands, !CustomEQ.standardBands.contains(i) { b.gain = 0 }
+            b.gain = min(max(b.gain, gainRange.lowerBound), gainRange.upperBound)
             return b
         }
     }
@@ -422,5 +441,6 @@ public struct NamedEQ: Codable, Hashable, Identifiable, Sendable {
     public init(shared eq: SharedEQ, in eqs: [NamedEQ]) {
         self.init(name: CustomEQ.uniqueName(CustomEQ.shortened(eq.name, to: CustomEQ.maxNameLength), in: eqs), bands: eq.eqBands,
                   preventClipping: eq.preventClipping, advanced: eq.usesAdvanced, allBands: eq.needsAllBands)
+        fullGain = eq.needsFullGain ? true : nil
     }
 }

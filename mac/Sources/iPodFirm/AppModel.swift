@@ -1174,6 +1174,11 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func eqUsesFullGain(_ patch: PatchInfo) -> Bool { selectedEQ.fullGain == true }
+
+    /// The view asks the user to agree to `CustomEQ.fullGainWarning` before it sets this to on.
+    func setEQUsesFullGain(_ patch: PatchInfo, _ on: Bool) { updateSelectedEQ { $0.fullGain = on ? true : nil } }
+
     func eqUsesPrecut(_ patch: PatchInfo) -> Bool { selectedEQ.preventClipping }
 
     func setEQUsesPrecut(_ patch: PatchInfo, _ on: Bool) { updateSelectedEQ { $0.preventClipping = on } }
