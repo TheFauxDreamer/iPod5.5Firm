@@ -1496,6 +1496,7 @@ final class AppModel: ObservableObject {
         case .playback: playbackLogFile
         case .diagnostic: diagnosticLogFile
         case .usb: usbProbeLogFile
+        case .battery: batteryLogFile
         }
     }
 

@@ -259,12 +259,26 @@ struct PlaybackLogContent: View {
 
 /// The log that the battery-log patch writes on the iPod.
 struct BatteryLogSection: View {
-    @EnvironmentObject var model: AppModel
-
     var body: some View {
         Section {
+            BatteryLogContent()
+        } header: {
+            Text("Battery Log")
+        }
+    }
+}
+
+/// The buttons and the text of the battery log, in the Patches pane and in `IPodLogSheet`.
+struct BatteryLogContent: View {
+    @EnvironmentObject var model: AppModel
+    var showsRead = true
+
+    var body: some View {
+        Group {
             HStack {
-                Button("Show Battery Log") { model.readBatteryLog() }.disabled(model.currentIPod == nil)
+                if showsRead {
+                    Button("Show Battery Log") { model.readBatteryLog() }.disabled(model.currentIPod == nil)
+                }
                 Spacer()
                 if let log = model.batteryLog, !log.isEmpty {
                     Button("Copy Log") {
@@ -286,8 +300,6 @@ struct BatteryLogSection: View {
                     .frame(minHeight: 80, maxHeight: 400)
                 }
             }
-        } header: {
-            Text("Battery Log")
         }
     }
 }
@@ -358,6 +370,8 @@ struct IPodLogSheet: View {
                 PlaybackLogContent(kind: .diagnostic, showsRead: false)
             case .usb:
                 USBLogContent(showsRead: false)
+            case .battery:
+                BatteryLogContent(showsRead: false)
             }
             Spacer(minLength: 0)
             HStack {
@@ -372,6 +386,7 @@ struct IPodLogSheet: View {
             case .playback: model.readSongLog(.playback)
             case .diagnostic: model.readSongLog(.diagnostic)
             case .usb: model.readUSBProbeLog()
+            case .battery: model.readBatteryLog()
             }
         }
     }

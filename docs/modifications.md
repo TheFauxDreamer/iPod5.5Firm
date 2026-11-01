@@ -29,7 +29,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [custom-eq](#custom-eq) | Code patch (extended) | Patches | 1 `bl`, 1 `b`, 2 words (`bytes`) | Version 0.1: yes, a basic test by the owner. Version 0.2 and later: no |
 | [playlist-folders](#playlist-folders) | Code patch (extended) | Patches | 4 `bl`, 2 `b` and 1 vtable word (with `chain`) | Version 0.1: emulator only (29 October 2026). Not tested on the real iPod |
 | [playback-log](#playback-log) | Code patch (test, extended) | Patches | 8 `bl`, 5 `b` (all 5 with `chain`) | Version 1.0: yes (30 October 2026). Version 1.2: no. Not tested in the emulator |
-| [battery-log](#battery-log) | Code patch (test, extended) | Patches | 1 `bl` | No. Not tested in the emulator |
+| [battery-log](#battery-log) | Code patch (test, extended) | Patches | 1 `bl` | Yes. Version 0.1 for 18.3 hours on a real iPod. Not tested in the emulator |
 | [diagnostic-log](#diagnostic-log) | Code patch (test, extended) | Patches | 12 `bl`, 8 `b` (all 8 with `chain`), 1 `word` (`chain`) | No. Not tested in the emulator |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
@@ -1108,11 +1108,13 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 
 ## battery-log
 
-**User interface.** Patches pane > Battery Log, letter `r`. It is a test patch: turn on **Enable Test Patches** to see it. "Clear the Battery Log" writes an empty 262144-byte `iPod_Control/iTunes/iPodFirmBatteryLog`. The option "Time Between Samples" gives 1, 5 or 30 minutes. The tool `battery-log` gives the section "Battery Log".
+**User interface.** Patches pane > Battery Log, letter `r`. It is a test patch: turn on **Enable Test Patches** to see it. "Clear the Battery Log" writes an empty 262144-byte `iPod_Control/iTunes/iPodFirmBatteryLog`. The option "Time Between Samples" gives 1, 5 or 30 minutes. The tool `battery-log` gives the section "Battery Log". The iPod pane lists the log if the file has data.
 
 **Effect.** The iPod records the raw battery value to the file at each sample. It needs no button press. The first sample comes 60 s after the start. Each line has the seconds, the raw value, the icon value and the charger state.
 
 **Method.** A `bl` hook at 0x1d91f8 in the firmware timer handler 0x1d91dc wraps 0x1e7fe4. The handler is the periodic battery read of the UI. The patch reads the raw value with 0x9b284. It writes each line, then the header with the end of the text.
+
+**Test status.** Swift tests (31 October 2026). Not tested in the emulator. Real iPod 5.5G (owner, 31 October 2026, version 0.1): 34 samples in 2.77 hours of music, with no gap. Second test (1 November 2026): 220 samples in 18.3 hours, until the iPod stopped. The fourth column was always 1 with no charger, so its meaning is not proven.
 
 **Research.** Refer to [re/battery.md](../re/battery.md).
 
