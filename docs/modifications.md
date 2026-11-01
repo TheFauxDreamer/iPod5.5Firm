@@ -132,7 +132,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 ## album-art
 
-**User interface.** Patches pane > Album Artwork, letter `a`, version 3.5. The patch has no option. Version 2.8 removed the option `source` ("Album Thumbnail Source"). `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
+**User interface.** Patches pane > Album Artwork, letter `a`, version 3.6. The patch has no option. Version 2.8 removed the option `source` ("Album Thumbnail Source"). `"ui": { "tools": ["album-thumbnails"] }` gives the detail these sections:
 
 - "Thumbnails": "Write Thumbnails to iPod" writes the thumbnail file for the playlists. The albums do not need this file. "Eject iPod" ejects the iPod.
 - "Playlist Artwork" sets a custom image for each playlist ("Choose Image…", "Use Automatic", or drag an image).
@@ -157,7 +157,7 @@ Each patch has one letter (`version_letter` in `patch.json`). The letters are so
 
 The research is in [../re/album-art-v2.md](../re/album-art-v2.md).
 
-**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 16668 bytes. Version 3.2 switches the measurement off (`ALBUM_ART_STATS` 0); with it, version 3.1 was 16552 bytes. To measure again, refer to [../re/album-art-v2.md](../re/album-art-v2.md#the-measurement-how-to-switch-it-on-again). Version 1.0 used the fixed area 0x7358d0–0x73658c (3080 bytes). Thus a build with this patch moves rsrc.
+**Load address.** `extended` (refer to [patch-system.md](patch-system.md#the-extended-area)). The compiled code and data are 16412 bytes. Version 3.2 switches the measurement off (`ALBUM_ART_STATS` 0); with it, version 3.1 was 16552 bytes. To measure again, refer to [../re/album-art-v2.md](../re/album-art-v2.md#the-measurement-how-to-switch-it-on-again). Version 1.0 used the fixed area 0x7358d0–0x73658c (3080 bytes). Thus a build with this patch moves rsrc.
 
 **Hooks.**
 
@@ -1035,7 +1035,7 @@ Each active band of each EQ gets the next filter number (`CustomEQ.library`). 5 
 
 ## playlist-folders
 
-**User interface.** Patches pane > Display > Playlist Folders, letter `o`, version 0.5. The section "Playlist Folders" of the patch is the editor (`ui.tools`: `playlist-folders`, `PlaylistFoldersSection` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)). It has these controls:
+**User interface.** Patches pane > Display > Playlist Folders, letter `o`, version 0.6. The section "Playlist Folders" of the patch is the editor (`ui.tools`: `playlist-folders`, `PlaylistFoldersSection` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)). It has these controls:
 
 - "Folder position": Folders First or Alphabetical.
 - "Folder Icons": a switch for the folder icon of all folders. The default is on. The switch always shows. It operates only if the connected iPod has folders, because the folder file on the iPod keeps the value.
@@ -1059,7 +1059,7 @@ A member is the persistent ID of a playlist (`mhyp` +0x1c). The firmware keeps i
 
 **The colour.** The firmware does not use the colour. Version 0.2 of the app does not show the colour picker and does not write colour squares. The colour squares did not show on the real iPod. The code stays in the app as comments, for later work. Refer to [../re/playlist-folders.md](../re/playlist-folders.md#folder-colours). The file keeps the colour field. The app writes the default colour into it.
 
-**Load address.** `extended`. The compiled code and data are 5444 bytes. The patch also uses heap memory: 64 KB for the file buffer, and small arrays for the views.
+**Load address.** `extended`. The compiled code and data are 3980 bytes. The patch also uses heap memory: 64 KB for the file buffer, 24 bytes for each folder (version 0.6), and small arrays for the views.
 
 **Hooks.**
 

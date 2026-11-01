@@ -117,9 +117,11 @@ The owner stopped this work. The patch uses the method of experiment 3.
 
 ## Folder icon
 
-Status (31 October 2026): made. Not tested in the emulator or on the real iPod.
+Status (1 November 2026): the owner tested `album-art` 3.6 and `playlist-folders` 0.6 in the emulator window. The icons and the folder keys operate. Not tested on the real iPod. Not tested: the switch in the app, the dark theme, and a folder change after a USB session.
 
 **The method.** `album-art` 3.4 keeps the icon in the array `folder_px`. It reads the file `iPodFirmPlaylistFolders` one time and keeps the hash of each folder name. The patch reads the file again after a USB session. A playlist row whose hash agrees with a folder name gets the icon. This step comes before the collage step.
+
+**The memory.** Since `album-art` 3.6, the list of folder hashes comes from the allocator (4 bytes for each folder). Since `playlist-folders` 0.6, the folder table also comes from the allocator (24 bytes for each folder). The fixed table used 1536 bytes of the firmware for 64 folders.
 
 **The switch.** The section "Playlist Folders" of the app has the switch "Folder Icons". The default is on. The switch always shows, but it operates only if the connected iPod has folders. If the switch is off, the app sets bit 1 of the flags in the folder file. Then `album-art` keeps no folder names, and a folder row has only text. "Write Folders to iPod" sends the change. A flash is not necessary. The patch `options` list cannot do this, because `album-art` cannot read an option of a different patch.
 

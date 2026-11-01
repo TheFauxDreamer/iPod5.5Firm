@@ -378,7 +378,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | (free) | | 0x736644–0x736700 (188 bytes) | `flash-keep-awake` used this area before version 1.2. |
 | `flash-wake-on-input` | 0x736700 | 0x736700–0x736790 (144 bytes) | Code and three variables. |
 | `dark-mode` | Set by the build | After the theme data, below 0x7F8000 | The value 0x7eb000 in `patch.json` is not used. |
-| `album-art` | `extended` | After all other data (16668 bytes). Alone: 0x736800–0x73a91c. The album table, the thumbnails, the cache and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
+| `album-art` | `extended` | After all other data (16412 bytes). Alone: 0x736800–0x73a81c. The album table, the thumbnails, the cache and a 20000-byte read buffer come from the allocator | Extended patch since version 2.0. The draw loop `shrink` is fast code; the other functions use `__attribute__((minsize))`. |
 | `usb-audio-out` | `extended` | After all other data (15924 bytes), then three menus: Settings, the main menu and Settings > Main Menu. The control page, the siTDs and the music buffers (52 KB) come from 0xad80c | Extended patch. |
 | `usb-host-probe` | `extended` | After all other data (22248 bytes; the 32 KB log buffer and the 40 KB of the isochronous test come from allocators) | Extended patch. Test patch. |
 | `playback-log` | `extended` | After all other data (38849 bytes; the 32 KB log buffer is in the patch, `.bss`) | Extended patch. Test patch. |
@@ -391,7 +391,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `cover-flow` | `extended` | After all other data (11384 bytes; approximately 600 KB for the screen copy, the covers and the read buffer come from the allocator while Cover Flow shows) | Extended patch. |
 | `up-next` | `extended` | After all other data (1807 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736f0f, menu at 0x736f10, osos end 0x737800 | Extended patch. |
 | `custom-eq` | `extended` | After all other data (1690 bytes, with 1000 bytes of filter records and 350 bytes for the list of EQs). | Extended patch. It also changes 2 words (`bytes`). |
-| `playlist-folders` | `extended` | After all other data (5444 bytes; the 64 KB file buffer and the views come from the allocator). Alone: code 0x736800–0x737d44, osos end 0x738000 | Extended patch. |
+| `playlist-folders` | `extended` | After all other data (3980 bytes; the 64 KB file buffer, the folder table and the views come from the allocator). Alone: code 0x736800–0x73778c, osos end 0x737800 | Extended patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
 
