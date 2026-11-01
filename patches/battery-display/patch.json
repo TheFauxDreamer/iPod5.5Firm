@@ -1,0 +1,142 @@
+{
+  "name": "battery-display",
+  "title": "Battery Display",
+  "summary": "Test patch: shows a battery percentage.",
+  "symbol": "battery.75percent",
+  "category": "test",
+  "version_letter": "t",
+  "version": "0.3",
+  "size": 2580,
+  "description": "Shows the battery as an icon, as a percentage, or as both. It can also use a curve from a larger battery in place of the Apple table.",
+  "details": [
+    "During a charge, the iPod shows the charge icon and the percentage. With Display set to Icon, it shows only the charge icon.",
+    "The Apple data moves in steps of 5 %. The Apple icon has only 16 levels.",
+    "Custom Battery changes the battery picture and the percentage. It does not change when the iPod stops.",
+    "Battery Curve imports a battery log, so that you can make a curve for your own battery."
+  ],
+  "notes": [
+    "The built-in Custom Battery curve is provisional. It comes from one larger battery and is not from a full charge. Import a log for your own battery.",
+    "The percentage reads high during a charge, because the charge raises the voltage.",
+    "Icon + Percent is not tested. Check the text and the title on each screen."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    {
+      "model": "iPod Video (5G/5.5G)",
+      "firmware": "1.3",
+      "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251"
+    }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "read_switches": "0x1d3ac4",
+    "battery_icon": "0x1e7fe4",
+    "battery_raw": "0x09b284",
+    "show_child": "0x1ae6d0",
+    "child_first": "0x17cda4",
+    "child_next": "0x17cc8c",
+    "child_end": "0x17cde4",
+    "str_table": "0x21f3b8",
+    "set_label_type": "0x243fb0",
+    "__aeabi_uidiv": "0x082694",
+    "hardware_revision": "0x265164"
+  },
+  "hooks": [
+    {
+      "kind": "bl",
+      "at": "0x0b4abc",
+      "expect": "0xeb047c00",
+      "to": "hook_switches"
+    },
+    {
+      "kind": "bl",
+      "at": "0x1e8af8",
+      "expect": "0xe28f1f55",
+      "to": "hook_text"
+    },
+    {
+      "kind": "bl",
+      "at": "0x1ae838",
+      "expect": "0xeb00e5e9",
+      "to": "hook_icon"
+    },
+    {
+      "kind": "bl",
+      "at": "0x1ae6b8",
+      "expect": "0xeb000004",
+      "to": "hook_show"
+    }
+  ],
+  "options": [
+    {
+      "id": "display",
+      "title": "Display",
+      "symbol": "display_mode",
+      "default": 2,
+      "choices": [
+        {
+          "value": 0,
+          "title": "Icon",
+          "description": "The Apple battery icon."
+        },
+        {
+          "value": 1,
+          "title": "Icon + Percent",
+          "description": "The battery icon, and the percentage at its left.",
+          "caution": "This is not tested. The text can touch a long title."
+        },
+        {
+          "value": 2,
+          "title": "Percent",
+          "description": "Only the percentage."
+        }
+      ]
+    },
+    {
+      "id": "data",
+      "title": "Battery Data",
+      "symbol": "battery_data",
+      "default": 0,
+      "choices": [
+        {
+          "value": 0,
+          "title": "Apple",
+          "description": "The Apple table. Use this for a battery of the original size."
+        },
+        {
+          "value": 1,
+          "title": "Custom Battery",
+          "description": "A curve from a larger battery. It changes the icon and the percentage.",
+          "caution": "The curve is provisional. It is for one battery, and other batteries are different."
+        }
+      ]
+    },
+    {
+      "id": "smoothing",
+      "title": "Smoothing",
+      "symbol": "smoothing",
+      "default": 0,
+      "choices": [
+        {
+          "value": 0,
+          "title": "Off",
+          "description": "The percentage follows the data directly. Apple data moves in steps of 5 %."
+        },
+        {
+          "value": 1,
+          "title": "On",
+          "description": "A longer average, and no small rises. Apple data moves in steps of 1 %, but it is then not the exact Apple logic. The value changes more slowly, and it can stay still for some minutes."
+        }
+      ]
+    }
+  ],
+  "battery_curve": {
+    "raw": "curve_raw",
+    "percent": "curve_pct"
+  },
+  "ui": {
+    "tools": [
+      "battery-curve"
+    ]
+  }
+}

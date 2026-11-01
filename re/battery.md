@@ -349,3 +349,23 @@ Next test: find the full value and the charger column.
 2. Clear the log.
 3. Start the iPod, with the charger connected for 15 minutes.
 4. Disconnect the charger and play music for 1 hour.
+
+## The patch `battery-display` (1 November 2026)
+
+The options are in the Patches pane, as the owner asked. There is no row in iPod Settings.
+
+Static results from `DumpCode` and `DecompileAt`:
+
+- 0x1ae838 is the `bl 0x1e7fe4` (mode 0) for the battery picture. Hook only this call. Other callers keep the Apple value.
+- The object in r5 at 0x1e8af8 is the provider for 0x1e7fe4, because the next case calls 0x1e7fe4 with r5.
+- 0x243fb0 uses the Type ID only if the second argument is a provider. The patch gives `str_table` (0x21f3b8).
+- The patch gives the text with the format `%s`. Thus it does not need `%%` in the firmware `sprintf`.
+- Icon + Percent uses the switch, so that the firmware marks the text. The hook then also shows the icon child. It widens the view by 30 pixels and moves the children (child + 0x58).
+
+The provisional table of the patch uses 20.3 hours from raw 438. This is an estimate. The hours from raw 423 are measured, and the 2 hours above raw 423 use the fall in the first log.
+
+Not tested: the text colour with the dark theme, the text width, and if the rectangles stay after a new layout.
+
+Version 0.2 adds the option Smoothing (off by default) and the import of a battery log. The address list of the tables comes from [The tables](#the-tables). The hardware word comes from 0x265164. The owner's iPod has revision 0xb. The other revisions are not tested.
+
+Version 0.3 shows the percentage during a charge. The charge path of 0x1ae774 gives a child that is not the text child, and `hook_show` then also shows the text. In Percent mode, the view goes back to the normal width after the charge. The size of the error during a charge is not known, because no log sample has a charger. This replaces the earlier design with no percentage during a charge.

@@ -936,6 +936,8 @@ the power chip of the PP5020 of Apple. The facts are Static.
 | 0x264fa4 | Gives the state of the power. The function has a switch with the cases 4 to 0xc. |
 | 0x265abc | Gives the state of the audio. The function has a switch with the cases 4 to 0xc. |
 | 0x1ae774 | Selects the element of the battery view (View 25599): the icon value + 4, or 0x1b for the text 0x63fc. Refer to [re/battery.md](../re/battery.md). |
+| 0x1ae774 | Selects the child of the battery view. The `bl 0x1e7fe4` at 0x1ae838 (mode 0) is only for the picture. The patch `battery-display` hooks it. | Static, Patch |
+| 0x243fb0 | Sets the Type of a label (label, provider, Type ID, redraw). With provider 0, the function does not use the Type ID. | Static |
 | 0x1d91dc | UI timer handler: reads the battery icon value at 0x1d91f8 (0x1e7fe4) and marks the status elements. The patch `battery-log` hooks 0x1d91f8. | Static, Patch |
 | 0x1ae6d0 | (view, index): makes one child of the battery view visible, with method + 0x9c. One caller: 0x1ae6b8. |
 | 0x1ebfec | Reads the switch byte 0x1081dfe3 (`_show_voltage`). If it is set, marks the battery text 0x63fc for a new draw. |
