@@ -10,8 +10,8 @@
     ]
   },
   "version_letter": "a",
-  "version": "3.5",
-  "size": 16668,
+  "version": "3.6",
+  "size": 16412,
   "description": "Each album and playlist in a list shows a small cover.",
   "details": [
     "Albums use the artwork that iTunes or Finder put on the iPod.",

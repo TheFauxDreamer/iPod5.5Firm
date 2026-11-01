@@ -1242,7 +1242,7 @@ static const unsigned short folder_px[TH * TH] __attribute__((aligned(4))) = {
     0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f, 0xf81f,
 };
 
-static unsigned folder_hash[FOLDERS_MAX];
+static unsigned *folder_hash;             /* folder_total items, from the allocator */
 static int folder_total;
 static int folders_read;                  /* 1: folder_hash agrees with the file */
 
@@ -1256,6 +1256,8 @@ COLD static void load_folders(void)
 
     folders_read = 1;
     folder_total = 0;
+    fw_free(folder_hash);
+    folder_hash = 0;
     if (open_path(fh, FOLDERS_PATH, 0) != 0)
         return;
     b = alloc(FOLDERS_FILE_MAX, 131072);
@@ -1264,7 +1266,12 @@ COLD static void load_folders(void)
     if (b && (rc == 0 || rc == READ_EOF) && got >= 12 && got <= FOLDERS_FILE_MAX
         && b[0] == 'I' && b[1] == 'F' && b[2] == 'P' && b[3] == 'F' && *(unsigned short *)(b + 4) == 1) {
         n = *(unsigned short *)(b + 6) & FOLDERS_NO_ICONS ? 0 : *(unsigned short *)(b + 8);
-        for (k = 0; k < n && k < FOLDERS_MAX; k++) {
+        if (n > FOLDERS_MAX)
+            n = FOLDERS_MAX;
+        folder_hash = n ? alloc(n * sizeof(unsigned), 262144) : 0;
+        if (!folder_hash)
+            n = 0;
+        for (k = 0; k < n; k++) {
             unsigned units, members, name_bytes;
             if (at + 8 > got)
                 break;

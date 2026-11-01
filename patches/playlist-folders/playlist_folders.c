@@ -96,7 +96,7 @@ struct folder {
 
 static unsigned char *file_buf;           /* the file, or 0 */
 static unsigned flags;
-static struct folder folders[MAX_FOLDERS];
+static struct folder *folders;            /* folder_count items, from the allocator */
 static unsigned folder_count;
 
 static void *seen_array;                  /* the array of the last build */
@@ -120,7 +120,9 @@ static void read_file(void)
     int rc;
 
     fw_free(file_buf);
+    fw_free(folders);
     file_buf = 0;
+    folders = 0;
     folder_count = 0;
     flags = 0;
     fw_memset0(path, sizeof path);
@@ -142,11 +144,18 @@ static void read_file(void)
         fw_free(b);
         return;
     }
+    n = FIELD(u16, b, 8);
+    if (n > MAX_FOLDERS)
+        n = MAX_FOLDERS;
+    folders = n ? fw_alloc(n * sizeof(struct folder)) : 0;
+    if (!folders) {
+        fw_free(b);
+        return;
+    }
     file_buf = b;
     flags = FIELD(u16, b, 6);
-    n = FIELD(u16, b, 8);
     at = 12;
-    for (k = 0; k < n && folder_count < MAX_FOLDERS; k++) {
+    for (k = 0; k < n; k++) {
         unsigned units, members, name_bytes;
         if (at + 8 > got)
             break;
