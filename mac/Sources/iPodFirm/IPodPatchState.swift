@@ -155,7 +155,8 @@ extension AppModel {
                 viaHelper = false
             }
             // The app makes the folder. If the helper makes it, an older helper leaves the folder to root.
-            try Self.patchLibrary.prepareStagingFolder()
+            // An automatic read must not open a password prompt.
+            if automatic { try Self.patchLibrary.prepareStagingFolder() } else { try await ensureStagingFolder() }
             ipodReadStatus = "Reading the patches on the iPod…"
             AppLog.step("Helper (\(viaHelper ? "daemon" : "password")): read the osos of \(ipod.disk)")
             let r = viaHelper ? try await HelperClient.readOSOS(disk: ipod.disk, dir: dir)

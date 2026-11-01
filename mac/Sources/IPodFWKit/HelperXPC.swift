@@ -66,6 +66,39 @@ public func checkedBackupDirectory(_ path: String, home: String) throws -> URL {
     return URL(fileURLWithPath: real)
 }
 
+/// The owner, the mode, the flags and the ACL state of `path`, for a report. The call does not follow a link.
+public func permissionState(_ path: String) -> String {
+    var info = stat()
+    guard lstat(path, &info) == 0 else { return "\(URL(fileURLWithPath: path).lastPathComponent): no item" }
+    let acl = acl_get_link_np(path, ACL_TYPE_EXTENDED)
+    defer { if let acl { acl_free(UnsafeMutableRawPointer(acl)) } }
+    return "\(URL(fileURLWithPath: path).lastPathComponent): owner \(info.st_uid), mode \(String(info.st_mode & 0o7777, radix: 8)), "
+        + "flags \(String(info.st_flags, radix: 16)), ACL \(acl == nil ? "no" : "yes")"
+}
+
+/// Give `~/Library/Application Support/iPodFirm` of `home` and all its items to `owner`, with write access to
+/// each folder. Any other path is refused. Root does this work, so no step follows a symbolic link.
+/// Gives the state of the main folders before the repair.
+public func repairAppFolder(_ path: String, owner: uid_t, home: String) throws -> String {
+    guard let realHome = resolvedPath(home), let real = resolvedPath(path),
+          real == realHome + "/Library/Application Support/iPodFirm" else {
+        throw FirmwareError("Refusing to repair \(path).")
+    }
+    let before = [real, real + "/Staging", real + "/Backups"].map(permissionState).joined(separator: "; ")
+    var items = [real]
+    let walk = FileManager.default.enumerator(atPath: real)
+    while let item = walk?.nextObject() as? String { items.append(real + "/" + item) }
+    var failures = 0
+    for item in items {
+        var info = stat()
+        guard lstat(item, &info) == 0, lchown(item, owner, gid_t(UInt32.max)) == 0 else { failures += 1; continue }
+        if info.st_mode & S_IFMT == S_IFDIR,
+           fchmodat(AT_FDCWD, item, (info.st_mode & 0o7777) | S_IRWXU, AT_SYMLINK_NOFOLLOW) != 0 { failures += 1 }
+    }
+    guard failures == 0 else { throw FirmwareError("Cannot repair \(failures) of \(items.count) items. Before: \(before)") }
+    return before
+}
+
 /// True if this process can read a file that only Full Disk Access unlocks.
 public func processHasFullDiskAccess() -> Bool {
     guard let h = FileHandle(forReadingAtPath: "/Library/Application Support/com.apple.TCC/TCC.db") else { return false }

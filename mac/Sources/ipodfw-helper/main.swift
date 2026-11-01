@@ -8,6 +8,7 @@ import IPodFWKit
 //   ipodfw-helper read   --disk diskN --backup-dir DIR [--owner UID]   (read only: DIR/ipod-osos.bin)
 //   ipodfw-helper flash  --disk diskN --image FILE --backup-dir DIR --reason TEXT [--dry-run] [--owner UID]
 //   ipodfw-helper rescue --disk diskN --image FILE --backup-dir DIR [--dry-run] [--owner UID]
+//   ipodfw-helper repair-folder --folder DIR --owner UID   (only ~/Library/Application Support/iPodFirm of UID)
 // Prints one HelperResult JSON object on stdout.
 
 func emit(_ r: HelperResult) -> Never {
@@ -23,7 +24,7 @@ AppLog.directory = nil
 if CommandLine.arguments.contains("--daemon") { runDaemon() }
 
 var args = Array(CommandLine.arguments.dropFirst())
-guard let command = args.first else { emit(HelperResult(ok: false, message: "usage: ipodfw-helper backup|read|flash|rescue ...")) }
+guard let command = args.first else { emit(HelperResult(ok: false, message: "usage: ipodfw-helper backup|read|flash|rescue|repair-folder ...")) }
 args.removeFirst()
 var opts: [String: String] = [:]
 var flags: Set<String> = []
@@ -37,6 +38,11 @@ while i < args.count {
 
 do {
     guard getuid() == 0 || geteuid() == 0 else { throw FirmwareError("ipodfw-helper must run as root.") }
+    if command == "repair-folder" {
+        guard let folder = opts["folder"], let owner = opts["owner"].flatMap({ uid_t($0) }), owner != 0,
+              let pw = getpwuid(owner) else { throw FirmwareError("--folder and --owner of a user are required.") }
+        emit(HelperResult(ok: true, message: try repairAppFolder(folder, owner: owner, home: String(cString: pw.pointee.pw_dir))))
+    }
     guard let diskID = opts["disk"], let dir = opts["backup-dir"] else { throw FirmwareError("--disk and --backup-dir are required.") }
     guard let ipod = try Device.findIPods().first(where: { $0.disk == diskID }) else {
         throw FirmwareError("No iPod at /dev/\(diskID). Is it still connected?")

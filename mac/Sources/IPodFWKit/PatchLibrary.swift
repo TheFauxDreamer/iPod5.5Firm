@@ -534,10 +534,9 @@ public struct PatchLibrary {
         let fm = FileManager.default
         try fm.createDirectory(at: stagingDir, withIntermediateDirectories: true)
         guard !fm.isWritableFile(atPath: stagingDir.path) else { return }
-        let attributes = try? fm.attributesOfItem(atPath: stagingDir.path)
-        let mode = (attributes?[.posixPermissions] as? NSNumber).map { String($0.intValue, radix: 8) } ?? "?"
-        AppLog.warning("No write access to \(stagingDir.path): owner \(attributes?[.ownerAccountID] ?? "?"), mode \(mode), app user \(getuid())")
-        let old = stagingDir.deletingLastPathComponent().appendingPathComponent("\(stagingDir.lastPathComponent) old \(UUID().uuidString)")
+        let parent = stagingDir.deletingLastPathComponent()
+        AppLog.step("No write access to the staging folder. \(permissionState(stagingDir.path)); \(permissionState(parent.path)); app user \(getuid())")
+        let old = parent.appendingPathComponent("\(stagingDir.lastPathComponent) old \(UUID().uuidString)")
         try fm.moveItem(at: stagingDir, to: old)
         try fm.createDirectory(at: stagingDir, withIntermediateDirectories: true)
     }

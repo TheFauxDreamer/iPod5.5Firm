@@ -11,11 +11,11 @@ enum Privileged {
 
     static func shellQuote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
 
-    static func run(_ args: [String]) async throws -> HelperResult {
+    static func run(_ args: [String], prompt: String = "iPodFirm needs administrator rights to read and write your iPod's firmware partition.") async throws -> HelperResult {
         let command = ([helperPath] + args).map(shellQuote).joined(separator: " ")
         let escaped = command.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         let source = """
-        do shell script "\(escaped)" with prompt "iPodFirm needs administrator rights to read and write your iPod's firmware partition." with administrator privileges
+        do shell script "\(escaped)" with prompt "\(prompt)" with administrator privileges
         """
         return try await withCheckedThrowingContinuation { cont in
             queue.async {

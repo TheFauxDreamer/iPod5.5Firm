@@ -25,6 +25,7 @@ iPodFirm obeys these limits. The code enforces each limit. The "Where" column gi
 | Keep the patch code below 0x736800, or make it an extended patch. | rsrc starts at 0x736800 in Apple's layout. An extended patch goes after all other data and makes the build move rsrc. | `Patcher.maxOSOSSize`, `Patcher.extendedBase`. |
 | Do not put data in the zero area at 0x6ca452. | The firmware stops at start if this area is not zero. | The theme import uses only the area after osos. |
 | Read the iPod without a write. | The app reads the patches on the iPod each time an iPod connects. | The helper command `read` (`Operations.readOSOS`) only reads the partition. It writes the osos to a file in `~/Library/Application Support/iPodFirm/`. It gives the file and its folder to the user. Automatic only with the Touch ID daemon. |
+| Repair only the app folder. | The app needs write access to its folder, and only root can correct a wrong owner. A write of root in a different location can damage macOS. | `repairAppFolder` refuses every path except `~/Library/Application Support/iPodFirm` of the user, and it does not follow symbolic links. The command needs the password each time. |
 | Never change the opened file or a backup. | A backup must stay correct. | "Save Firmware As…" refuses the Backups folder. Backups get a new name each time. |
 | Never apply program code changes from a theme. | The import cannot verify them. | `ThemeImport.make` records them as "skipped". |
 

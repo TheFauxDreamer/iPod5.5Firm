@@ -1892,11 +1892,26 @@ final class AppModel: ObservableObject {
         return nil
     }
 
+    /// Make sure that the app can write in the staging folder. If it cannot, the helper repairs the app
+    /// folder after a password prompt. The steps of a fault report then show the state before the repair.
+    func ensureStagingFolder() async throws {
+        do {
+            try Self.patchLibrary.prepareStagingFolder()
+        } catch {
+            AppLog.step("Helper (password): repair the app folder after: \(error.localizedDescription)")
+            let r = try await Privileged.run(["repair-folder", "--folder", Self.supportDir.path, "--owner", String(getuid())],
+                                             prompt: "iPodFirm needs administrator rights to repair the permissions of its folder.")
+            guard r.ok else { throw r.failure() }
+            AppLog.step("Helper (password): app folder repaired. Before: \(r.message)")
+            try Self.patchLibrary.prepareStagingFolder()
+        }
+    }
+
     func flashEdited() async {
         guard busy == nil, let editor else { return }
         let staging = Self.supportDir.appendingPathComponent("Staging/flash.bin")
         do {
-            try Self.patchLibrary.prepareStagingFolder()
+            try await ensureStagingFolder()
             try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion, list: activeList)).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
         } catch { fail("Cannot Flash", error) }

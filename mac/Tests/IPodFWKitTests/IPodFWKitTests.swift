@@ -25,6 +25,38 @@ final class BackupFolderTests: XCTestCase {
         XCTAssertThrowsError(try checkedBackupDirectory(outside.path, home: home.path))
     }
 
+    func testRepairAppFolderChecksThePath() throws {
+        let fm = FileManager.default
+        let home = fm.temporaryDirectory.appendingPathComponent("home-\(UUID().uuidString)")
+        let app = home.appendingPathComponent("Library/Application Support/iPodFirm")
+        let staging = app.appendingPathComponent("Staging")
+        let outside = home.appendingPathComponent("outside")
+        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+        try fm.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: staging.path)
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: outside.path)
+            try? fm.removeItem(at: home)
+        }
+        try fm.setAttributes([.posixPermissions: 0o500], ofItemAtPath: outside.path)
+        try fm.setAttributes([.posixPermissions: 0o777], ofItemAtPath: home.path)
+
+        // A link in the tree and a link to the tree do not move the repair to a different folder.
+        try fm.createSymbolicLink(at: staging.appendingPathComponent("link"), withDestinationURL: outside)
+        let link = home.appendingPathComponent("link")
+        try fm.createSymbolicLink(at: link, withDestinationURL: app)
+        XCTAssertThrowsError(try repairAppFolder(outside.path, owner: getuid(), home: home.path))
+        XCTAssertThrowsError(try repairAppFolder(staging.path, owner: getuid(), home: home.path))
+        XCTAssertThrowsError(try repairAppFolder(link.path, owner: getuid(), home: outside.path))
+
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: staging.path)
+        let before = try repairAppFolder(app.path, owner: getuid(), home: home.path)
+        XCTAssertTrue(before.contains("Staging: owner \(getuid()), mode 555"), before)
+        XCTAssertTrue(fm.isWritableFile(atPath: staging.path))
+        // The repair does not change the folder behind the link.
+        XCTAssertEqual((try fm.attributesOfItem(atPath: outside.path)[.posixPermissions] as? NSNumber)?.intValue, 0o500)
+    }
+
     func testPrepareStagingFolderReplacesAFolderWithoutWriteAccess() throws {
         let fm = FileManager.default
         let app = fm.temporaryDirectory.appendingPathComponent("app-\(UUID().uuidString)")
