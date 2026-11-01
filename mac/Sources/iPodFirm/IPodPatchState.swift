@@ -180,7 +180,7 @@ extension AppModel {
 
 /// One log file on the connected iPod.
 struct IPodLogFile: Identifiable {
-    enum Kind: CaseIterable { case playback, diagnostic, usb }
+    enum Kind: CaseIterable { case playback, diagnostic, usb, battery }
 
     let kind: Kind
     let bytes: Int
@@ -192,6 +192,7 @@ struct IPodLogFile: Identifiable {
         case .playback: "Playback Log"
         case .diagnostic: "Diagnostic Log"
         case .usb: "USB Log"
+        case .battery: "Battery Log"
         }
     }
 

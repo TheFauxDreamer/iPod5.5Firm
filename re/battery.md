@@ -170,6 +170,8 @@ Owner report (31 October 2026): since the battery mod (a larger battery), the ic
 
 This agrees with a value of 430–439: level 13 of the 0xb table starts at 436, and it gives an icon value of 17 from 20. It suggests that the voltage of this battery stays nearly constant for most of the discharge and then falls quickly. This is an estimate. A record of the value over one complete discharge will show the real curve. If the curve is this flat, a percentage from the voltage alone stays near one value for most of the time. Then the patch needs a table from the real curve, or a different method.
 
+Owner report (31 October 2026): during the music test, the display went from "43" to "44". Thus the display follows the value, and a fixed text is excluded. The charger state during the rise is not recorded. A rise without a charger can be a recovery of the voltage after a load, for example after the start.
+
 ### What the test gives
 
 - The width: if the number fits in 27 pixels, "100%" possibly also fits.
@@ -260,3 +262,90 @@ Next steps:
 1. Do the test with the 2 files. Record the number at full and at empty.
 2. Answer the open questions.
 3. Make a test patch `battery-display` on its own branch. Make Percent first, then Icon + Percent.
+
+## The patch `battery-log` (31 October 2026)
+
+The test patch records the complete raw value and thus answers the question of the value 43.
+
+0x1d91dc is the UI timer handler that reads the icon value. It calls 0x1e7fe4 at 0x1d91f8 (`bl`, eb003b79), starts the timer at + 0xa0 again and marks the status elements. The emulator showed the battery reads approximately each 30 s. Static: 0x1d91dc has one caller, 0x1d8ebc in 0x1d8e68.
+
+### First log from a real iPod (31 October 2026)
+
+The owner disconnected the power and played music. The patch (version 0.1) wrote 34 samples at 5-minute intervals, for 9964 s (2.77 hours). The first raw value was 433 and the last raw value was 417.
+
+| Measurement | Result |
+|---|---|
+| Hidden number | The complete raw value is 3 digits. The raw values of 430–438 agree with the display "43". Thus the display of the switch `_show_voltage` drops the third digit. |
+| Time between samples | 300 s or 301 s. The log has no gap. The owner did not report the state of the backlight. |
+| Fall of the raw value | 7.7 units for each hour (a straight line through all samples). |
+| Noise | A sample is up to 4.5 units from the line. The value also rises between samples, for example 417 to 419. |
+| Icon value | 18 until 1560 s (raw 435). 17 from 1860 s (raw 432). |
+| Charger column | Always 1, with no charger connected. |
+
+Conclusions:
+
+1. The voltage is not flat in this part of the discharge. This does not agree with the estimate in the owner report above. The log does not show the end of the discharge.
+2. The change from icon 18 to 17 is at a raw value of 432–435. Limit 434 of the table for revision 0xc and limit 436 of the table for revision 0xb both agree with this. The second log gives the answer: revision 0xb.
+3. A percentage needs a filter. One sample has noise of more than one percent of the range.
+4. The value of 0x9c258 is not proven to be the charger state. The value 1 with no charger does not agree with "the charger is connected". The log needs a sample with the charger connected for a comparison. Until then, read the fourth column as a power state with an unknown meaning.
+
+A full discharge from a full charge is necessary to give the full value, the empty value and the curve.
+
+### Second log: to the end of the battery (1 November 2026)
+
+The owner played music until the iPod stopped. The patch (version 0.1) wrote 220 samples for 65797 s (18.3 hours). The first raw value was 415, and the raw value was then 423 for 15 minutes. The last raw value was 116. The time between samples was 300–303 s.
+
+The log did not start from a full charge. The owner charged the iPod for 1 hour before the log.
+
+The icon changes agree with the table for revision 0xb. They do not agree with any other table:
+
+| Icon change | Raw value at the change | Limit in the 0xb table |
+|---|---|---|
+| 17 to 15 | 405 to 403 | 404 |
+| 15 to 14 | 396 to 393 | 395 |
+| 14 to 13 | 380 | 382 |
+| 13 to 11 | 364 to 363 | 365 |
+| 11 to 10 | 350 | 350 |
+| 10 to 9 | 341 to 337 | 338 |
+| 9 to 7 | 329 | 330 |
+| 7 to 6 | 326 to 325 | 325 |
+| 6 to 5 | 319 to 316 | 319 |
+| 5 to 3 | 317 to 314 | 317 |
+| 3 to 2 | 312 to 311 | 311 |
+| 2 to 1 | 303 to 300 | 302 |
+| 1 to 0 | 284 | 283 |
+
+Results:
+
+1. The iPod of the owner uses revision 0xb, as the emulator does.
+2. The icon value reached 0 at 43581 s, at raw 284. The iPod then played for 6.2 more hours, and the raw value fell to 116. Thus the Apple table ends far above the end of this larger battery.
+3. The raw value falls steadily through the complete log. It has no flat part. This does not agree with the earlier estimate of a nearly constant voltage.
+4. The fall is not constant. It is approximately 12 units each hour from 400 to 300, and approximately 26 units each hour from 280 to 130. The last 3 samples fell by 5, 4 and 7 units.
+5. The icon value can rise by one step, for example 9 to 10 at 29172 s. This agrees with rule 5 of 0x1dfe44.
+6. The fourth column was 1 for all samples. No sample with a charger exists yet.
+
+The owner report of an icon that goes from almost full to flat does not agree with this log. The icon fell in steps for 12 hours. The icon did reach 0 too early. The cause of the report is not proven.
+
+### Play time that remains
+
+This table comes only from the second log. It gives the hours of music that remained at each raw value. The first log is not part of this table, because a charge occurred between the 2 logs.
+
+| Raw value | 415 | 405 | 396 | 380 | 363 | 350 | 337 | 325 | 311 | 300 | 284 | 250 | 200 | 150 | 116 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Hours left | 16.8 | 15.7 | 14.9 | 13.9 | 12.4 | 11.2 | 10.1 | 8.8 | 7.6 | 6.9 | 6.2 | 4.8 | 2.5 | 0.8 | 0 |
+
+The full value and the play time from a full charge are not known. The highest raw value in the 2 logs is 438. The table cannot give a percentage until a log starts from a full charge.
+
+Decisions for the `battery-display` patch:
+
+- Do not use the Apple table for the percentage on this iPod. It gives 0 % with 6.2 hours of play time left.
+- Use a table of raw values and percentages, with a line between the points.
+- Other batteries need other tables, so the table must be a setting in the app. The Apple table is the default. A battery log can give a measured table.
+- Use a filter. One sample has noise of up to 4.5 units.
+
+Next test: find the full value and the charger column.
+
+1. Charge the iPod to full with a charger, not with the Mac.
+2. Clear the log.
+3. Start the iPod, with the charger connected for 15 minutes.
+4. Disconnect the charger and play music for 1 hour.

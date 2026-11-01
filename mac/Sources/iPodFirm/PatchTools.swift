@@ -86,6 +86,7 @@ struct PatchTool: View {
         case "playlist-folders": PlaylistFoldersSection()
         case "playback-log": PlaybackLogSection()
         case "diagnostic-log": PlaybackLogSection(kind: .diagnostic)
+        case "battery-log": BatteryLogSection()
         default: EmptyView()
         }
     }
@@ -256,6 +257,55 @@ struct PlaybackLogContent: View {
     }
 }
 
+// MARK: battery-log
+
+/// The log that the battery-log patch writes on the iPod.
+struct BatteryLogSection: View {
+    var body: some View {
+        Section {
+            BatteryLogContent()
+        } header: {
+            Text("Battery Log")
+        }
+    }
+}
+
+/// The buttons and the text of the battery log, in the Patches pane and in `IPodLogSheet`.
+struct BatteryLogContent: View {
+    @EnvironmentObject var model: AppModel
+    var showsRead = true
+
+    var body: some View {
+        Group {
+            HStack {
+                if showsRead {
+                    Button("Show Battery Log") { model.readBatteryLog() }.disabled(model.currentIPod == nil)
+                }
+                Spacer()
+                if let log = model.batteryLog, !log.isEmpty {
+                    Button("Copy Log") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(log, forType: .string)
+                    }
+                }
+            }
+            if let log = model.batteryLog {
+                if log.isEmpty {
+                    Text("The log is empty. Let the iPod operate for some minutes. Then connect it again.")
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ScrollView {
+                        Text(log)
+                            .font(.caption.monospaced()).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(minHeight: 80, maxHeight: 400)
+                }
+            }
+        }
+    }
+}
+
 // MARK: usb-log
 
 /// The log that the usb-host-probe patch writes on the iPod. Refer to USB-AUDIO-OUT.md (Stage 0).
@@ -322,6 +372,8 @@ struct IPodLogSheet: View {
                 PlaybackLogContent(kind: .diagnostic, showsRead: false)
             case .usb:
                 USBLogContent(showsRead: false)
+            case .battery:
+                BatteryLogContent(showsRead: false)
             }
             Spacer(minLength: 0)
             HStack {
@@ -336,6 +388,7 @@ struct IPodLogSheet: View {
             case .playback: model.readSongLog(.playback)
             case .diagnostic: model.readSongLog(.diagnostic)
             case .usb: model.readUSBProbeLog()
+            case .battery: model.readBatteryLog()
             }
         }
     }
