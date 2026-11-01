@@ -360,6 +360,9 @@ final class AppModel: ObservableObject {
         lines.append("Patches on in the app: \(on.isEmpty ? "none" : on.joined(separator: ", "))")
         lines.append("Appearance: \(appearance.rawValue), layout: \(layout.rawValue), theme: \(selectedThemeName ?? "-"), margin: \(ThemeImport.OSOSMargin.current.rawValue), test patches: \(showTestPatches)")
         lines.append("Helper: \(helperStatus), reply: \(helperReply), Full Disk Access: \(hasFullDiskAccess), Touch ID: \(requireTouchID)")
+        lines.append("App: \(Bundle.main.bundlePath), signature: \(ownSignatureDescription())")
+        lines.append("App folder:")
+        lines += appFolderReport(Self.supportDir).map { "  " + $0 }
         return AppLog.redact(lines.joined(separator: "\n"))
     }
 

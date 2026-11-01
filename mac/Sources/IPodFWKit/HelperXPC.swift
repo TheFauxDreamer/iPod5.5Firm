@@ -76,6 +76,28 @@ public func permissionState(_ path: String) -> String {
         + "flags \(String(info.st_flags, radix: 16)), ACL \(acl == nil ? "no" : "yes")"
 }
 
+/// Make and delete a small file in `dir`. A real write shows more than the mode: it also shows a block
+/// of macOS. Gives "write ok", or the error of the system.
+public func writeTest(_ dir: URL) -> String {
+    let file = dir.appendingPathComponent(".write-test-\(UUID().uuidString)").path
+    let fd = open(file, O_CREAT | O_EXCL | O_WRONLY, 0o600)
+    guard fd >= 0 else { return "write fails: \(String(cString: strerror(errno))) (errno \(errno))" }
+    close(fd)
+    unlink(file)
+    return "write ok"
+}
+
+/// The state of the app folder for a fault report: one line for each main folder, and the user of the app.
+public func appFolderReport(_ appFolder: URL) -> [String] {
+    var lines = [permissionState(appFolder.deletingLastPathComponent().path) + " (parent)"]
+    for dir in [appFolder, appFolder.appendingPathComponent("Staging"), appFolder.appendingPathComponent("Backups")] {
+        var isFolder: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: dir.path, isDirectory: &isFolder) && isFolder.boolValue
+        lines.append(permissionState(dir.path) + (exists ? ", " + writeTest(dir) : ""))
+    }
+    return lines + ["App user \(getuid()), effective user \(geteuid())"]
+}
+
 /// Give `~/Library/Application Support/iPodFirm` of `home` and all its items to `owner`, with write access to
 /// each folder. Any other path is refused. Root does this work, so no step follows a symbolic link.
 /// Gives the state of the main folders before the repair.
@@ -107,7 +129,7 @@ public func processHasFullDiskAccess() -> Bool {
 }
 
 /// Team identifier of the running process's own code signature (nil if ad-hoc / unsigned).
-public func ownTeamIdentifier() -> String? {
+func ownSigningInformation() -> [String: Any]? {
     var code: SecCode?
     guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
     var staticCode: SecStaticCode?
@@ -115,7 +137,19 @@ public func ownTeamIdentifier() -> String? {
     var info: CFDictionary?
     guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
           let dict = info as? [String: Any] else { return nil }
-    return dict[kSecCodeInfoTeamIdentifier as String] as? String
+    return dict
+}
+
+public func ownTeamIdentifier() -> String? {
+    ownSigningInformation()?[kSecCodeInfoTeamIdentifier as String] as? String
+}
+
+/// The signature of this program, for a fault report.
+public func ownSignatureDescription() -> String {
+    guard let info = ownSigningInformation(), let flags = (info[kSecCodeInfoFlags as String] as? NSNumber)?.uint32Value else { return "unknown" }
+    let adHoc = flags & SecCodeSignatureFlags.adhoc.rawValue != 0
+    let hardened = flags & SecCodeSignatureFlags.runtime.rawValue != 0
+    return "\(adHoc ? "ad-hoc" : "team \(info[kSecCodeInfoTeamIdentifier as String] ?? "none")"), hardened runtime: \(hardened)"
 }
 
 /// Code-signing requirement for "signed by the same team, with this identifier".

@@ -25,6 +25,26 @@ final class BackupFolderTests: XCTestCase {
         XCTAssertThrowsError(try checkedBackupDirectory(outside.path, home: home.path))
     }
 
+    func testAppFolderReport() throws {
+        let fm = FileManager.default
+        let app = fm.temporaryDirectory.appendingPathComponent("report-\(UUID().uuidString)/iPodFirm")
+        let staging = app.appendingPathComponent("Staging")
+        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: staging.path)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: staging.path)
+            try? fm.removeItem(at: app.deletingLastPathComponent())
+        }
+        let report = appFolderReport(app)
+        XCTAssertEqual(report.count, 5)
+        XCTAssertTrue(report[1].hasPrefix("iPodFirm: owner \(getuid()), mode 755"), report[1])
+        XCTAssertTrue(report[1].hasSuffix("write ok"), report[1])
+        XCTAssertTrue(report[2].contains("write fails: Permission denied (errno 13)"), report[2])
+        XCTAssertEqual(report[3], "Backups: no item")
+        // The test leaves no file in the folder.
+        XCTAssertEqual(try fm.contentsOfDirectory(atPath: app.path), ["Staging"])
+    }
+
     func testRepairAppFolderChecksThePath() throws {
         let fm = FileManager.default
         let home = fm.temporaryDirectory.appendingPathComponent("home-\(UUID().uuidString)")

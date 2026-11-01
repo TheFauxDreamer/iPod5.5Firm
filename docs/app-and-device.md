@@ -74,6 +74,8 @@ The log records these items:
 4. The result of each helper call. On a fault, the log also gets `HelperResult.detail`.
 5. Each fault, and each error that the app shows only as a status text.
 
+The fault report and Save Log… also give the path and the signature of the app, and the state of the app folder (`appFolderReport`). For the parent folder, `iPodFirm`, `Staging` and `Backups`, the state is the owner, the mode, the flags and the ACL state. For the last three, the app also makes and deletes a small test file (`writeTest`). The report also gives the user ID of the app. A failed test with the system error shows the real cause of a write fault.
+
 The log has no home folder path and no user name. `AppLog.redact` changes `/Users/<name>` to `~` and the short user name to `<user>`. The log has no serial number and no volume name. Only the app writes the log file. The tests and the helper write only to the unified log.
 
 Each error has more data than its message. `FirmwareError` and `PatchError` record the file, the line and the function of the throw. A `FirmwareError` can also have `context` (the steps of the callers, from `adding(_:)`) and `cause` (the full description of the error that caused it). `AppLog.describe` writes all of this data. It also writes the domain, the code and the underlying errors of an `NSError`.
