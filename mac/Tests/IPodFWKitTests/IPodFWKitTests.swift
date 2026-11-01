@@ -287,6 +287,37 @@ final class ModelCheckTests: XCTestCase {
         XCTAssertNoThrow(try Operations.checkModel(onIPod: [UInt8](repeating: 0, count: 0x6000)))
     }
 
+    func testLayoutReportHasPositionsAndNoImageData() throws {
+        let p = try FirmwarePartition(data: partition(vers: 0xb012))
+        let text = p.layoutDescription
+        XCTAssertTrue(text.hasPrefix("Partition 0x"), text)
+        XCTAssertTrue(text.contains("osos dev 0x"), text)
+        XCTAssertTrue(text.contains("checksum ok sha256 "), text)
+        XCTAssertFalse(Operations.layoutReport(partition(vers: 0xb012)).isEmpty)
+        XCTAssertEqual(Operations.layoutReport([UInt8](repeating: 0, count: 0x6000)).hasPrefix("The directory is not readable"), true)
+    }
+
+    func testAreasAndLargestEmptyArea() throws {
+        var data = partition(vers: 0xb012)
+        data += [UInt8](repeating: 0, count: 0x4000 - data.count % 0x800)
+        let base = try FirmwarePartition(data: data).imageBase
+        let end = (data.count - base) / 0x800 * 0x800
+        data[base + end - 0x1000 + 5] = 1                           // one byte of old data
+        let p = try FirmwarePartition(data: data)
+        let tail = p.areas(start: end - 0x2000)
+        XCTAssertEqual(tail.map(\.data), [false, true, false])
+        XCTAssertEqual(tail[1].range, end - 0x1000..<end - 0x800)
+        XCTAssertEqual(p.largestEmptyArea(start: end - 0x800), 0x800)
+        XCTAssertTrue(p.dataMap.contains("data 0x"), p.dataMap)
+    }
+
+    func testReportSysInfoHasOnlyTheAllowedKeys() {
+        let text = "ModelNumStr: xA446\nvisibleBuildID: 0x01308000 (1.3)\npszSerialNumber: ABC123\nFirewireGuid: 0x000A27\nBoardHwName: iPod Q45\n"
+        let shown = IPodDisk.reportSysInfo(text)
+        XCTAssertEqual(shown, "SysInfo: ModelNumStr xA446, visibleBuildID 0x01308000 (1.3), BoardHwName iPod Q45")
+        XCTAssertEqual(IPodDisk.reportSysInfo("pszSerialNumber: ABC123"), "SysInfo: no model data")
+    }
+
     /// A small partition with the layout of the iPod classic 6G firmware 1.1.2: the directory at
     /// 0x4000 + 0x1000, rsrc first, and an osos that starts with an "8702" image header.
     func classicPartition(header: String = "8702") -> [UInt8] {
@@ -3144,8 +3175,16 @@ final class AppLogTests: XCTestCase {
         XCTAssertEqual(items.first { $0.name == "title" }?.value, "Fault: Flash failed")
         XCTAssertTrue(body.contains("No rsrc image."))
         XCTAssertTrue(body.contains("first detail line"))
-        XCTAssertTrue(body.contains("iPodFirm Log.txt"))
+        XCTAssertTrue(body.hasPrefix("**Attach the log:** drag the file \"iPodFirm Log.txt\""), body)
         XCTAssertLessThanOrEqual(body.count, AppLog.maxIssueBody + 10)
         XCTAssertLessThan(url.absoluteString.count, 8000)
+    }
+
+    func testFaultExcerptIsShort() {
+        let details = "FirmwareError: no area\n  at: a.swift:1\n  cause: 3\n  cause: 4\n  cause: 5\n  cause: 6\n  cause: 7\n\nLast steps:\n  old"
+        let text = AppLog.faultExcerpt(details: details, steps: ["Build: start", "Layout of the iPod:\nosos dev 0x4800"])
+        XCTAssertEqual(text, "FirmwareError: no area\n  at: a.swift:1\n  cause: 3\n  cause: 4\n  cause: 5\n  cause: 6\n"
+                             + "Last steps:\n  Build: start\n  Layout of the iPod:")
+        XCTAssertEqual(AppLog.faultExcerpt(details: String(repeating: "x", count: 500), steps: []).count, 160)
     }
 }

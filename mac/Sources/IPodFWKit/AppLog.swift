@@ -166,27 +166,39 @@ public enum AppLog {
         return "macOS \(ProcessInfo.processInfo.operatingSystemVersionString), \(String(cString: model))"
     }
 
+    /// The first lines of the details of a fault and the first line of the last steps, each one short.
+    /// A step can have many lines (a layout). The saved log has all of them.
+    public static func faultExcerpt(details: String, steps: [String], lines: Int = 6, width: Int = 160) -> String {
+        func short(_ s: Substring) -> String { String(s.prefix(width)) }
+        let error = details.split(separator: "\n", omittingEmptySubsequences: false)
+            .prefix { !$0.isEmpty }.prefix(lines).map(short)
+        let last = steps.compactMap { $0.split(separator: "\n").first }.map { "  " + short($0) }
+        return (error + (last.isEmpty ? [] : ["Last steps:"] + last)).joined(separator: "\n")
+    }
+
     /// The largest body of the new issue. A longer web address can fail.
-    static let maxIssueBody = 3500
+    static let maxIssueBody = 1500
 
     /// A web page that opens a new issue on GitHub for a fault. The body has the fault, the details
     /// and the last steps. The user attaches the saved log file in the browser, because a web
     /// address cannot carry a file.
     public static func issueURL(title: String, message: String, details: String, fileName: String?) -> URL {
-        let attach = fileName.map { "Drag the file \"\($0)\" into this box. It is the log of iPodFirm.\n\n" }
-            ?? "To attach the log, select Help > Save Log… in iPodFirm. Then drag the file into this box.\n\n"
+        let attach = fileName.map { "**Attach the log:** drag the file \"\($0)\" into this box." }
+            ?? "**Attach the log:** select Help > Save Log… in iPodFirm. Then drag the file into this box."
         let head = """
-            Write what you did before the fault:
+            \(attach) We cannot find the fault without this file.
+
+            What did you do before the fault?
 
 
-            \(attach)**Fault:** \(title)
+            **Fault:** \(title)
             \(message)
 
             ```
             """
         let tail = "\n```\n"
         let room = max(0, maxIssueBody - head.count - tail.count - 1)
-        // The details start with the error. Thus a cut removes the least important lines.
+        // The saved log has the full data. The issue has only a short summary.
         let body = head + "\n" + String(redact(details).prefix(room)) + tail
         var c = URLComponents(url: UpdateCheck.repository.appendingPathComponent("issues/new"), resolvingAgainstBaseURL: false)!
         c.queryItems = [URLQueryItem(name: "title", value: "Fault: \(title)"),

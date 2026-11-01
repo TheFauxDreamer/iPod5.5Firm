@@ -105,9 +105,12 @@ public struct HelperResult: Codable {
     /// On a fault: the full error and the last steps of the helper (AppLog.failureDetail). The app
     /// writes it to its log. An older helper does not send it.
     public var detail: String?
+    /// After a read: the directory and the map of the partition. The app writes it to its log.
+    public var layout: String?
     public init(ok: Bool, message: String, code: String? = nil, ranges: [FirmwareFlasher.WriteRange]? = nil, backup: BackupInfo? = nil,
-                detail: String? = nil) {
+                detail: String? = nil, layout: String? = nil) {
         self.ok = ok; self.message = message; self.code = code; self.ranges = ranges; self.backup = backup; self.detail = detail
+        self.layout = layout
     }
 
     /// The result of a fault in the helper.
@@ -145,7 +148,15 @@ public enum Operations {
         AppLog.step("Read the firmware partition of \(ipod.disk) (\(ipod.mediaName), \(ipod.size) bytes, block size \(ipod.blockSize))")
         let disk = try RawDisk(path: ipod.rawPath, blockSize: ipod.blockSize)
         let (start, size) = try FirmwareFlasher.locatePartition(disk)
-        return (try disk.read(start, size), start)
+        let bytes = try disk.read(start, size)
+        AppLog.step("Layout of the iPod:\n\(layoutReport(bytes))")
+        return (bytes, start)
+    }
+
+    /// The directory and the map of the partition for a report. A damaged partition gives only a note.
+    static func layoutReport(_ bytes: [UInt8]) -> String {
+        guard let p = try? FirmwarePartition(data: bytes) else { return "The directory is not readable (\(bytes.count) bytes)." }
+        return p.layoutDescription + "\n" + p.dataMap
     }
 
     public static func backup(_ ipod: IPodDisk, to dir: URL, owner: uid_t?) throws -> HelperResult {
@@ -176,7 +187,7 @@ public enum Operations {
             // This process is root. If it made the folder, the app cannot write in the folder without this step.
             chown(dir.path, owner, gid_t(UInt32.max))
         }
-        return HelperResult(ok: true, message: url.path)
+        return HelperResult(ok: true, message: url.path, layout: layoutReport(bytes))
     }
 
     /// Flash `imageURL` onto the iPod. Always backs up the current partition first (unless dryRun).

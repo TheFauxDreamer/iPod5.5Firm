@@ -13,6 +13,29 @@ public struct IPodDisk: Codable, Identifiable, Hashable {
     public var volumeName: String?
     public var rawPath: String { "/dev/r\(disk)" }
 
+    /// The keys of the SysInfo file that a report can show. The file also holds the serial number and
+    /// the FireWire GUID, thus each other key is left out.
+    static let reportSysInfoKeys = ["ModelNumStr", "visibleBuildID", "BoardHwName"]
+
+    /// The allowed lines of the text of a SysInfo file, in words for a report.
+    static func reportSysInfo(_ text: String) -> String {
+        var found: [String: String] = [:]
+        for line in text.split(whereSeparator: \.isNewline) {
+            let parts = line.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            if parts.count == 2, reportSysInfoKeys.contains(parts[0]) { found[parts[0]] = String(parts[1].prefix(40)) }
+        }
+        let shown = reportSysInfoKeys.compactMap { key in found[key].map { "\(key) \($0)" } }
+        return shown.isEmpty ? "SysInfo: no model data" : "SysInfo: " + shown.joined(separator: ", ")
+    }
+
+    /// The model data of `iPod_Control/Device/SysInfo` on the mounted volume, for a report.
+    public var sysInfoReport: String {
+        guard let volumeName else { return "SysInfo: none" }
+        let file = URL(fileURLWithPath: "/Volumes").appendingPathComponent(volumeName).appendingPathComponent("iPod_Control/Device/SysInfo")
+        guard let data = try? Data(contentsOf: file) else { return "SysInfo: none" }
+        return Self.reportSysInfo(String(decoding: data, as: UTF8.self))
+    }
+
     /// The drive sizes of the original iPod 5G and 5.5G, in GB (10^9 bytes, as Apple marks them).
     public static let originalHDDSizes = [30, 60, 80]
 
@@ -289,6 +312,7 @@ public enum FirmwareFlasher {
     /// of the backup.
     public static func fitLayout(new newBytes: [UInt8], current: FirmwarePartition) throws -> [UInt8] {
         let new = try FirmwarePartition(data: newBytes)
+        AppLog.step("Layout of the new image:\n\(new.layoutDescription)")
         guard current.has("aupd"), new.has("aupd") else { return newBytes }
         guard new.has("hibe") == current.has("hibe"),
               try new.entry("aupd").devOffset == current.entry("aupd").devOffset else {

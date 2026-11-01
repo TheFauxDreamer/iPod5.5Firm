@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 // Swift port of src/ipodfw/partition.py: the iPod firmware partition
@@ -242,6 +243,52 @@ public final class FirmwarePartition {
         return Int(e.entryOffset != 0 ? e.entryOffset : e.length)
     }
 
+    /// The directory of the partition, for a report: positions, versions and hashes, and no image data.
+    /// `hibe` has no hash, because it holds the RAM of the iPod.
+    public var layoutDescription: String {
+        func hex(_ v: Int) -> String { "0x" + String(v, radix: 16) }
+        let lines = entries.map { e -> String in
+            var line = "\(e.name) dev \(hex(Int(e.devOffset))) length \(hex(Int(e.length))) vers \(hex(Int(e.vers)))"
+            guard let r = try? imageRange(e.name), r.upperBound <= data.count else { return line + " outside the partition" }
+            guard e.name != "hibe" else { return line }
+            line += " checksum \(checksumOK(e.name) ? "ok" : "wrong") sha256 "
+            return line + SHA256.hash(data: data[r]).map { String(format: "%02x", $0) }.joined()
+        }
+        return (["Partition \(hex(data.count)) bytes, image base \(hex(imageBase)), directory \(hex(dirOffset))"] + lines).joined(separator: "\n")
+    }
+
+    /// The areas after `start` as devOffset ranges, in steps of 0x800. `data` is true if an area holds a byte
+    /// that is not zero. The result has positions only, and no content.
+    func areas(start: Int = 0) -> [(range: Range<Int>, data: Bool)] {
+        let align = Self.imageAlign
+        var result: [(range: Range<Int>, data: Bool)] = []
+        var at = (start + align - 1) / align * align
+        while imageBase + at + align <= data.count {
+            let full = data[imageBase + at..<imageBase + at + align].contains { $0 != 0 }
+            if let last = result.last, last.data == full {
+                result[result.count - 1].range = last.range.lowerBound..<at + align
+            } else {
+                result.append((at..<at + align, full))
+            }
+            at += align
+        }
+        return result
+    }
+
+    /// The length of the largest all-zero area at or after `start`.
+    func largestEmptyArea(start: Int) -> Int {
+        areas(start: start).filter { !$0.data }.map(\.range.count).max() ?? 0
+    }
+
+    /// The map of the partition for a report: where data is and where zeros are, as devOffset values.
+    public var dataMap: String {
+        let maxRanges = 64
+        let all = areas()
+        var lines = all.prefix(maxRanges).map { "\($0.data ? "data" : "zero") 0x\(String($0.range.lowerBound, radix: 16))-0x\(String($0.range.upperBound, radix: 16))" }
+        if all.count > maxRanges { lines.append("and \(all.count - maxRanges) more") }
+        return lines.joined(separator: "\n")
+    }
+
     /// Images start at a multiple of 2048 bytes, as in Apple's files.
     static let imageAlign = 0x800
 
@@ -266,6 +313,8 @@ public final class FirmwarePartition {
             // A restore can leave old data (a stale hibernation dump) in that area, so the
             // area right after the last image is not always empty.
             guard let at = findEmptyArea(start: lastEnd, length: Int(rsrc.length)) else {
+                AppLog.step("Make room: rsrc needs 0x\(String(rsrc.length, radix: 16)) bytes, the last image ends at 0x\(String(lastEnd, radix: 16)), "
+                            + "the largest empty area is 0x\(String(largestEmptyArea(start: lastEnd), radix: 16)) bytes\n\(dataMap)")
                 throw FirmwareError("The firmware partition has no empty area for rsrc.")
             }
             let start = imageBase + at

@@ -162,6 +162,7 @@ extension AppModel {
             let r = viaHelper ? try await HelperClient.readOSOS(disk: ipod.disk, dir: dir)
                               : try await Privileged.run(helperArgs("read", dir: dir, ipod))
             guard r.ok else { throw r.failure() }
+            if let layout = r.layout { AppLog.info("Layout of the iPod:\n\(layout)") }
             let osos = try await Task.detached { [UInt8](try Data(contentsOf: file)) }.value
             try? FileManager.default.removeItem(at: file)
             applyIPodState(patchState(osos: osos, ipod: ipod))

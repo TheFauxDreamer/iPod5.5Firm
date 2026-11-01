@@ -76,13 +76,17 @@ The log records these items:
 
 The fault report and Save Log… also give the path and the signature of the app, and the state of the app folder (`appFolderReport`). For the parent folder, `iPodFirm`, `Staging` and `Backups`, the state is the owner, the mode, the flags and the ACL state. For the last three, the app also makes and deletes a small test file (`writeTest`). The report also gives the user ID of the app. A failed test with the system error shows the real cause of a write fault.
 
+The fault report and Save Log… also give model data of the iPod. The data comes from `iPod_Control/Device/SysInfo` on the mounted volume (`IPodDisk.sysInfoReport`). The app shows only the keys `ModelNumStr`, `visibleBuildID` and `BoardHwName`, thus no serial number and no FireWire GUID. The report also tells if the size agrees with an original drive.
+
+Each read of the partition by the helper records the layout of the iPod (`Operations.layoutReport`). The layout has the name, position, length, version, checksum result and SHA-256 of each image, and the map of the areas with data and the zero areas. `hibe` has no hash. The layout has no image data, so a user can send it. A user must not send a backup: it holds Apple firmware and, in `hibe`, the RAM of the iPod with the music library. The file `.bin.json` of a backup holds the iPod name. After a read, the app writes the layout to its log. On a fault, the steps of the helper hold it. If `makeRoom` finds no area for rsrc, a step gives the size of the largest empty area.
+
 The log has no home folder path and no user name. `AppLog.redact` changes `/Users/<name>` to `~` and the short user name to `<user>`. The log has no serial number and no volume name. Only the app writes the log file. The tests and the helper write only to the unified log.
 
 Each error has more data than its message. `FirmwareError` and `PatchError` record the file, the line and the function of the throw. A `FirmwareError` can also have `context` (the steps of the callers, from `adding(_:)`) and `cause` (the full description of the error that caused it). `AppLog.describe` writes all of this data. It also writes the domain, the code and the underlying errors of an `NSError`.
 
 All faults go through `AppModel.fail`. It writes the error, the last 15 steps and the state of the app (`diagnosticSnapshot`) to the log. The state has the open file name, the iPod model and the iPod size. It also has the patches on the iPod and in the app, with their versions and options. It also has the appearance and the helper status. The alert shows the message and the last step of the last two minutes. The alert of a fault has three buttons:
 
-- **Report on GitHub…** saves the log as a text file. Then it opens a new issue on GitHub in the browser (refer to [Network connections](#network-connections)). The user drags the file into the issue.
+- **Report on GitHub…** saves the log as a text file. Then it opens a new issue on GitHub in the browser (refer to [Network connections](#network-connections)). The issue starts with the instruction to attach the file. It holds only the fault, a short summary of the app and the iPod, the first lines of the error and the last three steps (`AppModel.issueSummary`, `AppLog.faultExcerpt`). The user drags the file into the issue. The file has all other data.
 - **Save Log…** saves the state of the app and the two log files as one text file, for example `iPodFirm Log 2026-10-29 1405.txt`. Finder then shows the file.
 - **OK** closes the alert.
 
@@ -324,7 +328,7 @@ The Patches pane shows the result:
 |---|---|---|
 | `http://appldnld.apple.com.edgesuite.net/content.info.apple.com/iPod/SBML/osx/bundles/061-2967.20080313.Cnvkg/iPod_25.1.3.ipsw` | "Download Apple Firmware 1.3", and each action that needs the Apple file if no correct copy is cached. | SHA-256 must be `840b2480ad5b692c098cb772c3d2bf8f58bf37557788782b596ac01c27ecdc32`. Apple serves this file only over HTTP, so `Info.plist` has an App Transport Security exception for this domain. |
 | `https://api.github.com/repos/TheFauxDreamer/iPod5.5Firm/releases/latest` | At each launch if Settings > Updates > "Check for a new version at launch" is on. iPodFirm > Check for Updates…. | TLS 1.2 or later. HTTP status 200 and JSON with `tag_name` and `html_url`. The app compares `tag_name` (without the `v`) with `CFBundleShortVersionString`. If the release is newer, the notification opens `html_url` in the browser. The app does not download the update. |
-| `https://github.com/TheFauxDreamer/iPod5.5Firm/issues/new?title=…&body=…` | "Report on GitHub…" in the alert of a fault. Help > Report a Problem on GitHub…. | The app does not connect. It opens the address in the browser (`NSWorkspace.open`). The body has the fault, the full error, the last steps and the state of the app (`AppLog.issueURL`). It has a maximum of 3500 characters. The app cuts the end of a longer text. The user must sign in to GitHub and attach the saved log file. |
+| `https://github.com/TheFauxDreamer/iPod5.5Firm/issues/new?title=…&body=…` | "Report on GitHub…" in the alert of a fault. Help > Report a Problem on GitHub…. | The app does not connect. It opens the address in the browser (`NSWorkspace.open`). The body starts with the instruction to attach the log. Then it has the fault, a short summary of the app and the iPod, the first lines of the error and the last three steps (`AppLog.issueURL`). It has a maximum of 1500 characters. The app cuts the end of a longer text. The user must sign in to GitHub and attach the saved log file. |
 | `https://github.com/TheFauxDreamer/iPod5.5Firm/issues/new?title=…&body=…` | Patches > Playback Log or Diagnostic Log > "Report on GitHub…". | The app does not connect. It opens the address in the browser (`NSWorkspace.open`). The body has the app version and the information lines of the playback log: the RAM, the free memory and the patches. It has a maximum of 1500 characters. The owner of the log must sign in to GitHub and attach the text file. |
 | `https://sh.rustup.rs` | "Install Emulator", only if `~/.cargo/bin/cargo` does not exist. | TLS 1.2 or later. |
 | `https://github.com/siggifly/ipod-emulator.git` | "Install Emulator". | Git over HTTPS. |
@@ -348,7 +352,7 @@ All paths are in `~/Library/Application Support/iPodFirm/`.
 | `Staging/flash.bin` | The partition that the helper writes. |
 | `Staging/ipod-osos.bin` | The osos of the iPod that the helper command `read` writes. The app deletes it after the read. |
 | `Staging/patch-<UUID>/` | A `.ipodpatch` file during the install or the export, or a copy of the code during Check Code. The app deletes it after use. |
-| `Staging old <UUID>/` | An old `Staging` folder without write access for the app, for example a folder of root. The app moves it and makes a new folder (`PatchLibrary.prepareStagingFolder`). The app does not delete it, because it cannot delete the files of root. The log gives the owner and the mode. |
+| `Staging old <UUID>/` | An old `Staging` folder of the user without write access. The app moves it and makes a new folder (`PatchLibrary.prepareStagingFolder`). macOS refuses the move for a folder of root (real report, 1 November 2026). The app then runs `repair-folder`. The log gives the owner and the mode. |
 | `Emulator/` | The emulator work folder: the custom `.ipsw` and the music libraries. |
 | `EmulatorProfile/` | The private emulator profile (`IPOD_EMULATOR_DATA`): the drive and `settings.txt`. |
 | `emulator-src/` | The emulator source and its build. |
@@ -368,6 +372,7 @@ The app writes these files on the mounted iPod volume. A patch can also write fi
 | `iPod_Control/iTunes/IC-Info.sidb` | **Install Games** with a key file that the owner chose (a copy of the owner's own file; the app never makes it) | The iPod firmware (the games) |
 | `iPod_Control/iTunes/iPodFirmAlbumCache` | The `album-art` patch on the iPod (version 2.8 and later), after it has all album covers in memory | `album-art` patch |
 | `iPod_Control/iTunes/iPodFirmAlbumArtStats` | The `album-art` patch on the iPod, only in a measurement build (`ALBUM_ART_STATS` 1; off since version 3.2) | `re/album-art-stats.py` |
+| `iPod_Control/Device/SysInfo` | iTunes or Finder. The app does not write it. | iPodFirm: three keys for a report (`IPodDisk.sysInfoReport`) |
 | `iPod_Control/Device/Preferences` (only byte 0x8b) | A flash or restore of a firmware without `shuffle-album-mix`: Album Mix off. Refer to [safety.md](safety.md). | The iPod firmware (its settings) |
 | `iPod_Control/iTunes/iPodFirmPlaylistArt/*.png` | "Choose Image…" in Playlist Artwork | iPodFirm (the next thumbnail file) |
 | `iPod_Control/iTunes/iPodFirmDarkMode` | The `dark-mode` patch on the iPod | `dark-mode` patch |

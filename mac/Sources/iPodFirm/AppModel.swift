@@ -331,6 +331,20 @@ final class AppModel: ObservableObject {
         return AppLog.describe(error) + "\n\nLast steps:\n" + (steps.isEmpty ? "  none" : steps) + "\n\n" + diagnosticSnapshot()
     }
 
+    /// The lines about the iPod in a report.
+    private var ipodReportLines: [String] {
+        guard let ipod = currentIPod else { return ["iPod: none"] }
+        return ["iPod: \(ipod.mediaName), \(ipod.size) bytes, block size \(ipod.blockSize)" + (currentIPodIsUnsupported ? ", not supported" : ""),
+                "  \(ipod.sysInfoReport), original drive: \(IPodDisk.likelyOriginalHDD(size: ipod.size).map { "probably \($0) GB" } ?? "no")"]
+    }
+
+    /// The short text for a new issue. The saved log has all other data.
+    func issueSummary(_ fault: AlertInfo?) -> String {
+        let state = (["iPodFirm \(version), \(AppLog.systemDescription)"] + ipodReportLines).joined(separator: "\n")
+        let excerpt = fault?.details.map { AppLog.faultExcerpt(details: $0, steps: AppLog.recentSteps(3)) }
+        return AppLog.redact(excerpt.map { state + "\n\n" + $0 } ?? state)
+    }
+
     /// The state of the app and of the iPod, for a fault report.
     func diagnosticSnapshot() -> String {
         var lines = ["iPodFirm \(version), \(AppLog.systemDescription)"]
@@ -340,12 +354,7 @@ final class AppModel: ObservableObject {
         } else {
             lines.append("Open file: none")
         }
-        if let ipod = currentIPod {
-            lines.append("iPod: \(ipod.mediaName), \(ipod.size) bytes, block size \(ipod.blockSize)" +
-                         (currentIPodIsUnsupported ? ", not supported" : ""))
-        } else {
-            lines.append("iPod: none")
-        }
+        lines += ipodReportLines
         if let state = ipodState {
             let found = state.detections.sorted { $0.key < $1.key }.compactMap { name, d -> String? in
                 if case .installed(let v) = d { return "\(name) \(v ?? "?")" }
@@ -399,10 +408,8 @@ final class AppModel: ObservableObject {
     /// log, then opens a new issue in the browser. The user drags the file into the issue.
     func reportOnGitHub(_ fault: AlertInfo?) {
         let file = saveLog()
-        let steps = AppLog.recentSteps(15).map { "  " + $0 }.joined(separator: "\n")
-        let details = fault?.details ?? diagnosticSnapshot() + "\n\nLast steps:\n" + (steps.isEmpty ? "  none" : steps)
         NSWorkspace.shared.open(AppLog.issueURL(title: fault?.title ?? "Problem report", message: fault?.message ?? "",
-                                                details: details, fileName: file?.lastPathComponent))
+                                                details: issueSummary(fault), fileName: file?.lastPathComponent))
     }
 
     /// Reading the system TCC database is only possible with Full Disk Access.
