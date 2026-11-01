@@ -953,6 +953,19 @@ the power chip of the PP5020 of Apple. The facts are Static.
 | 0x2823bc | Starts the driver of the general purpose input and output. |
 | 0x1fcf50 | The table of the clock. The table has 11 registers from 0x60004000 to 0x60004030. |
 | 0x1fca88 | Copies the table of the clock into the registers. |
+| 0xd252c | Gives the current time of day in the calendar structure. Refer to [re/date-time.md](../re/date-time.md). |
+| 0xa09c4 | Gets the time. If bit 0 of the flags is 0, it uses 1 January 2002. |
+| 0xb0038, 0xbc63c | Read and write the clock chip: 7 BCD bytes. Year = 2000 + 2 digits, so the last year is 2099. |
+| 0xc8f3c, 0xc8fd0 | Change a calendar structure to a day number, and a day number to a structure. The year is unsigned 16 bits. |
+| 0xd59cc | Compares two calendar structures. |
+| 0xd5b0c, 0xd8530 | Change a calendar structure to unsigned 32-bit seconds from 1970, and seconds to a structure. Lower limit: 0x2a9c20 (1970). |
+| 0xa4fc0, 0x94f18 | Give unsigned 32-bit seconds from 1904. These seconds wrap on 2040-02-06 at 06:28:16 UTC. |
+| 0xe4d28, 0xe5a78 | Change seconds from 1904 to seconds from 1970, and the opposite. |
+| 0xa0cec, 0xb3764 | Set the date. 0xb3764 writes the clock chip with 0xbc63c. |
+| 0x1f4c9c | Sets the date. The year must be 2000 to 2099. |
+| 0xe47d8 | Changes a FAT date to a calendar structure. The year is 1980 + 7 bits. |
+| 0x21cb98, 0x21bfcc | Write and read last played, track + 0x94, as seconds from 1904. |
+| 0x21cc74, 0x21c364 | Write and read track + 0xa4, probably last skipped. |
 | 0x28578c | The string "watchdog: Could not allocate timer!". |
 | 0x2857bc | The string "watchdog: No registered handlers for ". |
 
@@ -1364,7 +1377,6 @@ The emulator found these element IDs (view + 0x1c):
 ## Open questions
 
 - The caller of the method + 0x6c of the language manager after a selection in the Language menu. Is a call of 0x192ca8 safe in the lookup hook? Refer to [re/languages.md](../re/languages.md#open-questions).
-- The function that gives the current time of day. A timed dark mode needs it.
 - The style of the rating stars in Now Playing. The table at 0x336190 gives a style object (0x192448 + 16 × n) for each Type ID.
 - Why the stock firmware defers Sleep after a computer session.
 - The path of a long push of Play.

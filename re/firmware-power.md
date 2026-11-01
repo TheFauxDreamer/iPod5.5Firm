@@ -29,8 +29,9 @@ firmware has 3 parts.
    application.
 
 The iPod Video has no modem. The task `CNATask` does nothing for the iPod
-Video. The iPod has no real-time clock of its own. The task `RTCTimerMgr` uses
-the clock of the system.
+Video. The firmware reads the date from a clock chip through 0xb0038. Refer to
+the note [date-time.md](date-time.md). The research did not trace the task
+`RTCTimerMgr`.
 
 ## The tasks of the system
 
