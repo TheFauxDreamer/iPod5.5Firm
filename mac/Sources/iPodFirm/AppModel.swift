@@ -1878,7 +1878,7 @@ final class AppModel: ObservableObject {
         guard busy == nil, let editor else { return }
         let staging = Self.supportDir.appendingPathComponent("Staging/flash.bin")
         do {
-            try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Self.patchLibrary.prepareStagingFolder()
             try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion, list: activeList)).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
         } catch { fail("Cannot Flash", error) }

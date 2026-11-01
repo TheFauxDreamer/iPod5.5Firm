@@ -528,7 +528,22 @@ public struct PatchLibrary {
 
     // MARK: staging
 
+    /// Make sure that the app can write in the staging folder. A folder without write access (for example
+    /// a folder of root) moves to "Staging old <UUID>", because the app cannot delete the files of root.
+    public func prepareStagingFolder() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+        guard !fm.isWritableFile(atPath: stagingDir.path) else { return }
+        let attributes = try? fm.attributesOfItem(atPath: stagingDir.path)
+        let mode = (attributes?[.posixPermissions] as? NSNumber).map { String($0.intValue, radix: 8) } ?? "?"
+        AppLog.warning("No write access to \(stagingDir.path): owner \(attributes?[.ownerAccountID] ?? "?"), mode \(mode), app user \(getuid())")
+        let old = stagingDir.deletingLastPathComponent().appendingPathComponent("\(stagingDir.lastPathComponent) old \(UUID().uuidString)")
+        try fm.moveItem(at: stagingDir, to: old)
+        try fm.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+    }
+
     func newStagingFolder() throws -> URL {
+        try prepareStagingFolder()
         let dir = stagingDir.appendingPathComponent("patch-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir

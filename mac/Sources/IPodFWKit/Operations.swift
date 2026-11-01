@@ -171,7 +171,11 @@ public enum Operations {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent(readFileName)
         try Data(osos).write(to: url, options: .atomic)
-        if let owner { chown(url.path, owner, gid_t(UInt32.max)) }
+        if let owner {
+            chown(url.path, owner, gid_t(UInt32.max))
+            // This process is root. If it made the folder, the app cannot write in the folder without this step.
+            chown(dir.path, owner, gid_t(UInt32.max))
+        }
         return HelperResult(ok: true, message: url.path)
     }
 

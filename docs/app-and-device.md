@@ -244,7 +244,7 @@ macOS blocks raw disk access without Full Disk Access. The app tests the permiss
 
 ## The flash sequence
 
-1. "Flash to iPod…" builds the partition (refer to [modifications.md](modifications.md#the-build-sequence)) and writes it to `~/Library/Application Support/iPodFirm/Staging/flash.bin`.
+1. "Flash to iPod…" builds the partition (refer to [modifications.md](modifications.md#the-build-sequence)) and writes it to `~/Library/Application Support/iPodFirm/Staging/flash.bin`. Before the write, the app makes sure that it can write in the folder.
 2. The app makes sure that MiMusic does not write to the iPod (refer to [safety.md](safety.md#the-checks-before-a-flash)).
 3. The app runs the helper with `--dry-run`. The helper does all the checks and returns the block ranges that it will write. It writes nothing.
 4. If the iPod firmware is damaged and the action is a restore, the app tries the rescue restore with `--dry-run`.
@@ -343,6 +343,7 @@ All paths are in `~/Library/Application Support/iPodFirm/`.
 | `Staging/flash.bin` | The partition that the helper writes. |
 | `Staging/ipod-osos.bin` | The osos of the iPod that the helper command `read` writes. The app deletes it after the read. |
 | `Staging/patch-<UUID>/` | A `.ipodpatch` file during the install or the export, or a copy of the code during Check Code. The app deletes it after use. |
+| `Staging old <UUID>/` | An old `Staging` folder without write access for the app, for example a folder of root. The app moves it and makes a new folder (`PatchLibrary.prepareStagingFolder`). The app does not delete it, because it cannot delete the files of root. The log gives the owner and the mode. |
 | `Emulator/` | The emulator work folder: the custom `.ipsw` and the music libraries. |
 | `EmulatorProfile/` | The private emulator profile (`IPOD_EMULATOR_DATA`): the drive and `settings.txt`. |
 | `emulator-src/` | The emulator source and its build. |

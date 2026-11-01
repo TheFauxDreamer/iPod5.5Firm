@@ -24,6 +24,33 @@ final class BackupFolderTests: XCTestCase {
         XCTAssertThrowsError(try checkedBackupDirectory(app.appendingPathComponent("../other").path, home: home.path))
         XCTAssertThrowsError(try checkedBackupDirectory(outside.path, home: home.path))
     }
+
+    func testPrepareStagingFolderReplacesAFolderWithoutWriteAccess() throws {
+        let fm = FileManager.default
+        let app = fm.temporaryDirectory.appendingPathComponent("app-\(UUID().uuidString)")
+        let staging = app.appendingPathComponent("Staging")
+        let library = PatchLibrary(builtInDir: app, userDir: app, stagingDir: staging)
+
+        // The first call makes the folder. A second call does not move a folder with write access.
+        try library.prepareStagingFolder()
+        try library.prepareStagingFolder()
+        XCTAssertEqual(try fm.contentsOfDirectory(atPath: app.path), ["Staging"])
+
+        try Data("old".utf8).write(to: staging.appendingPathComponent("flash.bin"))
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: staging.path)
+        var old: URL?
+        defer {
+            for dir in [old, staging].compactMap({ $0 }) { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
+            try? fm.removeItem(at: app)
+        }
+
+        try library.prepareStagingFolder()
+        try Data("new".utf8).write(to: staging.appendingPathComponent("flash.bin"), options: .atomic)
+        let moved = try fm.contentsOfDirectory(atPath: app.path).filter { $0.hasPrefix("Staging old ") }
+        XCTAssertEqual(moved.count, 1)
+        old = app.appendingPathComponent(moved[0])
+        XCTAssertEqual(try Data(contentsOf: old!.appendingPathComponent("flash.bin")), Data("old".utf8))
+    }
 }
 
 final class FlasherTests: XCTestCase {
