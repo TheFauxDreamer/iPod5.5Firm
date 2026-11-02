@@ -326,7 +326,9 @@ The panel is 107 pixels wide. The song line scrolls. The artist, album and count
 
 Dark Gray does not change Types 24216 and 24217. It changes the colour of 21 Types. It changes no Type of Espy Sans 10, and stock has no white Type of that size. Thus a smaller size in Dark needs a change to a shared Type. Do not do this.
 
-No stock View uses Types 24216 or 24217. The record of each is complete. The emulator test must show that the text draws correctly.
+No stock View uses Types 24216 or 24217. The record of each is complete.
+
+Owner test on 2 November 2026 (emulator, Light, no other patches): the song line shows larger than the other 3 lines. The owner likes this result, so keep it. The View has Type 24216 in all 4 lines. The cause of the larger song line is not known. Stock scrolling elements use small Types too (View 21508 uses Type 24197), so the element kind is probably not the cause. Dark and Switch on iPod are not tested.
 
 ## Split with Switch on iPod
 
