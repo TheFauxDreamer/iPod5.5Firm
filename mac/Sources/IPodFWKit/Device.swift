@@ -1,8 +1,8 @@
 import Foundation
 
 // Swift port of src/ipodfw/device.py: find iPods, locate the firmware
-// partition (MBR or APM), and flash safely. Raw I/O needs root, so the app
-// runs these through the bundled ipodfw-helper with administrator rights.
+// partition (MBR or APM), and flash safely. Only the open of the raw disk needs
+// a privilege. The app gets the open disk from authopen (AuthOpen.swift).
 
 public struct IPodDisk: Codable, Identifiable, Hashable {
     public var id: String { disk }
@@ -86,6 +86,29 @@ public enum Device {
         return found
     }
 
+    /// The slice of the firmware partition that starts at byte `start`, or nil if the disk has no such
+    /// slice. An iPod in the Mac format has an Apple_MDFW slice. A firmware partition with MBR type 0 can
+    /// have no slice. A slice at a different position is a fault: the app must not write to it.
+    static func firmwareSlice(_ partitions: [(id: String, content: String, offset: Int?)], start: Int) throws -> String? {
+        guard let slice = partitions.first(where: { $0.content == "Apple_MDFW" }) else { return nil }
+        guard slice.offset == start else {
+            throw FirmwareError("The firmware slice \(slice.id) is not at the position in the partition map.")
+        }
+        return slice.id
+    }
+
+    /// The slice of the firmware partition of `ipod`. Refer to `firmwareSlice(_:start:)`.
+    public static func firmwareSlice(_ ipod: IPodDisk, start: Int) throws -> String? {
+        let listing = try diskutil("list", ipod.disk)
+        let disks = listing["AllDisksAndPartitions"] as? [[String: Any]] ?? []
+        let partitions = try (disks.first?["Partitions"] as? [[String: Any]] ?? []).compactMap { p -> (id: String, content: String, offset: Int?)? in
+            guard let id = p["DeviceIdentifier"] as? String, let content = p["Content"] as? String else { return nil }
+            guard content == "Apple_MDFW" else { return (id, content, nil) }
+            return (id, content, (try diskutil("info", id))["PartitionMapPartitionOffset"] as? Int)
+        }
+        return try firmwareSlice(partitions, start: start)
+    }
+
     /// Unmount all volumes of the iPod before a write to the firmware partition. A busy volume
     /// gets the same attempts as the eject.
     public static func unmount(_ ipod: IPodDisk) throws {
@@ -106,6 +129,11 @@ public enum Device {
     static func isBusy(_ text: String) -> Bool {
         text.contains("dissented") || text.contains("could not be unmounted") ||
             text.localizedCaseInsensitiveContains("busy")
+    }
+
+    /// Mount the volumes of the iPod again, for example after a write that did not start.
+    public static func mount(_ ipod: IPodDisk) throws {
+        _ = try runTool("/usr/sbin/diskutil", ["mountDisk", ipod.disk])
     }
 
     /// Unmount all volumes of the iPod and eject it, as Finder does. Then the iPod can be disconnected.
@@ -196,20 +224,84 @@ public protocol BlockReader {
     func read(_ offset: Int, _ length: Int) throws -> [UInt8]
 }
 
+/// How an operation gets the raw disk. The app uses `authOpen`. The tests use `direct` with a disk image.
+public struct DiskAccess {
+    /// Open the whole disk for a read.
+    public var read: (IPodDisk) throws -> RawDisk
+    /// Ask for the permission to write. Call this before the unmount. `start` is the firmware partition.
+    public var authorizeWrite: (IPodDisk, _ start: Int) throws -> Void
+    /// Open the disk for a write. Call this after the unmount.
+    public var write: (IPodDisk, _ start: Int) throws -> RawDisk
+
+    public init(read: @escaping (IPodDisk) throws -> RawDisk, authorizeWrite: @escaping (IPodDisk, Int) throws -> Void,
+                write: @escaping (IPodDisk, Int) throws -> RawDisk) {
+        self.read = read; self.authorizeWrite = authorizeWrite; self.write = write
+    }
+
+    /// The caller already has the right to open the disk.
+    public static let direct = DiskAccess(read: { try RawDisk(path: $0.rawPath, blockSize: $0.blockSize) },
+                                          authorizeWrite: { _, _ in },
+                                          write: { ipod, _ in try RawDisk(path: ipod.rawPath, blockSize: ipod.blockSize, writable: true) })
+
+    /// macOS asks for the password, and `authopen` opens the disk. The password is good for all the opens in
+    /// a short time. A write goes to the firmware slice if the iPod has one, because a read-write open of the
+    /// whole disk gives EBUSY while a volume is mounted.
+    public static func authOpen(_ auth: AuthOpen = .shared) -> DiskAccess {
+        let prompt = "iPodFirm needs an administrator password to read and write the firmware partition of your iPod."
+        return DiskAccess(
+            read: { ipod in
+                try auth.authorize(paths: [ipod.rawPath], writable: false, prompt: prompt)
+                return try RawDisk(descriptor: auth.open(path: ipod.rawPath, writable: false), blockSize: ipod.blockSize)
+            },
+            authorizeWrite: { ipod, start in
+                let slice = try Device.firmwareSlice(ipod, start: start).map { "/dev/r\($0)" }
+                // Both paths, so that the fallback in `openForWrite` opens no second prompt.
+                try auth.authorize(paths: (slice.map { [$0] } ?? []) + [ipod.rawPath], writable: true, prompt: prompt)
+            },
+            write: { ipod, start in
+                let slice = try Device.firmwareSlice(ipod, start: start).map { "/dev/r\($0)" }
+                return try openForWrite(slice: slice, whole: ipod.rawPath, start: start, blockSize: ipod.blockSize) {
+                    try auth.open(path: $0, writable: true)
+                }
+            })
+    }
+
+    /// Open the firmware slice. If that fails, open the whole disk. The iPod is unmounted here, and this
+    /// open operates on a real iPod. Offsets stay positions on the whole disk, so a write does not change.
+    static func openForWrite(slice: String?, whole: String, start: Int, blockSize: Int,
+                             open: (String) throws -> Int32) throws -> RawDisk {
+        if let slice {
+            do { return RawDisk(descriptor: try open(slice), blockSize: blockSize, origin: start) } catch {
+                AppLog.step("Cannot open \(slice) (\(error.localizedDescription)). Open \(whole).")
+            }
+        }
+        return RawDisk(descriptor: try open(whole), blockSize: blockSize)
+    }
+}
+
 public final class RawDisk: BlockReader {
     public let blockSize: Int
     let fd: Int32
+    /// The position of `fd` on the whole disk. All offsets of this class are positions on the whole disk.
+    let origin: Int
 
     public init(path: String, blockSize: Int, writable: Bool = false) throws {
         self.blockSize = blockSize
+        origin = 0
         fd = open(path, writable ? O_RDWR : O_RDONLY)
         guard fd >= 0 else {
             if errno == EPERM {
-                throw FirmwareError("macOS blocked access to \(path). iPodFirm needs Full Disk Access to read and write the iPod's firmware partition.",
-                                    code: HelperResult.fullDiskAccess)
+                throw FirmwareError("macOS blocked access to \(path). Turn on Full Disk Access for iPodFirm, then try again.")
             }
             throw FirmwareError("Cannot open \(path): \(String(cString: strerror(errno)))")
         }
+    }
+
+    /// Use an open descriptor. This object closes it. `origin` is the position of the descriptor on the disk.
+    public init(descriptor: Int32, blockSize: Int, origin: Int = 0) {
+        fd = descriptor
+        self.blockSize = blockSize
+        self.origin = origin
     }
 
     deinit { close(fd) }
@@ -221,7 +313,7 @@ public final class RawDisk: BlockReader {
         var pos = 0
         while pos < buf.count {
             let n = min(4 << 20, buf.count - pos)
-            let got = buf.withUnsafeMutableBytes { pread(fd, $0.baseAddress! + pos, n, off_t(start + pos)) }
+            let got = buf.withUnsafeMutableBytes { pread(fd, $0.baseAddress! + pos, n, off_t(start + pos - origin)) }
             guard got == n else { throw FirmwareError("Short read from disk at \(start + pos).") }
             pos += n
         }
@@ -230,7 +322,11 @@ public final class RawDisk: BlockReader {
 
     public func writeAligned(_ offset: Int, _ data: ArraySlice<UInt8>) throws {
         guard offset % blockSize == 0, data.count % blockSize == 0 else { throw FirmwareError("Unaligned raw write.") }
-        let written = data.withUnsafeBytes { pwrite(fd, $0.baseAddress!, data.count, off_t(offset)) }
+        guard offset >= origin else { throw FirmwareError("A write before the firmware partition; refusing.") }
+        let written = data.withUnsafeBytes { pwrite(fd, $0.baseAddress!, data.count, off_t(offset - origin)) }
+        if written < 0, errno == EPERM {
+            throw FirmwareError("macOS blocked the write to the iPod. Turn on Full Disk Access for iPodFirm, then try again.")
+        }
         guard written == data.count else { throw FirmwareError("Short write at \(offset): \(String(cString: strerror(errno)))") }
     }
 

@@ -2,7 +2,6 @@ import AppKit
 import CryptoKit
 import Foundation
 import IPodFWKit
-import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -50,17 +49,14 @@ final class AppModel: ObservableObject {
     @Published var pendingEQ: SharedEQ?
     @Published var ipods: [IPodDisk] = []
     @Published var selectedIPod: String?
-    /// iPods for which the helper gave HelperResult.unsupportedIPod (for example an iPod classic).
+    /// iPods for which an operation gave OperationResult.unsupportedIPod (for example an iPod classic).
     @Published var unsupportedIPods: Set<IPodDisk> = []
     /// The name of the connected iPod that iTunes set. Nil if the iPod has no music database.
     @Published var ipodLibraryName: String?
     @Published var backups: [BackupInfo] = []
     @Published var flashPlan: FlashPlan?
-    @Published var hasFullDiskAccess = AppModel.checkFullDiskAccess()
-    @Published var helperStatus: SMAppService.Status = HelperClient.serviceStatus
-    /// The result of the last `status` call to the helper. macOS can show the helper as enabled
-    /// when launchd cannot start it. Only a reply shows that Touch ID operates.
-    @Published var helperReply: HelperReply = .unknown
+    /// Not nil during a write to the iPod.
+    private var writeActivity: NSObjectProtocol?
     @Published var patches: [PatchInfo] = PatchSpec.visible(AppModel.patchLibrary.list(),
                                                             showTests: UserDefaults.standard.bool(forKey: "showTestPatches"))
     /// The disclaimer sheet. It shows at the first launch, and again after a change of `Disclaimer.version`.
@@ -207,15 +203,12 @@ final class AppModel: ObservableObject {
     @Published var playlistFolders = PlaylistFolders()
     @Published var savedPlaylistFolders = PlaylistFolders()
     @Published var playlistFoldersStatus: String?
-    @Published var helperSetupError: String?
-    @AppStorage("requireTouchID") var requireTouchID = true
     /// Settings > Updates: ask GitHub for a newer release at each launch.
     @AppStorage("checkForUpdates") var checkForUpdates = true
     /// The release that the user skipped with "Skip This Version". The launch check ignores it.
     @AppStorage(UpdateNotifier.skippedKey) var skippedUpdateVersion = ""
     /// A newer release, if macOS does not allow the notification. The app shows an alert instead.
     @Published var availableUpdate: UpdateCheck.Release?
-    @Published var showFullDiskAccessHelp = false
     @Published var showFinderRestoreHelp = false
 
     /// The appearance of the iPod software.
@@ -264,7 +257,7 @@ final class AppModel: ObservableObject {
         let ipod: IPodDisk
         let image: URL
         let reason: String
-        let result: HelperResult
+        let result: OperationResult
         /// MiMusic was open when iPodFirm made the plan.
         var musicAppRunning = false
     }
@@ -274,12 +267,15 @@ final class AppModel: ObservableObject {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
+    /// Temporary files. A flash image needs no backup, and a root-owned `Staging` folder of an older app
+    /// in the support folder has no effect here.
+    nonisolated static let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("iPodFirm")
     static let backupDir = supportDir.appendingPathComponent("Backups")
     static let themesDir = supportDir.appendingPathComponent("Themes")
     static var patchesDir: URL { Bundle.main.resourceURL!.appendingPathComponent("patches") }
     /// The built-in patches and the patches that the owner installs (Application Support/iPodFirm/Patches).
     static let patchLibrary = PatchLibrary(builtInDir: patchesDir, userDir: supportDir.appendingPathComponent("Patches"),
-                                           stagingDir: supportDir.appendingPathComponent("Staging"))
+                                           stagingDir: cacheDir.appendingPathComponent("Staging"))
     /// The SHA-256 of Apple's .ipsw file.
     static let appleFirmwareSHA256 = "840b2480ad5b692c098cb772c3d2bf8f58bf37557788782b596ac01c27ecdc32"
     /// The SHA-256 of the osos image in Apple's .ipsw file.
@@ -292,7 +288,7 @@ final class AppModel: ObservableObject {
 
     var currentIPod: IPodDisk? { ipods.first { $0.disk == selectedIPod } ?? ipods.first }
 
-    /// True if the helper found that the selected iPod is not an iPod Video.
+    /// True if an operation found that the selected iPod is not an iPod Video.
     var currentIPodIsUnsupported: Bool { currentIPod.map { unsupportedIPods.contains($0) } ?? false }
 
     /// The state of the iPod in the sidebar.
@@ -312,13 +308,8 @@ final class AppModel: ObservableObject {
         guard !Self.isCancellation(error) else { return }
         let details = faultDetails(error)
         AppLog.error("\(title)\n" + details)
-        if (error as? FirmwareError)?.code == HelperResult.fullDiskAccess {
-            hasFullDiskAccess = false
-            showFullDiskAccessHelp = true
-            return
-        }
         var title = title
-        if (error as? FirmwareError)?.code == HelperResult.unsupportedIPod, let ipod = currentIPod {
+        if (error as? FirmwareError)?.code == OperationResult.unsupportedIPod, let ipod = currentIPod {
             unsupportedIPods.insert(ipod)
             title = "Unsupported iPod"
         }
@@ -371,7 +362,7 @@ final class AppModel: ObservableObject {
         }
         lines.append("Patches on in the app: \(on.isEmpty ? "none" : on.joined(separator: ", "))")
         lines.append("Appearance: \(appearance.rawValue), layout: \(layout.rawValue), theme: \(selectedThemeName ?? "-"), margin: \(ThemeImport.OSOSMargin.current.rawValue), test patches: \(showTestPatches)")
-        lines.append("Helper: \(helperStatus), reply: \(helperReply), Full Disk Access: \(hasFullDiskAccess), Touch ID: \(requireTouchID)")
+        lines.append("Full Disk Access: \(Self.checkFullDiskAccess())")
         lines.append("App: \(Bundle.main.bundlePath), signature: \(ownSignatureDescription())")
         lines.append("App folder:")
         lines += appFolderReport(Self.supportDir).map { "  " + $0 }
@@ -415,7 +406,7 @@ final class AppModel: ObservableObject {
                                                 details: issueSummary(fault), fileName: file?.lastPathComponent))
     }
 
-    /// Reading the system TCC database is only possible with Full Disk Access.
+    /// For a fault report. The app does not need Full Disk Access. Only this permission can read the system TCC database.
     nonisolated static func checkFullDiskAccess() -> Bool {
         let probe = "/Library/Application Support/com.apple.TCC/TCC.db"
         guard let h = FileHandle(forReadingAtPath: probe) else { return false }
@@ -423,82 +414,43 @@ final class AppModel: ObservableObject {
         return true
     }
 
-    enum HelperReply: Equatable {
-        case unknown, checking, noReply
-        case replied(version: Int)
-    }
-
-    /// True if the helper is enabled and replied to the last check. Only then the app uses Touch ID.
-    var helperWorks: Bool {
-        if helperStatus == .enabled, case .replied = helperReply { return true }
-        return false
-    }
-
-    func recheckFullDiskAccess() {
-        hasFullDiskAccess = Self.checkFullDiskAccess()
-        helperStatus = HelperClient.serviceStatus
-        guard helperStatus == .enabled else { helperReply = .unknown; return }
-        helperReply = .checking
-        Task {
-            // The helper does the disk access, so its own permission is what counts.
-            if let s = try? await HelperClient.status() {
-                hasFullDiskAccess = s.hasFullDiskAccess
-                helperReply = .replied(version: s.version)
-            } else {
-                helperReply = .noReply
-            }
+    /// Run an operation away from the main thread. A fault gives a result with `ok == false`.
+    private func operation(_ body: @escaping @Sendable () throws -> OperationResult) async -> OperationResult {
+        let r = await Task.detached { () -> OperationResult in
+            do { return try body() } catch { return OperationResult(failure: error) }
+        }.value
+        if r.ok {
+            AppLog.info("Result: \(r.message)")
+        } else {
+            AppLog.warning("Fault: \(r.message) (code \(r.code ?? "none"))\n\(r.fault.map(AppLog.describe) ?? "No detail.")")
         }
+        return r
     }
 
-    /// Unregister the helper and register it again. This gives launchd a new registration
-    /// when the old one refers to an app that is not there (spawn failed, EX_CONFIG).
-    func repairHelper() {
-        helperReply = .checking
-        Task {
-            try? await HelperClient.unregister()
-            setUpHelper()
-        }
-    }
-
-    /// Register the Touch ID helper; macOS then asks for approval in Login Items once.
-    func setUpHelper() {
-        do {
-            try HelperClient.register()
-            helperSetupError = nil
-        } catch {
-            AppLog.warning("Cannot register the helper\n" + AppLog.describe(error))
-            helperSetupError = error.localizedDescription
-        }
-        helperStatus = HelperClient.serviceStatus
-        if helperStatus == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
-        recheckFullDiskAccess()
-    }
-
-    func removeHelper() {
-        Task {
-            try? await HelperClient.unregister()
-            helperStatus = HelperClient.serviceStatus
-        }
-    }
-
-    /// Ask the helper for a reply, and record the result for the Settings window.
-    private func helperResponds() async -> Bool {
-        guard HelperClient.isEnabled else { return false }
-        let ok = await HelperClient.isResponding()
-        if !ok { helperReply = .noReply } else if case .replied = helperReply {} else { recheckFullDiskAccess() }
-        return ok
-    }
-
-    // Route privileged work through the daemon (Touch ID) when it replies, else the password prompt.
-    private func runBackup(_ ipod: IPodDisk) async throws -> HelperResult {
+    private func runBackup(_ ipod: IPodDisk) async -> OperationResult {
         let start = Date()
         defer { recordAppInBackups(since: start) }
-        if await helperResponds() {
-            AppLog.step("Helper (daemon): back up \(ipod.disk)")
-            return logged(try await HelperClient.backup(disk: ipod.disk, backupDir: Self.backupDir))
+        AppLog.step("Back up \(ipod.disk)")
+        let dir = Self.backupDir
+        return await operation { try Operations.backup(ipod, to: dir, access: .authOpen()) }
+    }
+
+    /// reason is "flash", "restore", or "rescue" (a restore onto a damaged firmware partition).
+    private func runFlash(_ ipod: IPodDisk, image: URL, reason: String, dryRun: Bool) async -> OperationResult {
+        AppLog.step("\(reason) of \(image.lastPathComponent) on \(ipod.disk)\(dryRun ? " (dry run)" : "")")
+        let dir = Self.backupDir
+        let start = Date()
+        if !dryRun { beginWrite() }
+        defer {
+            if !dryRun {
+                endWrite()
+                recordAppInBackups(since: start)
+            }
         }
-        AppLog.step("Helper (password): back up \(ipod.disk)")
-        return logged(try await Privileged.run(helperArgs("backup", ipod)))
+        return await operation {
+            if reason == "rescue" { return try Operations.rescueRestore(ipod, image: image, backupDir: dir, dryRun: dryRun, access: .authOpen()) }
+            return try Operations.flash(ipod, image: image, backupDir: dir, reason: reason, dryRun: dryRun, access: .authOpen())
+        }
     }
 
     /// Writes this app into the metadata of the new backups. A fault here does not stop the operation.
@@ -511,42 +463,15 @@ final class AppModel: ObservableObject {
         } catch { AppLog.warning("Could not record the app in the backup metadata: \(AppLog.describe(error))") }
     }
 
-    /// Writes the result of the helper to the log. On a fault, the log also gets the detail of the helper.
-    private func logged(_ r: HelperResult) -> HelperResult {
-        if r.ok {
-            AppLog.info("Helper result: \(r.message)")
-        } else {
-            AppLog.warning("Helper fault: \(r.message) (code \(r.code ?? "none"))\n\(r.detail ?? "No detail from the helper.")")
-        }
-        return r
+    /// The app does the write itself. It must not quit, and macOS must not stop it or sleep, during a write.
+    private func beginWrite() {
+        writeActivity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled, .suddenTerminationDisabled, .automaticTerminationDisabled],
+                                                              reason: "Writing the firmware of the iPod")
     }
 
-    /// reason is "flash", "restore", or "rescue" (a restore onto a damaged firmware partition).
-    private func runFlash(_ ipod: IPodDisk, image: URL, reason: String, dryRun: Bool) async throws -> HelperResult {
-        let rescue = reason == "rescue"
-        let what = "\(reason) of \(image.lastPathComponent) on \(ipod.disk)\(dryRun ? " (dry run)" : "")"
-        let start = Date()
-        defer { if !dryRun { recordAppInBackups(since: start) } }
-        if await helperResponds() {
-            AppLog.step("Helper (daemon): " + what)
-            if !dryRun && requireTouchID {
-                try await HelperClient.authenticate(reason == "flash" ? "write new firmware to your iPod" : "restore a backup to your iPod")
-            }
-            if rescue {
-                return logged(try await HelperClient.rescueRestore(disk: ipod.disk, image: image, backupDir: Self.backupDir, dryRun: dryRun))
-            }
-            return logged(try await HelperClient.flash(disk: ipod.disk, image: image, backupDir: Self.backupDir, reason: reason, dryRun: dryRun))
-        }
-        AppLog.step("Helper (password): " + what)
-        let args = rescue ? helperArgs("rescue", ipod) + ["--image", image.path]
-                          : helperArgs("flash", ipod) + ["--image", image.path, "--reason", reason]
-        return logged(try await Privileged.run(args + (dryRun ? ["--dry-run"] : [])))
-    }
-
-    func openFullDiskAccessSettings() {
-        let urls = ["x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles",
-                    "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"]
-        for u in urls where NSWorkspace.shared.open(URL(string: u)!) { return }
+    private func endWrite() {
+        if let writeActivity { ProcessInfo.processInfo.endActivity(writeActivity) }
+        writeActivity = nil
     }
 
     func work<T>(_ label: String, _ body: @escaping () throws -> T) async throws -> T {
@@ -575,6 +500,13 @@ final class AppModel: ObservableObject {
 
     /// Asks before a quit or a close of the window.
     func confirmQuit() -> Bool {
+        guard writeActivity == nil else {
+            let a = NSAlert()
+            a.messageText = "iPodFirm Is Writing to the iPod"
+            a.informativeText = "If iPodFirm quits now, the iPod can get a partial firmware. Wait until the write is complete."
+            a.runModal()
+            return false
+        }
         guard hasUnsavedWork, !discardConfirmed else { return true }
         discardConfirmed = askDiscard("iPodFirm has changes that you did not save, apply, flash or write to the iPod.")
         return discardConfirmed
@@ -1825,16 +1757,12 @@ final class AppModel: ObservableObject {
 
     func backupURL(_ b: BackupInfo) -> URL { Self.backupDir.appendingPathComponent(b.file) }
 
-    func helperArgs(_ cmd: String, dir: URL? = nil, _ ipod: IPodDisk) -> [String] {
-        [cmd, "--disk", ipod.disk, "--backup-dir", (dir ?? Self.backupDir).path, "--owner", String(getuid())]
-    }
-
     func backupNow() async {
         guard busy == nil, let ipod = currentIPod else { return }
         busy = "Backing up the iPod's firmware partition…"
         defer { busy = nil; refreshBackups() }
         do {
-            let r = try await runBackup(ipod)
+            let r = await runBackup(ipod)
             guard r.ok else { throw r.failure() }
             alert = AlertInfo(title: "Backup Saved", message: "\(r.message)\n\n\(r.backup?.file ?? "")")
         } catch { fail("Backup Failed", error) }
@@ -1852,11 +1780,11 @@ final class AppModel: ObservableObject {
         do {
             try checkNoMusicSync()
             var reason = reason
-            var r = try await runFlash(ipod, image: image, reason: reason, dryRun: true)
-            if !r.ok, r.code == HelperResult.firmwareUnreadable, reason == "restore" {
+            var r = await runFlash(ipod, image: image, reason: reason, dryRun: true)
+            if !r.ok, r.code == OperationResult.firmwareUnreadable, reason == "restore" {
                 // An interrupted write left the iPod's firmware unreadable: the normal restore cannot compare with it.
                 reason = "rescue"
-                r = try await runFlash(ipod, image: image, reason: reason, dryRun: true)
+                r = await runFlash(ipod, image: image, reason: reason, dryRun: true)
             }
             guard r.ok else { throw r.failure() }
             if r.ranges?.isEmpty ?? true {
@@ -1888,7 +1816,7 @@ final class AppModel: ObservableObject {
         throw FirmwareError("MiMusic is writing to the iPod. Wait until the sync is complete. Then try again.")
     }
 
-    /// Step 2: the helper backs up the current partition, writes only changed blocks, and verifies.
+    /// Step 2: the app backs up the current partition, writes only changed blocks, and verifies.
     func performFlash(_ plan: FlashPlan) async {
         flashPlan = nil
         busy = "Backup, write and check in progress… Do not disconnect the iPod."
@@ -1898,7 +1826,7 @@ final class AppModel: ObservableObject {
             try checkNoMusicSync()
             // The write unmounts the volume, thus change the settings file first.
             let mixNote = clearAlbumMixIfNeeded(image: plan.image)
-            let r = try await runFlash(plan.ipod, image: plan.image, reason: plan.reason, dryRun: false)
+            let r = await runFlash(plan.ipod, image: plan.image, reason: plan.reason, dryRun: false)
             guard r.ok else { throw r.failure() }
             if plan.reason == "flash" { isDirty = false }
             recordWrittenImage(plan.image, ipod: plan.ipod)
@@ -1919,26 +1847,11 @@ final class AppModel: ObservableObject {
         return nil
     }
 
-    /// Make sure that the app can write in the staging folder. If it cannot, the helper repairs the app
-    /// folder after a password prompt. The steps of a fault report then show the state before the repair.
-    func ensureStagingFolder() async throws {
-        do {
-            try Self.patchLibrary.prepareStagingFolder()
-        } catch {
-            AppLog.step("Helper (password): repair the app folder after: \(error.localizedDescription)")
-            let r = try await Privileged.run(["repair-folder", "--folder", Self.supportDir.path, "--owner", String(getuid())],
-                                             prompt: "iPodFirm needs administrator rights to repair the permissions of its folder.")
-            guard r.ok else { throw r.failure() }
-            AppLog.step("Helper (password): app folder repaired. Before: \(r.message)")
-            try Self.patchLibrary.prepareStagingFolder()
-        }
-    }
-
     func flashEdited() async {
         guard busy == nil, let editor else { return }
-        let staging = Self.supportDir.appendingPathComponent("Staging/flash.bin")
+        let staging = Self.patchLibrary.stagingDir.appendingPathComponent("flash.bin")
         do {
-            try await ensureStagingFolder()
+            try Self.patchLibrary.prepareStagingFolder()
             try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion, list: activeList)).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
         } catch { fail("Cannot Flash", error) }
