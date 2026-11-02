@@ -41,12 +41,10 @@ BIN="$(swift build "${SWIFT_FLAGS[@]}" --show-bin-path)"
 APP="build/$APP_NAME.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN/iPodFirm" "$BIN/ipodfw-helper" "$APP/Contents/MacOS/"
+cp "$BIN/iPodFirm" "$APP/Contents/MacOS/"
 # "strip -S" removes the debug map of the linker. The app does not use it. The function
 # names stay for crash reports.
-strip -S "$APP/Contents/MacOS/iPodFirm" "$APP/Contents/MacOS/ipodfw-helper"
-mkdir -p "$APP/Contents/Library/LaunchDaemons"
-cp Resources/com.thefauxdreamer.ipodfirm.helper.plist "$APP/Contents/Library/LaunchDaemons/"
+strip -S "$APP/Contents/MacOS/iPodFirm"
 cp Resources/install-emulator.sh "$APP/Contents/Resources/"
 cp -R Resources/emulator-patches "$APP/Contents/Resources/"
 # The built-in themes. Format 2 does not store the bytes that a theme replaces, so the app
@@ -130,8 +128,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 sign_app() {    # $1 = the app, $2 = the identity
-    # The hardened runtime stops the injection of code into the app and into the helper.
-    codesign --force --options runtime --sign "$2" --identifier com.thefauxdreamer.ipodfirm.helper "$1/Contents/MacOS/ipodfw-helper"
+    # The hardened runtime stops the injection of code into the app.
     codesign --force --options runtime --sign "$2" "$1"
     codesign --verify --strict "$1"
 }

@@ -42,7 +42,7 @@ The app must read and write the disk of the iPod directly. Thus it needs Full Di
 1. Open System Settings > Privacy & Security > Full Disk Access.
 2. Turn on iPodFirm.
 
-Turn on Full Disk Access again after each update of the app. The app asks for your administrator password before it writes to the iPod.
+Turn on Full Disk Access again after each update of the app. The app asks for an administrator password before it reads or writes the firmware partition. The password is good for 5 minutes. No part of the app runs as root.
 
 ### Updates
 
@@ -382,10 +382,6 @@ The script [.githooks/check-repository](.githooks/check-repository) examines all
 
 The script increases the version number and the build number. Then it builds the app and installs it in `/Applications/iPodFirm.app`.
 
-A build from your source code can use the Touch ID helper. To set it up, open iPodFirm > Settings…, then click "Set Up Touch ID". Then approve iPodFirm in System Settings > General > Login Items.
-
-The Settings window examines the helper each time it opens. If the helper does not reply, the window shows an orange warning. Click "Repair" to register the helper again.
-
 ### Make a release build
 
 1. Enter this command:
@@ -396,9 +392,9 @@ The Settings window examines the helper each time it opens. If the helper does n
 
 2. Upload the file `mac/build/iPodFirm-<version>.zip` to the GitHub release.
 
-The release build has an ad-hoc signature. The script does not install the release build. A release build cannot use the Touch ID helper.
+The release build has an ad-hoc signature. The script does not install the release build.
 
-To make the release ZIP and install the app with the same version, use `RELEASE=both` in place of `RELEASE=1`. The installed app keeps the signature of a normal build. Thus Touch ID and Full Disk Access continue to operate.
+To make the release ZIP and install the app with the same version, use `RELEASE=both` in place of `RELEASE=1`. The installed app keeps the signature of a normal build. Thus Full Disk Access continues to operate.
 
 On the `main` branch, `RELEASE=both` is the default. On other branches, the default is a normal build. To change the default, set `RELEASE=0` or `RELEASE=1`.
 
@@ -508,7 +504,7 @@ The idea of SSD Mode comes from [rockpod](https://github.com/nuxcodes/rockpod). 
 
 The idea of Search on the 5G and the byte to change come from [RetroCux](https://github.com/RetroCux/Enable-the-Search-function-on-iPod-Video-5th-Gen).
 
-The idea of Playlist Folders comes from the Reddit user [u/Linusssk](https://www.reddit.com/user/Linusssk/).
+The idea of Playlist Folders and the reports of the flash faults (GitHub issues #2, #3 and #4) come from the Reddit user [u/Linusssk](https://www.reddit.com/user/Linusssk/).
 
 The user braniak87 found the cause of a crash when the Patches pane opened (GitHub issue 1). braniak87 also gave the fix and tested it.
 

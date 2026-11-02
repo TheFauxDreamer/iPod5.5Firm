@@ -528,18 +528,9 @@ public struct PatchLibrary {
 
     // MARK: staging
 
-    /// Make sure that the app can write in the staging folder. A folder of the user without write access
-    /// moves to "Staging old <UUID>". macOS refuses this move for a folder of root: the call then throws,
-    /// and `AppModel.ensureStagingFolder` runs the helper command `repair-folder`.
+    /// Make the staging folder. The folder is in Caches of the user, and only this app writes in it.
     public func prepareStagingFolder() throws {
-        let fm = FileManager.default
-        try fm.createDirectory(at: stagingDir, withIntermediateDirectories: true)
-        guard !fm.isWritableFile(atPath: stagingDir.path) else { return }
-        let parent = stagingDir.deletingLastPathComponent()
-        AppLog.step("No write access to the staging folder. \(permissionState(stagingDir.path)); \(permissionState(parent.path)); app user \(getuid())")
-        let old = parent.appendingPathComponent("\(stagingDir.lastPathComponent) old \(UUID().uuidString)")
-        try fm.moveItem(at: stagingDir, to: old)
-        try fm.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
     }
 
     func newStagingFolder() throws -> URL {

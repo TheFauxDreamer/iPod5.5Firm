@@ -112,14 +112,6 @@ struct SettingsView: View {
         TabView {
             Form {
                 Section {
-                    HelperRow()
-                    if model.helperStatus == .enabled {
-                        Toggle("Ask for Touch ID before a flash or a restore", isOn: $model.requireTouchID)
-                    }
-                } header: {
-                    Text("Touch ID")
-                }
-                Section {
                     FullDiskAccessRow { showHelp = true }
                 } header: {
                     Text("Full Disk Access")
