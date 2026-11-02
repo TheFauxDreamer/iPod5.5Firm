@@ -378,3 +378,12 @@ The iPod played music on a wall charger. The file has 3 samples: 1439 s raw 476,
 The app showed only the header. The 18 bytes after the header are 0, and the app stops at the first 0 byte. The probable cause: the iPod wrote the first sample, and then the Mac cleared the file with no restart of the iPod. The patch keeps the end of the text in RAM. It then writes at the old position, and the old position is 18 bytes after the header. The missing line "start" agrees with this.
 
 Fix (patch 0.3): each sample reads the header. If the header is missing, the text starts again after the header position, with the line "start". The app also ignores zero bytes in the file.
+
+### Battery log 0.3 on a real iPod (3 November 2026)
+
+The owner charged the iPod and played music overnight. The file stayed blank. The owner then played music for approximately 7 minutes. The file then had the line "start", 60 s raw 456 and 360 s raw 451, with icon value 20.
+
+- Version 0.3 writes correctly after a clear. The format of the file is correct.
+- The iPod does not change the file date when it writes. The date of the log file is not evidence of a write.
+- The overnight run with the charger wrote nothing. The cause is not known. The log of 2 November wrote on a wall charger, but its samples started late and its times do not follow the 300 s steps from 60 s.
+- The values 456 and 451 are above the highest earlier value on a battery (438). They are the first values after a long charge.
