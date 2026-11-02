@@ -192,7 +192,7 @@ A test in the emulator is strong evidence, but not proof:
 | Split layout | Yes (31 October 2026). The owner reported that all items operate as expected. The cover sometimes takes approximately 1 s to show, most often after Previous. |
 | Split Dark | No. Emulator only (31 October 2026). |
 | Split with Switch on iPod | No. Emulator start only (31 October 2026). |
-| Split Panel Text Small | No. Emulator, Light only (2 November 2026): the owner accepted the result. The song line shows larger than the other lines. Dark and Switch on iPod are not tested. |
+| Split Panel Text Small | No. Emulator, Light and Dark (2 November 2026): the owner accepted the result. In Light, the song line shows larger than the other lines. Switch on iPod is not tested. |
 | Dark Mode switch | Yes | Version 1.1: yes (28 October 2026). The three appearances Light, Dark and Switch on iPod operate. |
 | Software version | Not recorded | Yes (28 October 2026) |
 | The copy of the games (`games_RO`) | Not applicable (the emulator has no games) | Not recorded. The copy was tested on a copy of the folder `iPod_Control`: the 7 complete games were copied byte for byte, 226,577,300 bytes. The 2 games that are not complete were skipped. Real iPod (27 October 2026, test app "iPodFirm Game Key Test" 0.1.164): the copy of the games with the owner's own key file `IC-Info.sidb` (**Choose Key File…**) works; the owner reports "that works perfectly". |

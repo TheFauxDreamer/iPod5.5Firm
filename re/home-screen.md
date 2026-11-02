@@ -328,7 +328,9 @@ Dark Gray does not change Types 24216 and 24217. It changes the colour of 21 Typ
 
 No stock View uses Types 24216 or 24217. The record of each is complete.
 
-Owner test on 2 November 2026 (emulator, Light, no other patches): the song line shows larger than the other 3 lines. The owner likes this result, so keep it. The View has Type 24216 in all 4 lines. The cause of the larger song line is not known. Stock scrolling elements use small Types too (View 21508 uses Type 24197), so the element kind is probably not the cause. Dark and Switch on iPod are not tested.
+Owner test on 2 November 2026 (emulator, Light, no other patches): the song line shows larger than the other 3 lines. The owner likes this result, so keep it. The View has Type 24216 in all 4 lines. The cause of the larger song line is not known. Stock scrolling elements use small Types too (View 21508 uses Type 24197), so the element kind is probably not the cause.
+
+Owner test on 2 November 2026 (emulator, Dark Gray, no other patches, firmware from the Python tools): the owner reported that it looks good. Switch on iPod is not tested. The Swift build path of Split Dark Small did not run in the emulator.
 
 Open points for the larger song line, from a scan of the code on 2 November 2026 (Static, not decoded):
 
