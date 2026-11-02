@@ -166,16 +166,21 @@ def fit_layout(new_bytes: bytes, current: FirmwarePartition) -> bytes:
     with the new osos and rsrc. When the file and the iPod differ in the hibe image, the
     result follows the iPod. An image that already agrees with the iPod does not change:
     a restore writes the layout of the backup.
+
+    The flash never writes aupd. If the aupd of the iPod is different, the iPod has a different
+    firmware version, and the result would mix two versions. The flash stops.
     """
     new = FirmwarePartition(new_bytes)
     if not current.has("aupd") or not new.has("aupd"):
         return new_bytes
+    if current.image("aupd") != new.image("aupd"):
+        raise FirmwareError("the iPod has a different firmware version; restore the iPod to version 1.3, then flash again")
     if (new.has("hibe") == current.has("hibe")
             and new.entry("aupd").dev_offset == current.entry("aupd").dev_offset):
         return new_bytes
     out = FirmwarePartition(current.data)
     osos = new.image("osos")
-    out.make_room(len(osos))
+    out.make_room(len(osos), new.entry("rsrc").length if new.has("rsrc") else 0)
     out.replace_image("osos", osos)
     if new.has("rsrc") and out.has("rsrc"):
         out.replace_image("rsrc", new.image("rsrc"))

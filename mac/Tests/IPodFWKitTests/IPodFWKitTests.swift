@@ -5,26 +5,6 @@ import Foundation
 import XCTest
 
 final class BackupFolderTests: XCTestCase {
-    func testBackupFolderCheckResolvesLinks() throws {
-        let fm = FileManager.default
-        let home = fm.temporaryDirectory.appendingPathComponent("home-\(UUID().uuidString)")
-        defer { try? fm.removeItem(at: home) }
-        let app = home.appendingPathComponent("Library/Application Support/iPodFirm")
-        let outside = home.appendingPathComponent("outside")
-        try fm.createDirectory(at: app, withIntermediateDirectories: true)
-        try fm.createDirectory(at: outside, withIntermediateDirectories: true)
-        try fm.createSymbolicLink(at: app.appendingPathComponent("link"), withDestinationURL: outside)
-
-        // A folder in the app folder is permitted. The folder need not exist.
-        XCTAssertNoThrow(try checkedBackupDirectory(app.appendingPathComponent("backups/new").path, home: home.path))
-        // The folder after the link does not exist. The check must still see the link.
-        XCTAssertThrowsError(try checkedBackupDirectory(app.appendingPathComponent("link/backups").path, home: home.path))
-        try fm.createSymbolicLink(at: app.appendingPathComponent("broken"), withDestinationURL: outside.appendingPathComponent("none"))
-        XCTAssertThrowsError(try checkedBackupDirectory(app.appendingPathComponent("broken/backups").path, home: home.path))
-        XCTAssertThrowsError(try checkedBackupDirectory(app.appendingPathComponent("../other").path, home: home.path))
-        XCTAssertThrowsError(try checkedBackupDirectory(outside.path, home: home.path))
-    }
-
     func testAppFolderReport() throws {
         let fm = FileManager.default
         let app = fm.temporaryDirectory.appendingPathComponent("report-\(UUID().uuidString)/iPodFirm")
@@ -45,63 +25,74 @@ final class BackupFolderTests: XCTestCase {
         XCTAssertEqual(try fm.contentsOfDirectory(atPath: app.path), ["Staging"])
     }
 
-    func testRepairAppFolderChecksThePath() throws {
-        let fm = FileManager.default
-        let home = fm.temporaryDirectory.appendingPathComponent("home-\(UUID().uuidString)")
-        let app = home.appendingPathComponent("Library/Application Support/iPodFirm")
-        let staging = app.appendingPathComponent("Staging")
-        let outside = home.appendingPathComponent("outside")
-        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
-        try fm.createDirectory(at: outside, withIntermediateDirectories: true)
-        defer {
-            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: staging.path)
-            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: outside.path)
-            try? fm.removeItem(at: home)
-        }
-        try fm.setAttributes([.posixPermissions: 0o500], ofItemAtPath: outside.path)
-        try fm.setAttributes([.posixPermissions: 0o777], ofItemAtPath: home.path)
-
-        // A link in the tree and a link to the tree do not move the repair to a different folder.
-        try fm.createSymbolicLink(at: staging.appendingPathComponent("link"), withDestinationURL: outside)
-        let link = home.appendingPathComponent("link")
-        try fm.createSymbolicLink(at: link, withDestinationURL: app)
-        XCTAssertThrowsError(try repairAppFolder(outside.path, owner: getuid(), home: home.path))
-        XCTAssertThrowsError(try repairAppFolder(staging.path, owner: getuid(), home: home.path))
-        XCTAssertThrowsError(try repairAppFolder(link.path, owner: getuid(), home: outside.path))
-
-        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: staging.path)
-        let before = try repairAppFolder(app.path, owner: getuid(), home: home.path)
-        XCTAssertTrue(before.contains("Staging: owner \(getuid()), mode 555"), before)
-        XCTAssertTrue(fm.isWritableFile(atPath: staging.path))
-        // The repair does not change the folder behind the link.
-        XCTAssertEqual((try fm.attributesOfItem(atPath: outside.path)[.posixPermissions] as? NSNumber)?.intValue, 0o500)
-    }
-
-    func testPrepareStagingFolderReplacesAFolderWithoutWriteAccess() throws {
+    func testPrepareStagingFolderMakesTheFolder() throws {
         let fm = FileManager.default
         let app = fm.temporaryDirectory.appendingPathComponent("app-\(UUID().uuidString)")
-        let staging = app.appendingPathComponent("Staging")
-        let library = PatchLibrary(builtInDir: app, userDir: app, stagingDir: staging)
-
-        // The first call makes the folder. A second call does not move a folder with write access.
+        defer { try? fm.removeItem(at: app) }
+        let library = PatchLibrary(builtInDir: app, userDir: app, stagingDir: app.appendingPathComponent("Caches/Staging"))
         try library.prepareStagingFolder()
         try library.prepareStagingFolder()
-        XCTAssertEqual(try fm.contentsOfDirectory(atPath: app.path), ["Staging"])
+        XCTAssertTrue(fm.isWritableFile(atPath: library.stagingDir.path))
+    }
 
-        try Data("old".utf8).write(to: staging.appendingPathComponent("flash.bin"))
-        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: staging.path)
-        var old: URL?
-        defer {
-            for dir in [old, staging].compactMap({ $0 }) { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
-            try? fm.removeItem(at: app)
+    /// A write goes only to the Apple_MDFW slice at the position in the partition map.
+    func testFirmwareSlice() throws {
+        XCTAssertEqual(try Device.firmwareSlice([("disk4s1", "Apple_partition_map", nil), ("disk4s2", "Apple_MDFW", 129024),
+                                                 ("disk4s3", "Apple_HFS", nil)], start: 129024), "disk4s2")
+        // An iPod with an MBR has no slice for the firmware. The app then opens the whole disk after the unmount.
+        XCTAssertNil(try Device.firmwareSlice([("disk4s2", "Windows_FAT_32", nil)], start: 32256))
+        XCTAssertThrowsError(try Device.firmwareSlice([("disk4s2", "Apple_MDFW", 4096)], start: 129024))
+        XCTAssertThrowsError(try Device.firmwareSlice([("disk4s2", "Apple_MDFW", nil)], start: 129024))
+    }
+
+    /// A failed open of the slice goes to the whole disk, with the offsets of the whole disk.
+    func testOpenForWriteFallsBackToTheWholeDisk() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("whole-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data(repeating: 0, count: 8192).write(to: url)
+        var tried: [String] = []
+        func opener(failing: Set<String>) -> (String) throws -> Int32 {
+            { path in
+                tried.append(path)
+                if failing.contains(path) { throw FirmwareError("busy") }
+                return open(url.path, O_RDWR)
+            }
         }
+        let viaSlice = try DiskAccess.openForWrite(slice: "s", whole: "w", start: 4096, blockSize: 512, open: opener(failing: []))
+        XCTAssertEqual(viaSlice.origin, 4096)
+        XCTAssertEqual(tried, ["s"])
+        tried = []
+        let viaWhole = try DiskAccess.openForWrite(slice: "s", whole: "w", start: 4096, blockSize: 512, open: opener(failing: ["s"]))
+        XCTAssertEqual(viaWhole.origin, 0)
+        XCTAssertEqual(tried, ["s", "w"])
+        tried = []
+        XCTAssertThrowsError(try DiskAccess.openForWrite(slice: "s", whole: "w", start: 4096, blockSize: 512, open: opener(failing: ["s", "w"])))
+        XCTAssertNoThrow(try DiskAccess.openForWrite(slice: nil, whole: "w", start: 4096, blockSize: 512, open: opener(failing: ["s"])))
+    }
 
-        try library.prepareStagingFolder()
-        try Data("new".utf8).write(to: staging.appendingPathComponent("flash.bin"), options: .atomic)
-        let moved = try fm.contentsOfDirectory(atPath: app.path).filter { $0.hasPrefix("Staging old ") }
-        XCTAssertEqual(moved.count, 1)
-        old = app.appendingPathComponent(moved[0])
-        XCTAssertEqual(try Data(contentsOf: old!.appendingPathComponent("flash.bin")), Data("old".utf8))
+    /// The offsets of a descriptor of a slice stay positions on the whole disk.
+    func testRawDiskOrigin() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("slice-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data(repeating: 0, count: 2048).write(to: url)
+        let disk = RawDisk(descriptor: open(url.path, O_RDWR), blockSize: 512, origin: 4096)
+        try disk.writeAligned(4096 + 512, [UInt8](repeating: 7, count: 512)[...])
+        disk.sync()
+        XCTAssertEqual(try disk.read(4096 + 512, 512), [UInt8](repeating: 7, count: 512))
+        XCTAssertEqual(try Data(contentsOf: url)[512], 7)
+        XCTAssertThrowsError(try disk.writeAligned(0, [UInt8](repeating: 7, count: 512)[...]))
+    }
+
+    /// A backup stays with the user of the app.
+    func testBackupBelongsToTheUser() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("owner-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: dir) }
+        let ipod = IPodDisk(disk: "disk9", mediaName: "iPod", blockSize: 512, size: 0, volumeName: nil)
+        try Backups.save([UInt8](repeating: 0, count: 4096), ipod: ipod, reason: "test", in: dir, damaged: true)
+        for path in [dir.path] + (try fm.contentsOfDirectory(atPath: dir.path)).map({ dir.path + "/" + $0 }) {
+            XCTAssertEqual((try fm.attributesOfItem(atPath: path)[.ownerAccountID] as? NSNumber)?.uint32Value, getuid(), path)
+        }
     }
 }
 
@@ -237,12 +228,12 @@ final class ModelCheckTests: XCTestCase {
         let data = partition(vers: 0x1301)
         XCTAssertFalse(try FirmwarePartition(data: data).isVideo)
         XCTAssertThrowsError(try Operations.checkModel(onIPod: data)) {
-            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.unsupportedIPod)
+            XCTAssertEqual(($0 as? FirmwareError)?.code, OperationResult.unsupportedIPod)
         }
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("ipodfw-model-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tmp) }
-        XCTAssertThrowsError(try Backups.save(data, ipod: ipod, reason: "test", in: tmp, owner: nil)) {
-            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.unsupportedIPod)
+        XCTAssertThrowsError(try Backups.save(data, ipod: ipod, reason: "test", in: tmp)) {
+            XCTAssertEqual(($0 as? FirmwareError)?.code, OperationResult.unsupportedIPod)
         }
         XCTAssertTrue(Backups.list(in: tmp).isEmpty)
     }
@@ -253,7 +244,7 @@ final class ModelCheckTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: tmp) }
         var named = ipod
         named.volumeName = "Test Volume"
-        try Backups.save(partition(vers: 0xB001), ipod: named, reason: "test", in: tmp, owner: nil)
+        try Backups.save(partition(vers: 0xB001), ipod: named, reason: "test", in: tmp)
         let saved = Backups.list(in: tmp)
         XCTAssertEqual(saved.count, 2)                          // the backup and the original
         XCTAssertEqual(saved.map(\.ipodName), ["Test Volume", "Test Volume"])
@@ -264,7 +255,7 @@ final class ModelCheckTests: XCTestCase {
     func testBackupRecordsApp() throws {
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("ipodfw-app-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tmp) }
-        try Backups.save(partition(vers: 0xB001), ipod: ipod, reason: "test", in: tmp, owner: nil)
+        try Backups.save(partition(vers: 0xB001), ipod: ipod, reason: "test", in: tmp)
         try Backups.recordApp(version: "0.1.328", build: "329", name: "iPodFirm", in: tmp, since: Date().addingTimeInterval(60))
         XCTAssertEqual(Backups.list(in: tmp).map(\.appLabel), [nil, nil])     // too old for this start time
         try Backups.recordApp(version: "0.1.322", build: "323", name: "iPodFirm No Artwork Test", in: tmp,
@@ -273,7 +264,7 @@ final class ModelCheckTests: XCTestCase {
         XCTAssertEqual(Backups.list(in: tmp).map(\.appBuild), ["323", "323"])
         try Backups.recordApp(version: "0.1.400", build: "401", name: "iPodFirm", in: tmp, since: Date().addingTimeInterval(-60))
         XCTAssertEqual(Backups.list(in: tmp).first?.appVersion, "0.1.322")    // the first record stays
-        try Backups.save(partition(vers: 0xB001), ipod: ipod, reason: "next", in: tmp, owner: nil)
+        try Backups.save(partition(vers: 0xB001), ipod: ipod, reason: "next", in: tmp)
         try Backups.recordApp(version: "0.1.328", build: "329", name: "iPodFirm", in: tmp, since: Date().addingTimeInterval(-60))
         XCTAssertEqual(Backups.list(in: tmp).map(\.appLabel).filter { $0 == "v0.1.328" }.count, 1)
     }
@@ -296,7 +287,7 @@ final class ModelCheckTests: XCTestCase {
         XCTAssertThrowsError(try FirmwarePartition(data: data))
         XCTAssertEqual(FirmwarePartition.modelCode(in: data), 0x13)
         XCTAssertThrowsError(try Operations.checkModel(onIPod: data)) {
-            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.unsupportedIPod)
+            XCTAssertEqual(($0 as? FirmwareError)?.code, OperationResult.unsupportedIPod)
         }
     }
 
@@ -360,7 +351,7 @@ final class ModelCheckTests: XCTestCase {
         XCTAssertEqual(FirmwarePartition.samsungImageHeader(in: data), "8702")
         XCTAssertNil(FirmwarePartition.modelCode(in: data))
         XCTAssertThrowsError(try Operations.checkModel(onIPod: data)) {
-            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.unsupportedIPod)
+            XCTAssertEqual(($0 as? FirmwareError)?.code, OperationResult.unsupportedIPod)
             XCTAssertTrue($0.localizedDescription.contains("iPod classic"))
         }
     }
@@ -378,7 +369,7 @@ final class ModelCheckTests: XCTestCase {
         let data = classicPartition(header: "\u{0}\u{1}\u{2}\u{3}")
         XCTAssertEqual(FirmwarePartition.samsungImageHeader(in: data), "unknown")
         XCTAssertThrowsError(try Operations.checkModel(onIPod: data)) {
-            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.unsupportedIPod)
+            XCTAssertEqual(($0 as? FirmwareError)?.code, OperationResult.unsupportedIPod)
         }
     }
 
@@ -427,13 +418,29 @@ final class DiskImageFlashTests: XCTestCase {
         let edited = tmp.appendingPathComponent("edited.bin")
         try Data(ed.partition.data).write(to: edited)
 
+        // A cancel at the password prompt stops before the backup and before the unmount.
+        var refused = DiskAccess.direct
+        refused.authorizeWrite = { _, _ in throw FirmwareError("Cancelled.") }
+        XCTAssertThrowsError(try Operations.flash(ipod, image: edited, backupDir: backups, reason: "flash", dryRun: false, access: refused))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: backups.path))
+
+        // A failed open after the unmount changes no byte, and the user sees the fault of the open.
+        let before = [UInt8](try Data(contentsOf: img))
+        var noOpen = DiskAccess.direct
+        noOpen.write = { _, _ in throw FirmwareError("No open.") }
+        XCTAssertThrowsError(try Operations.flash(ipod, image: edited, backupDir: tmp.appendingPathComponent("Other"), reason: "flash",
+                                                  dryRun: false, access: noOpen)) {
+            XCTAssertEqual($0.localizedDescription, "No open.")
+        }
+        XCTAssertEqual([UInt8](try Data(contentsOf: img)), before)
+
         // 2. dry run writes nothing and takes no backup
-        let dry = try Operations.flash(ipod, image: edited, backupDir: backups, reason: "flash", dryRun: true, owner: nil)
+        let dry = try Operations.flash(ipod, image: edited, backupDir: backups, reason: "flash", dryRun: true)
         XCTAssertFalse(dry.ranges!.isEmpty)
         XCTAssertTrue(Backups.list(in: backups).isEmpty)
 
         // 3. flash: backup taken first (original + timestamped), writes verified
-        let r = try Operations.flash(ipod, image: edited, backupDir: backups, reason: "flash", dryRun: false, owner: nil)
+        let r = try Operations.flash(ipod, image: edited, backupDir: backups, reason: "flash", dryRun: false)
         XCTAssertTrue(r.ok)
         let list = Backups.list(in: backups)
         XCTAssertEqual(list.count, 2)
@@ -453,11 +460,11 @@ final class DiskImageFlashTests: XCTestCase {
         bad[aupd.lowerBound + 100] ^= 0xFF
         let badURL = tmp.appendingPathComponent("bad.bin")
         try Data(bad).write(to: badURL)
-        XCTAssertThrowsError(try Operations.flash(ipod, image: badURL, backupDir: backups, reason: "flash", dryRun: false, owner: nil))
+        XCTAssertThrowsError(try Operations.flash(ipod, image: badURL, backupDir: backups, reason: "flash", dryRun: false))
 
         // 5. restore the original backup: device is byte-identical to stock again
         _ = try Operations.flash(ipod, image: backups.appendingPathComponent(Backups.originalName), backupDir: backups,
-                                 reason: "restore", dryRun: false, owner: nil)
+                                 reason: "restore", dryRun: false)
         XCTAssertEqual(try raw.read(s, stock.count), stock)
         XCTAssertEqual(Backups.list(in: backups).count, 3)   // the restore backed up the edited state too
         XCTAssertEqual(try Data(contentsOf: backups.appendingPathComponent(Backups.originalName)), original)  // never overwritten
@@ -470,7 +477,7 @@ final class DiskImageFlashTests: XCTestCase {
         XCTAssertNotEqual(try file.entry("aupd").devOffset, try FirmwarePartition(data: stock).entry("aupd").devOffset)
         let largerURL = tmp.appendingPathComponent("larger.bin")
         try Data(file.data).write(to: largerURL)
-        let flashed = try Operations.flash(ipod, image: largerURL, backupDir: backups, reason: "flash", dryRun: false, owner: nil)
+        let flashed = try Operations.flash(ipod, image: largerURL, backupDir: backups, reason: "flash", dryRun: false)
         XCTAssertTrue(flashed.ok)
         let onDisk = try FirmwarePartition(data: raw.read(s, size))
         XCTAssertEqual(try onDisk.image("osos"), larger)
@@ -480,7 +487,7 @@ final class DiskImageFlashTests: XCTestCase {
         XCTAssertGreaterThan(try onDisk.entry("rsrc").devOffset, try onDisk.entry("aupd").devOffset)
         // ... and the restore of the original backup gives the original partition again, also the moved rsrc area
         _ = try Operations.flash(ipod, image: backups.appendingPathComponent(Backups.originalName), backupDir: backups,
-                                 reason: "restore", dryRun: false, owner: nil)
+                                 reason: "restore", dryRun: false)
         XCTAssertEqual(try raw.read(s, size), Array(original))
 
         // 6. an interrupted write: the STOP banner and the directory are gone
@@ -488,31 +495,31 @@ final class DiskImageFlashTests: XCTestCase {
         try w.writeAligned(s, [UInt8](repeating: 0, count: 4096)[...])
         w.sync()
         XCTAssertThrowsError(try Operations.flash(ipod, image: backups.appendingPathComponent(Backups.originalName), backupDir: backups,
-                                                  reason: "restore", dryRun: true, owner: nil)) {
-            XCTAssertEqual(($0 as? FirmwareError)?.code, HelperResult.firmwareUnreadable)
+                                                  reason: "restore", dryRun: true)) {
+            XCTAssertEqual(($0 as? FirmwareError)?.code, OperationResult.firmwareUnreadable)
         }
 
         // 7. a rescue with a changed aupd is refused; a backup that is itself damaged is refused
-        XCTAssertThrowsError(try Operations.rescueRestore(ipod, image: badURL, backupDir: backups, dryRun: false, owner: nil))
+        XCTAssertThrowsError(try Operations.rescueRestore(ipod, image: badURL, backupDir: backups, dryRun: false))
         let zeroURL = tmp.appendingPathComponent("zero.bin")
         try Data(count: stock.count).write(to: zeroURL)
-        XCTAssertThrowsError(try Operations.rescueRestore(ipod, image: zeroURL, backupDir: backups, dryRun: false, owner: nil))
+        XCTAssertThrowsError(try Operations.rescueRestore(ipod, image: zeroURL, backupDir: backups, dryRun: false))
 
         // 7a. the original backup is from a different disk: the rescue is refused
         var other = ipod
         other.mediaName = "Other iPod"
         XCTAssertThrowsError(try Operations.rescueRestore(other, image: backups.appendingPathComponent(Backups.originalName),
-                                                          backupDir: backups, dryRun: true, owner: nil))
+                                                          backupDir: backups, dryRun: true))
 
         // 8. the rescue writes only the damaged blocks (never aupd), keeps the damaged state, and the iPod is stock again
         let rescueDry = try Operations.rescueRestore(ipod, image: backups.appendingPathComponent(Backups.originalName),
-                                                     backupDir: backups, dryRun: true, owner: nil)
+                                                     backupDir: backups, dryRun: true)
         let aupdRange = try FirmwarePartition(data: stock).imageRange("aupd")
         XCTAssertFalse(rescueDry.ranges!.isEmpty)
         XCTAssertTrue(rescueDry.ranges!.allSatisfy { $0.offset + $0.length <= 4096 })   // only zeroed blocks that differ
         XCTAssertFalse(rescueDry.ranges!.contains { $0.offset < aupdRange.upperBound && $0.offset + $0.length > aupdRange.lowerBound })
         let rescued = try Operations.rescueRestore(ipod, image: backups.appendingPathComponent(Backups.originalName),
-                                                   backupDir: backups, dryRun: false, owner: nil)
+                                                   backupDir: backups, dryRun: false)
         XCTAssertTrue(rescued.ok)
         XCTAssertEqual(rescued.backup?.model, Backups.damagedModel)
         XCTAssertEqual(try raw.read(s, stock.count), stock)
@@ -520,7 +527,7 @@ final class DiskImageFlashTests: XCTestCase {
 
         // 9. the firmware is valid again, so a second rescue is refused
         XCTAssertThrowsError(try Operations.rescueRestore(ipod, image: backups.appendingPathComponent(Backups.originalName),
-                                                          backupDir: backups, dryRun: true, owner: nil))
+                                                          backupDir: backups, dryRun: true))
     }
 }
 
@@ -1442,6 +1449,113 @@ final class ThemeTests: XCTestCase {
         let fw = try FirmwarePartition(data: data)
         XCTAssertThrowsError(try larger(fw)) { e in
             XCTAssertEqual((e as? FirmwareError)?.message, "The firmware partition has no empty area for rsrc.")
+        }
+    }
+
+    /// The layout of a restored iPod with a used memory card: no hibe entry, and no byte in the free
+    /// space is zero. `partition` is the partition length.
+    func dirtyLayout(partition: Int, fill: UInt8 = 0xFF) -> [UInt8] {
+        var d = restoredLayout(stale: 0, free: 0)
+        d += [UInt8](repeating: fill, count: partition - d.count)
+        return d
+    }
+
+    /// Issue 4: a 64 MiB partition with old data. rsrc goes to the end, past a 32 MB hibernation area.
+    func testMakeRoomUsesTheEndOfADirtyPartition() throws {
+        let data = dirtyLayout(partition: 0x4000000)
+        let current = try FirmwarePartition(data: data)
+        let fw = try FirmwarePartition(data: data)
+        let aupd = try current.entry("aupd")
+        let aupdEnd = Int(aupd.devOffset) + Int(aupd.length)
+        _ = try larger(fw)
+        let rsrc = try fw.entry("rsrc")
+        XCTAssertEqual(fw.data.count, data.count)
+        XCTAssertEqual(Int(rsrc.devOffset) % 0x800, 0)
+        XCTAssertEqual(Int(rsrc.devOffset), (0x4000000 - 2048 - Int(rsrc.length)) / 0x800 * 0x800)
+        XCTAssertGreaterThanOrEqual(Int(rsrc.devOffset), aupdEnd + FirmwarePartition.hibernationArea32MB)
+        XCTAssertEqual(try fw.image("rsrc"), try current.image("rsrc"))
+        XCTAssertEqual(try fw.entry("aupd").devOffset, aupd.devOffset)
+        try FirmwareFlasher.checkCompatible(current: current, new: FirmwarePartition(data: fw.data), label: "t")
+    }
+
+    /// The full path of a flash with a larger osos on a dirty iPod that has Apple's aupd.
+    func testFitLayoutPutsALargerFileIntoADirtyPartition() throws {
+        let current = try FirmwarePartition(data: dirtyLayout(partition: 0x4000000))
+        let file = try FirmwarePartition(data: stock)
+        let osos = try larger(file)
+        let fitted = try FirmwarePartition(data: FirmwareFlasher.fitLayout(new: file.data, current: current))
+        XCTAssertEqual(try fitted.image("osos"), osos)
+        XCTAssertEqual(try fitted.image("rsrc"), try current.image("rsrc"))
+        XCTAssertTrue(fitted.checksumOK("rsrc"))
+        try FirmwareFlasher.checkCompatible(current: current, new: fitted, label: "t")
+    }
+
+    /// A large dirty partition also holds a 64 MB hibernation area: rsrc must be past it.
+    func testMakeRoomKeepsThe64MBAreaInALargeDirtyPartition() throws {
+        let fw = try FirmwarePartition(data: dirtyLayout(partition: 0x5400000))
+        let aupd = try fw.entry("aupd")
+        _ = try larger(fw)
+        XCTAssertGreaterThanOrEqual(Int(try fw.entry("rsrc").devOffset),
+                                    Int(aupd.devOffset) + Int(aupd.length) + FirmwarePartition.hibernationArea64MB)
+    }
+
+    /// This partition can hold a 64 MB dump, but not rsrc after it. The app cannot get the RAM
+    /// size, so it must refuse: it does not write in a dump.
+    func testMakeRoomRefusesAPartitionThatCanHoldA64MBDump() throws {
+        let fw = try FirmwarePartition(data: dirtyLayout(partition: 0x4E00000))
+        XCTAssertThrowsError(try larger(fw))
+    }
+
+    /// The 64 MB area ends at the position that real flashes used, dev 0x4d44000.
+    func testHibernationAreaAgreesWithTheRealIPod() throws {
+        let fw = try FirmwarePartition(data: stock)
+        let aupd = try fw.entry("aupd")
+        XCTAssertEqual(Int(aupd.devOffset) + Int(aupd.length) + FirmwarePartition.hibernationArea64MB, 0x4d44000)
+    }
+
+    /// A partition too small for rsrc after the hibernation area: refuse, and do not write in that area.
+    func testMakeRoomRefusesTheHibernationAreaOfADirtyPartition() throws {
+        let fw = try FirmwarePartition(data: dirtyLayout(partition: 0x2800000))
+        XCTAssertThrowsError(try larger(fw)) { e in
+            XCTAssertEqual((e as? FirmwareError)?.message, "The firmware partition has no empty area for rsrc.")
+        }
+    }
+
+    /// With an empty area, the dirty-partition rule changes nothing.
+    func testMakeRoomPrefersAnEmptyArea() throws {
+        var data = dirtyLayout(partition: 0x4000000)
+        data.replaceSubrange(2048 + 0x3000000..<2048 + 0x3600000, with: [UInt8](repeating: 0, count: 0x600000))
+        let fw = try FirmwarePartition(data: data)
+        _ = try larger(fw)
+        XCTAssertEqual(try fw.entry("rsrc").devOffset, 0x3000000)
+    }
+
+    /// The area must hold a new rsrc that is longer than the rsrc of the iPod.
+    func testMakeRoomUsesTheLengthOfTheNewRsrc() throws {
+        var data = restoredLayout(stale: 0, free: 0xB00000)
+        let fw = try FirmwarePartition(data: data)
+        let rsrc = try fw.entry("rsrc")
+        let end = Int(try fw.entry("aupd").devOffset + fw.entry("aupd").length)
+        // 0x500800 bytes of zeros, then a byte of old data: a longer rsrc does not fit there
+        data[2048 + end + Int(rsrc.length)] = 1
+        let longer = try FirmwarePartition(data: data)
+        let osos = try longer.image("osos") + [UInt8](repeating: 1, count: 40_000)
+        try longer.makeRoom(ososLength: osos.count, rsrcLength: Int(rsrc.length) + 0x800)
+        XCTAssertGreaterThan(Int(try longer.entry("rsrc").devOffset), end + Int(rsrc.length))
+        let same = try FirmwarePartition(data: data)
+        try same.makeRoom(ososLength: osos.count)
+        XCTAssertEqual(Int(try same.entry("rsrc").devOffset), end)
+    }
+
+    /// An iPod with an older firmware has a different aupd: the flash must not mix two versions.
+    func testFitLayoutRefusesADifferentAupd() throws {
+        var data = ipodLayout()
+        let current0 = try FirmwarePartition(data: data)
+        data[try current0.imageRange("aupd").lowerBound] ^= 0xFF
+        let current = try FirmwarePartition(data: data)
+        XCTAssertThrowsError(try FirmwareFlasher.fitLayout(new: stock, current: current)) { e in
+            XCTAssertEqual((e as? FirmwareError)?.message,
+                           "The iPod has a different firmware version. Restore the iPod to version 1.3 with Finder. Then flash again.")
         }
     }
 
@@ -3163,24 +3277,6 @@ final class AppLogTests: XCTestCase {
         let e = CocoaError(.fileNoSuchFile).adding("read the theme")
         XCTAssertEqual(e.context, ["read the theme"])
         XCTAssertTrue(e.cause?.contains("NSCocoaErrorDomain") ?? false)
-    }
-
-    /// An older helper sends no detail. A new helper sends the error and its steps.
-    func testHelperResultDetail() throws {
-        let old = try JSONDecoder().decode(HelperResult.self, from: Data(#"{"ok":false,"message":"No iPod.","code":null}"#.utf8))
-        XCTAssertNil(old.detail)
-        XCTAssertTrue(old.failure().cause?.contains("older helper") ?? false)
-
-        AppLog.step("Read the firmware partition of disk9")
-        let r = HelperResult(failure: FirmwareError("Short read from disk at 4096."))
-        XCTAssertFalse(r.ok)
-        let detail = try XCTUnwrap(r.detail)
-        XCTAssertTrue(detail.contains("Short read from disk at 4096."))
-        XCTAssertTrue(detail.contains("Helper steps:"))
-        XCTAssertTrue(detail.contains("disk9"))
-        let back = try JSONDecoder().decode(HelperResult.self, from: JSONEncoder().encode(r))
-        XCTAssertEqual(back.failure().message, "Short read from disk at 4096.")
-        XCTAssertTrue(back.failure().cause?.contains("In the helper:") ?? false)
     }
 
     /// The issue page has the fault and stays short. A long text is cut at the end.

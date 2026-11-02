@@ -4,13 +4,12 @@ This document describes the structure of the iPodFirm app. It tells how the app 
 
 ## The parts
 
-The Swift package is in [mac/](../mac/). [Package.swift](../mac/Package.swift) has four targets:
+The Swift package is in [mac/](../mac/). [Package.swift](../mac/Package.swift) has three targets:
 
 | Target | Type | Function |
 |---|---|---|
 | `IPodFWKit` | Library | The firmware formats, the patcher, the theme import, the disk access and the safety checks. It has no user interface. |
 | `iPodFirm` | App | The SwiftUI user interface. |
-| `ipodfw-helper` | Command-line program | The privileged helper. It reads and writes the raw disk. |
 | `IPodFWKitTests` | Tests | `swift test`. |
 
 The Python package in [src/ipodfw/](../src/ipodfw/) has the same formats. The two implementations must give the same bytes. When you change a format in one package, change the other package too.
@@ -33,7 +32,7 @@ The sidebar has two sections. The section "Device" has only the iPod row. The ro
 
 [AppModel.swift](../mac/Sources/iPodFirm/AppModel.swift) holds the state and the actions of all panes.
 
-The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has four tabs. Permissions: the Touch ID helper and its check (refer to [The helper check in the Settings window](#the-helper-check-in-the-settings-window)), `requireTouchID` and Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`). The default is 32 KB (the limit 0x7F8000). The value 16 KB (the limit 0x7FC000) gives more space for patches. The value 64 KB (the limit 0x7F0000) is the value before 9 October 2026. The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default) and "Show Descriptions in the Patch List" (`showPatchSummaries`, On by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`). A build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`). Updates: "Check for a new version at launch" (`checkForUpdates`, On by default). Refer to [The update check](#the-update-check).
+The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has three tabs. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`). The default is 32 KB (the limit 0x7F8000). The value 16 KB (the limit 0x7FC000) gives more space for patches. The value 64 KB (the limit 0x7F0000) is the value before 9 October 2026. The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default) and "Show Descriptions in the Patch List" (`showPatchSummaries`, On by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`). A build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`). Updates: "Check for a new version at launch" (`checkForUpdates`, On by default). Refer to [The update check](#the-update-check).
 
 The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
@@ -70,21 +69,21 @@ The log records these items:
 
 1. The launch: the app version, the macOS version and the Mac model.
 2. The iPods that the app finds.
-3. The steps of each operation (`AppLog.step`). Examples are each `work` label, each patch that the build applies, the helper call, and the read, write and verify of a flash.
-4. The result of each helper call. On a fault, the log also gets `HelperResult.detail`.
+3. The steps of each operation (`AppLog.step`). Examples are each `work` label, each patch that the build applies, and the read, write and verify of a flash.
+4. The result of each operation on the iPod. On a fault, the log also gets the full error.
 5. Each fault, and each error that the app shows only as a status text.
 
 The fault report and Save Log… also give the path and the signature of the app, and the state of the app folder (`appFolderReport`). For the parent folder, `iPodFirm`, `Staging` and `Backups`, the state is the owner, the mode, the flags and the ACL state. For the last three, the app also makes and deletes a small test file (`writeTest`). The report also gives the user ID of the app. A failed test with the system error shows the real cause of a write fault.
 
 The fault report and Save Log… also give model data of the iPod. The data comes from `iPod_Control/Device/SysInfo` on the mounted volume (`IPodDisk.sysInfoReport`). The app shows only the keys `ModelNumStr`, `visibleBuildID` and `BoardHwName`, thus no serial number and no FireWire GUID. The report also tells if the size agrees with an original drive.
 
-Each read of the partition by the helper records the layout of the iPod (`Operations.layoutReport`). The layout has the name, position, length, version, checksum result and SHA-256 of each image, and the map of the areas with data and the zero areas. `hibe` has no hash. The layout has no image data, so a user can send it. A user must not send a backup: it holds Apple firmware and, in `hibe`, the RAM of the iPod with the music library. The file `.bin.json` of a backup holds the iPod name. After a read, the app writes the layout to its log. On a fault, the steps of the helper hold it. If `makeRoom` finds no area for rsrc, a step gives the size of the largest empty area.
+Each read of the partition records the layout of the iPod (`Operations.layoutReport`). The layout has the name, position, length, version, checksum result and SHA-256 of each image, and the map of the areas with data and the zero areas. `hibe` has no hash. The layout has no image data, so a user can send it. A user must not send a backup: it holds Apple firmware and, in `hibe`, the RAM of the iPod with the music library. The file `.bin.json` of a backup holds the iPod name. After a read, the app writes the layout to its log. On a fault, the steps of the operation hold it. If `makeRoom` finds no area for rsrc, a step gives the size of the largest empty area.
 
-The log has no home folder path and no user name. `AppLog.redact` changes `/Users/<name>` to `~` and the short user name to `<user>`. The log has no serial number and no volume name. Only the app writes the log file. The tests and the helper write only to the unified log.
+The log has no home folder path and no user name. `AppLog.redact` changes `/Users/<name>` to `~` and the short user name to `<user>`. The log has no serial number and no volume name. Only the app writes the log file. The tests and the operation write only to the unified log.
 
 Each error has more data than its message. `FirmwareError` and `PatchError` record the file, the line and the function of the throw. A `FirmwareError` can also have `context` (the steps of the callers, from `adding(_:)`) and `cause` (the full description of the error that caused it). `AppLog.describe` writes all of this data. It also writes the domain, the code and the underlying errors of an `NSError`.
 
-All faults go through `AppModel.fail`. It writes the error, the last 15 steps and the state of the app (`diagnosticSnapshot`) to the log. The state has the open file name, the iPod model and the iPod size. It also has the patches on the iPod and in the app, with their versions and options. It also has the appearance and the helper status. The alert shows the message and the last step of the last two minutes. The alert of a fault has three buttons:
+All faults go through `AppModel.fail`. It writes the error, the last 15 steps and the state of the app (`diagnosticSnapshot`) to the log. The state has the open file name, the iPod model and the iPod size. It also has the patches on the iPod and in the app, with their versions and options. It also has the appearance and the Full Disk Access status. The alert shows the message and the last step of the last two minutes. The alert of a fault has three buttons:
 
 - **Report on GitHub…** saves the log as a text file. Then it opens a new issue on GitHub in the browser (refer to [Network connections](#network-connections)). The issue starts with the instruction to attach the file. It holds only the fault, a short summary of the app and the iPod, the first lines of the error and the last three steps (`AppModel.issueSummary`, `AppLog.faultExcerpt`). The user drags the file into the issue. The file has all other data.
 - **Save Log…** saves the state of the app and the two log files as one text file, for example `iPodFirm Log 2026-10-29 1405.txt`. Finder then shows the file.
@@ -100,23 +99,23 @@ The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the cent
 
 1. It increases the version and the build number in [mac/version.env](../mac/version.env).
 2. It runs `swift build -c release --arch arm64` with the option `-file-prefix-map <project folder>=.`. The compiler then writes `./mac/Sources/...` in place of the full path of each source file. Thus the build does not change with the location of the project folder.
-3. It makes `iPodFirm.app` with the app, the helper, the launchd property list, the emulator files and the patches.
-4. It runs `strip -S` on the app and on the helper. This removes the debug map of the linker. The app does not use it.
+3. It makes `iPodFirm.app` with the app, the plist of the old daemon, the emulator files and the patches.
+4. It runs `strip -S` on the app. This removes the debug map of the linker. The app does not use it.
 5. It writes `Info.plist`. The bundle identifier is `com.thefauxdreamer.ipodfirm`.
-6. It signs the helper with the identifier `com.thefauxdreamer.ipodfirm.helper`, then the app. It uses the first "Apple Development" or "Developer ID Application" identity, or `CODESIGN_IDENTITY`. It turns on the hardened runtime (`--options runtime`) for the two programs.
+6. It signs the app. It uses the first "Apple Development" or "Developer ID Application" identity, or `CODESIGN_IDENTITY`. It turns on the hardened runtime (`--options runtime`) for the two programs.
 7. It writes the new numbers to `version.env` only after a successful build.
-8. It quits iPodFirm with `osascript` if iPodFirm is open. Then it installs the app in `/Applications`.
+8. It waits if iPodFirm is open, and it stops with an error if the app stays open. It does not quit the app. Then it installs the app in `/Applications`.
 
 The variable `APP_NAME` changes the name of the app (the default is `iPodFirm`). Use it to install a test build next to the normal app, for example `APP_NAME="iPodFirm USB-C Test" mac/scripts/build-app.sh`. The two apps have the same bundle identifier and the same helper. Do not open the two apps at the same time.
 
-A stable signature is necessary. macOS connects Full Disk Access to the signature. An ad-hoc signature changes with each build, and the permission is lost.
+The app does not need a stable signature, because it does not need Full Disk Access.
 
 ### The release build
 
 `RELEASE=1 mac/scripts/build-app.sh` makes a build for a GitHub release:
 
 1. It increases the version and the build number, as a normal build does.
-2. It signs the helper and the app with an ad-hoc signature (`codesign --options runtime --sign -`). It ignores `CODESIGN_IDENTITY`.
+2. It signs the app with an ad-hoc signature (`codesign --options runtime --sign -`). It ignores `CODESIGN_IDENTITY`.
 3. It stops if a file in the app contains a path of the build Mac or the Git e-mail address. The script does not examine an address that ends in `@users.noreply.github.com`. The check occurs before the script writes the new numbers to `version.env`.
 4. It stops if `codesign -dvv` shows an `Authority=` line.
 5. It makes `build/iPodFirm-<version>.zip` with `ditto -c -k --keepParent`.
@@ -137,8 +136,6 @@ A developer certificate contains the e-mail address or the name of the owner. An
 An ad-hoc build has these limits:
 
 - The script does not notarize the app. Gatekeeper blocks the app at the first start. The user must open it with Control-click and **Open**.
-- The build has no team identifier. The daemon refuses to start, so the Touch ID helper is not available. `HelperRow` shows this and does not show "Set Up Touch ID". The app uses the password prompt.
-- macOS loses Full Disk Access after each update, because the signature changes. The user must turn on the permission again.
 
 ## The detection of the iPod
 
@@ -153,113 +150,55 @@ The app reads the disk size to identify a probable original hard drive. Refer to
 
 `FirmwareFlasher.locatePartition` then finds the firmware partition in the MBR or in the Apple partition map. Refer to [firmware-format.md](firmware-format.md#the-location-of-the-firmware-partition).
 
-The helper refuses an iPod that is not an iPod Video. It returns the code `unsupported-ipod`, and the iPod pane disables the back-up, flash and restore buttons. It does two tests:
+`Operations` refuses an iPod that is not an iPod Video. It returns the code `unsupported-ipod`, and the iPod pane disables the back-up, flash and restore buttons. It does two tests:
 
 1. It identifies an iPod with a Samsung CPU (iPod classic). Its directory is at the value at 0x104 + 0x1000, because it uses 4096-byte sectors (`FirmwarePartition.samsungImageHeader`). Refer to [re/ipod-classic-6g.md](../re/ipod-classic-6g.md).
 2. It reads the model code in the osos directory entry (`vers >> 8`). The iPod Video has 0xB0.
 
 ## Privileged access
 
-The raw disk `/dev/rdiskN` needs root rights. The app itself never opens the raw disk for a write. The helper `ipodfw-helper` does all raw reads and writes. The app starts the helper in one of two modes.
+The raw disk `/dev/rdiskN` has the owner root and the mode 640. No code of iPodFirm runs as root. The app gets an open disk from the Apple program `/usr/libexec/authopen`, and the app does all the work with the user's rights. The measurements are in [re/privilege-analysis.md](../re/privilege-analysis.md).
 
-### Mode 1: the launchd daemon (Touch ID)
+`AuthOpen` in [AuthOpen.swift](../mac/Sources/IPodFWKit/AuthOpen.swift) does these steps:
 
-1. The owner clicks "Set Up Touch ID" in the Settings window (Permissions).
-2. The app registers the daemon with `SMAppService.daemon(plistName: "com.thefauxdreamer.ipodfirm.helper.plist")`.
-3. macOS asks the owner to approve the daemon in System Settings > General > Login Items.
-4. launchd starts `ipodfw-helper --daemon` when the app connects to the Mach service `com.thefauxdreamer.ipodfirm.helper`.
-5. Before each write, the app asks for Touch ID (`LAContext.evaluatePolicy(.deviceOwnerAuthentication)`). The owner can switch this off (`requireTouchID`).
-6. The daemon stops after 60 seconds without a request.
+1. It keeps one `AuthorizationRef`.
+2. `authorize` asks for the right `sys.openfile.readonly.<path>` or `sys.openfile.readwrite.<path>`. macOS asks for the name and the password of an administrator. A password is good for 300 seconds.
+3. `open` starts `authopen -stdoutpipe -extauth -o <flags> <path>` and sends the external form of the authorization.
+4. `authopen` sends the file descriptor (`SCM_RIGHTS`) on a socket. On a fault, it sends two bytes. The last byte is the `errno` value.
 
-Both sides of the XPC connection examine the code signature:
+`DiskAccess` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift) gives the disk to `Operations`. The app uses `DiskAccess.authOpen()`. The tests use `DiskAccess.direct` with a disk image.
 
-- The daemon accepts only the code `identifier "com.thefauxdreamer.ipodfirm"`, signed by the same team (`setCodeSigningRequirement`).
-- The app accepts only the helper `identifier "com.thefauxdreamer.ipodfirm.helper"`, signed by the same team.
-- The daemon refuses to start if it has no team identifier (an ad-hoc signature).
-
-The app and the helper use the hardened runtime. The app needs no entitlement. Thus another program cannot inject code into the app and use the connection to the daemon.
-
-The daemon writes a backup only in `~/Library/Application Support/iPodFirm` of the caller. `checkedBackupDirectory` resolves symbolic links before the check. Thus a link in that folder cannot send a write of root to a different location.
-
-The daemon is registered for the whole Mac. Each copy of the app with the same bundle identifier sees the status `.enabled`, also a copy for a different user. Thus the app does two more checks (`HelperClient`):
-
-- An ad-hoc build always uses the password prompt. `serviceStatus` gives `.notRegistered` if the app has no team identifier.
-- Before each backup, flash or restore, the app sends `status` (`isResponding`). If the daemon does not reply in 10 seconds, the app uses the password prompt.
-
-The second check is necessary because launchd can fail to start the daemon. Then a request gets no reply and no error. Before version 0.1.135, the app waited for ever in this condition.
-
-#### The helper check in the Settings window
-
-The status `.enabled` does not show that launchd can start the daemon. A registration can refer to an old copy of the app. Then launchd records `job state = spawn failed` and `last exit code = 78: EX_CONFIG`. The system log shows `Could not find and/or execute program specified by service`.
-
-Thus `HelperRow` shows the result of a `status` call (`AppModel.helperReply`), not only the macOS status:
-
-| `helperReply` | Settings window | Buttons |
+| Access | Path | Note |
 |---|---|---|
-| `.checking` | "iPodFirm examines the Touch ID helper…" | — |
-| `.replied(version:)` | Green: the helper is on. The protocol version. | Check Again, Turn Off |
-| `.noReply` | Orange: the helper does not reply. The app uses the password prompt. | Check Again, Repair |
+| Read | `/dev/rdiskN` | The volume can stay mounted. |
+| Write, with an `Apple_MDFW` slice | The slice | `Device.firmwareSlice` compares `PartitionMapPartitionOffset` with the partition map. A different value stops the write. `RawDisk.origin` keeps the offsets as positions on the whole disk. |
+| Write, with no slice | `/dev/rdiskN` | The write comes after the unmount. A read-write open of the whole disk gives `EBUSY` while a volume is mounted. |
 
-The app sends `status` when the Settings window or the iPod pane opens, and when the owner clicks **Check Again**. Each backup, flash and restore also records the result of `isResponding`.
+`DiskAccess.openForWrite` has one fallback: if the open of the slice fails, it opens the whole disk. `authorizeWrite` asks for both paths, so the fallback opens no second prompt. A slice at the wrong position does not use the fallback.
 
-**Repair** (`AppModel.repairHelper`) does these steps:
+The app has no fallback to a root process. Refer to [re/privilege-analysis.md](../re/privilege-analysis.md).
 
-1. It unregisters the daemon (`SMAppService.unregister`).
-2. It registers the daemon again (`setUpHelper`). If macOS asks for approval, the app opens Login Items.
-3. It sends `status` again.
+The operations run in the app, so the app must not stop during a write. Refer to [safety.md](safety.md).
 
-The iPod pane and the flash sheet show "Touch ID" only if the helper replied (`AppModel.helperWorks`).
+### The old daemon
 
-The XPC protocol is `HelperXPCProtocol` in [HelperXPC.swift](../mac/Sources/IPodFWKit/HelperXPC.swift). The protocol version is 2.
+Versions before this one could register a root daemon. At each launch, `OldDaemon.removeIfRegistered` removes a registration with `SMAppService.unregister`. It opens no prompt. A fault goes to the log and does not stop the launch.
 
-| Method | Arguments | Result |
-|---|---|---|
-| `status` | — | `HelperStatus`: version, Full Disk Access |
-| `backup` | disk, backup folder | `HelperResult` |
-| `flash` | disk, image, backup folder, reason, dry run | `HelperResult` |
-| `rescueRestore` | disk, image, backup folder, dry run | `HelperResult` |
-
-The results are JSON data. On a fault, `HelperResult.detail` has the full error and the last steps of the helper (`AppLog.failureDetail`). The field is optional. Thus an older helper and a newer app work together, and the protocol version does not change. The helper runs as root, so it does not write the log file of the user. The daemon clears its steps at the start of each request. The daemon writes backups only inside `~/Library/Application Support/iPodFirm/` of the user that called it (`checkedBackupDir`). It sets the owner of each backup file to that user.
-
-### Mode 2: the password prompt
-
-If the daemon is not enabled or does not reply, the app runs the helper with AppleScript:
-
-```applescript
-do shell script "'<app>/Contents/MacOS/ipodfw-helper' 'flash' '--disk' 'disk4' ..." with administrator privileges
-```
-
-macOS asks for the name and the password of an administrator. A user that is not an administrator can also use this mode. The helper writes one `HelperResult` JSON object to standard output and always exits with 0. Thus AppleScript returns the output also for an error. The output also has `HelperResult.detail`. If AppleScript gives an error, the app records the AppleScript error number and the error in the log. [Privileged.swift](../mac/Sources/iPodFirm/Privileged.swift) puts each argument in single quotes.
-
-The helper commands are:
-
-```sh
-ipodfw-helper backup --disk diskN --backup-dir DIR [--owner UID]
-ipodfw-helper read   --disk diskN --backup-dir DIR [--owner UID]
-ipodfw-helper flash  --disk diskN --image FILE --backup-dir DIR --reason TEXT [--dry-run] [--owner UID]
-ipodfw-helper rescue --disk diskN --image FILE --backup-dir DIR [--dry-run] [--owner UID]
-ipodfw-helper repair-folder --folder DIR --owner UID
-```
-
-The helper refuses to run if it is not root.
-
-`repair-folder` does not touch the iPod. It gives `~/Library/Application Support/iPodFirm` of the user `UID` and all its items to that user, and it gives the user write access to each folder (`repairAppFolder`). It refuses every other path and does not follow symbolic links. It returns the owner, the mode, the flags and the ACL state of the main folders before the repair. The command exists only in password mode. The app runs it after a password prompt if it cannot write in `Staging` (`AppModel.ensureStagingFolder`).
-
-`read` writes nothing to the iPod. It reads the firmware partition, checks the model and writes only the osos image to `DIR/ipod-osos.bin` (`Operations.readOSOS`). The daemon has the same function as the XPC method `readOSOS` (protocol version 3, `helperReadVersion`). The daemon accepts only a folder in `~/Library/Application Support/iPodFirm/`.
+macOS needs the plist in `Contents/Library/LaunchDaemons` of the calling app, so the app keeps [the plist](../mac/Resources/com.thefauxdreamer.ipodfirm.helper.plist). The app never calls `register`, and it has no helper program.
 
 ### Full Disk Access
 
-macOS blocks raw disk access without Full Disk Access. The app tests the permission: it tries to open `/Library/Application Support/com.apple.TCC/TCC.db` for read. With the daemon, the daemon does the same test, because its permission is the permission that counts. If `open` returns `EPERM`, the helper returns the code `full-disk-access`, and the app shows the steps to allow the permission.
+The app does not need Full Disk Access. A real flash through `authopen` passed with the permission off (refer to [re/privilege-analysis.md](../re/privilege-analysis.md)). The fault report still records the permission (`AppModel.checkFullDiskAccess`), for a Mac where the result is different. If macOS gives `EPERM`, the error tells the user to turn on the permission.
 
 ## The flash sequence
 
-1. "Flash to iPod…" builds the partition (refer to [modifications.md](modifications.md#the-build-sequence)) and writes it to `~/Library/Application Support/iPodFirm/Staging/flash.bin`. Before the write, the app makes sure that it can write in the folder. If the app cannot write there, it moves the folder. If the move also fails, the helper command `repair-folder` repairs the app folder after a password prompt.
+1. "Flash to iPod…" builds the partition (refer to [modifications.md](modifications.md#the-build-sequence)) and writes it to `~/Library/Caches/iPodFirm/Staging/flash.bin`.
 2. The app makes sure that MiMusic does not write to the iPod (refer to [safety.md](safety.md#the-checks-before-a-flash)).
-3. The app runs the helper with `--dry-run`. The helper does all the checks and returns the block ranges that it will write. It writes nothing.
-4. If the iPod firmware is damaged and the action is a restore, the app tries the rescue restore with `--dry-run`.
+3. The app runs `Operations.flash` with `dryRun`. The operation does all the checks and returns the block ranges that it will write. It writes nothing.
+4. If the iPod firmware is damaged and the action is a restore, the app tries the rescue restore with `dryRun`.
 5. The app shows the ranges and the byte count. If MiMusic is open, it also shows a warning. The owner must confirm.
-6. The app does the MiMusic check again. Then it asks for Touch ID (daemon mode) or the password (password mode).
-7. The helper runs again without `--dry-run`. It saves a backup, unmounts the disk, writes the changed blocks, reads them again and compares them.
+6. The app does the MiMusic check again.
+7. The operation runs again without `dryRun`. It asks for the password if the last password is older than 300 seconds. It saves a backup, unmounts the disk, writes the changed blocks, reads them again and compares them. If the user clicks Cancel at the prompt, the iPod stays mounted and the app takes no backup. If the open fails after the unmount, no byte changed, and the app mounts the iPod again and shows the fault.
 
 [safety.md](safety.md) gives each check.
 
@@ -268,7 +207,7 @@ macOS blocks raw disk access without Full Disk Access. The app tests the permiss
 The patch switches are settings of the app. The owner can change a switch and not flash. Thus the app compares the switches with the firmware on the iPod.
 
 1. A build writes the iPodFirm list into osos (`FirmwareManifest`, refer to [patch-system.md](patch-system.md#the-ipodfirm-list)). The list has the patches, their versions and options, the appearance and the theme.
-2. When an iPod connects (`NSWorkspace.didMountNotification` and `didUnmountNotification`, then `refreshIPods`), the app reads the osos of the new iPod with the helper command `read` (`AppModel.readIPodPatches`). It reads automatically only with the Touch ID daemon, version 3 or later. In password mode, the owner clicks Read iPod, so that no password prompt opens when an iPod connects.
+2. A read of the iPod opens a password prompt, so the app does not read when an iPod connects. The owner clicks Read iPod (`AppModel.readIPodPatches`, `Operations.readOSOS`).
 3. `Patcher.detect` gives the state of each patch: installed (with the version from the list), absent, or not known. Without a list, the result comes from the changed words, and the versions are not known.
 4. After a flash or a restore, the app uses the image that it wrote (`recordWrittenImage`). It does not read the iPod again.
 
@@ -284,8 +223,10 @@ The Patches pane shows the result:
 
 | Program | Caller | Arguments | Purpose |
 |---|---|---|---|
-| `/usr/sbin/diskutil` | `Device` (app and helper) | `list -plist external physical`, `info -plist DISK` | Find the iPod. |
-| `/usr/sbin/diskutil` | Helper | `unmountDisk DISK` | Unmount the iPod before a write. If macOS uses the volume, the helper tries again, as for the eject. |
+| `/usr/sbin/diskutil` | `Device` | `list -plist external physical`, `list -plist DISK`, `info -plist DISK` | Find the iPod and the firmware slice. |
+| `/usr/sbin/diskutil` | `Operations` | `mountDisk DISK` | Mount the iPod again after an open that failed. |
+| `/usr/libexec/authopen` | `AuthOpen` | `-stdoutpipe -extauth -o FLAGS PATH` | Open the raw disk. |
+| `/usr/sbin/diskutil` | `Operations` | `unmountDisk DISK` | Unmount the iPod before a write. If macOS uses the volume, the app tries again, as for the eject. |
 | `/usr/sbin/diskutil` | App | `eject DISK` | Eject the iPod. If macOS uses the volume ("dissented", "could not be unmounted" or "busy"), the app tries again. It tries a maximum of 5 times, 2 seconds apart (`Device.retryWhileBusy`). Then the alert "The iPod did not eject" says: "macOS is still accessing your iPod. Try again in a second." |
 | `/usr/bin/xcrun clang` | `Patcher.compile` | Refer to [patch-system.md](patch-system.md#the-compiler) | Compile a patch. |
 | `/usr/bin/xcrun` | `PatchLibrary.hasCompiler` (the install and `PatchEditorSheet`) | `--find clang` | Find out if the Mac can compile a patch. |
@@ -303,13 +244,11 @@ The Patches pane shows the result:
 
 | API | Use |
 |---|---|
-| `open`, `pread`, `pwrite`, `fsync` | Raw disk access in the helper (`RawDisk`). Reads use chunks of 4 MB. Writes must be aligned to the block size. |
-| `chown` | The helper gives the backup files to the user. |
-| `SMAppService` | Register and unregister the daemon. Open Login Items. |
+| `open`, `pread`, `pwrite`, `fsync` | Raw disk access in the app (`RawDisk`). `AuthOpen` gives the descriptor. Reads use chunks of 4 MB. Writes must be aligned to the block size. |
 | `NSXPCConnection`, `NSXPCListener` | The connection between the app and the daemon. |
 | `SecCodeCopySelf`, `SecCodeCopySigningInformation` | Read the team identifier for the signature requirement. |
-| `LAContext` | Touch ID before a write. |
-| `NSAppleScript` | The password mode. |
+| `SMAppService` | Remove the registration of the old daemon. |
+| `AuthorizationCopyRights` | Ask for the password before `authopen` opens the disk. |
 | `URLSession` | Download the Apple firmware. Get the number of the newest iPodFirm release from GitHub (`UpdateCheck.swift`). |
 | `os.Logger` | The unified log of macOS (`AppLog.swift`). |
 | `sysctlbyname("hw.model")` | The Mac model for the log and the fault report. |
@@ -341,7 +280,9 @@ The app makes no other network connections. It sends no data about the owner or 
 
 ### Files on the Mac
 
-All paths are in `~/Library/Application Support/iPodFirm/`. The one exception is `iTunes Library.itl`. The user selects this file for "Import from iTunes…" in Playlist Folders. The app only reads it.
+The paths in this table are in `~/Library/Application Support/iPodFirm/`, unless the table gives a different folder.
+
+The one exception is `iTunes Library.itl`. The user selects this file for "Import from iTunes…" in Playlist Folders. The app only reads it.
 
 | Path | Content |
 |---|---|
@@ -350,10 +291,9 @@ All paths are in `~/Library/Application Support/iPodFirm/`. The one exception is
 | `Firmware/iPod_25.1.3.ipsw` | The cached Apple firmware. |
 | `Themes/*.ipodtheme` | The themes of the owner (JSON). A file in format 1 holds the old bytes of each change. A file in format 2 holds the hash of the old bytes and no byte of the Apple firmware. The app makes the folder and copies the built-in themes into it at the first start. |
 | `Patches/<name>/` | The patches that the owner installed or made with New Patch…. At the start, the app writes the measured `size` into a `patch.json` that has no size. |
-| `Staging/flash.bin` | The partition that the helper writes. |
-| `Staging/ipod-osos.bin` | The osos of the iPod that the helper command `read` writes. The app deletes it after the read. |
-| `Staging/patch-<UUID>/` | A `.ipodpatch` file during the install or the export, or a copy of the code during Check Code. The app deletes it after use. |
-| `Staging old <UUID>/` | An old `Staging` folder of the user without write access. The app moves it and makes a new folder (`PatchLibrary.prepareStagingFolder`). macOS refuses the move for a folder of root (real report, 1 November 2026). The app then runs `repair-folder`. The log gives the owner and the mode. |
+| `~/Library/Caches/iPodFirm/Staging/flash.bin` | The partition that the app writes to the iPod. |
+| `~/Library/Caches/iPodFirm/Staging/patch-<UUID>/` | A `.ipodpatch` file during the install or the export, or a copy of the code during Check Code. The app deletes it after use. |
+| `Staging/`, `Staging old <UUID>/` | Old folders of older versions. The app does not use them and does not delete them. |
 | `Emulator/` | The emulator work folder: the custom `.ipsw` and the music libraries. |
 | `EmulatorProfile/` | The private emulator profile (`IPOD_EMULATOR_DATA`): the drive and `settings.txt`. |
 | `emulator-src/` | The emulator source and its build. |
@@ -401,7 +341,6 @@ The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not ch
 | `darkTheme` | The name of the selected theme. |
 | `customVersionOn`, `customVersion` | The custom version. |
 | `versionLettersOn` | The patch letters on the About screen. |
-| `requireTouchID` | Touch ID before a write (daemon mode). |
 | `checkForUpdates` | Settings > Updates > "Check for a new version at launch". The default is true. |
 | `skippedUpdateVersion` | The release version that the user skipped with **Skip This Version**. The check at launch shows no notification for this version. iPodFirm > Check for Updates… ignores it. |
 | `ososMargin` | The empty margin below 8 MB: `current` (32 KB, limit 0x7F8000), `compact` (16 KB, limit 0x7FC000) or `previous` (64 KB, limit 0x7F0000). |

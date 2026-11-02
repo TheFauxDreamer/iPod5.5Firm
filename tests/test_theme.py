@@ -6,7 +6,7 @@ import struct
 import pytest
 
 from ipodfw import device, themeimport
-from ipodfw.partition import ENTRY_SIZE, FirmwareError, FirmwarePartition, checksum
+from ipodfw.partition import ENTRY_SIZE, HIBERNATION_AREAS, FirmwareError, FirmwarePartition, checksum
 
 
 def file_layout(partition_bytes: bytes) -> bytes:
@@ -106,6 +106,48 @@ def test_make_room_refuses_when_the_partition_has_no_empty_area(partition_bytes)
     fw = FirmwarePartition(data)
     with pytest.raises(FirmwareError, match="no empty area"):
         grow(fw, 1500)                      # osos grows; rsrc has nowhere to go
+
+
+def dirty_layout(partition_bytes: bytes, partition: int) -> bytes:
+    """A restored iPod with a used memory card: no hibe entry, no zero byte in the free space."""
+    data = restored_layout(partition_bytes, stale=0, free=0)
+    return data + b"\xff" * (partition - len(data))
+
+
+def test_make_room_uses_the_end_of_a_dirty_partition(partition_bytes):
+    data = dirty_layout(partition_bytes, 0x4000000)
+    current = FirmwarePartition(data)
+    fw = FirmwarePartition(data)
+    aupd = current.entry("aupd")
+    rsrc = current.image("rsrc")
+    grow(fw, 1500)
+    again = FirmwarePartition(fw.to_bytes())
+    at = again.entry("rsrc").dev_offset
+    assert at == (0x4000000 - fw.image_base - len(rsrc)) // 0x800 * 0x800
+    assert at >= aupd.dev_offset + aupd.length + HIBERNATION_AREAS[1]
+    assert again.image("rsrc") == rsrc and again.entry("aupd").dev_offset == aupd.dev_offset
+    device.check_compatible(current, again, "new")
+
+
+def test_make_room_keeps_the_64mb_area_in_a_large_dirty_partition(partition_bytes):
+    fw = FirmwarePartition(dirty_layout(partition_bytes, 0x4E00000))
+    aupd = fw.entry("aupd")
+    grow(fw, 1500)
+    assert fw.entry("rsrc").dev_offset >= aupd.dev_offset + aupd.length + HIBERNATION_AREAS[0]
+
+
+def test_make_room_refuses_the_hibernation_area_of_a_dirty_partition(partition_bytes):
+    fw = FirmwarePartition(dirty_layout(partition_bytes, 0x2000000))
+    with pytest.raises(FirmwareError, match="no empty area"):
+        grow(fw, 1500)
+
+
+def test_fit_layout_refuses_a_different_aupd(partition_bytes):
+    data = bytearray(ipod_layout(partition_bytes))
+    current = FirmwarePartition(bytes(data))
+    data[current.image_base + current.entry("aupd").dev_offset] ^= 0xFF
+    with pytest.raises(FirmwareError, match="different firmware version"):
+        device.fit_layout(file_layout(partition_bytes), FirmwarePartition(bytes(data)))
 
 
 def test_make_room_never_writes_into_data_in_the_free_space(partition_bytes):

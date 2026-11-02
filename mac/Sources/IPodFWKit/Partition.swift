@@ -292,13 +292,23 @@ public final class FirmwarePartition {
     /// Images start at a multiple of 2048 bytes, as in Apple's files.
     static let imageAlign = 0x800
 
+    /// The length of the 64 MB hibernation area after the last image, as on a real iPod:
+    /// 0x1000 bytes of boot page, then the 0x800-byte dump header, then the RAM.
+    static let hibernationArea64MB = 0x1000 + 0x4000800
+    /// The same area on an iPod with 32 MB of RAM.
+    static let hibernationArea32MB = 0x1000 + 0x2000800
+
     /// Move rsrc if an osos of `ososLength` bytes does not fit before it.
     ///
     /// An iPod partition has free space after its last image: rsrc goes into the first empty
-    /// area there, and aupd and hibe stay where they are. A firmware file has no free space:
+    /// area there, and aupd and hibe stay where they are. If there is no empty area, rsrc goes
+    /// to the end of the partition (`endOfPartition`). A firmware file has no free space:
     /// rsrc and the images after it move forward together and the file becomes longer. The
     /// content of the images does not change. The OS finds each image through the directory.
-    public func makeRoom(ososLength: Int) throws {
+    ///
+    /// `rsrcLength` is the length of the rsrc that replaces the current rsrc, if there is one.
+    /// The area must hold the current rsrc and the new rsrc.
+    public func makeRoom(ososLength: Int, rsrcLength: Int = 0) throws {
         let align = Self.imageAlign
         let osos = try entry("osos")
         let need = Int(osos.devOffset) + ososLength
@@ -308,15 +318,20 @@ public final class FirmwarePartition {
         var rsrc = first
         let rsrcData = try image("rsrc")
         let lastEnd = (entries.map { Int($0.devOffset) + Int($0.length) }.max()! + align - 1) / align * align
-        if imageBase + lastEnd + Int(rsrc.length) <= data.count {
+        let length = max(Int(rsrc.length), rsrcLength)
+        if imageBase + lastEnd + length <= data.count {
             // an iPod partition: put rsrc into the first empty area after the last image.
             // A restore can leave old data (a stale hibernation dump) in that area, so the
             // area right after the last image is not always empty.
-            guard let at = findEmptyArea(start: lastEnd, length: Int(rsrc.length)) else {
-                AppLog.step("Make room: rsrc needs 0x\(String(rsrc.length, radix: 16)) bytes, the last image ends at 0x\(String(lastEnd, radix: 16)), "
+            let empty = findEmptyArea(start: lastEnd, length: length)
+            if empty == nil {
+                AppLog.step("Make room: rsrc needs 0x\(String(length, radix: 16)) bytes, the last image ends at 0x\(String(lastEnd, radix: 16)), "
                             + "the largest empty area is 0x\(String(largestEmptyArea(start: lastEnd), radix: 16)) bytes\n\(dataMap)")
+            }
+            guard let at = empty ?? endOfPartition(lastEnd: lastEnd, length: length) else {
                 throw FirmwareError("The firmware partition has no empty area for rsrc.")
             }
+            AppLog.step("Make room: move rsrc to 0x\(String(at, radix: 16))")
             let start = imageBase + at
             data.replaceSubrange(start..<start + Int(rsrc.length), with: rsrcData)
             rsrc.devOffset = UInt32(at)
@@ -343,6 +358,26 @@ public final class FirmwarePartition {
             data.replaceSubrange(start..<start + img.count, with: img)
             writeEntry(e)
         }
+    }
+
+    /// The last 0x800-aligned position of `length` bytes in the partition, for a partition with no
+    /// empty area. Old data fills the free space of some iPods, for example an iPod with a used
+    /// memory card, because a restore does not erase that space. No directory entry points to
+    /// that data, and a flash first makes a backup of the full partition.
+    ///
+    /// The result stays out of the hibernation area of an iPod with no `hibe` entry: that area can
+    /// hold a stale dump, and the app does not write it. The area is the largest one that fits in
+    /// the partition, because the app cannot get the RAM size of the iPod. The result is nil if the
+    /// position is in that area.
+    func endOfPartition(lastEnd: Int, length: Int) -> Int? {
+        let align = Self.imageAlign
+        let at = (data.count - imageBase - length) / align * align
+        var reserved = 0
+        if !has("hibe") {
+            let area = [Self.hibernationArea64MB, Self.hibernationArea32MB].first { imageBase + lastEnd + $0 <= data.count }
+            reserved = area ?? data.count
+        }
+        return at >= lastEnd + reserved ? at : nil
     }
 
     /// The offset of the first 0x800-aligned all-zero area of `length` bytes at or after `start`.

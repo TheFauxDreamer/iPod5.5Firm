@@ -149,14 +149,6 @@ public enum AppLog {
         return redact(lines.joined(separator: "\n"))
     }
 
-    /// The text for `HelperResult.detail`: the error and the last steps of the helper.
-    public static func failureDetail(_ error: Error) -> String {
-        var t = describe(error)
-        let s = recentSteps(10)
-        if !s.isEmpty { t += "\nHelper steps:\n" + s.map { "  " + $0 }.joined(separator: "\n") }
-        return t
-    }
-
     /// The version of macOS and the model of the Mac, for a report.
     public static var systemDescription: String {
         var size = 0

@@ -13,7 +13,7 @@ iPodFirm obeys these limits. The code enforces each limit. The "Where" column gi
 | Never write the NOR flash. | The boot loader and disk mode are in the NOR flash. Disk mode is the recovery path. | No code can write it. |
 | Never change, move or write `aupd`. | `aupd` is the only image that writes the NOR flash. | `replaceImage` refuses `aupd`. `checkCompatible` refuses a different `aupd`. `planWrites` refuses a write that overlaps `aupd`. |
 | Never write `hibe`. | The iPod writes its RAM state there. An old copy is incorrect. | `preserveHibernation` copies the current `hibe` entry and data into the new image. |
-| Write only the firmware partition. | The music partition belongs to the owner. | The helper writes only inside the partition that `locatePartition` found. |
+| Write only the firmware partition. | The music partition belongs to the owner. | The app writes only inside the partition that `locatePartition` found. |
 | Support only the iPod Video (model code 0xB0). | The formats and the addresses are for this model. The iPod classic firmware is encrypted and signed. | `checkModel` (first the Samsung layout; also before a backup), `Backups.save`, `isVideo` checks. |
 | Apply a patch only to Apple osos 1.3. | The addresses are for this version. | `osos_sha256` in each `patch.json`, theme and version check. |
 | Examine a user patch before the install. Let a patch write files only below `iPod_Control/` on the iPod. | A user patch comes from another person. | `PatchLibrary.validate`, `PatchUI.isSafePath`, `PatchUI.maxWrite`. The install sheet tells the owner to install only patches from people that the owner trusts. |
@@ -24,21 +24,23 @@ iPodFirm obeys these limits. The code enforces each limit. The "Where" column gi
 | Keep osos below 0x7F8000. | The reset code stops if the image end is after 8 MB (0x800004). The 32 KB below 8 MB are a margin. No code uses the RAM there (static search and an emulator write watch), but a DMA write cannot be excluded. Real iPod (2026-10-15): with the USB Host Probe the album art of Now Playing did not load. The cause was a call of 0x19ff0c in the probe, not the image end (usb-host-probe 1.19). The setting "Layout" can select the limit 0x7FC000 (a margin of 16 KB, more space) or 0x7F0000 (64 KB). | `ThemeImport.ososLimit` (`ThemeImport.OSOSMargin`), `maxSize` in `Patcher.apply` (also for extended patches). |
 | Keep the patch code below 0x736800, or make it an extended patch. | rsrc starts at 0x736800 in Apple's layout. An extended patch goes after all other data and makes the build move rsrc. | `Patcher.maxOSOSSize`, `Patcher.extendedBase`. |
 | Do not put data in the zero area at 0x6ca452. | The firmware stops at start if this area is not zero. | The theme import uses only the area after osos. |
-| Read the iPod without a write. | The app reads the patches on the iPod each time an iPod connects. | The helper command `read` (`Operations.readOSOS`) only reads the partition. It writes the osos to a file in `~/Library/Application Support/iPodFirm/`. It gives the file and its folder to the user. Automatic only with the Touch ID daemon. |
-| Repair only the app folder. | The app needs write access to its folder, and only root can correct a wrong owner. A write of root in a different location can damage macOS. | `repairAppFolder` refuses every path except `~/Library/Application Support/iPodFirm` of the user, and it does not follow symbolic links. The command needs the password each time. |
+| Read the iPod without a write. | The owner reads the patches on the iPod with Read iPod. | `Operations.readOSOS` opens the disk read-only and gives the osos to the app in memory. |
+| Run no code of iPodFirm as root. | A write of root in the folder of the user made folders that the app could not use (issues #2 and #3). | `authopen` opens the raw disk, and the app does all the work with the rights of the user. `Device.firmwareSlice` stops a write to a slice at the wrong position. |
+| Do not quit during a write. | The app does the write. If it stops, the iPod can get a partial firmware. | `AppModel.confirmQuit` refuses a quit, and `beginActivity` stops a sudden termination and idle sleep. A crash or a power failure can still stop a write. Use the rescue restore. |
+| Mount the iPod again if the write does not start. | An open that fails after the unmount changes no byte, but the iPod disappears from Finder. | `Operations.openForWrite` runs `diskutil mountDisk`, then it shows the fault of the open. |
 | Never change the opened file or a backup. | A backup must stay correct. | "Save Firmware As…" refuses the Backups folder. Backups get a new name each time. |
 | Never apply program code changes from a theme. | The import cannot verify them. | `ThemeImport.make` records them as "skipped". |
 
 ## The checks before a flash
 
-The app does one check before it runs the helper. It does the check again before the write, after the owner confirms. A firmware write unmounts the iPod volume and stops a MiMusic sync.
+The app does one check before it starts the operation. It does the check again before the write, after the owner confirms. A firmware write unmounts the iPod volume and stops a MiMusic sync.
 
 - If a MiMusic temporary file is on the iPod volume, the app stops. The files are `iTunesDB.tmp`, `ArtworkDB.tmp` and `iPodFirmAlbumArt.tmp` (`MusicAppCheck` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift)).
 - If MiMusic is open, the confirmation sheet shows a warning. The owner can quit MiMusic or continue.
 
 Before the write, while the volume is still mounted, the app also does this step. The step applies if the image has no `shuffle-album-mix` (the word at osos 0x191e9c is not `cmp r0, #3`). The step also needs Album Mix on in `iPod_Control/Device/Preferences` (byte 0x8b, file version 0x39). The app then sets the byte to 0. Without this step, the firmware still loads the setting and shuffles the songs in each album, and no menu item can stop it. Settings > Shuffle then shows Albums. The result message tells the owner (`IPodPreferences` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift), `AppModel.clearAlbumMixIfNeeded`, the tests `testClearAlbumMix` and `testHasAlbumMix`). The command-line tool `ipodfw flash` does not do this step.
 
-The helper does these checks in `Operations.flash` ([Operations.swift](../mac/Sources/IPodFWKit/Operations.swift)). Any failed check stops the flash before a write.
+`Operations.flash` does these checks ([Operations.swift](../mac/Sources/IPodFWKit/Operations.swift)). Any failed check stops the flash before a write.
 
 1. Find the iPod again by its disk name. It must still be connected.
 2. Find the firmware partition (MBR or APM).
@@ -47,7 +49,7 @@ The helper does these checks in `Operations.flash` ([Operations.swift](../mac/So
 5. Read the model code. Stop if the iPod is not an iPod Video.
 6. Read the partition as a firmware partition. If this fails, stop with the code `firmware-unreadable`. The app then offers the rescue restore.
 7. Make sure that the new image is not larger than the partition.
-8. Put the new osos and rsrc into the layout of the iPod (`fitLayout`). When the file has a `hibe` image and the iPod has none, the result follows the iPod and has no `hibe` image.
+8. Put the new osos and rsrc into the layout of the iPod (`fitLayout`). Stop if the aupd of the file and the aupd of the iPod are different: the iPod has a different firmware version. When the file has a `hibe` image and the iPod has none, the result follows the iPod and has no `hibe` image.
 9. Copy the `hibe` entry and data of the iPod into the new image (`preserveHibernation`). This step does nothing when the iPod has no `hibe` entry.
 10. Make sure that the new image is for the iPod Video.
 11. Compare the new image with the iPod (`checkCompatible`):
@@ -60,9 +62,9 @@ The helper does these checks in `Operations.flash` ([Operations.swift](../mac/So
     - aupd is the same, byte for byte.
 12. Make a list of the blocks that are different (`planWrites`). Stop if a block overlaps aupd.
 
-If a check stops the flash, the helper returns the message and `HelperResult.detail`. The detail has the file and the line of the failed check, and the last steps of the helper. The app writes the detail to its log, and a fault report contains it (refer to [app-and-device.md](app-and-device.md#the-log-and-the-fault-report)).
+If a check stops the flash, the operation gives the error to the app. The error has the file and the line of the failed check, and the last steps of the operation. The app writes the detail to its log, and a fault report contains it (refer to [app-and-device.md](app-and-device.md#the-log-and-the-fault-report)).
 
-With `--dry-run`, the helper stops here and returns the list.
+With `dryRun`, the operation stops here and returns the list.
 
 ## The write
 
@@ -84,11 +86,11 @@ iPodFirm writes only the blocks that changed.
 4. Read each file again and compare it with the data.
 5. Write the metadata `<name>.bin.json`: date, reason, model, media name, size, SHA-256, disk size, volume name and the patches in the iPodFirm list.
 
-After the helper stops, the app adds its version, build number and name to the metadata of each new backup (`Backups.recordApp`). The helper does not do this step, because the daemon can come from a different copy of the app. The app also does this step after a flash that failed. A row of the backup list shows the version as a tag, for example `v0.1.328` or `v0.1.322 No Artwork Test`. The tooltip of the row shows the build number. An older backup has no tag.
+After an operation stops, the app adds its version, build number and name to the metadata of each new backup (`Backups.recordApp`). The app also does this step after a flash that failed. A row of the backup list shows the version as a tag, for example `v0.1.328` or `v0.1.322 No Artwork Test`. The tooltip of the row shows the build number. An older backup has no tag.
 
 The Patches tag of a row shows the number of patches. Put the pointer on the tag to see the name and the version of each patch.
 
-The helper saves a backup before each flash, each restore and each rescue restore. iPodFirm never deletes or overwrites a backup.
+`Operations` saves a backup before each flash, each restore and each rescue restore. iPodFirm never deletes or overwrites a backup.
 
 CAUTION: The backups contain Apple code and the state of your iPod. Do not commit them to Git and do not share them.
 
@@ -104,7 +106,7 @@ An interrupted write can leave a firmware partition that does not parse. A norma
 6. The selected backup agrees with the original (`checkCompatible`), with the same aupd.
 7. No planned write overlaps aupd. If the damage includes aupd, stop and tell the owner to use Finder.
 
-Before the write, the helper saves the damaged partition as a backup with the model `damaged`. The app cannot restore this backup.
+Before the write, the app saves the damaged partition as a backup with the model `damaged`. The app cannot restore this backup.
 
 ## Recovery
 
@@ -162,7 +164,7 @@ A test in the emulator is strong evidence, but not proof:
 | Flash and backup | No (no USB) | Yes |
 | Restore of a backup | No (no USB) | Not recorded. Tested on a disk image (`IPODFW_DISK_TEST=1`). |
 | Rescue restore | No | Not recorded |
-| Dark theme and moved rsrc | Yes | Yes (2 October 2026). The empty-area scan on a partition without the `hibe` entry (25 October 2026): two flashes, both started the iPod; the hibernation area stayed untouched. Refer to [../re/hibernation-restore.md](../re/hibernation-restore.md). |
+| Dark theme and moved rsrc | Yes | Yes (2 October 2026). The empty-area scan on a partition without the `hibe` entry (25 October 2026): two flashes, both started the iPod; the hibernation area stayed untouched. The move to the end of a partition with no empty area is not tested on a real iPod. Refer to [../re/hibernation-restore.md](../re/hibernation-restore.md). |
 | The patches on the iPod: the read, the iPodFirm list and the mirror of the switches | A firmware with the list starts (22 October 2026) | Yes (22 October 2026): the owner flashed, connected the iPod again, and the switches agreed with the iPod. A changed switch showed in the banner |
 | `album-art` | Versions 2.2–2.4: yes (9 and 10 October 2026). Version 2.8 (27 October 2026): the first start writes the cache with one file open; the second start uses the cache with no fill; a changed `ArtworkDB` gives a new cache. Version 3.0 (27 October 2026): the collages of 2 playlists and of On-The-Go are correct | Version 1.0: yes. Version 2.1: installed, the scroll is slow (9 October 2026). Version 2.2: measured (9 October 2026). Version 2.3, file mode: the scroll is much better (10 October 2026). Version 2.4, file mode with `cover-flow` 0.6.1: yes (10 October 2026); artwork mode with the file present: yes (10 October 2026); artwork mode without the file: yes, most rows are grey until a stop (10 October 2026). Version 2.5: the covers did not load (10 October 2026). Version 2.6: yes (14 October 2026). Version 2.8 (27 October 2026): the cache operates: rows from the cache are as fast as the original draw; a sync makes a new cache; the open of the 104 MB `F1028_1.ithmb` takes 0.93 s, and the 2 s close gives 7 more opens during a fill. Version 2.9 (the file first, the close after 30 s): works great (27 October 2026). Version 3.0 (the playlist collages): the collages showed, but the Albums list loaded the covers only after each stop (27 October 2026). Version 3.1: works well (27 October 2026). Version 3.2 (the measurement off): operates (28 October 2026). Versions 3.4 to 3.6 (the folder icon): not tested |
 | `backlight-60s` | Menu only | Version 1.1: yes (28 October 2026). Version 1.2 (selected time, new load address): starts and plays with the default time (30 October 2026). A short time and Sleep are not tested |
@@ -197,7 +199,7 @@ A test in the emulator is strong evidence, but not proof:
 
 ## Known problems
 
-- The start code of the iPod can remove the `hibe` entry from the directory. The old 64 MB hibernation area then stays in the partition ([re/hibernation-restore.md](../re/hibernation-restore.md)). Without the entry, the iPod does not hibernate. iPodFirm does not repair the hibernation: the research did not read the dump header or the start code of the NOR flash yet (open item). The rsrc move writes around the hibernation area, never into it.
+- The start code of the iPod can remove the `hibe` entry from the directory. The old 64 MB hibernation area then stays in the partition ([re/hibernation-restore.md](../re/hibernation-restore.md)). Without the entry, the iPod does not hibernate. iPodFirm does not repair the hibernation: the research did not read the dump header or the start code of the NOR flash yet (open item). The rsrc move writes around the hibernation area, never into it. The app does not know the RAM size of the iPod, so it refuses a partition that can hold a 64 MB dump but has no space for rsrc after that dump, if the partition also has no all-zero area.
 - The owner reported slower scroll in lists with `flash-keep-awake`. The emulator shows that the patch code does not run during a scroll. The cause is not known.
 - In the dark theme, the rating stars in Now Playing are almost invisible.
 - After a computer session, the stock firmware defers Sleep for approximately 1 minute. `sleep-now` works around this. The cause is not known.

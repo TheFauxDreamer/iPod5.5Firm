@@ -30,6 +30,9 @@ ENTRY_SIZE = struct.calcsize(ENTRY_FMT)  # 40
 DEVICE_TAGS = (b"!ATA", b"DNAN")
 IMAGE_BASE_CANDIDATES = (2048, 512, 1024, 4096, 0)
 IMAGE_ALIGN = 0x800         # images start at a multiple of 2048 bytes (as in Apple's files)
+# the hibernation area after the last image: 0x1000 bytes of boot page, then 0x800 bytes of dump
+# header, then the RAM (64 MB or 32 MB). The largest value comes first.
+HIBERNATION_AREAS = (0x1000 + 0x4000800, 0x1000 + 0x2000800)
 
 # The type field is stored byte-reversed on disk ("soso" == "osos").
 IMAGE_NAMES = {b"soso": "osos", b"crsr": "rsrc", b"dpua": "aupd", b"kbso": "osbk", b"ebih": "hibe"}
@@ -192,13 +195,17 @@ class FirmwarePartition:
         e.chksum = checksum(new)
         self._write_entry(e)
 
-    def make_room(self, osos_length: int) -> None:
+    def make_room(self, osos_length: int, rsrc_length: int = 0) -> None:
         """Move rsrc if an osos of osos_length bytes does not fit before it.
 
         An iPod partition has free space after its last image: rsrc goes there, and aupd and
-        hibe stay where they are. A firmware file has no free space: rsrc and the images after
-        it move forward together and the file becomes longer. The content of the images does
-        not change. The OS finds each image through the directory.
+        hibe stay where they are. If there is no empty area, rsrc goes to the end of the
+        partition (_end_of_partition). A firmware file has no free space: rsrc and the images
+        after it move forward together and the file becomes longer. The content of the images
+        does not change. The OS finds each image through the directory.
+
+        rsrc_length is the length of the rsrc that replaces the current rsrc, if there is one.
+        The area must hold the current rsrc and the new rsrc.
         """
         osos = self.entry("osos")
         need = osos.dev_offset + osos_length
@@ -211,11 +218,14 @@ class FirmwarePartition:
         data = self.image("rsrc")
         last_end = max(e.dev_offset + e.length for e in self.entries)
         last_end = (last_end + IMAGE_ALIGN - 1) // IMAGE_ALIGN * IMAGE_ALIGN
-        if self.image_base + last_end + rsrc.length <= len(self.data):
+        length = max(rsrc.length, rsrc_length)
+        if self.image_base + last_end + length <= len(self.data):
             # an iPod partition: put rsrc into the first empty area after the last image.
             # A restore can leave old data (a stale hibernation dump) in that area, so the
             # area right after the last image is not always empty.
-            at = self._find_empty_area(last_end, rsrc.length)
+            at = self._find_empty_area(last_end, length)
+            if at is None:
+                at = self._end_of_partition(last_end, length)
             if at is None:
                 raise FirmwareError("the firmware partition has no empty area for rsrc")
             self.data[self.image_base + at:self.image_base + at + rsrc.length] = data
@@ -238,6 +248,25 @@ class FirmwarePartition:
             start = self.image_base + e.dev_offset
             self.data[start:start + e.length] = img
             self._write_entry(e)
+
+    def _end_of_partition(self, last_end: int, length: int) -> int | None:
+        """The last 0x800-aligned position of `length` bytes, for a partition with no empty area.
+
+        Old data fills the free space of some iPods, for example an iPod with a used memory
+        card, because a restore does not erase that space. No directory entry points to that
+        data, and a flash first makes a backup of the full partition.
+
+        The result stays out of the hibernation area of an iPod with no hibe entry: that area
+        can hold a stale dump, and the tool does not write it. The area is the largest one that
+        fits in the partition, because the tool cannot get the RAM size of the iPod. The result
+        is None if the position is in that area.
+        """
+        at = (len(self.data) - self.image_base - length) // IMAGE_ALIGN * IMAGE_ALIGN
+        reserved = 0
+        if not self.has("hibe"):
+            fits = [a for a in HIBERNATION_AREAS if self.image_base + last_end + a <= len(self.data)]
+            reserved = fits[0] if fits else len(self.data)
+        return at if at >= last_end + reserved else None
 
     def _find_empty_area(self, start: int, length: int) -> int | None:
         """The offset of the first 0x800-aligned all-zero area of `length` bytes at or after `start`.

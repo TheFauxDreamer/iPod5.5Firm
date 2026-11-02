@@ -1,5 +1,4 @@
 import AppKit
-import ServiceManagement
 import IPodFWKit
 import SwiftUI
 
@@ -13,7 +12,7 @@ struct IPodView: View {
             macColumn
                 .frame(minWidth: 340, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .onAppear { model.refreshBackups(); model.recheckFullDiskAccess(); model.refreshIPodLogs() }
+        .onAppear { model.refreshBackups(); model.refreshIPodLogs() }
         .onChange(of: model.selectedIPod) { Task { await model.refreshIPods() } }
     }
 
@@ -27,7 +26,6 @@ struct IPodView: View {
                 }
             }
             Section {
-                PermissionSummaryRow()
                 if model.ipods.isEmpty {
                     Label("No iPod is connected. Connect the iPod. If the Mac does not find it, put it in disk mode: hold Menu and Select to reset it, then hold Select and Play.",
                           systemImage: "cable.connector.slash").foregroundStyle(.secondary)
@@ -321,9 +319,7 @@ struct FlashConfirmSheet: View {
                 Label("iPodFirm does not change the boot-flash updater (aupd).", systemImage: "lock.shield")
             }
             .foregroundStyle(.secondary)
-            Text(model.helperWorks
-                 ? "Keep the iPod connected until the operation is complete.\(model.requireTouchID ? " Touch ID asks for a confirmation." : "")"
-                 : "Keep the iPod connected until the operation is complete. macOS asks for your administrator password.")
+            Text("Keep the iPod connected until the operation is complete. macOS asks for your administrator password.")
                 .font(.callout)
             HStack {
                 Spacer()
@@ -366,132 +362,6 @@ struct FinderRestoreSheet: View {
         }
         .padding(22)
         .frame(width: 500)
-    }
-}
-
-struct FullDiskAccessRow: View {
-    @EnvironmentObject var model: AppModel
-    var showHelp: () -> Void
-    var body: some View {
-        HStack {
-            if model.hasFullDiskAccess {
-                Label("Full Disk Access is on. iPodFirm can read and write the firmware partition of the iPod.", systemImage: "checkmark.shield.fill")
-                    .labelStyle(StatusLabelStyle(tint: .green))
-            } else {
-                Label("Full Disk Access is necessary for backups and flashes.", systemImage: "exclamationmark.shield.fill")
-                    .labelStyle(StatusLabelStyle(tint: .orange))
-                Spacer()
-                Button("How to Allow…") { showHelp() }
-            }
-        }
-    }
-}
-
-/// The permission status in the iPod pane. The Settings window has the controls.
-struct PermissionSummaryRow: View {
-    @EnvironmentObject var model: AppModel
-    var body: some View {
-        HStack {
-            if model.hasFullDiskAccess {
-                Label(model.helperWorks ? "Full Disk Access and Touch ID are on." : "Full Disk Access is on.",
-                      systemImage: "checkmark.shield.fill")
-                    .labelStyle(StatusLabelStyle(tint: .green))
-            } else {
-                Label("Full Disk Access is necessary for backups and flashes.", systemImage: "exclamationmark.shield.fill")
-                    .labelStyle(StatusLabelStyle(tint: .orange))
-            }
-            Spacer()
-            if !model.hasFullDiskAccess {
-                Button("How to Allow…") { model.showFullDiskAccessHelp = true }
-            }
-            SettingsLink { Text("Settings…") }
-        }
-    }
-}
-
-struct FullDiskAccessSheet: View {
-    @EnvironmentObject var model: AppModel
-    @Environment(\.dismiss) var dismiss
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label("Allow Full Disk Access", systemImage: "lock.shield").font(.title3.bold())
-            Text("macOS does not let an app read a removable disk directly without Full Disk Access. Your administrator password does not change this. iPodFirm needs Full Disk Access to back up and flash the hidden firmware partition of the iPod. It reads and writes only that partition.")
-                .fixedSize(horizontal: false, vertical: true)
-            VStack(alignment: .leading, spacing: 6) {
-                Step(n: 1, text: "Click Open Privacy Settings.")
-                Step(n: 2, text: "Turn on iPodFirm in the list. If the list does not show iPodFirm, click + and select Applications → iPodFirm.")
-                Step(n: 3, text: "When macOS asks, quit iPodFirm and open it again. Then do the operation again.")
-                Step(n: 4, text: "If the Touch ID helper is on and the status still shows a warning, add the helper too. Click +, press ⌘⇧G and paste the path from Copy Helper Path.")
-            }
-            HStack {
-                Button("Copy Helper Path") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(Privileged.helperPath, forType: .string)
-                }
-                Button("Check Again") {
-                    model.recheckFullDiskAccess()
-                    if model.hasFullDiskAccess { dismiss() }
-                }
-                Spacer()
-                Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Open Privacy Settings") { model.openFullDiskAccessSettings() }
-                    .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
-            }
-        }
-        .padding(22)
-        .frame(width: 500)
-    }
-}
-
-struct HelperRow: View {
-    @EnvironmentObject var model: AppModel
-    var body: some View {
-        HStack {
-            switch model.helperStatus {
-            case .enabled:
-                switch model.helperReply {
-                case .replied(let version):
-                    Label("The Touch ID helper is on. macOS does not ask for your password.", systemImage: "touchid")
-                        .labelStyle(StatusLabelStyle(tint: .green))
-                        .help("The helper replied (protocol version \(version)).")
-                    Spacer()
-                    Button("Check Again") { model.recheckFullDiskAccess() }
-                    Button("Turn Off") { model.removeHelper() }
-                case .noReply:
-                    VStack(alignment: .leading, spacing: 2) {
-                        Label("The Touch ID helper does not reply.", systemImage: "exclamationmark.triangle.fill")
-                            .labelStyle(StatusLabelStyle(tint: .orange))
-                        if let err = model.helperSetupError { Text(err).font(.caption).foregroundStyle(.red) }
-                    }
-                    Spacer()
-                    Button("Check Again") { model.recheckFullDiskAccess() }
-                    Button("Repair") { model.repairHelper() }.buttonStyle(.borderedProminent)
-                        .help("macOS shows the helper as on, but cannot start it. iPodFirm asks for your administrator password. Click Repair to register the helper again.")
-                case .checking, .unknown:
-                    ProgressView().controlSize(.small)
-                    Text("iPodFirm examines the Touch ID helper…").foregroundStyle(.secondary)
-                    Spacer()
-                }
-            case .requiresApproval:
-                Label("Approve “iPodFirm” in System Settings → General → Login Items (Allow in the Background).", systemImage: "touchid")
-                    .labelStyle(StatusLabelStyle(tint: .orange))
-                Spacer()
-                Button("Open Login Items") { SMAppService.openSystemSettingsLoginItems() }
-                Button("Check Again") { model.recheckFullDiskAccess() }
-            // An ad-hoc build has no team identifier, and the daemon refuses to start without one.
-            case _ where ownTeamIdentifier() == nil:
-                Label("This build has no developer signature. Touch ID is not available.", systemImage: "touchid")
-                    .help("iPodFirm asks for your administrator password before it writes to the iPod.")
-            default:
-                VStack(alignment: .leading, spacing: 2) {
-                    Label("Use Touch ID, not your password.", systemImage: "touchid")
-                    if let err = model.helperSetupError { Text(err).font(.caption).foregroundStyle(.red) }
-                }
-                Spacer()
-                Button("Set Up Touch ID") { model.setUpHelper() }.buttonStyle(.borderedProminent)
-                    .help("iPodFirm installs a small helper that only iPodFirm can use. You approve it one time.")
-            }
-        }
     }
 }
 
