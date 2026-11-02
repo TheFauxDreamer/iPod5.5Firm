@@ -499,7 +499,7 @@ The idea of SSD Mode comes from [rockpod](https://github.com/nuxcodes/rockpod). 
 
 The idea of Search on the 5G and the byte to change come from [RetroCux](https://github.com/RetroCux/Enable-the-Search-function-on-iPod-Video-5th-Gen).
 
-The idea of Playlist Folders and the reports of the flash faults (GitHub issues #2, #3 and #4) come from the Reddit user [u/Linusssk](https://www.reddit.com/user/Linusssk/).
+The idea of Playlist Folders comes from the Reddit user [u/Linusssk](https://www.reddit.com/user/Linusssk/).
 
 The user braniak87 found the cause of a crash when the Patches pane opened (GitHub issue 1). braniak87 also gave the fix and tested it.
 
