@@ -243,7 +243,7 @@ ipodfw-helper repair-folder --folder DIR --owner UID
 
 The helper refuses to run if it is not root.
 
-`repair-folder` does not touch the iPod. It gives `~/Library/Application Support/iPodFirm` of the user `UID` and all its items to that user, and it gives the user write access to each folder (`repairAppFolder`). It refuses every other path and does not follow symbolic links. It returns the owner, the mode, the flags and the ACL state of the main folders before the repair. The command exists only in password mode. The app runs it after a password prompt if it cannot write in `Staging` (`AppModel.ensureStagingFolder`).
+The helper runs as root. It gives the folder of a backup or of a read to the user also if a write fails. `repair-folder` does not touch the iPod. It gives `~/Library/Application Support/iPodFirm` of the user `UID` and all its items to that user, and it gives the user write access to each folder (`repairAppFolder`). It refuses every other path and does not follow symbolic links. It returns the owner, the mode, the flags and the ACL state of the main folders before the repair. The command exists only in password mode. The app runs it after a password prompt if it cannot write in `Staging` (`AppModel.ensureStagingFolder`).
 
 `read` writes nothing to the iPod. It reads the firmware partition, checks the model and writes only the osos image to `DIR/ipod-osos.bin` (`Operations.readOSOS`). The daemon has the same function as the XPC method `readOSOS` (protocol version 3, `helperReadVersion`). The daemon accepts only a folder in `~/Library/Application Support/iPodFirm/`.
 

@@ -68,3 +68,24 @@ The owner flashed two builds on the iPod with the fixed app (0.1.148, build 149)
 | Second flash (10:58) | 0x7f9800 bytes | dev 0x4d44000 | `fit_layout` rebuilt the file layout into the iPod's layout. The iPod started and mounted. |
 
 The hibernation area kept its content after each flash (the `booting!` block at partition 0xd43000 did not change). The backups of 10:38 and 10:58 record these states.
+
+## A partition with no empty area (issue 4)
+
+A 5.0 iPod with SD card storage stopped with "The firmware partition has no empty area for rsrc." The firmware was unchanged Apple 1.3. The partition had 64 MiB. The app version 0.1.237 did not record the partition map, so the data below comes from a calculation.
+
+1. The fault can occur only if rsrc on the iPod starts before the end of the new osos. Apple 1.3 has rsrc at dev 0x73b000, and the osos ends at 0x73a800. Thus this iPod did not have the 1.3 layout.
+2. The first size check passed, so the bytes after the last image had sufficient length. No window of these bytes was all zero.
+3. A 32 MB dump cannot fill the 19 MB after it. The probable cause is old data on the card. This is not proved.
+
+The owner's backups also show data with no directory entry: 0x6d00000–0x6e00000 and 0x7d00000–0x8400000.
+
+The safety decision above does not change. The move does not write into a dump area. The new position is the end of the partition. The reserved area starts at the last image and has 0x1000 bytes of boot page, plus the dump length. The dump length is the RAM plus 0x800 (the handler at 0x468).
+
+| RAM | Reserved | Source |
+|---|---|---|
+| 64 MB | 0x4001800 | Measured. On the 1.3 layout, the area ends at dev 0x4d44000. |
+| 32 MB | 0x2001800 | Calculated. No 32 MB iPod was measured. |
+
+The app uses the larger value if it fits in the partition. The app does not read the RAM size, because the published sources do not agree on each model, and SysInfo can be missing on a modified iPod.
+
+The move to the end of the partition is not tested on a real iPod. All 44 backups of the owner give the same rsrc position with the new code and with the old code (dev 0x4d44000, checksum correct).

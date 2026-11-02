@@ -1426,6 +1426,113 @@ final class ThemeTests: XCTestCase {
         }
     }
 
+    /// The layout of a restored iPod with a used memory card: no hibe entry, and no byte in the free
+    /// space is zero. `partition` is the partition length.
+    func dirtyLayout(partition: Int, fill: UInt8 = 0xFF) -> [UInt8] {
+        var d = restoredLayout(stale: 0, free: 0)
+        d += [UInt8](repeating: fill, count: partition - d.count)
+        return d
+    }
+
+    /// Issue 4: a 64 MiB partition with old data. rsrc goes to the end, past a 32 MB hibernation area.
+    func testMakeRoomUsesTheEndOfADirtyPartition() throws {
+        let data = dirtyLayout(partition: 0x4000000)
+        let current = try FirmwarePartition(data: data)
+        let fw = try FirmwarePartition(data: data)
+        let aupd = try current.entry("aupd")
+        let aupdEnd = Int(aupd.devOffset) + Int(aupd.length)
+        _ = try larger(fw)
+        let rsrc = try fw.entry("rsrc")
+        XCTAssertEqual(fw.data.count, data.count)
+        XCTAssertEqual(Int(rsrc.devOffset) % 0x800, 0)
+        XCTAssertEqual(Int(rsrc.devOffset), (0x4000000 - 2048 - Int(rsrc.length)) / 0x800 * 0x800)
+        XCTAssertGreaterThanOrEqual(Int(rsrc.devOffset), aupdEnd + FirmwarePartition.hibernationArea32MB)
+        XCTAssertEqual(try fw.image("rsrc"), try current.image("rsrc"))
+        XCTAssertEqual(try fw.entry("aupd").devOffset, aupd.devOffset)
+        try FirmwareFlasher.checkCompatible(current: current, new: FirmwarePartition(data: fw.data), label: "t")
+    }
+
+    /// The full path of a flash with a larger osos on a dirty iPod that has Apple's aupd.
+    func testFitLayoutPutsALargerFileIntoADirtyPartition() throws {
+        let current = try FirmwarePartition(data: dirtyLayout(partition: 0x4000000))
+        let file = try FirmwarePartition(data: stock)
+        let osos = try larger(file)
+        let fitted = try FirmwarePartition(data: FirmwareFlasher.fitLayout(new: file.data, current: current))
+        XCTAssertEqual(try fitted.image("osos"), osos)
+        XCTAssertEqual(try fitted.image("rsrc"), try current.image("rsrc"))
+        XCTAssertTrue(fitted.checksumOK("rsrc"))
+        try FirmwareFlasher.checkCompatible(current: current, new: fitted, label: "t")
+    }
+
+    /// A large dirty partition also holds a 64 MB hibernation area: rsrc must be past it.
+    func testMakeRoomKeepsThe64MBAreaInALargeDirtyPartition() throws {
+        let fw = try FirmwarePartition(data: dirtyLayout(partition: 0x5400000))
+        let aupd = try fw.entry("aupd")
+        _ = try larger(fw)
+        XCTAssertGreaterThanOrEqual(Int(try fw.entry("rsrc").devOffset),
+                                    Int(aupd.devOffset) + Int(aupd.length) + FirmwarePartition.hibernationArea64MB)
+    }
+
+    /// This partition can hold a 64 MB dump, but not rsrc after it. The app cannot get the RAM
+    /// size, so it must refuse: it does not write in a dump.
+    func testMakeRoomRefusesAPartitionThatCanHoldA64MBDump() throws {
+        let fw = try FirmwarePartition(data: dirtyLayout(partition: 0x4E00000))
+        XCTAssertThrowsError(try larger(fw))
+    }
+
+    /// The 64 MB area ends at the position that real flashes used, dev 0x4d44000.
+    func testHibernationAreaAgreesWithTheRealIPod() throws {
+        let fw = try FirmwarePartition(data: stock)
+        let aupd = try fw.entry("aupd")
+        XCTAssertEqual(Int(aupd.devOffset) + Int(aupd.length) + FirmwarePartition.hibernationArea64MB, 0x4d44000)
+    }
+
+    /// A partition too small for rsrc after the hibernation area: refuse, and do not write in that area.
+    func testMakeRoomRefusesTheHibernationAreaOfADirtyPartition() throws {
+        let fw = try FirmwarePartition(data: dirtyLayout(partition: 0x2800000))
+        XCTAssertThrowsError(try larger(fw)) { e in
+            XCTAssertEqual((e as? FirmwareError)?.message, "The firmware partition has no empty area for rsrc.")
+        }
+    }
+
+    /// With an empty area, the dirty-partition rule changes nothing.
+    func testMakeRoomPrefersAnEmptyArea() throws {
+        var data = dirtyLayout(partition: 0x4000000)
+        data.replaceSubrange(2048 + 0x3000000..<2048 + 0x3600000, with: [UInt8](repeating: 0, count: 0x600000))
+        let fw = try FirmwarePartition(data: data)
+        _ = try larger(fw)
+        XCTAssertEqual(try fw.entry("rsrc").devOffset, 0x3000000)
+    }
+
+    /// The area must hold a new rsrc that is longer than the rsrc of the iPod.
+    func testMakeRoomUsesTheLengthOfTheNewRsrc() throws {
+        var data = restoredLayout(stale: 0, free: 0xB00000)
+        let fw = try FirmwarePartition(data: data)
+        let rsrc = try fw.entry("rsrc")
+        let end = Int(try fw.entry("aupd").devOffset + fw.entry("aupd").length)
+        // 0x500800 bytes of zeros, then a byte of old data: a longer rsrc does not fit there
+        data[2048 + end + Int(rsrc.length)] = 1
+        let longer = try FirmwarePartition(data: data)
+        let osos = try longer.image("osos") + [UInt8](repeating: 1, count: 40_000)
+        try longer.makeRoom(ososLength: osos.count, rsrcLength: Int(rsrc.length) + 0x800)
+        XCTAssertGreaterThan(Int(try longer.entry("rsrc").devOffset), end + Int(rsrc.length))
+        let same = try FirmwarePartition(data: data)
+        try same.makeRoom(ososLength: osos.count)
+        XCTAssertEqual(Int(try same.entry("rsrc").devOffset), end)
+    }
+
+    /// An iPod with an older firmware has a different aupd: the flash must not mix two versions.
+    func testFitLayoutRefusesADifferentAupd() throws {
+        var data = ipodLayout()
+        let current0 = try FirmwarePartition(data: data)
+        data[try current0.imageRange("aupd").lowerBound] ^= 0xFF
+        let current = try FirmwarePartition(data: data)
+        XCTAssertThrowsError(try FirmwareFlasher.fitLayout(new: stock, current: current)) { e in
+            XCTAssertEqual((e as? FirmwareError)?.message,
+                           "The iPod has a different firmware version. Restore the iPod to version 1.3 with Finder. Then flash again.")
+        }
+    }
+
     /// The file has a hibe image, the restored iPod has none: the result follows the iPod.
     func testFitLayoutDropsTheFilesHibeWhenTheIPodHasNone() throws {
         let current = try FirmwarePartition(data: restoredLayout())

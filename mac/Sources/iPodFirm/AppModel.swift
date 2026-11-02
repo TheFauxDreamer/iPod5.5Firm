@@ -280,7 +280,10 @@ final class AppModel: ObservableObject {
     /// The built-in patches and the patches that the owner installs (Application Support/iPodFirm/Patches).
     static let patchLibrary = PatchLibrary(builtInDir: patchesDir, userDir: supportDir.appendingPathComponent("Patches"),
                                            stagingDir: supportDir.appendingPathComponent("Staging"))
+    /// The SHA-256 of Apple's .ipsw file.
     static let appleFirmwareSHA256 = "840b2480ad5b692c098cb772c3d2bf8f58bf37557788782b596ac01c27ecdc32"
+    /// The SHA-256 of the osos image in Apple's .ipsw file.
+    static let appleOSOSSHA256 = "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251"
 
     var version: String {
         let info = Bundle.main.infoDictionary ?? [:]
@@ -349,7 +352,7 @@ final class AppModel: ObservableObject {
     func diagnosticSnapshot() -> String {
         var lines = ["iPodFirm \(version), \(AppLog.systemDescription)"]
         if let editor {
-            let apple = editor.originalOSOSHash == Self.appleFirmwareSHA256 ? "Apple 1.3" : "not Apple 1.3"
+            let apple = editor.originalOSOSHash == Self.appleOSOSSHA256 ? "Apple 1.3" : "not Apple 1.3"
             lines.append("Open file: \(fileURL?.lastPathComponent ?? "-") (osos \(apple), \(editor.osos.count) bytes, edited: \(isDirty))")
         } else {
             lines.append("Open file: none")

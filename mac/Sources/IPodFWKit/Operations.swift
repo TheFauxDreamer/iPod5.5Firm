@@ -55,6 +55,8 @@ public enum Backups {
             patches = (try? partition.image("osos")).flatMap(patchNames)
         }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // This process is root. Give the folder to the user also if a write fails.
+        defer { if let owner { chown(dir.path, owner, gid_t(UInt32.max)) } }
         let stamp = DateFormatter()
         stamp.locale = Locale(identifier: "en_US_POSIX")
         stamp.dateFormat = "yyyy-MM-dd HH.mm.ss"
@@ -85,7 +87,6 @@ public enum Backups {
             }
             last = info
         }
-        if let owner { chown(dir.path, owner, gid_t(UInt32.max)) }
         return last!
     }
 }
@@ -180,13 +181,12 @@ public enum Operations {
                                 code: HelperResult.firmwareUnreadable, cause: error)
         }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // This process is root. If it made the folder, the app cannot write in the folder without this step.
+        // The step also runs if the write fails.
+        defer { if let owner { chown(dir.path, owner, gid_t(UInt32.max)) } }
         let url = dir.appendingPathComponent(readFileName)
         try Data(osos).write(to: url, options: .atomic)
-        if let owner {
-            chown(url.path, owner, gid_t(UInt32.max))
-            // This process is root. If it made the folder, the app cannot write in the folder without this step.
-            chown(dir.path, owner, gid_t(UInt32.max))
-        }
+        if let owner { chown(url.path, owner, gid_t(UInt32.max)) }
         return HelperResult(ok: true, message: url.path, layout: layoutReport(bytes))
     }
 

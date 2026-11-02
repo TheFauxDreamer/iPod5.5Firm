@@ -310,16 +310,25 @@ public enum FirmwareFlasher {
     /// new osos and rsrc. When the file and the iPod differ in the hibe image, the result follows the
     /// iPod. An image that already agrees with the iPod does not change: a restore writes the layout
     /// of the backup.
+    ///
+    /// The flash never writes aupd. If the aupd of the iPod is different, the iPod has a different
+    /// firmware version, and the result would mix two versions. The flash stops.
     public static func fitLayout(new newBytes: [UInt8], current: FirmwarePartition) throws -> [UInt8] {
         let new = try FirmwarePartition(data: newBytes)
         AppLog.step("Layout of the new image:\n\(new.layoutDescription)")
         guard current.has("aupd"), new.has("aupd") else { return newBytes }
+        let onIPod = try current.imageRange("aupd"), inFile = try new.imageRange("aupd")
+        guard onIPod.upperBound <= current.data.count, inFile.upperBound <= new.data.count,
+              current.data[onIPod] == new.data[inFile] else {
+            AppLog.step("Layout of the iPod:\n\(current.layoutDescription)")
+            throw FirmwareError("The iPod has a different firmware version. Restore the iPod to version 1.3 with Finder. Then flash again.")
+        }
         guard new.has("hibe") == current.has("hibe"),
               try new.entry("aupd").devOffset == current.entry("aupd").devOffset else {
             // the file and the iPod differ: rebuild from the iPod's own partition
             let out = try FirmwarePartition(data: current.data)
             let osos = try new.image("osos")
-            try out.makeRoom(ososLength: osos.count)
+            try out.makeRoom(ososLength: osos.count, rsrcLength: new.has("rsrc") ? Int(new.entry("rsrc").length) : 0)
             try out.replaceImage("osos", with: osos)
             if new.has("rsrc"), out.has("rsrc") { try out.replaceImage("rsrc", with: new.image("rsrc")) }
             return out.data

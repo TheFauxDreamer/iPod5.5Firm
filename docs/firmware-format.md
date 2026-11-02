@@ -55,6 +55,8 @@ The type names are byte-reversed:
 
 On firmware 1.3 the osos entry has devOffset 0x4800 and length 0x736000. rsrc starts 0x736800 bytes after osos. Thus the gap after osos is 2 KB.
 
+The size of the partition and the content of its free space are not fixed. Measured partitions have 64 MiB, approximately 125 MiB and 192 MiB. A restore does not erase the free space, so the space can hold old data. Thus an all-zero test does not show which space is free. An area is free if no directory entry points to it and it is not a hibernation area.
+
 ## The image base
 
 The image base is the partition offset of devOffset 0. iPodFirm does not use a fixed value. It tries 2048, 512, 1024, 4096 and 0, in this sequence. It keeps the first value where the osos checksum is correct. On the 5.5G the image base is 2048. Thus osos starts at partition offset 0x800 + 0x4800.
