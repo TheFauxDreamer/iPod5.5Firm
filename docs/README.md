@@ -13,7 +13,7 @@ All data is for Apple RetailOS 1.3 (`iPod_25.1.3.ipsw`). Other firmware versions
 | [modifications.md](modifications.md) | Each change that iPodFirm can make to the firmware: hooks, data formats, runtime logic and limits. |
 | [ghidra-guide.md](ghidra-guide.md) | How to search the firmware with Ghidra: the set-up, the scripts, the search recipes, the procedure for an AI agent, the port to another firmware version and the support of another iPod model. |
 | [firmware-functions.md](firmware-functions.md) | The Ghidra findings: the firmware functions, vtables, RAM addresses and resource IDs that are identified. The method and the scripts. |
-| [app-and-device.md](app-and-device.md) | The app structure, the detection of the iPod, the privileged helper, and each external process, system API and network call. |
+| [app-and-device.md](app-and-device.md) | The app structure, the detection of the iPod, the disk access through `authopen`, and each external process, system API and network call. |
 | [ipod-shuffle.md](ipod-shuffle.md) | A specification of the iPod shuffle (Songs and Albums), with code in C and Swift to copy it into a music player. It has no links to other files, so you can share it alone. |
 | [porting.md](porting.md) | The parts that work only on macOS, the Swift and Python versions of each module, and a recommended path to a Windows or Linux version. |
 | [translations.md](translations.md) | The iPod text that the patches add, and its translations. A guide for volunteer translators. |
@@ -50,7 +50,7 @@ Use this table to find the documents to update:
 | `Partition.swift`, `Resources.swift`, `Pictures.swift` or their Python versions | [firmware-format.md](firmware-format.md) |
 | `themes/layouts/Split.ipodtheme`, `re/home-screen-views.py` | [modifications.md](modifications.md), [../re/home-screen.md](../re/home-screen.md) |
 | `ThemeImport.swift`, `DarkMode.swift`, `FirmwareVersion.swift`, `AlbumArt.swift`, `ArtworkDB.swift`, `MusicImport.swift` | [modifications.md](modifications.md) |
-| `Device.swift`, `Operations.swift`, the helper or `Privileged.swift` | [safety.md](safety.md), [app-and-device.md](app-and-device.md) |
+| `Device.swift`, `Operations.swift` or `AuthOpen.swift` | [safety.md](safety.md), [app-and-device.md](app-and-device.md) |
 | A new external program, system API, network connection, file or `UserDefaults` key | [app-and-device.md](app-and-device.md). If the item works only on macOS, also [porting.md](porting.md). |
 | A new Swift module in `IPodFWKit`, a new Python module, or a module that gets its first version in the other language | [porting.md](porting.md) (section 2) |
 | A new pane, button or app function | [app-and-device.md](app-and-device.md), [../README.md](../README.md) |

@@ -137,35 +137,20 @@ extension AppModel {
         switchesChangedSinceSync = false
     }
 
-    /// Read the patches on the connected iPod. Nothing is written to the iPod. `automatic`: only with the
-    /// Touch ID helper (version 3 or later), so that no password prompt opens when an iPod connects.
+    /// Read the patches on the connected iPod. Nothing is written to the iPod. `automatic`: no read, because
+    /// a read opens a password prompt, and no prompt must open when an iPod connects.
     func readIPodPatches(automatic: Bool) async {
         guard let ipod = currentIPod, busy == nil else { return }
-        let dir = Self.supportDir.appendingPathComponent("Staging")
-        let file = dir.appendingPathComponent(Operations.readFileName)
+        guard !automatic else {
+            ipodReadStatus = "Click Read iPod to see the patches on the iPod."
+            return
+        }
         do {
-            let viaHelper: Bool
-            if HelperClient.isEnabled, let s = try? await HelperClient.status(), s.version >= helperReadVersion {
-                viaHelper = true
-            } else {
-                guard !automatic else {
-                    ipodReadStatus = "Click Read iPod to see the patches on the iPod."
-                    return
-                }
-                viaHelper = false
-            }
-            // The app makes the folder. If the helper makes it, an older helper leaves the folder to root.
-            // An automatic read must not open a password prompt.
-            if automatic { try Self.patchLibrary.prepareStagingFolder() } else { try await ensureStagingFolder() }
             ipodReadStatus = "Reading the patches on the iPod…"
-            AppLog.step("Helper (\(viaHelper ? "daemon" : "password")): read the osos of \(ipod.disk)")
-            let r = viaHelper ? try await HelperClient.readOSOS(disk: ipod.disk, dir: dir)
-                              : try await Privileged.run(helperArgs("read", dir: dir, ipod))
-            guard r.ok else { throw r.failure() }
-            if let layout = r.layout { AppLog.info("Layout of the iPod:\n\(layout)") }
-            let osos = try await Task.detached { [UInt8](try Data(contentsOf: file)) }.value
-            try? FileManager.default.removeItem(at: file)
-            applyIPodState(patchState(osos: osos, ipod: ipod))
+            AppLog.step("Read the osos of \(ipod.disk)")
+            let read = try await Task.detached { try Operations.readOSOS(ipod, access: .authOpen()) }.value
+            AppLog.info("Layout of the iPod:\n\(read.layout)")
+            applyIPodState(patchState(osos: read.osos, ipod: ipod))
         } catch {
             AppLog.warning("Cannot read the patches on the iPod\n" + AppLog.describe(error))
             ipodReadStatus = "Cannot read the patches on the iPod: \(error.localizedDescription)"

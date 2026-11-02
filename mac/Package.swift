@@ -7,7 +7,6 @@ let package = Package(
     targets: [
         .target(name: "IPodFWKit"),
         .executableTarget(name: "iPodFirm", dependencies: ["IPodFWKit"]),
-        .executableTarget(name: "ipodfw-helper", dependencies: ["IPodFWKit"]),
         .testTarget(name: "IPodFWKitTests", dependencies: ["IPodFWKit"]),
     ],
     swiftLanguageModes: [.v5]
