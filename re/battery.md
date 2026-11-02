@@ -343,6 +343,15 @@ Decisions for the `battery-display` patch:
 - Other batteries need other tables, so the table must be a setting in the app. The Apple table is the default. A battery log can give a measured table.
 - Use a filter. One sample has noise of up to 4.5 units.
 
+### Empty log with the iPod connected (2 November 2026)
+
+The owner flashed the patch (version 0.1) and left the iPod connected to the Mac. The log file stayed empty: all 262144 bytes were zero. The volume was mounted on the Mac during the check.
+
+1. The iPod cannot write the log while the Mac has the disk. Both good logs came from an iPod that was not connected.
+2. Version 0.1 set a flag after one failed read or write. The flag stopped the log until the next start. Thus a USB session could stop the log after the disconnection.
+3. Version 0.2 tries again at the next sample. Only a full file stops the log. If the read of the file fails, the patch does not write, so the old text stays safe.
+4. It is not known if the timer 0x1d91dc runs during a USB session. No sample is possible there, so the charger column needs a wall charger.
+
 Next test: find the full value and the charger column.
 
 1. Charge the iPod to full with a charger, not with the Mac.

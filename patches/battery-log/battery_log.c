@@ -8,6 +8,9 @@
  * The file has a header of HEADER bytes with the end of the text. Each line is:
  * seconds raw icon charger. The seconds start at 0 at each start of the iPod. The line "start" marks
  * a new start. The first 60 s have no sample, because the disk can be not ready.
+ *
+ * The iPod cannot write the log while the Mac has the disk. A sample that cannot write tries again at
+ * the next sample. Only a full file stops the log. Thus a USB session does not stop the log.
  */
 
 #define USEC       (*(volatile unsigned *)0x60005010)   /* the microsecond timer */
@@ -32,7 +35,7 @@ int battery_state(void);
 
 unsigned interval_min = 5;                              /* an option in patch.json */
 
-static unsigned last_us, seconds, next_s = FIRST_S, end, started, failed;
+static unsigned last_us, seconds, next_s = FIRST_S, end, started, full;
 
 static void path_record(unsigned *path)
 {
@@ -40,17 +43,20 @@ static void path_record(unsigned *path)
     fw_strcpy((char *)path + 4, LOG_PATH);
 }
 
-/* The end of the text from the header. A clear file has no header: the text starts after it. */
-static void read_end(void)
+/* The end of the text from the header. A clear file has no header: the text starts after it.
+ * Gives 0 if the file was read. Without the read, a write can go over the old text. */
+static int read_end(void)
 {
     unsigned path[0x108 / 4], fh[0x30 / 4], got = HEADER, value = 0, i;
     char head[HEADER];
+    int err;
     end = HEADER;
     path_record(path);
     fw_memset0(fh, sizeof fh);
     if (file_open(path, fh, 0, MODE_DATA) != 0)
-        return;
-    if (file_read(fh, &got, head) == 0 && got == HEADER && head[0] == 'B' && head[1] == 'L'
+        return 1;
+    err = file_read(fh, &got, head);
+    if (err == 0 && got == HEADER && head[0] == 'B' && head[1] == 'L'
         && head[2] == '0' && head[3] == '1') {
         for (i = 5; i < 15 && head[i] >= '0' && head[i] <= '9'; i++)
             value = value * 10 + (head[i] - '0');
@@ -58,6 +64,7 @@ static void read_end(void)
             end = value;
     }
     file_close(fh);
+    return err;
 }
 
 static int write_text(const char *text, unsigned length)
@@ -93,16 +100,16 @@ static void sample(int icon)
     char line[64];
     unsigned n = 0;
     if (!started) {
-        started = 1;
-        read_end();
+        if (read_end() != 0)
+            return;
         fw_strcpy(line, "start\n");
         n = 6;
     }
     n += fw_snprintf(line + n, sizeof line - n, "%u %d %d %d\n", seconds, battery_raw(), icon, battery_state());
     if (end + n > LOG_BYTES)
-        failed = 1;                                     /* the file is full */
-    else if (write_text(line, n) != 0)
-        failed = 1;
+        full = 1;
+    else if (write_text(line, n) == 0)
+        started = 1;
 }
 
 int hook_battery_timer(void *provider, int mode)
@@ -114,7 +121,7 @@ int hook_battery_timer(void *provider, int mode)
     s = (now - last_us) / 1000000;
     seconds += s;
     last_us += s * 1000000;
-    if (!failed && seconds >= next_s) {
+    if (!full && seconds >= next_s) {
         next_s = seconds + interval_min * 60;
         sample(icon);
     }
