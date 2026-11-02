@@ -514,6 +514,9 @@ def make_theme(theme_fw: FirmwarePartition, base_fw: FirmwarePartition, target_f
 # only the styles of size 18 white, for example the title in Now Playing.
 LAYOUT_TEXT_STYLE = 0x5EA30000
 LAYOUT_DARK_TEXT_STYLE = 0x5E9F0000
+# The small text: Type 24216 (size 14). Stock Type 24217 (size 14) is already white.
+LAYOUT_SMALL_TEXT_STYLE = 0x5E980000
+LAYOUT_SMALL_DARK_TEXT_STYLE = 0x5E990000
 
 
 def moved_layout(theme: Theme, osos: bytes, dark: bool = False) -> Theme:
@@ -526,8 +529,16 @@ def moved_layout(theme: Theme, osos: bytes, dark: bool = False) -> Theme:
     new = view.new
     if dark:
         new = new.replace(struct.pack("<I", LAYOUT_TEXT_STYLE), struct.pack("<I", LAYOUT_DARK_TEXT_STYLE))
+        new = new.replace(struct.pack("<I", LAYOUT_SMALL_TEXT_STYLE), struct.pack("<I", LAYOUT_SMALL_DARK_TEXT_STYLE))
     return replace(theme, changes=[replace(view, offset=view.offset + delta, new=new),
                                    replace(entry, new=struct.pack("<I", value) + entry.new[4:])])
+
+
+def small_text(theme: Theme) -> Theme:
+    """The layout with the panel text at size 14 (Type 24216) in place of size 16 (Type 24227)."""
+    view = theme.changes[0]
+    new = view.new.replace(struct.pack("<I", LAYOUT_TEXT_STYLE), struct.pack("<I", LAYOUT_SMALL_TEXT_STYLE))
+    return replace(theme, changes=[replace(view, new=new), *theme.changes[1:]])
 
 
 def apply_theme(theme: Theme, osos: bytearray, original_sha256: str) -> tuple[int, int]:

@@ -176,7 +176,8 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
 
     /// The layout with its View after the data in osos, and text for a dark theme if `dark`.
     /// The first change is the View, and the second change is the offset and the size in the
-    /// table entry. A dark theme makes only the styles of size 18 white.
+    /// table entry. A dark theme makes only the styles of size 18 white. Stock Type 24217 is
+    /// already white, so the dark form of the small text uses it.
     public func movedLayout(after osos: [UInt8], dark: Bool = false) -> ImportedTheme {
         guard changes.count == 2 else { return self }
         var out = self
@@ -188,11 +189,23 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
         out.changes[1].new = Data(entry)
         if dark {
             var view = [UInt8](changes[0].new)
-            for i in stride(from: 0, to: view.count - 3, by: 1) where view[i..<i + 4].elementsEqual([0, 0, 0xA3, 0x5E]) {
-                view[i + 2] = 0x9F
+            for i in stride(from: 0, to: view.count - 3, by: 1) where view[i..<i + 2].elementsEqual([0, 0]) && view[i + 3] == 0x5E {
+                if view[i + 2] == 0xA3 { view[i + 2] = 0x9F } else if view[i + 2] == 0x98 { view[i + 2] = 0x99 }
             }
             out.changes[0].new = Data(view)
         }
+        return out
+    }
+
+    /// The layout with the panel text at size 14 (Type 24216) in place of size 16 (Type 24227).
+    public func withSmallText() -> ImportedTheme {
+        guard let first = changes.first else { return self }
+        var out = self
+        var view = [UInt8](first.new)
+        for i in stride(from: 0, to: view.count - 3, by: 1) where view[i..<i + 4].elementsEqual([0, 0, 0xA3, 0x5E]) {
+            view[i + 2] = 0x98
+        }
+        out.changes[0].new = Data(view)
         return out
     }
 

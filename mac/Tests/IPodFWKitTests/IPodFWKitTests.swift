@@ -1301,6 +1301,18 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(moved.changes[0].offset, 0x73fe20)
         let dark = [UInt8](theme.movedLayout(after: [], dark: true).changes[0].new)
         XCTAssertEqual(stride(from: 0, to: dark.count - 3, by: 4).filter { dark[$0..<$0 + 4].elementsEqual([0, 0, 0x9F, 0x5E]) }.count, 4)
+        // The small text: 4 words change, in both forms. The length stays the same.
+        func words(_ view: Data, _ type: UInt8) -> Int {
+            let v = [UInt8](view)
+            return stride(from: 0, to: v.count - 3, by: 4).filter { v[$0..<$0 + 4].elementsEqual([0, 0, type, 0x5E]) }.count
+        }
+        let small = theme.withSmallText()
+        XCTAssertEqual(words(small.changes[0].new, 0x98), 4)
+        XCTAssertEqual(words(small.changes[0].new, 0xA3), 0)
+        XCTAssertEqual(small.changes[0].new.count, theme.changes[0].new.count)
+        XCTAssertEqual(words(small.movedLayout(after: [], dark: true).changes[0].new, 0x99), 4)
+        XCTAssertEqual(words(small.movedLayout(after: [], dark: true).changes[0].new, 0x98), 0)
+        XCTAssertEqual(words(theme.changes[0].new, 0xA3), 4)
         var wrong = [UInt8](repeating: 0, count: 0x736000)
         XCTAssertThrowsError(try theme.apply(to: &wrong, originalSHA256: theme.osos_sha256))
         let env = ProcessInfo.processInfo.environment
@@ -1997,6 +2009,31 @@ final class DarkModeTests: XCTestCase {
         if let path = env["IPODFW_SPLIT_SWITCH_RESULT"] {
             XCTAssertEqual(ThemeImport.sha256(out), ThemeImport.sha256([UInt8](try Data(contentsOf: URL(fileURLWithPath: path)))))
         }
+    }
+
+    /// The small text with "Switch on iPod": the size is the same as the Split layout, and the
+    /// switch table goes back to the same osos when it runs 2 times. Needs IPODFW_IPSW and IPODFW_THEME.
+    func testSplitSmallTextSwitchBuild() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let ipsw = env["IPODFW_IPSW"], let themePath = env["IPODFW_THEME"] else { throw XCTSkip("set IPODFW_IPSW and IPODFW_THEME") }
+        let partition = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data)
+        let osos = try partition.image("osos")
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        let dark = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "dark-mode" }!
+        let theme = try ImportedTheme.load(URL(fileURLWithPath: themePath))
+        let split = try ImportedTheme.load(repo.appendingPathComponent("themes/layouts/Split.ipodtheme"))
+        let small = split.withSmallText()
+        let (out, info) = try DarkMode.build(partition: partition, osos: osos, theme: theme, patch: dark,
+                                             originalSHA256: ThemeImport.sha256(osos), layout: small)
+        let size = try DarkMode.addedSize(partition: partition, osos: osos, theme: theme, codeSize: dark.spec.size!, layout: small)
+        XCTAssertEqual(Patcher.maxOSOSSize + size, info.patchAt + dark.spec.size!)
+        XCTAssertEqual(size, try DarkMode.addedSize(partition: partition, osos: osos, theme: theme, codeSize: dark.spec.size!, layout: split))
+        let table = [UInt8](out[info.table.at..<info.table.at + info.table.length])
+        var work = out
+        DarkMode.applySwitchTable(&work, table)
+        XCTAssertNotEqual(work, out)
+        DarkMode.applySwitchTable(&work, table)
+        XCTAssertEqual(work, out)
     }
 
     func testExtendedPatchAfterSwitchBuild() throws {

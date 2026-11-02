@@ -1341,7 +1341,9 @@ This change does not exist yet. The research found a USB Audio Class 1 source in
 
 **Status.** Tested in the emulator and on a real iPod (31 October 2026). All items operate. The cover sometimes takes approximately 1 s to show, most often after Previous.
 
-**User interface.** Patches pane > iPod Appearance > Layout. Split operates with Light, Dark and Switch on iPod. The pane shows the size.
+**User interface.** Patches pane > iPod Appearance > Layout. Split operates with Light, Dark and Switch on iPod. The pane shows the size. With Split, the Panel Text control selects Standard or Small.
+
+**Panel Text.** Small uses Type 24216 (size 14) in place of Type 24227 (size 16). With Dark, it uses Type 24217 (size 14, white in stock). The build changes 4 words of the View (`withSmallText`). The file `Split.ipodtheme` does not change, and the size on the iPod stays the same. The research is in [../re/home-screen.md](../re/home-screen.md#small-panel-text). In the emulator (Light), the song line shows larger than the other lines. The owner accepted this on 2 November 2026. The owner reported that Dark looks good in the emulator. Switch on iPod is not tested. Not tested on a real iPod.
 
 **Data.** `themes/layouts/Split.ipodtheme` is a theme in format 2. `re/home-screen-views.py` makes it. The build copies it to `Contents/Resources/Layouts`, so it is not in the list of dark themes. It has 2 changes:
 

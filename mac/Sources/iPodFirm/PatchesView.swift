@@ -788,6 +788,13 @@ struct AppearanceDetail: View {
                 .frame(maxWidth: 380)
                 .disabled(AppModel.splitTheme == nil)
                 .help("Split shows the cover and the current song beside the main menu. All other screens stay stock.")
+                if model.layout == .split {
+                    Picker("Panel Text", selection: $model.splitText) {
+                        ForEach(AppModel.SplitText.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 380)
+                }
                 if let split = AppModel.splitTheme {
                     if model.editor != nil, !model.isCompatible(split) {
                         Label("Split does not agree with the open firmware. It is only for the original Apple firmware 1.3.",

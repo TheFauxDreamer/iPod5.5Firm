@@ -135,6 +135,14 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The size of the text in the panel of the Split layout.
+    @Published var splitText: SplitText = SplitText(rawValue: UserDefaults.standard.string(forKey: "splitText") ?? "") ?? .standard {
+        didSet {
+            UserDefaults.standard.set(splitText.rawValue, forKey: "splitText")
+            switchesChanged(oldValue != splitText)
+        }
+    }
+
     /// True if the owner changed a patch switch, an option or the appearance after the last flash, restore
     /// or read of the iPod. Then a new read of the iPod does not change the switches (`applyIPodState`).
     @Published var switchesChangedSinceSync = UserDefaults.standard.bool(forKey: "switchesChangedSinceSync") {
@@ -221,6 +229,12 @@ final class AppModel: ObservableObject {
     /// The layout of the iPod software.
     enum Layout: String, CaseIterable, Identifiable {
         case stock, split
+        var id: String { rawValue }
+        var title: String { rawValue.capitalized }
+    }
+
+    enum SplitText: String, CaseIterable, Identifiable {
+        case standard, small
         var id: String { rawValue }
         var title: String { rawValue.capitalized }
     }
@@ -361,7 +375,7 @@ final class AppModel: ObservableObject {
             return "\(p.spec.name) \(p.spec.versionText)" + (o.map { " [\($0)]" } ?? "")
         }
         lines.append("Patches on in the app: \(on.isEmpty ? "none" : on.joined(separator: ", "))")
-        lines.append("Appearance: \(appearance.rawValue), layout: \(layout.rawValue), theme: \(selectedThemeName ?? "-"), margin: \(ThemeImport.OSOSMargin.current.rawValue), test patches: \(showTestPatches)")
+        lines.append("Appearance: \(appearance.rawValue), layout: \(layout.rawValue), panel text: \(splitText.rawValue), theme: \(selectedThemeName ?? "-"), margin: \(ThemeImport.OSOSMargin.current.rawValue), test patches: \(showTestPatches)")
         lines.append("Full Disk Access: \(Self.checkFullDiskAccess())")
         lines.append("App: \(Bundle.main.bundlePath), signature: \(ownSignatureDescription())")
         lines.append("App folder:")
@@ -664,17 +678,23 @@ final class AppModel: ObservableObject {
     static let splitTheme: ImportedTheme? = Bundle.main.resourceURL
         .flatMap { try? ImportedTheme.load($0.appendingPathComponent("Layouts/Split.ipodtheme")) }
 
+    /// The Split layout with the selected text size. Nil for the Stock layout.
+    var activeSplit: ImportedTheme? {
+        guard layout == .split else { return nil }
+        return splitText == .small ? Self.splitTheme?.withSmallText() : Self.splitTheme
+    }
+
     /// The appearance build for the output: nothing for Light with the Stock layout.
     var activeAppearance: AppearanceBuild? {
         if appearance == .light {
-            return layout == .split ? Self.splitTheme.map { .layout($0) } : nil
+            return activeSplit.map { .layout($0) }
         }
         guard let theme = selectedTheme?.theme else { return nil }
         switch appearance {
         case .light: return nil
-        case .dark: return .dark(theme, layout: layout == .split ? Self.splitTheme : nil)
+        case .dark: return .dark(theme, layout: activeSplit)
         case .onIPod:
-            let split = layout == .split ? Self.splitTheme : nil
+            let split = activeSplit
             return Self.darkModePatch.map { .switchOnIPod(theme, $0, layout: split) }
         }
     }
@@ -714,7 +734,7 @@ final class AppModel: ObservableObject {
         }
         guard key != switchSizeDone else { return }
         measuringSwitchSize = true
-        let partition = editor.partition, osos = editor.osos, split = layout == .split ? Self.splitTheme : nil
+        let partition = editor.partition, osos = editor.osos, split = activeSplit
         let version = version, layoutName = layout.rawValue
         let size = await Task.detached(priority: .utility) { () -> Int? in
             let defaults = UserDefaults.standard

@@ -313,6 +313,31 @@ Measured: Dark Gray puts picture 21997 at 0x736800, so the View of the layout mo
 
 Type 24227 stays black in the dark theme. Dark Now Playing uses Types 24222 and 24223, which the theme makes white. Thus the panel uses Type 24223 in Dark.
 
+## Small panel text
+
+Status: a trial on branch `split-small-text`. Measured on stock 1.3 on 2 November 2026.
+
+The panel is 107 pixels wide. The song line scrolls. The artist, album and count lines do not scroll, so long text stops at the edge. The panel text style is a Type ID in each text element. A change of the 4 IDs gives a smaller font, with no code and with no new data.
+
+| Mode | Standard | Small |
+|---|---|---|
+| Light | Type 24227: Podium Sans 16, style 0x0101 | Type 24216: Podium Sans 14, style 0x0101 |
+| Dark | Type 24223: Podium Sans 18, style 0x0101 | Type 24217: Podium Sans 14, style 0x0101, white in stock |
+
+Dark Gray does not change Types 24216 and 24217. It changes the colour of 21 Types. It changes no Type of Espy Sans 10, and stock has no white Type of that size. Thus a smaller size in Dark needs a change to a shared Type. Do not do this.
+
+No stock View uses Types 24216 or 24217. The record of each is complete.
+
+Owner test on 2 November 2026 (emulator, Light, no other patches): the song line shows larger than the other 3 lines. The owner likes this result, so keep it. The View has Type 24216 in all 4 lines. The cause of the larger song line is not known. Stock scrolling elements use small Types too (View 21508 uses Type 24197), so the element kind is probably not the cause.
+
+Owner test on 2 November 2026 (emulator, Dark Gray, no other patches, firmware from the Python tools): the owner reported that it looks good. Switch on iPod is not tested. The Swift build path of Split Dark Small did not run in the emulator.
+
+Open points for the larger song line, from a scan of the code on 2 November 2026 (Static, not decoded):
+
+- The value 0x63bd (the song element) is a data word at 0x1e9984, 0x1eaa80 and 0x25f6e8. Only the first 2 also have 0x63be near them.
+- The function 0x243fb0 gives a label a text style. It has one direct call, at 0x168f70. Thus a live style change of the song element through this function is not likely, but this scan does not find an indirect call.
+- No data word has the value of Types 24223 or 24227. Type 24222 is at 0x1d0568.
+
 ## Split with Switch on iPod
 
 Status: on branch `split-switch`. Not tested on a real iPod.
