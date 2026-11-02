@@ -84,6 +84,10 @@ iPodFirm writes only the blocks that changed.
 4. Read each file again and compare it with the data.
 5. Write the metadata `<name>.bin.json`: date, reason, model, media name, size, SHA-256, disk size, volume name and the patches in the iPodFirm list.
 
+After the helper stops, the app adds its version, build number and name to the metadata of each new backup (`Backups.recordApp`). The helper does not do this step, because the daemon can come from a different copy of the app. The app also does this step after a flash that failed. A row of the backup list shows the version as a tag, for example `v0.1.328` or `v0.1.322 No Artwork Test`. The tooltip of the row shows the build number. An older backup has no tag.
+
+The Patches tag of a row shows the number of patches. Put the pointer on the tag to see the name and the version of each patch.
+
 The helper saves a backup before each flash, each restore and each rescue restore. iPodFirm never deletes or overwrites a backup.
 
 CAUTION: The backups contain Apple code and the state of your iPod. Do not commit them to Git and do not share them.

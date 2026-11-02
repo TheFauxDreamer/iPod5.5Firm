@@ -260,6 +260,24 @@ final class ModelCheckTests: XCTestCase {
         XCTAssertEqual(saved.map(\.patches), [nil, nil])
     }
 
+    /// The app records itself only in backups with no app. The name of a test build goes into the label.
+    func testBackupRecordsApp() throws {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("ipodfw-app-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try Backups.save(partition(vers: 0xB001), ipod: ipod, reason: "test", in: tmp, owner: nil)
+        try Backups.recordApp(version: "0.1.328", build: "329", name: "iPodFirm", in: tmp, since: Date().addingTimeInterval(60))
+        XCTAssertEqual(Backups.list(in: tmp).map(\.appLabel), [nil, nil])     // too old for this start time
+        try Backups.recordApp(version: "0.1.322", build: "323", name: "iPodFirm No Artwork Test", in: tmp,
+                              since: Date().addingTimeInterval(-60))
+        XCTAssertEqual(Backups.list(in: tmp).map(\.appLabel), ["v0.1.322 No Artwork Test", "v0.1.322 No Artwork Test"])
+        XCTAssertEqual(Backups.list(in: tmp).map(\.appBuild), ["323", "323"])
+        try Backups.recordApp(version: "0.1.400", build: "401", name: "iPodFirm", in: tmp, since: Date().addingTimeInterval(-60))
+        XCTAssertEqual(Backups.list(in: tmp).first?.appVersion, "0.1.322")    // the first record stays
+        try Backups.save(partition(vers: 0xB001), ipod: ipod, reason: "next", in: tmp, owner: nil)
+        try Backups.recordApp(version: "0.1.328", build: "329", name: "iPodFirm", in: tmp, since: Date().addingTimeInterval(-60))
+        XCTAssertEqual(Backups.list(in: tmp).map(\.appLabel).filter { $0 == "v0.1.328" }.count, 1)
+    }
+
     /// A sidecar file of an older version has no name and no patches.
     func testOldBackupMetadataDecodes() throws {
         let json = #"{"file":"a.bin","created":"2026-01-01T00:00:00Z","reason":"manual backup","model":"Video","mediaName":"iPod","bytes":1,"sha256":"00","isOriginal":false}"#
@@ -268,6 +286,7 @@ final class ModelCheckTests: XCTestCase {
         let info = try dec.decode(BackupInfo.self, from: Data(json.utf8))
         XCTAssertNil(info.ipodName)
         XCTAssertNil(info.patches)
+        XCTAssertNil(info.appLabel)
     }
 
     /// A different model with an incorrect checksum is "unsupported", not "damaged": no rescue restore.

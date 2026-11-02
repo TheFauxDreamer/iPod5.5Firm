@@ -491,12 +491,24 @@ final class AppModel: ObservableObject {
 
     // Route privileged work through the daemon (Touch ID) when it replies, else the password prompt.
     private func runBackup(_ ipod: IPodDisk) async throws -> HelperResult {
+        let start = Date()
+        defer { recordAppInBackups(since: start) }
         if await helperResponds() {
             AppLog.step("Helper (daemon): back up \(ipod.disk)")
             return logged(try await HelperClient.backup(disk: ipod.disk, backupDir: Self.backupDir))
         }
         AppLog.step("Helper (password): back up \(ipod.disk)")
         return logged(try await Privileged.run(helperArgs("backup", ipod)))
+    }
+
+    /// Writes this app into the metadata of the new backups. A fault here does not stop the operation.
+    private func recordAppInBackups(since start: Date) {
+        let info = Bundle.main.infoDictionary ?? [:]
+        guard let version = info["CFBundleShortVersionString"] as? String else { return }
+        do {
+            try Backups.recordApp(version: version, build: info["CFBundleVersion"] as? String,
+                                  name: info["CFBundleName"] as? String, in: Self.backupDir, since: start)
+        } catch { AppLog.warning("Could not record the app in the backup metadata: \(AppLog.describe(error))") }
     }
 
     /// Writes the result of the helper to the log. On a fault, the log also gets the detail of the helper.
@@ -513,6 +525,8 @@ final class AppModel: ObservableObject {
     private func runFlash(_ ipod: IPodDisk, image: URL, reason: String, dryRun: Bool) async throws -> HelperResult {
         let rescue = reason == "rescue"
         let what = "\(reason) of \(image.lastPathComponent) on \(ipod.disk)\(dryRun ? " (dry run)" : "")"
+        let start = Date()
+        defer { if !dryRun { recordAppInBackups(since: start) } }
         if await helperResponds() {
             AppLog.step("Helper (daemon): " + what)
             if !dryRun && requireTouchID {

@@ -223,8 +223,9 @@ struct BackupRow: View {
             HStack(spacing: 6) {
                 Text(backup.created, format: .dateTime.year().month().day().hour().minute()).bold()
                 if let name = backup.ipodName { BackupTag(text: name, tint: .secondary) }
+                if let app = backup.appLabel { BackupTag(text: app, tint: .purple) }
                 if let patches = backup.patches, !patches.isEmpty {
-                    BackupTag(text: patches.count == 1 ? "1 Patch" : "\(patches.count) Patches", tint: .blue)
+                    BackupPatchesTag(patches: patches)
                 }
                 if backup.isOriginal { BackupTag(text: "Original", tint: .green) }
             }
@@ -247,7 +248,26 @@ struct BackupRow: View {
 
     private var help: String {
         let summary = "\(backup.reason) · \(ByteCountFormatter.string(fromByteCount: Int64(backup.bytes), countStyle: .file)) · \(backup.model)"
-        return ([summary] + (backup.patches ?? [])).joined(separator: "\n")
+        let app = backup.appLabel.map { label in backup.appBuild.map { "\(label), build \($0)" } ?? label }
+        return ([summary] + (app.map { [$0] } ?? [])).joined(separator: "\n")
+    }
+}
+
+/// The tag with the number of patches. The pointer on the tag shows the list of the patches.
+struct BackupPatchesTag: View {
+    let patches: [String]
+    @State private var showList = false
+
+    var body: some View {
+        BackupTag(text: patches.count == 1 ? "1 Patch" : "\(patches.count) Patches", tint: .blue)
+            .onHover { showList = $0 }
+            .popover(isPresented: $showList, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(patches, id: \.self) { Text($0) }
+                }
+                .padding(10)
+            }
+            .accessibilityLabel(patches.joined(separator: ", "))
     }
 }
 
