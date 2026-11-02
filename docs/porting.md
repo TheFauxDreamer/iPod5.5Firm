@@ -9,7 +9,6 @@ The table gives the number of lines on `main` (commit `f257fcc` of 2026-10-29) w
 | Part | Folder | Language | Lines | Runs on Windows or Linux |
 |---|---|---|---|---|
 | App user interface | `mac/Sources/iPodFirm` | Swift (SwiftUI, AppKit) | 5800 | No. SwiftUI and AppKit are for Apple systems only. |
-| Privileged helper | `mac/Sources/ipodfw-helper` | Swift (XPC, launchd) | 172 | No. |
 | Core library | `mac/Sources/IPodFWKit` | Swift | 6646 | Partly. Swift runs on Windows and Linux, but the library uses Apple frameworks (section 3). |
 | Swift tests | `mac/Tests` | Swift | 2799 | Partly, the same as the core library. |
 | `ipodfw` command-line tool | `src/ipodfw` | Python | 3892 | Mostly. The device code is for macOS only (section 3). |
@@ -60,7 +59,7 @@ The Swift and Python versions of a module are two copies of the same logic. A ch
 | Item | Where | Use | Replacement on Windows or Linux |
 |---|---|---|---|
 | `/usr/sbin/diskutil` and `/dev/rdiskN` | `Device.swift`, `device.py` | Find the iPod. Unmount and eject it. Read and write the firmware partition. | Linux: `/sys/block`, `lsblk`, `/dev/sdX`, `udisksctl`. Windows: `\\.\PhysicalDriveN`, the SetupAPI or WMI to find the disk, and a volume lock before the write. |
-| Privileged helper: XPC, launchd, `SMAppService`, Security, LocalAuthentication | `HelperXPC.swift`, `mac/Sources/ipodfw-helper`, `HelperClient.swift`, `Privileged.swift` | Get root access to the raw disk. | Linux: polkit (`pkexec`) or a udev rule. Windows: a UAC elevation (the app runs as administrator). |
+| `/usr/libexec/authopen`, Security | `AuthOpen.swift`, `DiskAccess` in `Device.swift` | Get the raw disk with an administrator password. No code of the app runs as root. | Windows and Linux have a different privilege model. Linux: `pkexec` or a `udev` rule. Windows: a UAC prompt. |
 | `/usr/bin/ditto`, `/usr/bin/zip` | `IPSW.swift`, `PatchLibrary.swift` | Unpack an `.ipsw` file. Unpack and make a `.ipodpatch` file. | A zip library. `ipsw.py` already uses `zipfile`. |
 | `/usr/bin/xcrun clang` | `Patcher.swift`, `PatchLibrary.swift` | Compile the C file of a patch. | `clang` from LLVM. `patcher.py` already calls `clang` without `xcrun`. An exported `.ipodpatch` file has a precompiled `patch.o`, so the user does not need a compiler for it. |
 | `/usr/bin/afconvert` | `ITunesDB.swift`, `itunesdb.py` | Make the test audio file for an emulated library. | `ffmpeg`, or a short WAV or AAC file in the repository. |

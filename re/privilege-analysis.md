@@ -39,6 +39,7 @@ The test process had no Full Disk Access: it could not read `TCC.db`.
 | `authopen`, read-only, `/dev/rdisk15`, volume mounted | A descriptor. The read gives 2048 bytes with the signature `ER`. |
 | `authopen`, read-write, `/dev/rdisk15`, volume mounted | No descriptor. `authopen` sends the bytes `00 10`. The value 0x10 is `EBUSY`. |
 | `authopen`, read-write, `/dev/rdisk15s2`, volume mounted | A descriptor with the mode `O_RDWR`. |
+| `authopen`, read-write, `/dev/rdisk15`, volume not mounted | A descriptor. Thus the `EBUSY` above came from the mounted volume. |
 | One `AuthorizationRef`, read and write rights, 5 opens | One password prompt. The opens took 0.1 second each. |
 
 The right `sys.openfile.` has `authenticate-user: true`, `group: admin`, `timeout: 300` and `shared: false`.
@@ -50,7 +51,7 @@ A later test with the ad-hoc build 0.1.240 (241) did a real flash on the same iP
 ## What is not known
 
 1. Does the result stay the same on other versions of macOS? The test used macOS 27.2. The reports are from macOS 15.7.7.
-2. Can a read-write open of the whole disk operate after the unmount? A firmware partition with MBR type 0 needs this, if macOS gives it no slice. The app has no Windows-format test yet.
+2. Does a Windows-format iPod have a firmware slice? If it has none, the app opens the whole disk after the unmount. This open operates on a Mac-format iPod, but no write used this path on a real iPod.
 3. Does the prompt offer Touch ID?
 4. Does a standard user operate the app with the name of an administrator?
 
