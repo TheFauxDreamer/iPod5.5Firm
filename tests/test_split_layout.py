@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from ipodfw.themeimport import Theme, ThemeError, apply_theme, moved_layout, view_elements
+from ipodfw.themeimport import Theme, ThemeError, apply_theme, moved_layout, small_text, view_elements
 
 ROOT = Path(__file__).resolve().parents[1]
 THEME = ROOT / "themes/layouts/Split.ipodtheme"
@@ -82,3 +82,15 @@ def test_wrong_firmware_bytes_stop_the_build():
     osos = bytearray(0x736000)
     with pytest.raises(ThemeError):
         apply_theme(theme, osos, theme.osos_sha256)
+
+
+def test_small_text_uses_types_of_size_14():
+    theme = Theme.from_json((ROOT / "themes/layouts/Split.ipodtheme").read_text())
+    small = small_text(theme)
+    view = small.changes[0].new
+    assert view.count(struct.pack("<I", 0x5E980000)) == 4
+    assert view.count(struct.pack("<I", 0x5EA30000)) == 0
+    assert len(view) == len(theme.changes[0].new)
+    dark = moved_layout(small, b"", True).changes[0].new
+    assert dark.count(struct.pack("<I", 0x5E990000)) == 4
+    assert dark.count(struct.pack("<I", 0x5E980000)) == 0

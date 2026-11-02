@@ -313,6 +313,21 @@ Measured: Dark Gray puts picture 21997 at 0x736800, so the View of the layout mo
 
 Type 24227 stays black in the dark theme. Dark Now Playing uses Types 24222 and 24223, which the theme makes white. Thus the panel uses Type 24223 in Dark.
 
+## Small panel text
+
+Status: a trial on branch `split-small-text`. Measured on stock 1.3 on 2 November 2026.
+
+The panel is 107 pixels wide. The song line scrolls. The artist, album and count lines do not scroll, so long text stops at the edge. The panel text style is a Type ID in each text element. A change of the 4 IDs gives a smaller font, with no code and with no new data.
+
+| Mode | Standard | Small |
+|---|---|---|
+| Light | Type 24227: Podium Sans 16, style 0x0101 | Type 24216: Podium Sans 14, style 0x0101 |
+| Dark | Type 24223: Podium Sans 18, style 0x0101 | Type 24217: Podium Sans 14, style 0x0101, white in stock |
+
+Dark Gray does not change Types 24216 and 24217. It changes the colour of 21 Types. It changes no Type of Espy Sans 10, and stock has no white Type of that size. Thus a smaller size in Dark needs a change to a shared Type. Do not do this.
+
+No stock View uses Types 24216 or 24217. The record of each is complete. The emulator test must show that the text draws correctly.
+
 ## Split with Switch on iPod
 
 Status: on branch `split-switch`. Not tested on a real iPod.
