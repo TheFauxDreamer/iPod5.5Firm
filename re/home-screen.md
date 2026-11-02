@@ -330,6 +330,12 @@ No stock View uses Types 24216 or 24217. The record of each is complete.
 
 Owner test on 2 November 2026 (emulator, Light, no other patches): the song line shows larger than the other 3 lines. The owner likes this result, so keep it. The View has Type 24216 in all 4 lines. The cause of the larger song line is not known. Stock scrolling elements use small Types too (View 21508 uses Type 24197), so the element kind is probably not the cause. Dark and Switch on iPod are not tested.
 
+Open points for the larger song line, from a scan of the code on 2 November 2026 (Static, not decoded):
+
+- The value 0x63bd (the song element) is a data word at 0x1e9984, 0x1eaa80 and 0x25f6e8. Only the first 2 also have 0x63be near them.
+- The function 0x243fb0 gives a label a text style. It has one direct call, at 0x168f70. Thus a live style change of the song element through this function is not likely, but this scan does not find an indirect call.
+- No data word has the value of Types 24223 or 24227. Type 24222 is at 0x1d0568.
+
 ## Split with Switch on iPod
 
 Status: on branch `split-switch`. Not tested on a real iPod.
