@@ -138,7 +138,7 @@ extension AppModel {
     }
 
     /// Read the patches on the connected iPod. Nothing is written to the iPod. `automatic`: no read, because
-    /// a read opens a password prompt, and no prompt must open when an iPod connects.
+    /// a read opens a macOS prompt, and no prompt must open when an iPod connects.
     func readIPodPatches(automatic: Bool) async {
         guard let ipod = currentIPod, busy == nil else { return }
         guard !automatic else {

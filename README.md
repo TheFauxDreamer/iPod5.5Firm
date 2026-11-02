@@ -37,7 +37,7 @@ The author tested iPodFirm on an iPod 5.5th generation (64 MB of RAM) with 1 TB 
 
 If macOS does not show **Open**, open System Settings > Privacy & Security. Then click **Open Anyway**.
 
-The app asks for an administrator password before it reads or writes the firmware partition. The password is good for 5 minutes. No part of the app runs as root, and the app does not need Full Disk Access.
+macOS asks for Touch ID or an administrator password before the app reads or writes the firmware partition. A flash usually asks two times: one time for the read and one time for the write. No part of the app runs as root, and the app does not need Full Disk Access.
 
 ### Updates
 

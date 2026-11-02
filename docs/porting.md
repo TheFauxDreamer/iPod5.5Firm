@@ -60,7 +60,7 @@ The Swift and Python versions of a module are two copies of the same logic. A ch
 | Item | Where | Use | Replacement on Windows or Linux |
 |---|---|---|---|
 | `/usr/sbin/diskutil` and `/dev/rdiskN` | `Device.swift`, `device.py` | Find the iPod. Unmount and eject it. Read and write the firmware partition. | Linux: `/sys/block`, `lsblk`, `/dev/sdX`, `udisksctl`. Windows: `\\.\PhysicalDriveN`, the SetupAPI or WMI to find the disk, and a volume lock before the write. |
-| `/usr/libexec/authopen`, Security | `AuthOpen.swift`, `DiskAccess` in `Device.swift` | Get the raw disk with an administrator password. No code of the app runs as root. | Windows and Linux have a different privilege model. Linux: `pkexec` or a `udev` rule. Windows: a UAC prompt. |
+| `/usr/libexec/authopen` | `AuthOpen.swift`, `DiskAccess` in `Device.swift` | Get the raw disk with Touch ID or an administrator password. No code of the app runs as root. | Windows and Linux have a different privilege model. Linux: `pkexec` or a `udev` rule. Windows: a UAC prompt. |
 | `/usr/bin/ditto`, `/usr/bin/zip` | `IPSW.swift`, `PatchLibrary.swift` | Unpack an `.ipsw` file. Unpack and make a `.ipodpatch` file. | A zip library. `ipsw.py` already uses `zipfile`. |
 | CommonCrypto, Compression | `ITunesLibrary.swift` | Decrypt and inflate `iTunes Library.itl`. | Any AES library and zlib. |
 | `/usr/bin/xcrun clang` | `Patcher.swift`, `PatchLibrary.swift` | Compile the C file of a patch. | `clang` from LLVM. `patcher.py` already calls `clang` without `xcrun`. An exported `.ipodpatch` file has a precompiled `patch.o`, so the user does not need a compiler for it. |

@@ -161,10 +161,12 @@ The raw disk `/dev/rdiskN` has the owner root and the mode 640. No code of iPodF
 
 `AuthOpen` in [AuthOpen.swift](../mac/Sources/IPodFWKit/AuthOpen.swift) does these steps:
 
-1. It keeps one `AuthorizationRef`.
-2. `authorize` asks for the right `sys.openfile.readonly.<path>` or `sys.openfile.readwrite.<path>`. macOS asks for the name and the password of an administrator. A password is good for 300 seconds.
-3. `open` starts `authopen -stdoutpipe -extauth -o <flags> <path>` and sends the external form of the authorization.
-4. `authopen` sends the file descriptor (`SCM_RIGHTS`) on a socket. On a fault, it sends two bytes. The last byte is the `errno` value.
+1. `open` starts `authopen -stdoutpipe -o <flags> <path>`.
+2. `authopen` asks for the right `sys.openfile.readonly.<path>` or `sys.openfile.readwrite.<path>`. `authopen` is signed by Apple, so macOS offers Touch ID. If Touch ID is not available, macOS asks for the name and the password of an administrator.
+3. `authopen` sends the file descriptor (`SCM_RIGHTS`) on a socket. On a fault, it sends two bytes. The last byte is the `errno` value. Cancel gives `ECANCELED`.
+4. macOS asks at each open, so `AuthOpen` keeps the descriptors. `read` keeps the read descriptor for 60 seconds. `prepareWrite` opens the firmware slice before the unmount, and `takeWrite` gives it to the write.
+
+The app closes the read descriptor before an unmount and an eject. It examines a kept descriptor before each use, so a different iPod on the same path does not get the old descriptor.
 
 `DiskAccess` in [Device.swift](../mac/Sources/IPodFWKit/Device.swift) gives the disk to `Operations`. The app uses `DiskAccess.authOpen()`. The tests use `DiskAccess.direct` with a disk image.
 
@@ -198,7 +200,7 @@ The app does not need Full Disk Access. A real flash through `authopen` passed w
 4. If the iPod firmware is damaged and the action is a restore, the app tries the rescue restore with `dryRun`.
 5. The app shows the ranges and the byte count. If MiMusic is open, it also shows a warning. The owner must confirm.
 6. The app does the MiMusic check again.
-7. The operation runs again without `dryRun`. It asks for the password if the last password is older than 300 seconds. It saves a backup, unmounts the disk, writes the changed blocks, reads them again and compares them. If the user clicks Cancel at the prompt, the iPod stays mounted and the app takes no backup. If the open fails after the unmount, no byte changed, and the app mounts the iPod again and shows the fault.
+7. The operation runs again without `dryRun`. macOS asks for Touch ID or a password for the write, before the unmount. If the iPod has no firmware slice, this prompt comes after the unmount. It saves a backup, unmounts the disk, writes the changed blocks, reads them again and compares them. If the user clicks Cancel at the prompt, the iPod stays mounted and the app takes no backup. If the open fails after the unmount, no byte changed, and the app mounts the iPod again and shows the fault.
 
 [safety.md](safety.md) gives each check.
 
@@ -207,7 +209,7 @@ The app does not need Full Disk Access. A real flash through `authopen` passed w
 The patch switches are settings of the app. The owner can change a switch and not flash. Thus the app compares the switches with the firmware on the iPod.
 
 1. A build writes the iPodFirm list into osos (`FirmwareManifest`, refer to [patch-system.md](patch-system.md#the-ipodfirm-list)). The list has the patches, their versions and options, the appearance and the theme.
-2. A read of the iPod opens a password prompt, so the app does not read when an iPod connects. The owner clicks Read iPod (`AppModel.readIPodPatches`, `Operations.readOSOS`).
+2. A read of the iPod opens a macOS prompt, so the app does not read when an iPod connects. The owner clicks Read iPod (`AppModel.readIPodPatches`, `Operations.readOSOS`).
 3. `Patcher.detect` gives the state of each patch: installed (with the version from the list), absent, or not known. Without a list, the result comes from the changed words, and the versions are not known.
 4. After a flash or a restore, the app uses the image that it wrote (`recordWrittenImage`). It does not read the iPod again.
 
@@ -248,7 +250,6 @@ The Patches pane shows the result:
 | `NSXPCConnection`, `NSXPCListener` | The connection between the app and the daemon. |
 | `SecCodeCopySelf`, `SecCodeCopySigningInformation` | Read the team identifier for the signature requirement. |
 | `SMAppService` | Remove the registration of the old daemon. |
-| `AuthorizationCopyRights` | Ask for the password before `authopen` opens the disk. |
 | `URLSession` | Download the Apple firmware. Get the number of the newest iPodFirm release from GitHub (`UpdateCheck.swift`). |
 | `os.Logger` | The unified log of macOS (`AppLog.swift`). |
 | `sysctlbyname("hw.model")` | The Mac model for the log and the fault report. |

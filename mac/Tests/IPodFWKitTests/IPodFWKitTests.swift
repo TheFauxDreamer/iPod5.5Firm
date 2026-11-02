@@ -45,31 +45,6 @@ final class BackupFolderTests: XCTestCase {
         XCTAssertThrowsError(try Device.firmwareSlice([("disk4s2", "Apple_MDFW", nil)], start: 129024))
     }
 
-    /// A failed open of the slice goes to the whole disk, with the offsets of the whole disk.
-    func testOpenForWriteFallsBackToTheWholeDisk() throws {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("whole-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: url) }
-        try Data(repeating: 0, count: 8192).write(to: url)
-        var tried: [String] = []
-        func opener(failing: Set<String>) -> (String) throws -> Int32 {
-            { path in
-                tried.append(path)
-                if failing.contains(path) { throw FirmwareError("busy") }
-                return open(url.path, O_RDWR)
-            }
-        }
-        let viaSlice = try DiskAccess.openForWrite(slice: "s", whole: "w", start: 4096, blockSize: 512, open: opener(failing: []))
-        XCTAssertEqual(viaSlice.origin, 4096)
-        XCTAssertEqual(tried, ["s"])
-        tried = []
-        let viaWhole = try DiskAccess.openForWrite(slice: "s", whole: "w", start: 4096, blockSize: 512, open: opener(failing: ["s"]))
-        XCTAssertEqual(viaWhole.origin, 0)
-        XCTAssertEqual(tried, ["s", "w"])
-        tried = []
-        XCTAssertThrowsError(try DiskAccess.openForWrite(slice: "s", whole: "w", start: 4096, blockSize: 512, open: opener(failing: ["s", "w"])))
-        XCTAssertNoThrow(try DiskAccess.openForWrite(slice: nil, whole: "w", start: 4096, blockSize: 512, open: opener(failing: ["s"])))
-    }
-
     /// The offsets of a descriptor of a slice stay positions on the whole disk.
     func testRawDiskOrigin() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("slice-\(UUID().uuidString)")

@@ -58,11 +58,28 @@ The app has no fallback to a root process, for these reasons:
 
 `authopen` fails at the open, before the first write. Thus the app has two small steps: it tries the whole disk if the slice fails, and it mounts the iPod again if the write cannot start.
 
+## Touch ID
+
+Measured on 2 November 2026, macOS 27.2.
+
+Apple forum replies report that the authorization plug-in offers Touch ID only if the main program of the request is signed by Apple. Thus `AuthorizationCopyRights` in iPodFirm gave a password prompt. The replies are mostly from 2018. Refer to the Sources.
+
+If `authopen` runs with no `-extauth`, `authopen` makes the request itself:
+
+| Test | Result |
+|---|---|
+| `authopen` from Terminal | The prompt offered Touch ID. |
+| `authopen -stdoutpipe -o 0` from an ad-hoc program, Touch ID used | The program got the descriptor. |
+| The same, two runs | Two prompts. Each open asks again. |
+| The same, Cancel | Exit status 1, no descriptor, bytes `00 59` (`ECANCELED`), stderr "AuthorizationCreate failed: The authorization was canceled by the user." |
+
+The program used a protected file, not an iPod. No code of iPodFirm runs as root. The app keeps the descriptors for a short time, so a flash has fewer prompts.
+
 ## What is not known
 
 1. Does the result stay the same on other versions of macOS? The test used macOS 27.2. The reports are from macOS 15.7.7.
 2. Does a Windows-format iPod have a firmware slice? If it has none, the app opens the whole disk after the unmount. This open operates on a Mac-format iPod, but no write used this path on a real iPod.
-3. Does the prompt offer Touch ID?
+3. Does a real flash operate with a write descriptor that opens before the unmount?
 4. Does a standard user operate the app with the name of an administrator?
 
 ## Sources
@@ -70,3 +87,5 @@ The app has no fallback to a root process, for these reasons:
 - <https://tech.dreamleaves.org/posts/how-to-write-to-dev-rdiskx-without-root-a-look-at-macos-authopen/>
 - <https://developer.apple.com/forums/thread/777577>
 - `man authopen`
+- <https://developer.apple.com/forums/thread/109706>
+- <https://developer.apple.com/forums/thread/106386>

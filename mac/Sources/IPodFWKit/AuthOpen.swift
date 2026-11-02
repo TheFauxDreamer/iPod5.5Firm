@@ -1,71 +1,117 @@
 import Foundation
-import Security
 
-/// Opens a raw disk through the Apple program `authopen`. No code of iPodFirm runs as root: macOS asks
-/// for the name and the password of an administrator, `authopen` opens the disk, and the app gets the
-/// file descriptor. One authorization is kept, so that macOS can accept the password for a short time
-/// (the right `sys.openfile.` has a timeout of 300 seconds).
+/// Opens a raw disk through the Apple program `authopen`. No code of iPodFirm runs as root. `authopen`
+/// asks for the right itself. It is signed by Apple, so macOS offers Touch ID, or a password if Touch ID
+/// is not available. The app gets the file descriptor. macOS asks at each open, so this class keeps
+/// the descriptors for a short time. Refer to re/privilege-analysis.md.
 public final class AuthOpen: @unchecked Sendable {
     public static let shared = AuthOpen()
 
     private let lock = NSLock()
-    private var authorization: AuthorizationRef?
+    private let keepTime: TimeInterval
+    private let now: () -> Date
+    private let opener: ((String, Bool) throws -> Int32)?
+    private var keptRead: (path: String, fd: Int32, time: Date)?
+    private var keptWrite: (path: String, fd: Int32)?
 
-    public init() {}
-
-    deinit { if let authorization { AuthorizationFree(authorization, []) } }
-
-    /// The right that `authopen` asks for.
-    static func right(path: String, writable: Bool) -> String {
-        "sys.openfile.\(writable ? "readwrite" : "readonly").\(path)"
+    /// `now` and `opener` are for the tests. `opener` replaces `authopen`.
+    public init(keepTime: TimeInterval = 60, now: @escaping () -> Date = Date.init,
+                opener: ((String, Bool) throws -> Int32)? = nil) {
+        self.keepTime = keepTime
+        self.now = now
+        self.opener = opener
     }
 
-    private func reference() throws -> AuthorizationRef {
-        if let authorization { return authorization }
-        var made: AuthorizationRef?
-        let status = AuthorizationCreate(nil, nil, [], &made)
-        guard status == errAuthorizationSuccess, let made else { throw Self.error(status) }
-        authorization = made
-        return made
-    }
+    deinit { closeKept() }
 
-    static func error(_ status: OSStatus) -> FirmwareError {
-        if status == errAuthorizationCanceled { return FirmwareError("Cancelled.") }
-        let text = SecCopyErrorMessageString(status, nil) as String? ?? "error \(status)"
-        return FirmwareError("macOS did not give access to the iPod: \(text)")
-    }
+    static func isCancel(_ error: Error) -> Bool { (error as? FirmwareError)?.message == "Cancelled." }
 
-    /// Ask for the password now, for each path. This call blocks until the user replies. Call it before the
-    /// iPod unmounts: if the user clicks Cancel, the iPod stays as it was.
-    public func authorize(paths: [String], writable: Bool, prompt: String) throws {
+    /// A descriptor for a read of the disk. The caller closes it. The next reads in `keepTime` open no prompt.
+    public func read(path: String, blockSize: Int) throws -> Int32 {
         lock.lock()
         defer { lock.unlock() }
-        let ref = try reference()
-        let names = paths.map { strdup(Self.right(path: $0, writable: writable))! }
-        defer { names.forEach { free($0) } }
-        var items = names.map { AuthorizationItem(name: UnsafePointer($0), valueLength: 0, value: nil, flags: 0) }
-        let status = prompt.withCString { text -> OSStatus in
-            var entry = AuthorizationItem(name: kAuthorizationEnvironmentPrompt, valueLength: strlen(text),
-                                          value: UnsafeMutableRawPointer(mutating: text), flags: 0)
-            return withUnsafeMutablePointer(to: &entry) { entryPointer in
-                var environment = AuthorizationEnvironment(count: 1, items: entryPointer)
-                return items.withUnsafeMutableBufferPointer { buffer in
-                    var rights = AuthorizationRights(count: UInt32(buffer.count), items: buffer.baseAddress)
-                    return AuthorizationCopyRights(ref, &rights, &environment, [.interactionAllowed, .extendRights, .preAuthorize], nil)
-                }
-            }
+        if let kept = keptRead, kept.path == path, now().timeIntervalSince(kept.time) < keepTime,
+           Self.canRead(kept.fd, blockSize: blockSize) {
+            let copy = dup(kept.fd)
+            if copy >= 0 { return copy }
         }
-        guard status == errAuthorizationSuccess else { throw Self.error(status) }
+        closeRead()
+        let fd = try openNow(path, writable: false)
+        keptRead = (path, fd, now())
+        DispatchQueue.global().asyncAfter(deadline: .now() + keepTime + 1) { [weak self] in self?.closeExpired() }
+        let copy = dup(fd)
+        guard copy >= 0 else { throw FirmwareError("Cannot read \(path): \(String(cString: strerror(errno)))") }
+        return copy
     }
 
-    /// Open `path`, and give the file descriptor to the caller. Call `authorize` first.
+    /// A kept descriptor stops at a disconnect, so a different iPod on the same path never uses it.
+    static func canRead(_ fd: Int32, blockSize: Int) -> Bool {
+        var block = [UInt8](repeating: 0, count: blockSize)
+        return pread(fd, &block, blockSize, 0) == blockSize
+    }
+
+    /// Open `path` for a write now, and keep the descriptor for `takeWrite`. Call this before the unmount:
+    /// if the user clicks Cancel, the iPod stays as it was.
+    public func prepareWrite(path: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        closeWrite()
+        keptWrite = (path, try openNow(path, writable: true))
+    }
+
+    /// The descriptor of `prepareWrite`, or nil. The caller closes it.
+    public func takeWrite(path: String) -> Int32? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let kept = keptWrite, kept.path == path else { return nil }
+        keptWrite = nil
+        return kept.fd
+    }
+
+    /// Stop the read descriptor. A kept descriptor on the whole disk can stop an eject.
+    public func closeKeptRead() {
+        lock.lock()
+        defer { lock.unlock() }
+        closeRead()
+    }
+
+    /// Stop the write descriptor if the operation did not use it.
+    public func closeKeptWrite() {
+        lock.lock()
+        defer { lock.unlock() }
+        closeWrite()
+    }
+
+    public func closeKept() {
+        closeKeptRead()
+        closeKeptWrite()
+    }
+
+    private func closeExpired() {
+        lock.lock()
+        defer { lock.unlock() }
+        if let kept = keptRead, now().timeIntervalSince(kept.time) >= keepTime { closeRead() }
+    }
+
+    private func closeRead() {
+        if let kept = keptRead { Darwin.close(kept.fd) }
+        keptRead = nil
+    }
+
+    private func closeWrite() {
+        if let kept = keptWrite { Darwin.close(kept.fd) }
+        keptWrite = nil
+    }
+
+    /// Open `path`, and give the file descriptor to the caller. macOS asks for Touch ID or a password.
     public func open(path: String, writable: Bool) throws -> Int32 {
         lock.lock()
         defer { lock.unlock() }
-        var external = AuthorizationExternalForm()
-        let status = AuthorizationMakeExternalForm(try reference(), &external)
-        guard status == errAuthorizationSuccess else { throw Self.error(status) }
+        return try openNow(path, writable: writable)
+    }
 
+    private func openNow(_ path: String, writable: Bool) throws -> Int32 {
+        if let opener { return try opener(path, writable) }
         var sockets: [Int32] = [0, 0]
         guard socketpair(AF_UNIX, SOCK_STREAM, 0, &sockets) == 0 else {
             throw FirmwareError("Cannot make a socket: \(String(cString: strerror(errno)))")
@@ -73,26 +119,31 @@ public final class AuthOpen: @unchecked Sendable {
         defer { Darwin.close(sockets[0]) }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/libexec/authopen")
-        process.arguments = ["-stdoutpipe", "-extauth", "-o", String(writable ? O_RDWR : O_RDONLY), path]
-        let input = Pipe(), problems = Pipe()
-        process.standardInput = input
+        process.arguments = ["-stdoutpipe", "-o", String(writable ? O_RDWR : O_RDONLY), path]
+        let problems = Pipe()
+        process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle(fileDescriptor: sockets[1], closeOnDealloc: true)
         process.standardError = problems
         try process.run()
-        input.fileHandleForWriting.write(withUnsafeBytes(of: &external) { Data($0) })
-        try input.fileHandleForWriting.close()
         let received = Self.receiveDescriptor(from: sockets[0], whileOpen: process)
         process.waitUntilExit()
         if let fd = received.fd { return fd }
         let text = String(decoding: problems.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         // authopen sends two bytes on a fault. The last byte is the errno value.
-        if received.lastByte == UInt8(EBUSY) { throw FirmwareError("\(path) is in use. Eject the iPod volume, then try again.") }
-        if received.lastByte == UInt8(EPERM) {
-            throw FirmwareError("macOS blocked access to \(path). Turn on Full Disk Access for iPodFirm, then try again.")
-        }
+        if let fault = Self.knownFault(received.lastByte, path: path) { throw fault }
         var fault = FirmwareError("Cannot open \(path) through authopen.")
         fault.cause = "authopen status \(process.terminationStatus), \(received.note), stderr: \(text)"
         throw fault
+    }
+
+    /// The fault for the errno value of `authopen`. A click on Cancel gives ECANCELED (measured on macOS 27.2).
+    static func knownFault(_ byte: UInt8?, path: String) -> FirmwareError? {
+        switch byte.map(Int32.init) {
+        case ECANCELED: return FirmwareError("Cancelled.")
+        case EBUSY: return FirmwareError("\(path) is in use. Eject the iPod volume, then try again.")
+        case EPERM: return FirmwareError("macOS blocked access to \(path). Turn on Full Disk Access for iPodFirm, then try again.")
+        default: return nil
+        }
     }
 
     /// Receive one descriptor (SCM_RIGHTS). The parent end stays open, so read until the child stops.

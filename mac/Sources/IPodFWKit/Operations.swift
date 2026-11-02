@@ -241,6 +241,7 @@ public enum Operations {
 
         // Ask first: if the user clicks Cancel, the iPod stays mounted.
         try access.authorizeWrite(ipod, partStart)
+        defer { access.release() }
         // Mandatory backup of exactly what is about to be replaced.
         AppLog.step("Flash: back up the iPod before \(total) bytes in \(ranges.count) range(s)")
         let info = try Backups.save(currentBytes, ipod: ipod, reason: "before \(reason)", in: backupDir)
@@ -316,6 +317,7 @@ public enum Operations {
         if dryRun { return OperationResult(ok: true, message: "Would write \(total) bytes in \(ranges.count) range(s).", ranges: ranges) }
 
         try access.authorizeWrite(ipod, partStart)
+        defer { access.release() }
         let info = try Backups.save(currentBytes, ipod: ipod, reason: "before rescue", in: backupDir, damaged: true)
 
         AppLog.step("Unmount \(ipod.disk), then write \(ranges.count) range(s)")

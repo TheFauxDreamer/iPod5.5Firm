@@ -112,6 +112,7 @@ public enum Device {
     /// Unmount all volumes of the iPod before a write to the firmware partition. A busy volume
     /// gets the same attempts as the eject.
     public static func unmount(_ ipod: IPodDisk) throws {
+        AuthOpen.shared.closeKeptRead()
         try retryWhileBusy(["unmountDisk", ipod.disk], action: "unmount")
     }
 
@@ -138,6 +139,7 @@ public enum Device {
 
     /// Unmount all volumes of the iPod and eject it, as Finder does. Then the iPod can be disconnected.
     public static func eject(_ ipod: IPodDisk) throws {
+        AuthOpen.shared.closeKept()
         try retryWhileBusy(["eject", ipod.disk], action: "eject")
     }
 
@@ -232,10 +234,12 @@ public struct DiskAccess {
     public var authorizeWrite: (IPodDisk, _ start: Int) throws -> Void
     /// Open the disk for a write. Call this after the unmount.
     public var write: (IPodDisk, _ start: Int) throws -> RawDisk
+    /// Stop what `authorizeWrite` kept, if the operation did not use it.
+    public var release: () -> Void
 
     public init(read: @escaping (IPodDisk) throws -> RawDisk, authorizeWrite: @escaping (IPodDisk, Int) throws -> Void,
-                write: @escaping (IPodDisk, Int) throws -> RawDisk) {
-        self.read = read; self.authorizeWrite = authorizeWrite; self.write = write
+                write: @escaping (IPodDisk, Int) throws -> RawDisk, release: @escaping () -> Void = {}) {
+        self.read = read; self.authorizeWrite = authorizeWrite; self.write = write; self.release = release
     }
 
     /// The caller already has the right to open the disk.
@@ -243,39 +247,30 @@ public struct DiskAccess {
                                           authorizeWrite: { _, _ in },
                                           write: { ipod, _ in try RawDisk(path: ipod.rawPath, blockSize: ipod.blockSize, writable: true) })
 
-    /// macOS asks for the password, and `authopen` opens the disk. The password is good for all the opens in
-    /// a short time. A write goes to the firmware slice if the iPod has one, because a read-write open of the
-    /// whole disk gives EBUSY while a volume is mounted.
+    /// `authopen` opens the disk, and macOS asks for Touch ID or a password. A write goes to the firmware slice
+    /// if the iPod has one, because a read-write open of the whole disk gives EBUSY while a volume is mounted.
+    /// The slice opens before the unmount, so a Cancel leaves the iPod mounted. Without a slice, the whole
+    /// disk opens after the unmount, and `Operations.openForWrite` mounts the iPod again after a Cancel.
     public static func authOpen(_ auth: AuthOpen = .shared) -> DiskAccess {
-        let prompt = "iPodFirm needs an administrator password to read and write the firmware partition of your iPod."
-        return DiskAccess(
+        DiskAccess(
             read: { ipod in
-                try auth.authorize(paths: [ipod.rawPath], writable: false, prompt: prompt)
-                return try RawDisk(descriptor: auth.open(path: ipod.rawPath, writable: false), blockSize: ipod.blockSize)
+                RawDisk(descriptor: try auth.read(path: ipod.rawPath, blockSize: ipod.blockSize), blockSize: ipod.blockSize)
             },
             authorizeWrite: { ipod, start in
-                let slice = try Device.firmwareSlice(ipod, start: start).map { "/dev/r\($0)" }
-                // Both paths, so that the fallback in `openForWrite` opens no second prompt.
-                try auth.authorize(paths: (slice.map { [$0] } ?? []) + [ipod.rawPath], writable: true, prompt: prompt)
+                guard let slice = try Device.firmwareSlice(ipod, start: start).map({ "/dev/r\($0)" }) else { return }
+                do { try auth.prepareWrite(path: slice) } catch {
+                    if AuthOpen.isCancel(error) { throw error }
+                    AppLog.step("Cannot open \(slice) (\(error.localizedDescription)). Open \(ipod.rawPath) after the unmount.")
+                }
             },
             write: { ipod, start in
                 let slice = try Device.firmwareSlice(ipod, start: start).map { "/dev/r\($0)" }
-                return try openForWrite(slice: slice, whole: ipod.rawPath, start: start, blockSize: ipod.blockSize) {
-                    try auth.open(path: $0, writable: true)
+                if let slice, let fd = auth.takeWrite(path: slice) {
+                    return RawDisk(descriptor: fd, blockSize: ipod.blockSize, origin: start)
                 }
-            })
-    }
-
-    /// Open the firmware slice. If that fails, open the whole disk. The iPod is unmounted here, and this
-    /// open operates on a real iPod. Offsets stay positions on the whole disk, so a write does not change.
-    static func openForWrite(slice: String?, whole: String, start: Int, blockSize: Int,
-                             open: (String) throws -> Int32) throws -> RawDisk {
-        if let slice {
-            do { return RawDisk(descriptor: try open(slice), blockSize: blockSize, origin: start) } catch {
-                AppLog.step("Cannot open \(slice) (\(error.localizedDescription)). Open \(whole).")
-            }
-        }
-        return RawDisk(descriptor: try open(whole), blockSize: blockSize)
+                return RawDisk(descriptor: try auth.open(path: ipod.rawPath, writable: true), blockSize: ipod.blockSize)
+            },
+            release: { auth.closeKeptWrite() })
     }
 }
 

@@ -319,7 +319,7 @@ struct FlashConfirmSheet: View {
                 Label("iPodFirm does not change the boot-flash updater (aupd).", systemImage: "lock.shield")
             }
             .foregroundStyle(.secondary)
-            Text("Keep the iPod connected until the operation is complete. macOS asks for your administrator password.")
+            Text("Keep the iPod connected until the operation is complete. macOS asks for Touch ID or your administrator password.")
                 .font(.callout)
             HStack {
                 Spacer()

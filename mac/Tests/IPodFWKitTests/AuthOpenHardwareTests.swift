@@ -1,10 +1,10 @@
 import XCTest
 @testable import IPodFWKit
 
-/// A test on a real iPod. It opens the disk and reads, and it has no write call. macOS asks for the
-/// password. Set IPODFW_AUTHOPEN_DISK, for example to disk15.
+/// A test on a real iPod. It opens the disk and reads, and it has no write call. macOS asks for
+/// Touch ID or a password at each open. Set IPODFW_AUTHOPEN_DISK, for example to disk15.
 final class AuthOpenHardwareTests: XCTestCase {
-    func testOpenWithOneAuthorization() throws {
+    func testOpens() throws {
         guard let disk = ProcessInfo.processInfo.environment["IPODFW_AUTHOPEN_DISK"] else { throw XCTSkip("set IPODFW_AUTHOPEN_DISK") }
         setbuf(stdout, nil)
         print("AUTHOPEN start")
@@ -15,8 +15,6 @@ final class AuthOpenHardwareTests: XCTestCase {
             defer { print("AUTHOPEN \(name): \(String(format: "%.1f", Date().timeIntervalSince(start))) s") }
             return try body()
         }
-        try timed("authorize") { try auth.authorize(paths: [whole, slice], writable: false, prompt: "iPodFirm test: read the iPod.") }
-        try timed("authorize write") { try auth.authorize(paths: [whole, slice], writable: true, prompt: "iPodFirm test: open the iPod.") }
         let reader = try RawDisk(descriptor: auth.open(path: whole, writable: false), blockSize: 2048)
         let located = try FirmwareFlasher.locatePartition(reader)
         let ipod = IPodDisk(disk: disk, mediaName: "iPod", blockSize: 2048, size: 0, volumeName: nil)
