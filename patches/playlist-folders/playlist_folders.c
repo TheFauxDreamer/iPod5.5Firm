@@ -156,8 +156,9 @@ static void read_file(void)
     n = FIELD(u16, b, 8);
     if (n > MAX_FOLDERS)
         n = MAX_FOLDERS;
+    /* A file with a custom order can have no folders. */
     folders = n ? fw_alloc(n * sizeof(struct folder)) : 0;
-    if (!folders) {
+    if (n && !folders) {
         fw_free(b);
         return;
     }
@@ -290,7 +291,7 @@ static void place_custom(void **array, unsigned n, void *otg, int *home)
             top_items[top_used++] = (u16)i;
 }
 
-/* Makes the views again if the array changed. Returns 0 if there are no folders. */
+/* Makes the views again if the array changed. Returns 0 if there are no folders and no order. */
 static int ensure(void *browser)
 {
     void *main = browser_main(browser);
@@ -315,7 +316,7 @@ static int ensure(void *browser)
     fw_free(folder_items);
     top_items = folder_items = 0;
     top_used = 0;
-    if (!folder_count || !array || n < 2)
+    if ((!folder_count && !order) || !array || n < 2)
         return 0;
     top_items = fw_alloc((n + folder_count) * sizeof(u16));
     folder_items = fw_alloc(n * sizeof(u16));

@@ -144,10 +144,10 @@ public struct PlaylistFolders: Equatable {
         return decode([UInt8](data)) ?? PlaylistFolders()
     }
 
-    /// Write the file on a mounted iPod. A file with no folders is removed.
+    /// Write the file on a mounted iPod. A file with no folders and no custom order is removed.
     public func write(volume: URL) throws {
         let url = volume.appendingPathComponent(Self.path)
-        if folders.isEmpty {
+        if folders.isEmpty && !customOrder {
             if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
             return
         }
@@ -239,12 +239,15 @@ public struct PlaylistFolders: Equatable {
             }
             out.folders[i].members.append(member)
         }
-        // The custom order starts from the order of the library.
-        let free = Set(onIPod.map(\.persistentID)).subtracting(out.folders.flatMap(\.members))
+        // The order of the records is the order of the library. A later top-level item keeps this order.
+        let free = ids.subtracting(out.folders.flatMap(\.members))
         out.order = library.compactMap { p in
             if let i = index[p.persistentID] { return .folder(out.folders[i].id) }
-            return !p.isFolder && free.contains(p.persistentID) ? .playlist(p.persistentID) : nil
+            guard !p.isFolder, let id = ids.contains(p.persistentID) ? p.persistentID : byName[p.name],
+                  free.contains(id) else { return nil }
+            return .playlist(id)
         }
+        out.customOrder = true
         return (out, missing)
     }
 

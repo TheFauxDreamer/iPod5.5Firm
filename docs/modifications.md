@@ -1035,7 +1035,7 @@ Each active band of each EQ gets the next filter number (`CustomEQ.library`). 5 
 
 ## playlist-folders
 
-**User interface.** Patches pane > Display > Playlist Folders, letter `o`, version 0.7. The section "Playlist Folders" of the patch is the editor (`ui.tools`: `playlist-folders`, `PlaylistFoldersSection` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)). It has these controls:
+**User interface.** Patches pane > Display > Playlist Folders, letter `o`, version 0.8. The section "Playlist Folders" of the patch is the editor (`ui.tools`: `playlist-folders`, `PlaylistFoldersSection` in [PatchTools.swift](../mac/Sources/iPodFirm/PatchTools.swift)). It has these controls:
 
 - "Order": Folders First, Alphabetical or Custom. With Custom, each row has buttons that move it up or down.
 - "Folder Icons": a switch for the folder icon of all folders. The default is on. The switch always shows. It operates only if the connected iPod has folders, because the folder file on the iPod keeps the value.
@@ -1044,9 +1044,9 @@ Each active band of each EQ gets the next filter number (`CustomEQ.library`). 5 
 
 The app does not write the folders if a folder has no name, a name of more than 63 characters, the name of a playlist or the name of a different folder. The research is in [../re/playlist-folders.md](../re/playlist-folders.md).
 
-"Import from iTunes…" reads the file `iTunes Library.itl` (`ITunesLibrary.swift`). It replaces the folders in the editor and does not change the iPod. A playlist in a nested folder goes into its top-level folder. The app finds each playlist by persistent ID, and then by name. The status label shows the count of playlists that are not on the iPod. Refer to [../re/playlist-folders.md](../re/playlist-folders.md#itunes-folders). Tested with one library of iTunes 12.9.5.5. Not tested on the real iPod.
+"Import from iTunes…" reads the file `iTunes Library.itl` (`ITunesLibrary.swift`). It replaces the folders in the editor and does not change the iPod. It selects the order Custom and copies the order of the records in the file, for the top list and in each folder. A playlist that is not in the library goes at the end. The copy of a custom iTunes order is not tested, so the status label tells the user this after each import. A playlist in a nested folder goes into its top-level folder. The app finds each playlist by persistent ID, and then by name. The status label shows the count of playlists that are not on the iPod. Refer to [../re/playlist-folders.md](../re/playlist-folders.md#itunes-folders). Tested with one library of iTunes 12.9.5.5. Not tested on the real iPod.
 
-**The custom order.** Version 0.7 reads the order from the folder file (bit 2 of the flags, and a list after the last folder). The patch makes the rows from this order and does not change the `iTunesDB`. A new playlist that is not in the file goes at the end. On-The-Go stays last. An older patch and `album-art` ignore the list. Version 0.7 is not tested in the emulator or on the real iPod. Refer to [../re/playlist-folders.md](../re/playlist-folders.md#custom-order).
+**The custom order.** Version 0.7 reads the order from the folder file (bit 2 of the flags, and a list after the last folder). The patch makes the rows from this order and does not change the `iTunesDB`. A new playlist that is not in the file goes at the end. On-The-Go stays last. An older patch and `album-art` ignore the list. Since version 0.8, a custom order operates with no folders. Versions 0.7 and 0.8 are not tested in the emulator or on the real iPod. Refer to [../re/playlist-folders.md](../re/playlist-folders.md#custom-order).
 
 **Effect.** The Playlists list shows the folders and the playlists that are not in a folder. Select on a folder shows its playlists on the same screen. Menu goes back to the top list, with the folder selected. A folder cannot contain a folder. There is no slide animation, and the title stays "Playlists". A folder without playlists on the iPod does not show. On-The-Go stays in the top list.
 
@@ -1063,7 +1063,7 @@ A member is the persistent ID of a playlist (`mhyp` +0x1c). The firmware keeps i
 
 **The colour.** The firmware does not use the colour. Version 0.2 of the app does not show the colour picker and does not write colour squares. The colour squares did not show on the real iPod. The code stays in the app as comments, for later work. Refer to [../re/playlist-folders.md](../re/playlist-folders.md#folder-colours). The file keeps the colour field. The app writes the default colour into it.
 
-**Load address.** `extended`. The compiled code and data are 4876 bytes. The patch also uses heap memory: 64 KB for the file buffer, 24 bytes for each folder (version 0.6), and small arrays for the views.
+**Load address.** `extended`. The compiled code and data are 4952 bytes. The patch also uses heap memory: 64 KB for the file buffer, 24 bytes for each folder (version 0.6), and small arrays for the views.
 
 **Hooks.**
 

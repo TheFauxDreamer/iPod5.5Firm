@@ -95,6 +95,19 @@ final class PlaylistFoldersTests: XCTestCase {
         XCTAssertEqual(f.shownMembers(of: f.folders[0], playlists: list), [5, 2])  // the order of the user
     }
 
+    /// A custom order needs the file also if the iPod has no folders.
+    func testCustomOrderWithNoFolders() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var f = PlaylistFolders(customOrder: true)
+        f.order = [.playlist(7), .playlist(3)]
+        try f.write(volume: dir)
+        XCTAssertEqual(PlaylistFolders.read(volume: dir), f)
+        XCTAssertEqual(PlaylistFolders.read(volume: dir).order, [.playlist(7), .playlist(3)])
+        try PlaylistFolders().write(volume: dir)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent(PlaylistFolders.path).path))
+    }
+
     func testPositionKeepsOneChoice() {
         var f = PlaylistFolders(alphabetical: true)
         XCTAssertEqual(f.position, .alphabetical)

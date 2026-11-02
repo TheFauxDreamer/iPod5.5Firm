@@ -1682,12 +1682,11 @@ final class AppModel: ObservableObject {
         do {
             let library = try ITunesLibrary.playlists([UInt8](try Data(contentsOf: url)))
             var (folders, missing) = PlaylistFolders.imported(from: library, ipod: folderPlaylists)
-            folders.position = playlistFolders.position
             folders.folderIcons = playlistFolders.folderIcons
             playlistFolders = folders
             var status = "Imported \(counted(folders.folders.count, "folder"))."
             if !missing.isEmpty { status += " The iPod does not have \(counted(missing.count, "playlist")) of these folders." }
-            playlistFoldersStatus = status
+            playlistFoldersStatus = status + " The copy of a custom iTunes order is not tested. Examine the order."
         } catch { fail("Cannot Import from iTunes", error) }
     }
 

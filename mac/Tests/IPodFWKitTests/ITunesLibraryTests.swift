@@ -123,6 +123,23 @@ final class ITunesLibraryTests: XCTestCase {
         XCTAssertEqual(missing, ["Gone", "Lost"])
     }
 
+    /// The import copies the order of the records: the top list and the playlists in a folder.
+    func testImportKeepsTheLibraryOrder() {
+        let library: [ITunesLibrary.Playlist] = [
+            .init(name: "Zed", persistentID: 1),
+            .init(name: "Folder", persistentID: 2, isFolder: true),
+            .init(name: "Second", persistentID: 3, parentID: 2),
+            .init(name: "First", persistentID: 4, parentID: 2),
+            .init(name: "Other ID", persistentID: 5),
+            .init(name: "Not Here", persistentID: 6),
+        ]
+        let ipod = [entry("Alpha", 9), entry("First", 4), entry("Other ID", 8), entry("Second", 3), entry("Zed", 1)]
+        let f = PlaylistFolders.imported(from: library, ipod: ipod).folders
+        XCTAssertEqual(f.position, .custom)
+        XCTAssertEqual(f.folders[0].members, [3, 4])
+        XCTAssertEqual(f.shownItems(ipod), [.playlist(1), .folder(f.folders[0].id), .playlist(8), .playlist(9)])
+    }
+
     func testImportStopsAtALoop() {
         let library: [ITunesLibrary.Playlist] = [
             .init(name: "A", persistentID: 1, parentID: 2, isFolder: true),

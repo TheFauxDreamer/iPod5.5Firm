@@ -5,8 +5,8 @@
   "symbol": "folder",
   "category": "display",
   "version_letter": "o",
-  "version": "0.7",
-  "size": 4876,
+  "version": "0.8",
+  "size": 4952,
   "description": "Make the folders in the Playlist Folders section below.",
   "details": [
     "Put each playlist into one folder, or into no folder.",

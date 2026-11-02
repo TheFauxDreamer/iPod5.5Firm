@@ -174,7 +174,9 @@ To copy the folders from iTunes:
 5. Click **Write Folders to iPod**.
 6. Eject the iPod.
 
-The import replaces the folders in the app. iTunes 12.9.5.5 is the only tested version.
+The import replaces the folders in the app. It selects the order **Custom** and copies the order of the library file. iTunes 12.9.5.5 is the only tested version.
+
+CAUTION: The copy of a custom iTunes order is not tested. Examine the order in the app before you write it to the iPod.
 
 A folder cannot have the name of a playlist. A folder has no colour square at this time.
 

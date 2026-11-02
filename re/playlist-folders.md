@@ -57,9 +57,9 @@ The first min(limit, body length rounded down to 16) bytes of the body are AES-1
 
 ## Custom order
 
-Status (2 November 2026): version 0.7 of the patch has a custom order. It is not tested in the emulator or on the real iPod.
+Status (2 November 2026): versions 0.7 and 0.8 of the patch have a custom order. Version 0.8 also operates with no folders. It is not tested in the emulator or on the real iPod.
 
-The firmware shows the playlists in the order of the `iTunesDB`. iTunes 12.9.5.5 cannot set a custom order of the playlists (the owner). The sample `iTunes Library.itl` has its playlists in alphabetical order, and the `miph` records have no order field. Thus the app cannot read an order from this version. The user sets the order in the app. A read from a different iTunes version needs a sample of that version.
+The firmware shows the playlists in the order of the `iTunesDB`. iTunes 12.9.5.5 cannot set a custom order of the playlists (the owner). The sample `iTunes Library.itl` has its playlists in alphabetical order, and the `miph` records have no order field. Thus the app cannot read an order from this version. The user sets the order in the app. The import copies the order of the `miph` records. This assumes that an iTunes version with a custom order writes the records in that order. This is not measured. A sample of that version must confirm it.
 
 The file keeps version 1. Bit 2 of the flags is set. After the last folder there is: u16 item count, u16 0, then each item as a u64 persistent ID. A folder item has the high word 0xffffffff and the folder index in the low word. An older patch and `album-art` stop after the last folder, so they ignore this list.
 
