@@ -3278,3 +3278,14 @@ final class AppLogTests: XCTestCase {
         XCTAssertEqual(AppLog.faultExcerpt(details: String(repeating: "x", count: 500), steps: []).count, 160)
     }
 }
+
+final class BatteryLogTests: XCTestCase {
+    /// Zeros in the text do not stop the read, and zeros after the text do not show.
+    func testZerosDoNotStopTheLog() {
+        var data = Data("BL01 0000000092 5 min\n".utf8)
+        data.append(Data(repeating: 0, count: 18))
+        data.append(Data("1439 476 20 1\n".utf8))
+        data.append(Data(repeating: 0, count: 100))
+        XCTAssertEqual(BatteryLog.text(data), "BL01 0000000092 5 min\n1439 476 20 1\n")
+    }
+}

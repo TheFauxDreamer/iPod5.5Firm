@@ -367,3 +367,14 @@ Next test: find the full value and the charger column.
 2. Clear the log.
 3. Start the iPod, with the charger connected for 15 minutes.
 4. Disconnect the charger and play music for 1 hour.
+
+### Third log: with a wall charger (2 November 2026)
+
+The iPod played music on a wall charger. The file has 3 samples: 1439 s raw 476, 1739 s raw 477 and 2039 s raw 478. The icon value is 20 and the fourth column is 1 in each sample.
+
+- The fourth column is also 1 on a battery, so it does not show the charger. The meaning of 0x9c258 stays not known.
+- The raw value on the charger is up to 40 units above the highest value on the battery (438). The full value with no charger is not known yet.
+
+The app showed only the header. The 18 bytes after the header are 0, and the app stops at the first 0 byte. The probable cause: the iPod wrote the first sample, and then the Mac cleared the file with no restart of the iPod. The patch keeps the end of the text in RAM. It then writes at the old position, and the old position is 18 bytes after the header. The missing line "start" agrees with this.
+
+Fix (patch 0.3): each sample reads the header. If the header is missing, the text starts again after the header position, with the line "start". The app also ignores zero bytes in the file.

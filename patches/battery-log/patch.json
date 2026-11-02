@@ -25,8 +25,8 @@
     "tools": ["battery-log"]
   },
   "version_letter": "r",
-  "version": "0.2",
-  "size": 1224,
+  "version": "0.3",
+  "size": 1197,
   "description": "A test. It records the raw battery value at regular times, so that you can see the discharge curve of the battery. The iPod does not need a button press.",
   "details": [
     "Each line has the seconds since the start, the raw battery value, the icon value (0 to 20) and the charger state.",

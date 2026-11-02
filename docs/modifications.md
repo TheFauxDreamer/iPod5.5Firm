@@ -1127,11 +1127,11 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 
 **User interface.** Patches pane > Battery Log, letter `r`. It is a test patch: turn on **Enable Test Patches** to see it. "Clear the Battery Log" writes an empty 262144-byte `iPod_Control/iTunes/iPodFirmBatteryLog`. The option "Time Between Samples" gives 1, 5 or 30 minutes. The tool `battery-log` gives the section "Battery Log". The iPod pane lists the log if the file has data.
 
-**Effect.** The iPod records the raw battery value to the file at each sample. It needs no button press. The first sample comes 60 s after the start. Each line has the seconds, the raw value, the icon value and the charger state. The iPod cannot write the log while it is connected to the Mac, because the Mac has the disk. Disconnect the iPod and play music.
+**Effect.** The iPod records the raw battery value to the file at each sample. It needs no button press. The first sample comes 60 s after the start. Each sample reads the header of the file, so **Clear the Battery Log** also operates with no restart of the iPod. Each line has the seconds, the raw value, the icon value and the charger state. The iPod cannot write the log while it is connected to the Mac, because the Mac has the disk. Disconnect the iPod and play music.
 
 **Method.** A `bl` hook at 0x1d91f8 in the firmware timer handler 0x1d91dc wraps 0x1e7fe4. The handler is the periodic battery read of the UI. The patch reads the raw value with 0x9b284. It writes each line, then the header with the end of the text. Since version 0.2, a sample that cannot read or write the file tries again at the next sample. Only a full file stops the log.
 
-**Test status.** Swift tests (31 October 2026). Not tested in the emulator. Real iPod 5.5G (owner, 31 October 2026, version 0.1): 34 samples in 2.77 hours of music, with no gap. Second test (1 November 2026): 220 samples in 18.3 hours, until the iPod stopped. The fourth column was always 1 with no charger, so its meaning is not proven. Version 0.2 (2 November 2026): Swift tests only. Not tested on a real iPod.
+**Test status.** Swift tests (2 November 2026, version 0.3). Version 0.3 is not tested on a real iPod. Not tested in the emulator. Real iPod 5.5G (owner, 31 October 2026, version 0.1): 34 samples in 2.77 hours of music, with no gap. Second test (1 November 2026): 220 samples in 18.3 hours, until the iPod stopped. The fourth column was always 1 with no charger, so its meaning is not proven. Version 0.2 (2 November 2026): Swift tests only. Not tested on a real iPod.
 
 **Research.** Refer to [re/battery.md](../re/battery.md).
 

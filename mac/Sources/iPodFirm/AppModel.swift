@@ -1511,7 +1511,7 @@ final class AppModel: ObservableObject {
 
     static let batteryLogFile = "iPod_Control/iTunes/iPodFirmBatteryLog"
 
-    /// Read the text of the battery log. The file has zeros after the end of the text.
+    /// Read the text of the battery log.
     func readBatteryLog() {
         guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
@@ -1521,7 +1521,7 @@ final class AppModel: ObservableObject {
             alert = AlertInfo(title: "No Battery Log", message: "The iPod has no battery log. Click Clear the Battery Log. Then do the test.")
             return
         }
-        batteryLog = String(decoding: data.prefix { $0 != 0 }, as: UTF8.self)
+        batteryLog = BatteryLog.text(data)
     }
 
     static func logFile(_ kind: IPodLogFile.Kind) -> String {
