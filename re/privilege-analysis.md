@@ -45,11 +45,11 @@ The right `sys.openfile.` has `authenticate-user: true`, `group: admin`, `timeou
 
 These tests did not do a write. The disk image test does a real flash with no root code.
 
-A later test with the ad-hoc build 0.1.240 (241) did a real flash on the same iPod. The log shows `Wrote and verified 112640 bytes in 33 range(s)`, with no fault. The app had an ad-hoc signature. The log does not record if Full Disk Access was on for that app.
+A later test with the ad-hoc build 0.1.240 (241) did a real flash on the same iPod. The log shows `Wrote and verified 112640 bytes in 33 range(s)`, with no fault. The app had an ad-hoc signature. The owner confirmed that Full Disk Access was off for that app.
 
 ## What is not known
 
-1. Was Full Disk Access off in the real flash? If the owner confirms this, the app can remove the Full Disk Access screens.
+1. Does the result stay the same on other versions of macOS? The test used macOS 27.2. The reports are from macOS 15.7.7.
 2. Can a read-write open of the whole disk operate after the unmount? A firmware partition with MBR type 0 needs this, if macOS gives it no slice. The app has no Windows-format test yet.
 3. Does the prompt offer Touch ID?
 4. Does a standard user operate the app with the name of an administrator?

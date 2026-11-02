@@ -88,7 +88,7 @@ public final class AuthOpen: @unchecked Sendable {
         // authopen sends two bytes on a fault. The last byte is the errno value.
         if received.lastByte == UInt8(EBUSY) { throw FirmwareError("\(path) is in use. Eject the iPod volume, then try again.") }
         if received.lastByte == UInt8(EPERM) {
-            throw FirmwareError("macOS blocked access to \(path). Turn on Full Disk Access for iPodFirm.", code: OperationResult.fullDiskAccess)
+            throw FirmwareError("macOS blocked access to \(path). Turn on Full Disk Access for iPodFirm, then try again.")
         }
         var fault = FirmwareError("Cannot open \(path) through authopen.")
         fault.cause = "authopen status \(process.terminationStatus), \(received.note), stderr: \(text)"

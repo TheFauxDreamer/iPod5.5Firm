@@ -165,8 +165,7 @@ if [ "$RELEASE" = both ]; then
     ditto "$APP" "$RELEASE_APP"
 fi
 
-# Sign with a stable identity so macOS keeps Full Disk Access across rebuilds
-# (an ad-hoc signature changes every build and silently loses the permission).
+# Sign with a stable identity if the Mac has one. The app works with an ad-hoc signature too.
 if [ "$RELEASE" = 1 ]; then
     # The certificate name of a developer identity contains the e-mail address or the name of the owner.
     IDENTITY="-"
@@ -174,7 +173,7 @@ else
     IDENTITY="${CODESIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development|Developer ID Application/ {print $2; exit}')}"
 fi
 if [ -z "$IDENTITY" ]; then
-    echo "warning: no signing identity found; ad-hoc signing (Full Disk Access must be re-granted after each build)"
+    echo "warning: no signing identity found; ad-hoc signing"
     IDENTITY="-"
 fi
 sign_app "$APP" "$IDENTITY"

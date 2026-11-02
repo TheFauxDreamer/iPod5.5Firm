@@ -272,8 +272,7 @@ public final class RawDisk: BlockReader {
         fd = open(path, writable ? O_RDWR : O_RDONLY)
         guard fd >= 0 else {
             if errno == EPERM {
-                throw FirmwareError("macOS blocked access to \(path). iPodFirm needs Full Disk Access to read and write the iPod's firmware partition.",
-                                    code: OperationResult.fullDiskAccess)
+                throw FirmwareError("macOS blocked access to \(path). Turn on Full Disk Access for iPodFirm, then try again.")
             }
             throw FirmwareError("Cannot open \(path): \(String(cString: strerror(errno)))")
         }
@@ -307,7 +306,7 @@ public final class RawDisk: BlockReader {
         guard offset >= origin else { throw FirmwareError("A write before the firmware partition; refusing.") }
         let written = data.withUnsafeBytes { pwrite(fd, $0.baseAddress!, data.count, off_t(offset - origin)) }
         if written < 0, errno == EPERM {
-            throw FirmwareError("macOS blocked the write to the iPod. Turn on Full Disk Access for iPodFirm.", code: OperationResult.fullDiskAccess)
+            throw FirmwareError("macOS blocked the write to the iPod. Turn on Full Disk Access for iPodFirm, then try again.")
         }
         guard written == data.count else { throw FirmwareError("Short write at \(offset): \(String(cString: strerror(errno)))") }
     }

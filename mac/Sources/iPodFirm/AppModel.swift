@@ -55,7 +55,6 @@ final class AppModel: ObservableObject {
     @Published var ipodLibraryName: String?
     @Published var backups: [BackupInfo] = []
     @Published var flashPlan: FlashPlan?
-    @Published var hasFullDiskAccess = AppModel.checkFullDiskAccess()
     /// Not nil during a write to the iPod.
     private var writeActivity: NSObjectProtocol?
     @Published var patches: [PatchInfo] = PatchSpec.visible(AppModel.patchLibrary.list(),
@@ -210,7 +209,6 @@ final class AppModel: ObservableObject {
     @AppStorage(UpdateNotifier.skippedKey) var skippedUpdateVersion = ""
     /// A newer release, if macOS does not allow the notification. The app shows an alert instead.
     @Published var availableUpdate: UpdateCheck.Release?
-    @Published var showFullDiskAccessHelp = false
     @Published var showFinderRestoreHelp = false
 
     /// The appearance of the iPod software.
@@ -307,11 +305,6 @@ final class AppModel: ObservableObject {
         guard !Self.isCancellation(error) else { return }
         let details = faultDetails(error)
         AppLog.error("\(title)\n" + details)
-        if (error as? FirmwareError)?.code == OperationResult.fullDiskAccess {
-            hasFullDiskAccess = false
-            showFullDiskAccessHelp = true
-            return
-        }
         var title = title
         if (error as? FirmwareError)?.code == OperationResult.unsupportedIPod, let ipod = currentIPod {
             unsupportedIPods.insert(ipod)
@@ -366,7 +359,7 @@ final class AppModel: ObservableObject {
         }
         lines.append("Patches on in the app: \(on.isEmpty ? "none" : on.joined(separator: ", "))")
         lines.append("Appearance: \(appearance.rawValue), layout: \(layout.rawValue), theme: \(selectedThemeName ?? "-"), margin: \(ThemeImport.OSOSMargin.current.rawValue), test patches: \(showTestPatches)")
-        lines.append("Full Disk Access: \(hasFullDiskAccess)")
+        lines.append("Full Disk Access: \(Self.checkFullDiskAccess())")
         lines.append("App: \(Bundle.main.bundlePath), signature: \(ownSignatureDescription())")
         lines.append("App folder:")
         lines += appFolderReport(Self.supportDir).map { "  " + $0 }
@@ -410,16 +403,12 @@ final class AppModel: ObservableObject {
                                                 details: issueSummary(fault), fileName: file?.lastPathComponent))
     }
 
-    /// Reading the system TCC database is only possible with Full Disk Access.
+    /// For a fault report. The app does not need Full Disk Access. Only this permission can read the system TCC database.
     nonisolated static func checkFullDiskAccess() -> Bool {
         let probe = "/Library/Application Support/com.apple.TCC/TCC.db"
         guard let h = FileHandle(forReadingAtPath: probe) else { return false }
         try? h.close()
         return true
-    }
-
-    func recheckFullDiskAccess() {
-        hasFullDiskAccess = Self.checkFullDiskAccess()
     }
 
     /// Run an operation away from the main thread. A fault gives a result with `ok == false`.
@@ -480,12 +469,6 @@ final class AppModel: ObservableObject {
     private func endWrite() {
         if let writeActivity { ProcessInfo.processInfo.endActivity(writeActivity) }
         writeActivity = nil
-    }
-
-    func openFullDiskAccessSettings() {
-        let urls = ["x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles",
-                    "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"]
-        for u in urls where NSWorkspace.shared.open(URL(string: u)!) { return }
     }
 
     func work<T>(_ label: String, _ body: @escaping () throws -> T) async throws -> T {

@@ -37,12 +37,7 @@ The author tested iPodFirm on an iPod 5.5th generation (64 MB of RAM) with 1 TB 
 
 If macOS does not show **Open**, open System Settings > Privacy & Security. Then click **Open Anyway**.
 
-The app must read and write the disk of the iPod directly. Thus it needs Full Disk Access:
-
-1. Open System Settings > Privacy & Security > Full Disk Access.
-2. Turn on iPodFirm.
-
-Turn on Full Disk Access again after each update of the app. The app asks for an administrator password before it reads or writes the firmware partition. The password is good for 5 minutes. No part of the app runs as root.
+The app asks for an administrator password before it reads or writes the firmware partition. The password is good for 5 minutes. No part of the app runs as root, and the app does not need Full Disk Access.
 
 ### Updates
 
@@ -394,7 +389,7 @@ The script increases the version number and the build number. Then it builds the
 
 The release build has an ad-hoc signature. The script does not install the release build.
 
-To make the release ZIP and install the app with the same version, use `RELEASE=both` in place of `RELEASE=1`. The installed app keeps the signature of a normal build. Thus Full Disk Access continues to operate.
+To make the release ZIP and install the app with the same version, use `RELEASE=both` in place of `RELEASE=1`. The installed app keeps the signature of a normal build.
 
 On the `main` branch, `RELEASE=both` is the default. On other branches, the default is a normal build. To change the default, set `RELEASE=0` or `RELEASE=1`.
 

@@ -32,7 +32,7 @@ The sidebar has two sections. The section "Device" has only the iPod row. The ro
 
 [AppModel.swift](../mac/Sources/iPodFirm/AppModel.swift) holds the state and the actions of all panes.
 
-The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has four tabs. Permissions: Full Disk Access. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`). The default is 32 KB (the limit 0x7F8000). The value 16 KB (the limit 0x7FC000) gives more space for patches. The value 64 KB (the limit 0x7F0000) is the value before 9 October 2026. The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default) and "Show Descriptions in the Patch List" (`showPatchSummaries`, On by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`). A build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`). Updates: "Check for a new version at launch" (`checkForUpdates`, On by default). Refer to [The update check](#the-update-check).
+The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has three tabs. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`). The default is 32 KB (the limit 0x7F8000). The value 16 KB (the limit 0x7FC000) gives more space for patches. The value 64 KB (the limit 0x7F0000) is the value before 9 October 2026. The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default) and "Show Descriptions in the Patch List" (`showPatchSummaries`, On by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`). A build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`). Updates: "Check for a new version at launch" (`checkForUpdates`, On by default). Refer to [The update check](#the-update-check).
 
 The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
@@ -108,7 +108,7 @@ The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the cent
 
 The variable `APP_NAME` changes the name of the app (the default is `iPodFirm`). Use it to install a test build next to the normal app, for example `APP_NAME="iPodFirm USB-C Test" mac/scripts/build-app.sh`. The two apps have the same bundle identifier and the same helper. Do not open the two apps at the same time.
 
-A stable signature is necessary. macOS connects Full Disk Access to the signature. An ad-hoc signature changes with each build, and the permission is lost.
+The app does not need a stable signature, because it does not need Full Disk Access.
 
 ### The release build
 
@@ -136,7 +136,6 @@ A developer certificate contains the e-mail address or the name of the owner. An
 An ad-hoc build has these limits:
 
 - The script does not notarize the app. Gatekeeper blocks the app at the first start. The user must open it with Control-click and **Open**.
-- macOS loses Full Disk Access after each update, because the signature changes. The user must turn on the permission again.
 
 ## The detection of the iPod
 
@@ -179,9 +178,7 @@ The operations run in the app, so the app must not stop during a write. Refer to
 
 ### Full Disk Access
 
-The app tests the permission: it tries to open `/Library/Application Support/com.apple.TCC/TCC.db` for read. An open or a write that gives `EPERM` returns the code `full-disk-access`, and the app shows the help sheet.
-
-An open through `authopen` operates without Full Disk Access. A real write without Full Disk Access has no test result yet, so the app still shows the permission.
+The app does not need Full Disk Access. A real flash through `authopen` passed with the permission off (refer to [re/privilege-analysis.md](../re/privilege-analysis.md)). The fault report still records the permission (`AppModel.checkFullDiskAccess`), for a Mac where the result is different. If macOS gives `EPERM`, the error tells the user to turn on the permission.
 
 ## The flash sequence
 

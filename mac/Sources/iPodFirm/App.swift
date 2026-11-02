@@ -99,26 +99,15 @@ struct IPodFirmApp: App {
     }
 }
 
-/// The settings window (⌘,): the permissions that the app needs to write to the iPod, and the
-/// firmware layout (the empty margin below 8 MB).
+/// The settings window (⌘,): the firmware layout (the empty margin below 8 MB).
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
-    @State private var showHelp = false
     @AppStorage(ThemeImport.ososMarginKey) private var ososMargin = ThemeImport.OSOSMargin.current.rawValue
     @AppStorage("showPatchSummaries") private var showPatchSummaries = true
     @AppStorage(EQColours.settingKey) private var colourfulEQCurve = true
 
     var body: some View {
         TabView {
-            Form {
-                Section {
-                    FullDiskAccessRow { showHelp = true }
-                } header: {
-                    Text("Full Disk Access")
-                }
-            }
-            .formStyle(.grouped)
-            .tabItem { Label("Permissions", systemImage: "lock.shield") }
             Form {
                 Section {
                     Picker("Empty margin below 8 MB", selection: $ososMargin) {
@@ -159,8 +148,6 @@ struct SettingsView: View {
             .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
         }
         .frame(width: 560, height: 380)
-        .onAppear { model.recheckFullDiskAccess() }
-        .sheet(isPresented: $showHelp) { FullDiskAccessSheet().environmentObject(model) }
     }
 }
 
@@ -321,7 +308,6 @@ struct ContentView: View {
         .sheet(item: $model.pendingInstall) { c in InstallPatchSheet(candidate: c) }
         .sheet(item: $model.pendingEQ) { eq in EQImportSheet(eq: eq) }
         .sheet(item: $model.patchEditor) { s in PatchEditorSheet(state: s) }
-        .sheet(isPresented: $model.showFullDiskAccessHelp) { FullDiskAccessSheet() }
         .sheet(isPresented: $model.showFinderRestoreHelp) { FinderRestoreSheet() }
         .sheet(isPresented: $model.showDisclaimer) { DisclaimerSheet(review: false).interactiveDismissDisabled() }
         .sheet(isPresented: $model.showDisclaimerReview) { DisclaimerSheet(review: true) }

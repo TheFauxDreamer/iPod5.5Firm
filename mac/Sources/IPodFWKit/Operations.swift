@@ -118,7 +118,6 @@ public enum Backups {
 
 /// The result of an operation on the iPod.
 public struct OperationResult {
-    public static let fullDiskAccess = "full-disk-access"
     /// The firmware partition on the iPod does not parse (e.g. after an interrupted write): use rescueRestore.
     public static let firmwareUnreadable = "firmware-unreadable"
     /// The iPod is not an iPod Video (5G/5.5G), for example an iPod classic.

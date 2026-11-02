@@ -12,7 +12,7 @@ struct IPodView: View {
             macColumn
                 .frame(minWidth: 340, idealWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .onAppear { model.refreshBackups(); model.recheckFullDiskAccess(); model.refreshIPodLogs() }
+        .onAppear { model.refreshBackups(); model.refreshIPodLogs() }
         .onChange(of: model.selectedIPod) { Task { await model.refreshIPods() } }
     }
 
@@ -26,7 +26,6 @@ struct IPodView: View {
                 }
             }
             Section {
-                PermissionSummaryRow()
                 if model.ipods.isEmpty {
                     Label("No iPod is connected. Connect the iPod. If the Mac does not find it, put it in disk mode: hold Menu and Select to reset it, then hold Select and Play.",
                           systemImage: "cable.connector.slash").foregroundStyle(.secondary)
@@ -359,75 +358,6 @@ struct FinderRestoreSheet: View {
             HStack {
                 Spacer()
                 Button("Close") { dismiss() }.keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(22)
-        .frame(width: 500)
-    }
-}
-
-struct FullDiskAccessRow: View {
-    @EnvironmentObject var model: AppModel
-    var showHelp: () -> Void
-    var body: some View {
-        HStack {
-            if model.hasFullDiskAccess {
-                Label("Full Disk Access is on. iPodFirm can read and write the firmware partition of the iPod.", systemImage: "checkmark.shield.fill")
-                    .labelStyle(StatusLabelStyle(tint: .green))
-            } else {
-                Label("Full Disk Access is necessary for backups and flashes.", systemImage: "exclamationmark.shield.fill")
-                    .labelStyle(StatusLabelStyle(tint: .orange))
-                Spacer()
-                Button("How to Allow…") { showHelp() }
-            }
-        }
-    }
-}
-
-/// The permission status in the iPod pane. The Settings window has the controls.
-struct PermissionSummaryRow: View {
-    @EnvironmentObject var model: AppModel
-    var body: some View {
-        HStack {
-            if model.hasFullDiskAccess {
-                Label("Full Disk Access is on.",
-                      systemImage: "checkmark.shield.fill")
-                    .labelStyle(StatusLabelStyle(tint: .green))
-            } else {
-                Label("Full Disk Access is necessary for backups and flashes.", systemImage: "exclamationmark.shield.fill")
-                    .labelStyle(StatusLabelStyle(tint: .orange))
-            }
-            Spacer()
-            if !model.hasFullDiskAccess {
-                Button("How to Allow…") { model.showFullDiskAccessHelp = true }
-            }
-            SettingsLink { Text("Settings…") }
-        }
-    }
-}
-
-struct FullDiskAccessSheet: View {
-    @EnvironmentObject var model: AppModel
-    @Environment(\.dismiss) var dismiss
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label("Allow Full Disk Access", systemImage: "lock.shield").font(.title3.bold())
-            Text("macOS does not let an app read a removable disk directly without Full Disk Access. Your administrator password does not change this. iPodFirm needs Full Disk Access to back up and flash the hidden firmware partition of the iPod. It reads and writes only that partition.")
-                .fixedSize(horizontal: false, vertical: true)
-            VStack(alignment: .leading, spacing: 6) {
-                Step(n: 1, text: "Click Open Privacy Settings.")
-                Step(n: 2, text: "Turn on iPodFirm in the list. If the list does not show iPodFirm, click + and select Applications → iPodFirm.")
-                Step(n: 3, text: "When macOS asks, quit iPodFirm and open it again. Then do the operation again.")
-            }
-            HStack {
-                Button("Check Again") {
-                    model.recheckFullDiskAccess()
-                    if model.hasFullDiskAccess { dismiss() }
-                }
-                Spacer()
-                Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Open Privacy Settings") { model.openFullDiskAccessSettings() }
-                    .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
             }
         }
         .padding(22)
