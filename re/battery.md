@@ -352,6 +352,15 @@ The owner flashed the patch (version 0.1) and left the iPod connected to the Mac
 3. Version 0.2 tries again at the next sample. Only a full file stops the log. If the read of the file fails, the patch does not write, so the old text stays safe.
 4. It is not known if the timer 0x1d91dc runs during a USB session. No sample is possible there, so the charger column needs a wall charger.
 
+### Third log: an idle iPod (2 November 2026)
+
+The owner disconnected the iPod and did not play music. Later, the owner connected a power bank for 15 minutes. The log has 1 sample: `60 451 20 1`.
+
+1. The patch wrote the header and the first sample correctly. The sample before the power bank has charger value 1, so it does not give the charger column.
+2. The raw value 451 is the highest value in the 3 logs. The earlier highest value was 438.
+3. No sample came at 360 s. The probable cause is the sleep of the idle iPod, because the timer 0x1d91dc is a UI timer. This is not proven.
+4. 0x1ee8d0 does not sleep if it finds external power. An iPod that is already asleep possibly stays asleep on a power bank. Do the test with music, so that the iPod stays awake.
+
 Next test: find the full value and the charger column.
 
 1. Charge the iPod to full with a charger, not with the Mac.

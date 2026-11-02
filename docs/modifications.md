@@ -1278,7 +1278,7 @@ The XOR data switches the bytes in both directions. A change that the owner edit
 **Size.** Patches pane > iPod Appearance > Dark Theme shows the new space for each appearance:
 
 - "Size on iPod (Dark)": the theme data after 0x736800 (`ImportedTheme.addedSize`).
-- "Size on iPod (Switch on iPod)": items 1 to 4 above, with the alignment (`DarkMode.addedSize`). It needs the open firmware 1.3.
+- "Size on iPod (Switch on iPod)": items 1 to 4 above, with the alignment (`DarkMode.addedSize`). It needs the open firmware 1.3. The app calculates this value away from the main thread (`refreshSwitchOnIPodSize`), because it takes 1.5 s to 2.6 s. The row shows the last known value until the new value is ready. It shows "Measuring…" only if the app has no value. The app stores the result for each firmware, theme file and layout in its preferences. A different app version calculates again.
 
 The tooltip of the row "Size on iPod (Dark)" gives the bytes inside osos that the theme changes (`ImportedTheme.changedSize`). These changes use no new space. The measured values for the theme "Dark Gray" are 38,428 bytes (Dark), 738,593 bytes (Switch on iPod) and 660,678 changed bytes. The limit of the area is 792,576 bytes (0x736800–0x7F8000; 759,808 bytes before 9 October 2026). The test `testExtendedPatchAfterSwitchBuild` makes sure that `DarkMode.addedSize` agrees with `DarkMode.build`.
 

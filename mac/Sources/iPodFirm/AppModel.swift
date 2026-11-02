@@ -689,19 +689,52 @@ final class AppModel: ObservableObject {
 
     func isCompatible(_ t: ImportedTheme) -> Bool { editor?.originalOSOSHash == t.osos_sha256 }
 
-    private var switchSizeCache: (key: String, size: Int?)?
-
     /// The bytes that "Switch on iPod" adds to the firmware: the theme data, the switch table, the
-    /// Settings menu and the dark-mode code. Nil if no theme agrees with the open firmware.
-    var switchOnIPodSize: Int? {
-        guard let editor, let file = selectedTheme, isCompatible(file.theme), let patch = Self.darkModePatch else { return nil }
-        let key = "\(revision) \(themeRevision) \(file.name) \(layout.rawValue)"
-        if let c = switchSizeCache, c.key == key { return c.size }
-        let size = try? DarkMode.addedSize(partition: editor.partition, osos: editor.osos, theme: file.theme,
-                                           codeSize: patch.spec.size ?? 0,
-                                           layout: layout == .split ? Self.splitTheme : nil)
-        switchSizeCache = (key, size)
-        return size
+    /// Settings menu and the dark-mode code. This is the last known value until
+    /// `refreshSwitchOnIPodSize` ends. Show it only if `switchSizeKey` is not nil.
+    @Published var switchOnIPodSize = UserDefaults.standard.object(forKey: "switchSizeLast") as? Int
+    /// True while `refreshSwitchOnIPodSize` calculates.
+    @Published var measuringSwitchSize = false
+    private var switchSizeDone: String?
+
+    /// The input of `switchOnIPodSize`. Nil if no theme agrees with the open firmware.
+    var switchSizeKey: String? {
+        guard editor != nil, let file = selectedTheme, isCompatible(file.theme), Self.darkModePatch != nil else { return nil }
+        return "\(revision) \(themeRevision) \(file.name) \(layout.rawValue)"
+    }
+
+    /// Calculate `switchOnIPodSize` away from the main thread. The calculation takes seconds, so the
+    /// view must not do it. The old value stays visible until the new value is ready. The result stays
+    /// on the Mac for each firmware, theme file and layout, and a new version of the app calculates again.
+    func refreshSwitchOnIPodSize() async {
+        measuringSwitchSize = false
+        guard let key = switchSizeKey, let editor, let file = selectedTheme, let patch = Self.darkModePatch else {
+            switchSizeDone = nil
+            return
+        }
+        guard key != switchSizeDone else { return }
+        measuringSwitchSize = true
+        let partition = editor.partition, osos = editor.osos, split = layout == .split ? Self.splitTheme : nil
+        let version = version, layoutName = layout.rawValue
+        let size = await Task.detached(priority: .utility) { () -> Int? in
+            let defaults = UserDefaults.standard
+            let themeBytes = (try? Data(contentsOf: file.url)) ?? Data()
+            let input = "\(ThemeImport.sha256(osos + themeBytes)) \(layoutName)"
+            var sizes = defaults.string(forKey: "switchSizesVersion") == version
+                ? defaults.dictionary(forKey: "switchSizes") as? [String: Int] ?? [:] : [:]
+            if let size = sizes[input] { return size }
+            guard let size = try? DarkMode.addedSize(partition: partition, osos: osos, theme: file.theme,
+                                                     codeSize: patch.spec.size ?? 0, layout: split) else { return nil }
+            sizes[input] = size
+            defaults.set(sizes, forKey: "switchSizes")
+            defaults.set(version, forKey: "switchSizesVersion")
+            return size
+        }.value
+        guard !Task.isCancelled else { return }
+        switchSizeDone = key
+        switchOnIPodSize = size
+        UserDefaults.standard.set(size, forKey: "switchSizeLast")
+        measuringSwitchSize = false
     }
 
     // MARK: dark theme pictures

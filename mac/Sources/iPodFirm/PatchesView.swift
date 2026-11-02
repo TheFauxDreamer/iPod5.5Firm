@@ -752,6 +752,14 @@ struct AppearanceDetail: View {
     @EnvironmentObject var model: AppModel
     @State private var confirmDelete: AppModel.ThemeFile?
 
+    var switchSizeText: String {
+        if model.switchSizeKey != nil {
+            if let size = model.switchOnIPodSize { return PatchSpec.byteText(size) }
+            if model.measuringSwitchSize { return "Measuring…" }
+        }
+        return "Open the firmware 1.3 to calculate"
+    }
+
     var body: some View {
         Form {
             Section {
@@ -809,7 +817,7 @@ struct AppearanceDetail: View {
                     LabeledContent("Size on iPod (Dark)", value: PatchSpec.byteText(current.theme.addedSize))
                         .help("The theme also changes \(PatchSpec.byteText(current.theme.changedSize)) of the Apple pictures and layouts. These changes use no new space.")
                     LabeledContent("Size on iPod (Switch on iPod)",
-                                   value: model.switchOnIPodSize.map(PatchSpec.byteText) ?? "Open the firmware 1.3 to calculate")
+                                   value: switchSizeText)
                     HStack {
                         Button("Show Import Report") { model.themeReport = current.theme }
                         Spacer()
@@ -825,6 +833,7 @@ struct AppearanceDetail: View {
             }
         }
         .formStyle(.grouped)
+        .task(id: model.switchSizeKey) { await model.refreshSwitchOnIPodSize() }
         .confirmationDialog("Delete the theme \"\(confirmDelete?.name ?? "")\"?", isPresented: Binding(
             get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), presenting: confirmDelete) { t in
             Button("Delete Theme", role: .destructive) { model.deleteTheme(t) }
