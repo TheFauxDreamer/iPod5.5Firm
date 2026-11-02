@@ -27,6 +27,7 @@ iPodFirm obeys these limits. The code enforces each limit. The "Where" column gi
 | Read the iPod without a write. | The owner reads the patches on the iPod with Read iPod. | `Operations.readOSOS` opens the disk read-only and gives the osos to the app in memory. |
 | Run no code of iPodFirm as root. | A write of root in the folder of the user made folders that the app could not use (issues #2 and #3). | `authopen` opens the raw disk, and the app does all the work with the rights of the user. `Device.firmwareSlice` stops a write to a slice at the wrong position. |
 | Do not quit during a write. | The app does the write. If it stops, the iPod can get a partial firmware. | `AppModel.confirmQuit` refuses a quit, and `beginActivity` stops a sudden termination and idle sleep. A crash or a power failure can still stop a write. Use the rescue restore. |
+| Mount the iPod again if the write does not start. | An open that fails after the unmount changes no byte, but the iPod disappears from Finder. | `Operations.openForWrite` runs `diskutil mountDisk`, then it shows the fault of the open. |
 | Never change the opened file or a backup. | A backup must stay correct. | "Save Firmware As…" refuses the Backups folder. Backups get a new name each time. |
 | Never apply program code changes from a theme. | The import cannot verify them. | `ThemeImport.make` records them as "skipped". |
 

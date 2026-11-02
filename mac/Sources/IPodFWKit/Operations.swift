@@ -162,6 +162,16 @@ public enum Operations {
         }
     }
 
+    /// Open the disk after the unmount. No byte changed yet. If the open fails, the iPod mounts again and the
+    /// user sees the fault of the open.
+    static func openForWrite(_ ipod: IPodDisk, _ start: Int, _ access: DiskAccess) throws -> RawDisk {
+        do { return try access.write(ipod, start) } catch {
+            AppLog.step("Mount \(ipod.disk) again after: \(error.localizedDescription)")
+            try? Device.mount(ipod)
+            throw error
+        }
+    }
+
     static func readCurrent(_ ipod: IPodDisk, _ access: DiskAccess) throws -> (bytes: [UInt8], start: Int) {
         AppLog.step("Read the firmware partition of \(ipod.disk) (\(ipod.mediaName), \(ipod.size) bytes, block size \(ipod.blockSize))")
         let disk = try access.read(ipod)
@@ -237,7 +247,7 @@ public enum Operations {
 
         AppLog.step("Unmount \(ipod.disk), then write \(ranges.count) range(s)")
         try Device.unmount(ipod)
-        let disk = try access.write(ipod, partStart)
+        let disk = try openForWrite(ipod, partStart, access)
         for r in ranges {
             try disk.writeAligned(partStart + r.offset, newBytes[r.offset..<r.offset + r.length])
         }
@@ -310,7 +320,7 @@ public enum Operations {
 
         AppLog.step("Unmount \(ipod.disk), then write \(ranges.count) range(s)")
         try Device.unmount(ipod)
-        let disk = try access.write(ipod, partStart)
+        let disk = try openForWrite(ipod, partStart, access)
         for r in ranges {
             try disk.writeAligned(partStart + r.offset, newBytes[r.offset..<r.offset + r.length])
         }

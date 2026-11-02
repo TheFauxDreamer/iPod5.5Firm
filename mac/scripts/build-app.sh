@@ -45,6 +45,9 @@ cp "$BIN/iPodFirm" "$APP/Contents/MacOS/"
 # "strip -S" removes the debug map of the linker. The app does not use it. The function
 # names stay for crash reports.
 strip -S "$APP/Contents/MacOS/iPodFirm"
+# Only the plist of the old daemon. macOS needs it to remove a registration of an older version (OldDaemon.swift).
+mkdir -p "$APP/Contents/Library/LaunchDaemons"
+cp Resources/com.thefauxdreamer.ipodfirm.helper.plist "$APP/Contents/Library/LaunchDaemons/"
 cp Resources/install-emulator.sh "$APP/Contents/Resources/"
 cp -R Resources/emulator-patches "$APP/Contents/Resources/"
 # The built-in themes. Format 2 does not store the bytes that a theme replaces, so the app

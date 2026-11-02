@@ -131,6 +131,11 @@ public enum Device {
             text.localizedCaseInsensitiveContains("busy")
     }
 
+    /// Mount the volumes of the iPod again, for example after a write that did not start.
+    public static func mount(_ ipod: IPodDisk) throws {
+        _ = try runTool("/usr/sbin/diskutil", ["mountDisk", ipod.disk])
+    }
+
     /// Unmount all volumes of the iPod and eject it, as Finder does. Then the iPod can be disconnected.
     public static func eject(_ ipod: IPodDisk) throws {
         try retryWhileBusy(["eject", ipod.disk], action: "eject")
@@ -250,13 +255,27 @@ public struct DiskAccess {
             },
             authorizeWrite: { ipod, start in
                 let slice = try Device.firmwareSlice(ipod, start: start).map { "/dev/r\($0)" }
-                try auth.authorize(paths: [slice ?? ipod.rawPath], writable: true, prompt: prompt)
+                // Both paths, so that the fallback in `openForWrite` opens no second prompt.
+                try auth.authorize(paths: (slice.map { [$0] } ?? []) + [ipod.rawPath], writable: true, prompt: prompt)
             },
             write: { ipod, start in
                 let slice = try Device.firmwareSlice(ipod, start: start).map { "/dev/r\($0)" }
-                return try RawDisk(descriptor: auth.open(path: slice ?? ipod.rawPath, writable: true), blockSize: ipod.blockSize,
-                                   origin: slice == nil ? 0 : start)
+                return try openForWrite(slice: slice, whole: ipod.rawPath, start: start, blockSize: ipod.blockSize) {
+                    try auth.open(path: $0, writable: true)
+                }
             })
+    }
+
+    /// Open the firmware slice. If that fails, open the whole disk. The iPod is unmounted here, and this
+    /// open operates on a real iPod. Offsets stay positions on the whole disk, so a write does not change.
+    static func openForWrite(slice: String?, whole: String, start: Int, blockSize: Int,
+                             open: (String) throws -> Int32) throws -> RawDisk {
+        if let slice {
+            do { return RawDisk(descriptor: try open(slice), blockSize: blockSize, origin: start) } catch {
+                AppLog.step("Cannot open \(slice) (\(error.localizedDescription)). Open \(whole).")
+            }
+        }
+        return RawDisk(descriptor: try open(whole), blockSize: blockSize)
     }
 }
 

@@ -183,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppLog.info("Launch: iPodFirm \(info["CFBundleShortVersionString"] as? String ?? "dev") (\(info["CFBundleVersion"] as? String ?? "0")), \(AppLog.systemDescription)")
         NSApp.setActivationPolicy(.regular)
         UpdateNotifier.shared.register()
+        OldDaemon.removeIfRegistered()
         NSApp.activate(ignoringOtherApps: true)
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

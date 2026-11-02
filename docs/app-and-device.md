@@ -99,7 +99,7 @@ The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the cent
 
 1. It increases the version and the build number in [mac/version.env](../mac/version.env).
 2. It runs `swift build -c release --arch arm64` with the option `-file-prefix-map <project folder>=.`. The compiler then writes `./mac/Sources/...` in place of the full path of each source file. Thus the build does not change with the location of the project folder.
-3. It makes `iPodFirm.app` with the app, the emulator files and the patches.
+3. It makes `iPodFirm.app` with the app, the plist of the old daemon, the emulator files and the patches.
 4. It runs `strip -S` on the app. This removes the debug map of the linker. The app does not use it.
 5. It writes `Info.plist`. The bundle identifier is `com.thefauxdreamer.ipodfirm`.
 6. It signs the app. It uses the first "Apple Development" or "Developer ID Application" identity, or `CODESIGN_IDENTITY`. It turns on the hardened runtime (`--options runtime`) for the two programs.
@@ -174,7 +174,17 @@ The raw disk `/dev/rdiskN` has the owner root and the mode 640. No code of iPodF
 | Write, with an `Apple_MDFW` slice | The slice | `Device.firmwareSlice` compares `PartitionMapPartitionOffset` with the partition map. A different value stops the write. `RawDisk.origin` keeps the offsets as positions on the whole disk. |
 | Write, with no slice | `/dev/rdiskN` | The write comes after the unmount. A read-write open of the whole disk gives `EBUSY` while a volume is mounted. |
 
+`DiskAccess.openForWrite` has one fallback: if the open of the slice fails, it opens the whole disk. `authorizeWrite` asks for both paths, so the fallback opens no second prompt. A slice at the wrong position does not use the fallback.
+
+The app has no fallback to a root process. Refer to [re/privilege-analysis.md](../re/privilege-analysis.md).
+
 The operations run in the app, so the app must not stop during a write. Refer to [safety.md](safety.md).
+
+### The old daemon
+
+Versions before this one could register a root daemon. At each launch, `OldDaemon.removeIfRegistered` removes a registration with `SMAppService.unregister`. It opens no prompt. A fault goes to the log and does not stop the launch.
+
+macOS needs the plist in `Contents/Library/LaunchDaemons` of the calling app, so the app keeps [the plist](../mac/Resources/com.thefauxdreamer.ipodfirm.helper.plist). The app never calls `register`, and it has no helper program.
 
 ### Full Disk Access
 
@@ -188,7 +198,7 @@ The app does not need Full Disk Access. A real flash through `authopen` passed w
 4. If the iPod firmware is damaged and the action is a restore, the app tries the rescue restore with `dryRun`.
 5. The app shows the ranges and the byte count. If MiMusic is open, it also shows a warning. The owner must confirm.
 6. The app does the MiMusic check again.
-7. The operation runs again without `dryRun`. It asks for the password if the last password is older than 300 seconds. It saves a backup, unmounts the disk, writes the changed blocks, reads them again and compares them. If the user clicks Cancel at the prompt, the iPod stays mounted and the app takes no backup.
+7. The operation runs again without `dryRun`. It asks for the password if the last password is older than 300 seconds. It saves a backup, unmounts the disk, writes the changed blocks, reads them again and compares them. If the user clicks Cancel at the prompt, the iPod stays mounted and the app takes no backup. If the open fails after the unmount, no byte changed, and the app mounts the iPod again and shows the fault.
 
 [safety.md](safety.md) gives each check.
 
@@ -214,6 +224,7 @@ The Patches pane shows the result:
 | Program | Caller | Arguments | Purpose |
 |---|---|---|---|
 | `/usr/sbin/diskutil` | `Device` | `list -plist external physical`, `list -plist DISK`, `info -plist DISK` | Find the iPod and the firmware slice. |
+| `/usr/sbin/diskutil` | `Operations` | `mountDisk DISK` | Mount the iPod again after an open that failed. |
 | `/usr/libexec/authopen` | `AuthOpen` | `-stdoutpipe -extauth -o FLAGS PATH` | Open the raw disk. |
 | `/usr/sbin/diskutil` | `Operations` | `unmountDisk DISK` | Unmount the iPod before a write. If macOS uses the volume, the app tries again, as for the eject. |
 | `/usr/sbin/diskutil` | App | `eject DISK` | Eject the iPod. If macOS uses the volume ("dissented", "could not be unmounted" or "busy"), the app tries again. It tries a maximum of 5 times, 2 seconds apart (`Device.retryWhileBusy`). Then the alert "The iPod did not eject" says: "macOS is still accessing your iPod. Try again in a second." |
@@ -236,6 +247,7 @@ The Patches pane shows the result:
 | `open`, `pread`, `pwrite`, `fsync` | Raw disk access in the app (`RawDisk`). `AuthOpen` gives the descriptor. Reads use chunks of 4 MB. Writes must be aligned to the block size. |
 | `NSXPCConnection`, `NSXPCListener` | The connection between the app and the daemon. |
 | `SecCodeCopySelf`, `SecCodeCopySigningInformation` | Read the team identifier for the signature requirement. |
+| `SMAppService` | Remove the registration of the old daemon. |
 | `AuthorizationCopyRights` | Ask for the password before `authopen` opens the disk. |
 | `URLSession` | Download the Apple firmware. Get the number of the newest iPodFirm release from GitHub (`UpdateCheck.swift`). |
 | `os.Logger` | The unified log of macOS (`AppLog.swift`). |

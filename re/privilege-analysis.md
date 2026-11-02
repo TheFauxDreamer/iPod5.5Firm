@@ -48,6 +48,16 @@ These tests did not do a write. The disk image test does a real flash with no ro
 
 A later test with the ad-hoc build 0.1.240 (241) did a real flash on the same iPod. The log shows `Wrote and verified 112640 bytes in 33 range(s)`, with no fault. The app had an ad-hoc signature. The owner confirmed that Full Disk Access was off for that app.
 
+## No fallback to root
+
+The app has no fallback to a root process, for these reasons:
+
+- A root process caused issues #2 and #3.
+- macOS blocks a root process without Full Disk Access. A user with `EPERM` from `authopen` probably has the same block on that path.
+- A second write path needs its own tests on a real iPod.
+
+`authopen` fails at the open, before the first write. Thus the app has two small steps: it tries the whole disk if the slice fails, and it mounts the iPod again if the write cannot start.
+
 ## What is not known
 
 1. Does the result stay the same on other versions of macOS? The test used macOS 27.2. The reports are from macOS 15.7.7.
