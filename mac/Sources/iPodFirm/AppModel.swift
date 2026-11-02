@@ -436,6 +436,8 @@ final class AppModel: ObservableObject {
     }
 
     private func runBackup(_ ipod: IPodDisk) async -> OperationResult {
+        let start = Date()
+        defer { recordAppInBackups(since: start) }
         AppLog.step("Back up \(ipod.disk)")
         let dir = Self.backupDir
         return await operation { try Operations.backup(ipod, to: dir, access: .authOpen()) }
@@ -445,12 +447,28 @@ final class AppModel: ObservableObject {
     private func runFlash(_ ipod: IPodDisk, image: URL, reason: String, dryRun: Bool) async -> OperationResult {
         AppLog.step("\(reason) of \(image.lastPathComponent) on \(ipod.disk)\(dryRun ? " (dry run)" : "")")
         let dir = Self.backupDir
+        let start = Date()
         if !dryRun { beginWrite() }
-        defer { if !dryRun { endWrite() } }
+        defer {
+            if !dryRun {
+                endWrite()
+                recordAppInBackups(since: start)
+            }
+        }
         return await operation {
             if reason == "rescue" { return try Operations.rescueRestore(ipod, image: image, backupDir: dir, dryRun: dryRun, access: .authOpen()) }
             return try Operations.flash(ipod, image: image, backupDir: dir, reason: reason, dryRun: dryRun, access: .authOpen())
         }
+    }
+
+    /// Writes this app into the metadata of the new backups. A fault here does not stop the operation.
+    private func recordAppInBackups(since start: Date) {
+        let info = Bundle.main.infoDictionary ?? [:]
+        guard let version = info["CFBundleShortVersionString"] as? String else { return }
+        do {
+            try Backups.recordApp(version: version, build: info["CFBundleVersion"] as? String,
+                                  name: info["CFBundleName"] as? String, in: Self.backupDir, since: start)
+        } catch { AppLog.warning("Could not record the app in the backup metadata: \(AppLog.describe(error))") }
     }
 
     /// The app does the write itself. It must not quit, and macOS must not stop it or sleep, during a write.

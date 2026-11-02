@@ -19,6 +19,19 @@ public struct BackupInfo: Codable, Identifiable, Hashable {
     /// The patches in the iPodFirm list, for example "album-art 3.2". It is nil if the firmware has no
     /// list, and in older backups.
     public var patches: [String]?
+    /// The version of the app that made the backup, for example "0.1.328". Older backups do not have it.
+    public var appVersion: String?
+    /// The build number of the app that made the backup.
+    public var appBuild: String?
+    /// The name of the app that made the backup, for example "iPodFirm No Artwork Test".
+    public var appName: String?
+
+    /// The app that made the backup, for example "v0.1.328" or "v0.1.322 No Artwork Test".
+    public var appLabel: String? {
+        guard let appVersion else { return nil }
+        let test = appName.map { $0.hasPrefix("iPodFirm") ? String($0.dropFirst(8)) : " " + $0 } ?? ""
+        return "v\(appVersion)\(test)"
+    }
 }
 
 public enum Backups {
@@ -29,6 +42,26 @@ public enum Backups {
     /// The names and the versions of the patches in the iPodFirm list of `osos`, or nil if it has no list.
     public static func patchNames(osos: [UInt8]) -> [String]? {
         FirmwareManifest.read(osos: osos)?.patches.map { [$0.name, $0.version].compactMap { $0 }.joined(separator: " ") }
+    }
+
+    static var encoder: JSONEncoder {
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .iso8601
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return enc
+    }
+
+    /// Record the app in each backup from `since` or later that has no app in its metadata.
+    /// This also applies after a flash that failed.
+    public static func recordApp(version: String, build: String?, name: String?, in dir: URL, since: Date) throws {
+        // The metadata keeps only full seconds.
+        let start = since.addingTimeInterval(-1)
+        for var info in list(in: dir) where info.created >= start && info.appVersion == nil {
+            info.appVersion = version
+            info.appBuild = build
+            info.appName = name
+            try encoder.encode(info).write(to: dir.appendingPathComponent(info.file + ".json"), options: .atomic)
+        }
     }
 
     public static func list(in dir: URL) -> [BackupInfo] {
@@ -64,9 +97,7 @@ public enum Backups {
             names.insert(originalName, at: 0)
         }
         let sha = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
-        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let enc = encoder
         var last: BackupInfo?
         for name in names {
             let url = dir.appendingPathComponent(name)

@@ -43,11 +43,13 @@ The test process had no Full Disk Access: it could not read `TCC.db`.
 
 The right `sys.openfile.` has `authenticate-user: true`, `group: admin`, `timeout: 300` and `shared: false`.
 
-The test did not do a write to the iPod. The disk image test does a real flash with no root code, but a disk image is not a real iPod.
+These tests did not do a write. The disk image test does a real flash with no root code.
+
+A later test with the ad-hoc build 0.1.240 (241) did a real flash on the same iPod. The log shows `Wrote and verified 112640 bytes in 33 range(s)`, with no fault. The app had an ad-hoc signature. The log does not record if Full Disk Access was on for that app.
 
 ## What is not known
 
-1. Does `pwrite` on the iPod operate without Full Disk Access? The open operates. An Apple forum post says that a write can need Full Disk Access.
+1. Was Full Disk Access off in the real flash? If the owner confirms this, the app can remove the Full Disk Access screens.
 2. Can a read-write open of the whole disk operate after the unmount? A firmware partition with MBR type 0 needs this, if macOS gives it no slice. The app has no Windows-format test yet.
 3. Does the prompt offer Touch ID?
 4. Does a standard user operate the app with the name of an administrator?
