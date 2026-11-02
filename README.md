@@ -150,10 +150,31 @@ The Playlists list shows the folders and the playlists that are not in a folder.
 1. Connect the iPod so that it shows in Finder.
 2. In the **Patches** pane, select "Playlist Folders".
 3. Click **Add Folder**. Type a name.
-4. Open the folder row. Turn on each playlist that goes into the folder.
-5. Select the position of the folders: **Folders First** or **Alphabetical**.
+4. For each playlist that goes into the folder, select the folder in the menu of the playlist.
+5. Select the order: **Folders First**, **Alphabetical** or **Custom**.
 6. Click **Write Folders to iPod**.
 7. Eject the iPod.
+
+To set your own order:
+
+1. Select the order **Custom**.
+2. Use the arrow buttons to move the folders and the playlists.
+3. To change the order in a folder, open the folder row and use the arrow buttons.
+4. Click **Write Folders to iPod**.
+5. Eject the iPod.
+
+The order does not change the iTunes library. A new playlist goes at the end of the list.
+
+To copy the folders from iTunes:
+
+1. Connect the iPod so that it shows in Finder.
+2. Click **Import from iTunes…**.
+3. Select the file `iTunes Library.itl`. The file is usually in `Music/iTunes` in your home folder.
+4. Examine the folders.
+5. Click **Write Folders to iPod**.
+6. Eject the iPod.
+
+The import replaces the folders in the app. iTunes 12.9.5.5 is the only tested version.
 
 A folder cannot have the name of a playlist. A folder has no colour square at this time.
 

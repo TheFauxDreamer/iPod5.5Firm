@@ -1,6 +1,8 @@
 """Writes an iPodFirmPlaylistFolders file for the emulator test library (format: playlist_folders.c).
 
-usage: python -I folders.py ITUNESDB OUT [--alpha] "Folder=Playlist,Playlist" ...
+usage: python -I folders.py ITUNESDB OUT [--alpha] [--order=Name,Name] "Folder=Playlist,Playlist" ...
+
+--order sets the custom order of the top list. A name is a folder or a playlist.
 """
 import struct
 import sys
@@ -18,14 +20,17 @@ def playlist_ids(db: bytes) -> dict[str, int]:
     return out
 
 
-def build(folders: list[tuple[str, int, list[int]]], alphabetical: bool, icons: bool = True) -> bytes:
-    flags = (1 if alphabetical else 0) | (0 if icons else 2)
+def build(folders: list[tuple[str, int, list[int]]], alphabetical: bool, icons: bool = True,
+          order: list[int] | None = None) -> bytes:
+    flags = (1 if alphabetical else 0) | (0 if icons else 2) | (4 if order is not None else 0)
     b = bytearray(b"IFPF" + struct.pack("<HHHH", 1, flags, len(folders), 0))
     for name, colour, ids in folders:
         text = name.encode("utf-16-le")
         b += struct.pack("<HHHH", colour, len(text) // 2, len(ids), 0) + text + bytes(-len(text) % 4)
         for pid in ids:
             b += struct.pack("<Q", pid)
+    if order is not None:
+        b += struct.pack("<HH", len(order), 0) + b"".join(struct.pack("<Q", item) for item in order)
     return bytes(b)
 
 
@@ -39,5 +44,8 @@ if __name__ == "__main__":
             continue
         name, _, members = arg.partition("=")
         spec.append((name, 0xf800, [ids[m] for m in members.split(",") if m]))
-    open(sys.argv[2], "wb").write(build(spec, alpha))
+    names = next((a[8:].split(",") for a in sys.argv if a.startswith("--order=")), None)
+    index = {f[0]: 0xffffffff << 32 | k for k, f in enumerate(spec)}
+    order = None if names is None else [index.get(n, ids.get(n)) for n in names]
+    open(sys.argv[2], "wb").write(build(spec, alpha, order=order))
     print(ids)

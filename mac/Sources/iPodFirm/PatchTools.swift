@@ -95,8 +95,11 @@ struct PatchTool: View {
 // MARK: playlist-folders
 
 /// The folder editor of the playlist-folders patch. It writes iPod_Control/iTunes/iPodFirmPlaylistFolders.
+/// The list shows the rows in the order of the iPod.
 struct PlaylistFoldersSection: View {
     @EnvironmentObject var model: AppModel
+
+    var items: [PlaylistFolders.OrderItem] { model.playlistFolders.shownItems(model.folderPlaylists) }
 
     var body: some View {
         Section {
@@ -107,21 +110,24 @@ struct PlaylistFoldersSection: View {
             } else if model.folderPlaylists.isEmpty {
                 Text("The iPod has no playlists.").foregroundStyle(.secondary)
             } else {
-                Picker("Folder position", selection: $model.playlistFolders.alphabetical) {
-                    Text("Folders First").tag(false)
-                    Text("Alphabetical").tag(true)
+                Picker("Order", selection: $model.playlistFolders.position) {
+                    Text("Folders First").tag(PlaylistFolders.Position.foldersFirst)
+                    Text("Alphabetical").tag(PlaylistFolders.Position.alphabetical)
+                    Text("Custom").tag(PlaylistFolders.Position.custom)
                 }
                 .pickerStyle(.segmented)
-                ForEach($model.playlistFolders.folders) { $folder in
-                    PlaylistFolderRow(folder: $folder)
+                ForEach(Array(items.enumerated()), id: \.element) { i, item in
+                    row(item, at: i, of: items.count)
                 }
                 HStack {
                     Button("Add Folder") {
                         model.playlistFolders.folders.append(.init(name: newName()))
                     }
                     .disabled(model.playlistFolders.folders.count >= PlaylistFolders.maxFolders)
+                    Button("Import from iTunes…") { model.importITunesFolders() }
                     Spacer()
                     Button("Write Folders to iPod") { Task { await model.writePlaylistFolders() } }
+                        .buttonStyle(.borderedProminent)
                         .disabled(!model.playlistFolderProblems.isEmpty || model.playlistFolders == model.savedPlaylistFolders)
                 }
                 ForEach(model.playlistFolderProblems, id: \.self) { p in
@@ -139,6 +145,24 @@ struct PlaylistFoldersSection: View {
         .task(id: model.currentIPod?.disk) { await model.loadPlaylistFolders() }
     }
 
+    /// The buttons that move a row. They show only with the custom order.
+    func arrows(at i: Int, of count: Int, move: @escaping (Int) -> Void) -> OrderArrows? {
+        model.playlistFolders.customOrder ? OrderArrows(canMoveUp: i > 0, canMoveDown: i < count - 1, move: move) : nil
+    }
+
+    @ViewBuilder func row(_ item: PlaylistFolders.OrderItem, at i: Int, of count: Int) -> some View {
+        let ids = model.folderPlaylists.map(\.persistentID)
+        let move = { (delta: Int) in model.playlistFolders.shiftOrder(item, by: delta, playlists: ids) }
+        switch item {
+        case .playlist(let id):
+            PlaylistFolderPlaylistRow(id: id) { arrows(at: i, of: count, move: move) }
+        case .folder(let id):
+            if let index = model.playlistFolders.folders.firstIndex(where: { $0.id == id }) {
+                PlaylistFolderRow(folder: $model.playlistFolders.folders[index]) { arrows(at: i, of: count, move: move) }
+            }
+        }
+    }
+
     /// "New Folder", or "New Folder 2" and so on if that name is used.
     func newName() -> String {
         let used = Set(model.playlistFolders.folders.map(\.name))
@@ -148,9 +172,55 @@ struct PlaylistFoldersSection: View {
     }
 }
 
-struct PlaylistFolderRow: View {
+/// The buttons that move a row up or down.
+struct OrderArrows: View {
+    var canMoveUp: Bool
+    var canMoveDown: Bool
+    var move: (Int) -> Void
+
+    var body: some View {
+        Button { move(-1) } label: { Image(systemName: "chevron.up") }
+            .disabled(!canMoveUp)
+            .accessibilityLabel("Move up")
+        Button { move(1) } label: { Image(systemName: "chevron.down") }
+            .disabled(!canMoveDown)
+            .accessibilityLabel("Move down")
+    }
+}
+
+/// One playlist: its name, the menu that selects its folder and the buttons that move it.
+struct PlaylistFolderPlaylistRow<Accessory: View>: View {
+    @EnvironmentObject var model: AppModel
+    var id: UInt64
+    @ViewBuilder var accessory: () -> Accessory
+
+    var name: String { model.folderPlaylists.first { $0.persistentID == id }?.name ?? "" }
+
+    var body: some View {
+        HStack {
+            Text(name.isEmpty ? "(No name)" : name)
+            Spacer()
+            if !model.playlistFolders.folders.isEmpty {
+                Picker("Folder", selection: Binding(get: { model.playlistFolders.folderIndex(of: id) },
+                                                    set: { model.playlistFolders.move(id, to: $0) })) {
+                    Text("No Folder").tag(Int?.none)
+                    ForEach(Array(model.playlistFolders.folders.enumerated()), id: \.element.id) { i, f in
+                        Text(f.name).tag(Int?.some(i))
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            accessory()
+        }
+    }
+}
+
+/// One folder. Open the row to see its playlists.
+struct PlaylistFolderRow<Accessory: View>: View {
     @EnvironmentObject var model: AppModel
     @Binding var folder: PlaylistFolders.Folder
+    @ViewBuilder var accessory: () -> Accessory
     @State private var expanded = false
 
     // Saved for later: the folder colour. The colour squares did not show on the real iPod.
@@ -170,21 +240,20 @@ struct PlaylistFolderRow: View {
     var index: Int? { model.playlistFolders.folders.firstIndex { $0.id == folder.id } }
 
     var body: some View {
+        let members = model.playlistFolders.shownMembers(of: folder, playlists: model.folderPlaylists)
         DisclosureGroup(isExpanded: $expanded) {
-            ForEach(model.folderPlaylists) { p in
-                let home = model.playlistFolders.folderIndex(of: p.persistentID)
-                Toggle(isOn: Binding(get: { home != nil && home == index },
-                                     set: { on in model.playlistFolders.move(p.persistentID, to: on ? index : nil) })) {
-                    HStack {
-                        Text(p.name.isEmpty ? "(No name)" : p.name)
-                        if let home, home != index {
-                            Text("in “\(model.playlistFolders.folders[home].name)”").font(.caption).foregroundStyle(.secondary)
+            ForEach(Array(members.enumerated()), id: \.element) { i, id in
+                PlaylistFolderPlaylistRow(id: id) {
+                    if model.playlistFolders.customOrder {
+                        OrderArrows(canMoveUp: i > 0, canMoveDown: i < members.count - 1) { delta in
+                            folder.members.swapAt(i, i + delta)
                         }
                     }
                 }
             }
         } label: {
             HStack {
+                Image(systemName: "folder")
                 // ColorPicker("Colour", selection: colour, supportsOpacity: false).labelsHidden()
                 TextField("Folder name", text: $folder.name).textFieldStyle(.roundedBorder)
                 Text(counted(folder.members.count, "playlist")).font(.caption).foregroundStyle(.secondary)
@@ -193,6 +262,7 @@ struct PlaylistFolderRow: View {
                 } label: { Image(systemName: "trash") }
                 .help("Delete the folder. Its playlists go back to the Playlists list.")
                 .accessibilityLabel("Delete folder")
+                accessory()
             }
         }
     }

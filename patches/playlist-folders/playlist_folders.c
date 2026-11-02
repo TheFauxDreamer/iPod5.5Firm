@@ -23,10 +23,13 @@
  *
  * The file (little-endian). All parts start at a multiple of 4 bytes:
  *   "IFPF", u16 version (1), u16 flags (bit 0: alphabetical order; bit 1: no folder icons, read
- *   only by album-art), u16 folder count, u16 0
+ *   only by album-art; bit 2: custom order), u16 folder count, u16 0
  *   for each folder: u16 colour (RGB565, for the app), u16 name units, u16 member count, u16 0,
  *                    the name (UTF-16, padded to 4 bytes), the members (u32 low, u32 high: the
  *                    persistent ID of a playlist, mhyp +0x1c)
+ *   only with bit 2, after the last folder: u16 item count, u16 0, then each item of the top list
+ *   (u32 low, u32 high: the persistent ID of a playlist, or the folder index with high 0xffffffff).
+ *   With bit 2, the playlists in a folder also have the order of the members.
  * The patch reads the file again when the playlist array changes (a new database) and when the
  * Playlists screen opens with the top list. */
 
@@ -82,6 +85,8 @@ int list_event(int *list, int *ev, void *a3, int a4);
 #define NAME_MAX         63
 #define FOLDER_BIT       0x8000           /* a view item with this bit is a folder */
 #define FLAG_ALPHABETICAL 1
+#define FLAG_CUSTOM      4
+#define ORDER_FOLDER     0xffffffffu      /* the high word of a folder item */
 
 static const char folder_path[] = "iPod_Control\\iTunes\\";
 static const char file_name[] = "iPodFirmPlaylistFolders";
@@ -98,6 +103,8 @@ static unsigned char *file_buf;           /* the file, or 0 */
 static unsigned flags;
 static struct folder *folders;            /* folder_count items, from the allocator */
 static unsigned folder_count;
+static const unsigned *order;             /* pairs in the file buffer: low, high */
+static unsigned order_count;
 
 static void *seen_array;                  /* the array of the last build */
 static unsigned seen_count, seen_sum;
@@ -124,6 +131,8 @@ static void read_file(void)
     file_buf = 0;
     folders = 0;
     folder_count = 0;
+    order = 0;
+    order_count = 0;
     flags = 0;
     fw_memset0(path, sizeof path);
     fw_strcpy((char *)path + 4, folder_path);
@@ -171,6 +180,10 @@ static void read_file(void)
         folder_count++;
         at += 8 + name_bytes + members * 8;
     }
+    if ((flags & FLAG_CUSTOM) && k == n && at + 4 <= got && at + 4 + FIELD(u16, b, at) * 8u <= got) {
+        order_count = FIELD(u16, b, at);
+        order = (const unsigned *)(b + at + 4);
+    }
 }
 
 /* ---- The views ----------------------------------------------------------------------------- */
@@ -183,6 +196,16 @@ static int folder_of(void *pl)
             if (folders[k].members[2 * m] == lo && folders[k].members[2 * m + 1] == hi)
                 return (int)k;
     return -1;
+}
+
+/* The index in the array of the playlist with this persistent ID, or 0. */
+static unsigned index_of(void **array, unsigned n, unsigned lo, unsigned hi)
+{
+    unsigned i;
+    for (i = 1; i < n; i++)
+        if (FIELD(unsigned, array[i], PL_ID_LOW) == lo && FIELD(unsigned, array[i], PL_ID_HIGH) == hi)
+            return i;
+    return 0;
 }
 
 static u16 fold(u16 c)
@@ -221,6 +244,50 @@ static void place_folders(unsigned char *placed, const u16 *name)
         placed[best] = 1;
         top_items[top_used++] = (u16)(FOLDER_BIT | best);
     }
+}
+
+/* Fills the views in the custom order. home[i] changes to -2 when playlist i has its place. */
+static void place_custom(void **array, unsigned n, void *otg, int *home)
+{
+    unsigned char placed[MAX_FOLDERS];
+    unsigned a, i, k, m;
+
+    for (k = 0; k < folder_count; k++) {
+        struct folder *f = &folders[k];
+        placed[k] = 0;
+        for (m = 0; m < f->count; m++) {
+            i = index_of(array, n, f->members[2 * m], f->members[2 * m + 1]);
+            if (i && home[i] == (int)k) {
+                folder_items[f->first + f->used++] = (u16)i;
+                home[i] = -2;
+            }
+        }
+    }
+    for (a = 0; a < order_count; a++) {
+        if (order[2 * a + 1] == ORDER_FOLDER) {
+            k = order[2 * a];
+            if (k < folder_count && folders[k].used && !placed[k]) {
+                placed[k] = 1;
+                top_items[top_used++] = (u16)(FOLDER_BIT | k);
+            }
+        } else {
+            i = index_of(array, n, order[2 * a], order[2 * a + 1]);
+            if (i && home[i] == -1 && array[i] != otg) {
+                home[i] = -2;
+                top_items[top_used++] = (u16)i;
+            }
+        }
+    }
+    /* The file does not know a new playlist. It goes at the end. On-The-Go stays last. */
+    for (k = 0; k < folder_count; k++)
+        if (folders[k].used && !placed[k])
+            top_items[top_used++] = (u16)(FOLDER_BIT | k);
+    for (i = 1; i < n; i++)
+        if (home[i] == -1 && array[i] != otg)
+            top_items[top_used++] = (u16)i;
+    for (i = 1; i < n; i++)
+        if (home[i] == -1 && array[i] == otg)
+            top_items[top_used++] = (u16)i;
 }
 
 /* Makes the views again if the array changed. Returns 0 if there are no folders. */
@@ -274,6 +341,11 @@ static int ensure(void *browser)
             at += folders[k].used;
             folders[k].used = 0;
         }
+    }
+    if (flags & FLAG_CUSTOM) {
+        place_custom(array, n, otg, home);
+        fw_free(home);
+        return 1;
     }
     for (i = 1; i < n; i++)
         if (home[i] >= 0) {

@@ -315,6 +315,7 @@ The Patches pane shows the result:
 | `sysctlbyname("hw.model")` | The Mac model for the log and the fault report. |
 | `UNUserNotificationCenter` | Tell the user about a newer release (`UpdateNotifier.swift`). If the user does not allow notifications, the app shows an alert. |
 | `CryptoKit.SHA256` | Hashes of the firmware, the osos and the backups. |
+| `CCCrypt` (CommonCrypto), `compression_decode_buffer` (Compression) | Decrypt and inflate `iTunes Library.itl` (`ITunesLibrary.swift`). |
 | `CGImageSource`, `CGContext` | Read and scale the cover images and the PNG files. |
 | `AVURLAsset` | Read the cover of a non-MP4 music file. |
 | `NSWorkspace` | Open Finder, System Settings, the emulator app and the GitHub issue page. |
@@ -340,7 +341,7 @@ The app makes no other network connections. It sends no data about the owner or 
 
 ### Files on the Mac
 
-All paths are in `~/Library/Application Support/iPodFirm/`.
+All paths are in `~/Library/Application Support/iPodFirm/`. The one exception is `iTunes Library.itl`. The user selects this file for "Import from iTunes…" in Playlist Folders. The app only reads it.
 
 | Path | Content |
 |---|---|

@@ -1671,11 +1671,34 @@ final class AppModel: ObservableObject {
         playlistFolders.problems(playlistNames: folderPlaylists.map(\.name))
     }
 
+    /// Replace the folders in the editor with the folders of an iTunes library. The iPod does not
+    /// change until "Write Folders to iPod".
+    func importITunesFolders() {
+        let p = NSOpenPanel()
+        p.allowedContentTypes = ["itl"].compactMap { UTType(filenameExtension: $0) }
+        p.message = "Choose the file iTunes Library.itl"
+        p.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Music/iTunes")
+        guard p.runModal() == .OK, let url = p.url else { return }
+        do {
+            let library = try ITunesLibrary.playlists([UInt8](try Data(contentsOf: url)))
+            var (folders, missing) = PlaylistFolders.imported(from: library, ipod: folderPlaylists)
+            folders.position = playlistFolders.position
+            folders.folderIcons = playlistFolders.folderIcons
+            playlistFolders = folders
+            var status = "Imported \(counted(folders.folders.count, "folder"))."
+            if !missing.isEmpty { status += " The iPod does not have \(counted(missing.count, "playlist")) of these folders." }
+            playlistFoldersStatus = status
+        } catch { fail("Cannot Import from iTunes", error) }
+    }
+
     /// Write the folder file to the iPod.
     func writePlaylistFolders() async {
         guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
             return
+        }
+        if playlistFolders.customOrder {
+            playlistFolders.order = playlistFolders.completedOrder(playlists: folderPlaylists.map(\.persistentID))
         }
         let folders = playlistFolders
         // Saved for later: the folder colours. The app wrote the thumbnail file again, so that

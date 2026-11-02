@@ -14,7 +14,54 @@ Status (29 October 2026): research complete. The patch `playlist-folders` uses t
 
 ## The stock firmware and iTunes folders
 
-The parser of the playlists (0xd6de8) reads a 0x6c-byte `mhyp` header. It does not read +0x3c to +0x6b. Thus the firmware ignores the folder fields that iTunes can write. The only nesting in the firmware is the podcast group (`mhip` +0x11, 0x94348, 0x10d228).
+The parser of the playlists (0xd6de8) reads a 0x6c-byte `mhyp` header. It does not read +0x3c to +0x6b. Real databases have an `mhyp` header of 0xb8 bytes. The firmware ignores the bytes after +0x3b, so it cannot use folder data in them. The only nesting in the firmware is the podcast group (`mhip` +0x11, 0x94348, 0x10d228).
+
+## iTunes folders
+
+Status (2 November 2026): the app reads the folders from `iTunes Library.itl`. Refer to `ITunesLibrary.swift`. All values come from one library of iTunes 12.9.5.5, with one folder that has seven playlists. The format is private, so the reader stops at each failed check.
+
+**The file.** The header is big-endian:
+
+| Offset | Content |
+|---|---|
+| 0x00 | `hdfm` |
+| 0x04 | The header length (0x90) |
+| 0x10 | The length of the version string. The string starts at 0x11. |
+| 0x5c | The limit of the encrypted part (0x19000) |
+
+The first min(limit, body length rounded down to 16) bytes of the body are AES-128-ECB. The key is in each copy of iTunes. The remainder is not encrypted. The whole body is zlib data.
+
+**The body.** The body is little-endian. It is a sequence of `msdh` sections: +4 header length, +8 total length, +12 type. The section of type 2 has a `mlph` record (+4 header length), and then the `miph` playlist records.
+
+**A `miph` record.** The header has 3500 bytes:
+
+| Offset | Content |
+|---|---|
+| +4 | The header length |
+| +8 | The total length, with the records in it |
+| +16 | The count of items. A folder has the merged songs of its playlists. |
+| +440 | The persistent ID (u64). It agrees with `Playlist Persistent ID` in the library XML. |
+| +522 | 1 on the folder. 0 on the other 46 playlists. |
+| +528 | The persistent ID of the parent folder (u64), or 0 |
+
+**The name.** The name is the `mhoh` record of type 100 after the `miph` header: +8 total length, +12 type, +0x18 encoding (3 UTF-8, 1 UTF-16LE), +0x1c byte length, +0x28 the text.
+
+**The library XML.** The XML entry of a folder has `Folder` true and `All Items` true. Its `Playlist Items` has the merged songs. The app does not read the XML, so the user does not export the library.
+
+**Not known:**
+
+- the format of a different iTunes version;
+- a nested folder. The app puts the playlists of a nested folder into its top-level folder;
+- if the persistent IDs on an iPod that iTunes syncs agree with the library. The app finds a playlist by persistent ID, and then by name;
+- if iTunes writes a merged playlist with the folder name to an iPod. If it does, the app shows the existing problem "has the name of a playlist", and the user changes the folder name.
+
+## Custom order
+
+Status (2 November 2026): version 0.7 of the patch has a custom order. It is not tested in the emulator or on the real iPod.
+
+The firmware shows the playlists in the order of the `iTunesDB`. iTunes 12.9.5.5 cannot set a custom order of the playlists (the owner). The sample `iTunes Library.itl` has its playlists in alphabetical order, and the `miph` records have no order field. Thus the app cannot read an order from this version. The user sets the order in the app. A read from a different iTunes version needs a sample of that version.
+
+The file keeps version 1. Bit 2 of the flags is set. After the last folder there is: u16 item count, u16 0, then each item as a u64 persistent ID. A folder item has the high word 0xffffffff and the folder index in the low word. An older patch and `album-art` stop after the last folder, so they ignore this list.
 
 ## The playlist array
 

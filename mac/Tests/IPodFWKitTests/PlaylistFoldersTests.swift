@@ -36,6 +36,75 @@ final class PlaylistFoldersTests: XCTestCase {
         XCTAssertEqual(PlaylistFolders.decode(f.encode()), f)
     }
 
+    func testCustomOrderLayout() {
+        var f = PlaylistFolders(folders: [.init(name: "Road", members: [1])], customOrder: true)
+        f.order = [.playlist(0x1122334455667788), .folder(f.folders[0].id)]
+        let b = f.encode()
+        XCTAssertEqual(b[6], 4)
+        XCTAssertEqual(Array(b[36..<40]), [2, 0, 0, 0])
+        XCTAssertEqual(Array(b[40..<48]), [0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11])
+        XCTAssertEqual(Array(b[48..<56]), [0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff])
+        XCTAssertEqual(b.count, 56)
+    }
+
+    func testCustomOrderRoundTrip() throws {
+        var f = PlaylistFolders(folders: [.init(name: "A", members: [1]), .init(name: "B", members: [2])], customOrder: true)
+        f.order = [.folder(f.folders[1].id), .playlist(9), .folder(f.folders[0].id)]
+        let d = try XCTUnwrap(PlaylistFolders.decode(f.encode()))
+        XCTAssertEqual(d, f)
+        XCTAssertEqual(d.order, [.folder(d.folders[1].id), .playlist(9), .folder(d.folders[0].id)])
+        XCTAssertEqual(d.position, .custom)
+    }
+
+    func testFileWithNoOrder() throws {
+        var f = PlaylistFolders(folders: [.init(name: "A", members: [1])])
+        f.order = [.playlist(9)]
+        XCTAssertEqual(f.encode().count, 12 + 8 + 4 + 8)                          // the order only goes with bit 2
+        XCTAssertEqual(PlaylistFolders.decode(f.encode())?.order, [])
+        var b = f.encode()
+        b[6] = 4                                                                  // bit 2 with no order part
+        XCTAssertNil(PlaylistFolders.decode(b))
+    }
+
+    func testCompletedOrder() {
+        var f = PlaylistFolders(folders: [.init(name: "A", members: [1]), .init(name: "New", members: [])], customOrder: true)
+        let a = f.folders[0].id, new = f.folders[1].id
+        f.order = [.playlist(3), .playlist(99), .folder(a), .playlist(1), .playlist(3)]   // 99 is gone, 1 is in a folder
+        XCTAssertEqual(f.completedOrder(playlists: [1, 2, 3]), [.playlist(3), .folder(a), .folder(new), .playlist(2)])
+        f.shiftOrder(.playlist(2), by: -1, playlists: [1, 2, 3])
+        XCTAssertEqual(f.order, [.playlist(3), .folder(a), .playlist(2), .folder(new)])
+        f.shiftOrder(.playlist(3), by: -1, playlists: [1, 2, 3])                  // the first item stays
+        XCTAssertEqual(f.order.first, .playlist(3))
+    }
+
+    func testShownOrder() {
+        let list = [ITunesDB.PlaylistEntry(name: "b", persistentID: 2, trackIDs: [], isPodcast: false),
+                    ITunesDB.PlaylistEntry(name: "D", persistentID: 4, trackIDs: [], isPodcast: false),
+                    ITunesDB.PlaylistEntry(name: "e", persistentID: 5, trackIDs: [], isPodcast: false)]
+        var f = PlaylistFolders(folders: [.init(name: "C", members: [5, 2])])
+        let c = PlaylistFolders.OrderItem.folder(f.folders[0].id)
+        XCTAssertEqual(f.shownItems(list), [c, .playlist(4)])
+        XCTAssertEqual(f.shownMembers(of: f.folders[0], playlists: list), [2, 5])  // database order
+        f.position = .alphabetical
+        f.folders[0].members = [5]
+        XCTAssertEqual(f.shownItems(list), [.playlist(2), c, .playlist(4)])
+        f.position = .custom
+        f.order = [.playlist(4), c]
+        XCTAssertEqual(f.shownItems(list), [.playlist(4), c, .playlist(2)])
+        f.folders[0].members = [5, 2]
+        XCTAssertEqual(f.shownMembers(of: f.folders[0], playlists: list), [5, 2])  // the order of the user
+    }
+
+    func testPositionKeepsOneChoice() {
+        var f = PlaylistFolders(alphabetical: true)
+        XCTAssertEqual(f.position, .alphabetical)
+        f.position = .custom
+        XCTAssertTrue(f.customOrder)
+        XCTAssertFalse(f.alphabetical)
+        f.position = .foldersFirst
+        XCTAssertFalse(f.customOrder)
+    }
+
     func testDecodeRejectsBadFiles() {
         XCTAssertNil(PlaylistFolders.decode([]))
         XCTAssertNil(PlaylistFolders.decode(Array("IFPX".utf8) + [1, 0, 0, 0, 0, 0, 0, 0]))
