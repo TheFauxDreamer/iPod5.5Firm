@@ -246,7 +246,7 @@ For a larger battery of the same voltage, the voltage curve is similar. If a bat
 
 1. Does the dark theme have a white version of a size 10 style? If not, the patch needs one.
 2. Does a script read 0x1081dfe3 through 0x1d3780? The effect is not checked.
-3. Does a live rectangle stay after a new layout? Only the emulator can show this. If not, use the start method of `dark-mode`: the option then needs a restart.
+3. Does a live rectangle stay after a new layout? Answer (emulator, 3 November 2026): yes. Refer to [Version 0.4](#version-04-emulator-tests-and-the-text-path-3-november-2026).
 4. Does size 10 fit in the box? Only a draw can show this.
 
 ### Verdict
@@ -369,3 +369,64 @@ Not tested: the text colour with the dark theme, the text width, and if the rect
 Version 0.2 adds the option Smoothing (off by default) and the import of a battery log. The address list of the tables comes from [The tables](#the-tables). The hardware word comes from 0x265164. The owner's iPod has revision 0xb. The other revisions are not tested.
 
 Version 0.3 shows the percentage during a charge. The charge path of 0x1ae774 gives a child that is not the text child, and `hook_show` then also shows the text. In Percent mode, the view goes back to the normal width after the charge. The size of the error during a charge is not known, because no log sample has a charger. This replaces the earlier design with no percentage during a charge.
+
+### Version 0.4: emulator tests and the text path (3 November 2026)
+
+Emulator tests by the owner, with version 0.3 and Icon + Percent:
+
+- The text was on the icon, and only "10" of "100%" showed.
+- After several seconds, the icon and the text disappeared.
+- The text was white in Light.
+
+A diagnostic copy of the patch recorded the rectangles at each call of `hook_show` (instrumented emulator, `peek`). The results:
+
+- The rectangles at + 0x58 are screen positions, not positions in the parent. The battery view and its children were all at x = 287–314.
+- Version 0.3 put the text at x = 0–30 and moved the icon to x = 317–344, outside the screen. This caused the disappearance.
+- 0x1ae6d0 runs approximately 45 times each second, for several battery views.
+- A wider view rectangle stays. The firmware does not set it again. This answers open question 3.
+
+The text path (static, Ghidra):
+
+| Address | Fact |
+|---|---|
+| 0x170954 | Registers the class 0x1580 with the constructor 0x243850. Word 1 of a View element is the class ID. |
+| 0x243850 | Allocates 444 bytes and calls 0x244a30. 0x244a30 sets the vtable 0x677920. The draw method (vtable + 0xf4) is 0x244924. |
+| View 25599, element 27 | `Str ` 25596: class 0x1580, word 6 = 0x1000208, word 23 = 0. |
+| 0x21af84 | The base constructor. Label + 0x20 = element word 6. |
+| 0x243f60, 0x243de0 | Label + 0xc8 = the Type record (24223). Label + 0xc0 = element word 23. |
+| 0x244924 | Reads the colour from the Type record at each draw. Calls 0x2438bc with label + 0xc0 as the flags. |
+| 0x2438bc | If label + 0x20 has bit 0x8 and label + 0xc0 does not have bit 0x200, it uses the colour at RAM 0x10823394, not the Type colour. The battery text has bit 0x8. |
+| 0x2438bc, 0x21093c, 0x210744 | 0xe1d38 counts the characters that fit in the box. 0x210744 draws only these characters. |
+| 0x1ae820 | `bl 0x1ebfec` with the provider in r5. It runs before each show, except during a charge. |
+
+The other reads of label + 0xc0 in the label code (0x244090, 0x244170, 0x2447c8, 0x24484c) test the bits 0x20, 0x80, 0x10 and 0x40. Only 0x2438bc reads the bit 0x200.
+
+Thus:
+
+- The white text came from the fixed colour. The patch sets the bit 0x200 in label + 0xc0. Then the Type colour applies.
+- The "%" was cut because the box was too small. In Podium Sans 14, "100" is 21 pixels wide (measured in an emulator screenshot at scale 2.0). The text box is now 38 pixels.
+- Espy Sans 10 also gave white text and no "%". The font was not the cause.
+- At the start, the first show came before the first text request. Thus the patch had no provider, and it used the layout for the text alone. The hook at 0x1ae820 now records the provider.
+
+Version 0.4 changes:
+
+| Item | Version 0.3 | Version 0.4 |
+|---|---|---|
+| Rectangles | Changed relative to the current value | Absolute: the stock values + an offset, for each view |
+| Icon | Moved 30 pixels to the right | Does not move |
+| Text box | 28 pixels | 38 pixels, right aligned, 1 pixel higher than the icon box |
+| Percent mode | The stock box (27 pixels) | A 38-pixel box that ends at the right edge of the stock box |
+| Font | Type 24197 (Espy Sans 10) | An own Type record: Podium Sans 14, with the colour of Type 24223 |
+| Colour | Fixed colour | The colour of Type 24223: black in Light, white in Dark Gray |
+| Start | The text moved after a few seconds | The icon shows until the first valid percentage. Then the text shows |
+| Hooks | 4 | 5 (0x1ae820 added) |
+
+Emulator results with version 0.4 (owner, 3 November 2026, firmware from the Python tools, with a test copy that always shows 7 %):
+
+- Light: "100%" and "7%" are black and complete, at the left of the icon.
+- Dark Gray: "7%" is white.
+- At the start, only the icon shows. Then the text shows, and it does not move.
+
+Not tested: Percent mode, Now Playing, the hold icon, a long title, the charge view, the Swift build path, and a real iPod.
+
+In the Dark Gray build, the rows that are not selected had no arrow. The cause is not known. It can be the theme build of the test script. A Dark Gray build with no patch can answer this.
