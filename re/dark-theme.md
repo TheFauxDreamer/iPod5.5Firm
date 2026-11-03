@@ -196,3 +196,39 @@ On the real iPod the rating stars in Now Playing were almost invisible in dark m
 - Test on the real iPod (0.1.32): with Apple's picture 24351 (`KEEP_APPLE`), the stars stayed dark grey. Thus picture 24351 is not the fill of the stars. The build does not keep it.
 - Open: find the style of the rating row. The table at 0x336190 gives a style object (0x192448 + 16·n) for each Type ID. The code uses the object addresses.
 
+
+## The missing arrows (3 November 2026)
+
+In Dark Gray, the ">" arrow shows only on the selected row. `battery-display` is not the cause: a Dark Gray build with no patch has the same fault (emulator, owner, 3 November 2026), and [home-screen.md](home-screen.md) recorded it earlier. The "now playing" speaker in a song row is possibly affected too. Status: research only. The cause is **not** proven.
+
+### Static facts (Ghidra and resource data)
+
+| Item | Fact |
+|---|---|
+| Picture 24268 | The ">" arrow: 8 × 11, 4-bit grey. Dark Gray does not change it. |
+| Element 0x5ecc | The arrow in 36 row Views (for example -292, 22046): class 0x5200, a picture view with the vtable 0x66d89c. Word 24 = 0x2101, word 25 = 0xffffffff. Dark Gray does not change these 2 words. |
+| Element 0x63eb | The speaker (picture 24273, 2-bit grey) in 8 song row Views. Word 24 = 0x2101. |
+| 0x1aba04–0x1aba44 | The constructor of the picture view. From a record in r4, it copies + 0x5c and + 0x5d to the object + 0x1ec and + 0x1ed, and + 0x60 to + 0x63 to the object + 0x1f0 to + 0x1f3. The research assumed that r4 is the element + 4, as in 0x21af84. **This is not checked.** |
+| 0x1ab83c | The draw method. Without bit 0x8 in the object + 0x20, the mode is + 0x1ec. With bit 0x8, the mode is + 0x1ed. Only mode 0x21 sets the colour, from + 0x1f0, through 0x2106e4. |
+| 0x210638 | The init of a drawing context: colour R = G = B = 0, A = 255 (black), at 0x210650–0x210664. |
+| 0x21a27c, 0x2192fc, 0x211aa8, 0x211abc, 0x218cd4 | Change the clip, the origin and the target of the context. They do not change the colour. |
+| 0x210114 → 0x1216a0 | The blit. It gets the context colour (+ 0x11), the second colour (+ 0x15) and the mode (+ 0x10). |
+
+The theory from these facts: the normal mode is 0x01, so the arrow uses the default black, and black does not show on a black row. The selected row uses mode 0x21 with the white element colour.
+
+### The test that failed
+
+A test theme set byte element + 0x60 (the low byte of word 24) from 0x01 to 0x21 in all 44 elements (36 arrows and 8 speakers). The apply had no conflict, and the 44 bytes were 0x21 in the firmware. The owner reported that the arrows still did not show (emulator, Dark Gray with no patch, and Switch on iPod, 3 November 2026). The test theme and the app change for it were removed.
+
+Thus at least one step of the theory is wrong. Possible causes, not checked:
+
+1. r4 in the constructor is not the element + 4. Then + 0x1ec, + 0x1ed and + 0x1f0 come from other bytes of the element, and the test changed the wrong byte.
+2. The rows on the screen do not use these 44 elements. For example, the main menu or a list can use other row Views, or an element that the code makes.
+3. The blit does not draw a grey picture in the context colour in mode 0x21. For example, the second colour or the picture data decides the result.
+4. Something sets bit 0x8 or changes the mode after the constructor.
+
+### Next steps, if the work continues
+
+1. In the instrumented emulator, set `IPODFW_REGS_AT` at 0x1aba04. Record r4 for the arrow, and compare it with the element address. This answers cause 1.
+2. Set `IPODFW_REGS_AT` at 0x1ab83c, and record the object, the mode and + 0x1f0 for each arrow on a black row. This answers causes 2 and 4.
+3. Only then make a test theme again.

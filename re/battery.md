@@ -469,7 +469,7 @@ Emulator results with version 0.4 (owner, 3 November 2026, firmware from the Pyt
 
 Not tested: Percent mode, Now Playing, the hold icon, a long title, the charge view, the Swift build path, and a real iPod.
 
-In the Dark Gray build, the rows that are not selected had no arrow. The cause is not known. It can be the theme build of the test script. A Dark Gray build with no patch can answer this.
+In the Dark Gray build, the rows that are not selected had no arrow. A Dark Gray build with no patch has the same fault, so `battery-display` is not the cause. Refer to [dark-theme.md](dark-theme.md#the-missing-arrows-3-november-2026).
 
 ### Version 1.0 (3 November 2026)
 
