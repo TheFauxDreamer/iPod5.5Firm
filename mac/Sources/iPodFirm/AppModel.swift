@@ -86,6 +86,15 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var selectedEQName = ""
+    /// The curve from a battery log for the patch battery-display (nil: the curve of the patch).
+    @Published var batteryCurve: BatteryCurve? = {
+        UserDefaults.standard.data(forKey: "batteryCurve").flatMap { try? JSONDecoder().decode(BatteryCurve.self, from: $0) }
+    }() {
+        didSet {
+            UserDefaults.standard.set(batteryCurve.flatMap { try? JSONEncoder().encode($0) }, forKey: "batteryCurve")
+            switchesChanged(oldValue != batteryCurve)
+        }
+    }
 
     static func loadEQs() -> [NamedEQ] {
         let d = UserDefaults.standard
@@ -1153,6 +1162,7 @@ final class AppModel: ObservableObject {
             var p = p
             p.options = patchOptions[p.spec.name] ?? [:]
             if p.spec.eq_editor != nil { p.customEQs = customEQs }
+            if p.spec.battery_curve != nil { p.batteryCurve = batteryCurve }
             return p
         }
     }
@@ -1558,6 +1568,33 @@ final class AppModel: ObservableObject {
             return
         }
         batteryLog = BatteryLog.text(data)
+    }
+
+    /// Makes the battery curve from the battery log on the iPod.
+    func importBatteryCurveFromIPod() {
+        readBatteryLog()
+        if let log = batteryLog { importBatteryCurve(log) }
+    }
+
+    /// Makes the battery curve from a saved battery log.
+    func chooseBatteryLogFile() {
+        let p = NSOpenPanel()
+        p.allowedContentTypes = [.plainText, .data]
+        p.message = "Choose a battery log from a full charge until the iPod stopped."
+        guard p.runModal() == .OK, let url = p.url else { return }
+        do {
+            importBatteryCurve(String(decoding: try Data(contentsOf: url).prefix { $0 != 0 }, as: UTF8.self))
+        } catch {
+            fail("Cannot Read the Battery Log", error)
+        }
+    }
+
+    private func importBatteryCurve(_ log: String) {
+        do {
+            batteryCurve = try BatteryCurve.make(log: log)
+        } catch {
+            alert = AlertInfo(title: "Cannot Use the Battery Log", message: error.localizedDescription)
+        }
     }
 
     static func logFile(_ kind: IPodLogFile.Kind) -> String {

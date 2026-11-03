@@ -944,10 +944,18 @@ the power chip of the PP5020 of Apple. The facts are Static.
 | 0x264fa4 | Gives the state of the power. The function has a switch with the cases 4 to 0xc. |
 | 0x265abc | Gives the state of the audio. The function has a switch with the cases 4 to 0xc. |
 | 0x1ae774 | Selects the element of the battery view (View 25599): the icon value + 4, or 0x1b for the text 0x63fc. Refer to [re/battery.md](../re/battery.md). |
+| 0x1ae774 | Selects the child of the battery view. The `bl 0x1e7fe4` at 0x1ae838 (mode 0) is only for the picture. The patch `battery-display` hooks it. | Static, Patch |
+| 0x243fb0 | Sets the Type of a label (label, provider, Type ID, redraw). With provider 0, the function does not use the Type ID. | Static |
 | 0x1d91dc | UI timer handler: reads the battery icon value at 0x1d91f8 (0x1e7fe4) and marks the status elements. The patch `battery-log` hooks 0x1d91f8. | Static, Patch |
 | 0x1ae6d0 | (view, index): makes one child of the battery view visible, with method + 0x9c. One caller: 0x1ae6b8. |
-| 0x1ebfec | Reads the switch byte 0x1081dfe3 (`_show_voltage`). If it is set, marks the battery text 0x63fc for a new draw. |
+| 0x1ebfec | Reads the switch byte 0x1081dfe3 (`_show_voltage`). If it is set, marks the battery text 0x63fc for a new draw. 0x1ae774 calls it at 0x1ae820 with the provider in r5. The patch `battery-display` hooks this call. | Static, Patch |
 | 0x21a168 | (view, Type record, gc, out): applies a text style. Type + 0 is the font `Str` ID, + 4 the size, + 8 the colour. Static. |
+| 0x170954 | Registers the View element class 0x1580 (a text label) with the constructor 0x243850. Word 1 of a View element is the class ID. | Static |
+| 0x243850 | Constructor of the class 0x1580: allocates 444 bytes and calls 0x244a30. 0x244a30 sets the vtable 0x677920. | Static |
+| 0x21af84 | Base constructor of a View element object. Object + 0x20 = element word 6 (the flags). | Static |
+| 0x244924 | Draw method of a text label (vtable 0x677920 + 0xf4). Reads the colour from the Type record at label + 0xc8 at each draw. Calls 0x2438bc with label + 0xc0 as the flags. | Static, Emulator |
+| 0x2438bc | Draws the text of a label. If label + 0x20 has bit 0x8 and label + 0xc0 does not have bit 0x200, it uses the colour at RAM 0x10823394, not the Type colour. | Static, Emulator |
+| 0x210744 | Draws a text in a box. 0xe1d38 counts the characters that fit in the width. Only these characters are drawn. | Static, Emulator |
 | 0x243fb0 | (label, parent, Type ID): gives a label a text style. Static. |
 | 0x1d3ac4 | Reads the hidden switch files in `iPod_Control/Device/`. Refer to [re/device-switches.md](../re/device-switches.md). |
 | 0x175818 | Reads the state of the battery and the state of the charger. The states are at +0x1bc and at +0x1be. |

@@ -119,6 +119,12 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
         /// The variable with the filter records and the variable with the list of EQs.
         public var records, list: String
     }
+    /// The patch takes a `BatteryCurve` from `PatchInfo.batteryCurve`.
+    public var battery_curve: BatteryCurveVariables?
+    public struct BatteryCurveVariables: Codable, Hashable {
+        /// The variables with the raw values and the percentages (each 16 values of 16 bits).
+        public var raw, percent: String
+    }
     /// A warning for an iPod that probably has the original hard drive (see IPodDisk.likelyOriginalHDD).
     public var hdd_warning: String?
     /// One letter a–z that the About screen can show after the version (see FirmwareVersion.letters).
@@ -166,7 +172,7 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
         patches.filter { $0.spec.internal != true && (showTests || !$0.spec.isTest) }
     }
     /// The ids of the built-in Swift tools that `ui.tools` can name (PatchTools.swift in the app).
-    public static let knownTools = ["album-thumbnails", "usb-log", "playlist-folders", "playback-log", "diagnostic-log", "battery-log"]
+    public static let knownTools = ["album-thumbnails", "usb-log", "playlist-folders", "playback-log", "diagnostic-log", "battery-log", "battery-curve"]
     public var displayTitle: String { title ?? name }
     /// The version, or nil if `version` is missing or not valid.
     public var parsedVersion: PatchVersion? { version.flatMap(PatchVersion.init) }
@@ -311,6 +317,8 @@ public struct PatchInfo: Identifiable, Hashable {
     public var options: [String: Int] = [:]
     /// The EQs of a patch with `eq_editor`. If the list is empty, the options give one EQ "Custom".
     public var customEQs: [NamedEQ] = []
+    /// The curve of a patch with `battery_curve`. Without a curve, the patch uses its own values.
+    public var batteryCurve: BatteryCurve?
     public init(spec: PatchSpec, folder: URL, source: Source = .builtIn) {
         self.spec = spec
         self.folder = folder
@@ -578,7 +586,7 @@ public enum Patcher {
                 for h in chained { fw[h.chain!] = try chainTarget(h, in: current, patchSymbols: first) }
             }
             (code, table) = try link(object, base: base, firmware: fw)
-            try setOptions(spec, values: patch.options, eqs: patch.customEQs, in: &code, base: base, symbols: table)
+            try setOptions(spec, values: patch.options, eqs: patch.customEQs, curve: patch.batteryCurve, in: &code, base: base, symbols: table)
         }
         let end = Int(base) + code.count
         guard end <= maxSize else {
@@ -616,7 +624,7 @@ public enum Patcher {
     }
 
     /// Write the selected value of each option into its variable in the linked code.
-    static func setOptions(_ spec: PatchSpec, values: [String: Int], eqs: [NamedEQ] = [], in code: inout [UInt8], base: UInt32,
+    static func setOptions(_ spec: PatchSpec, values: [String: Int], eqs: [NamedEQ] = [], curve: BatteryCurve? = nil, in code: inout [UInt8], base: UInt32,
                            symbols: [String: UInt32]) throws {
         for o in spec.options ?? [] {
             let value = values[o.id] ?? o.defaultValue
@@ -633,6 +641,14 @@ public enum Patcher {
             for (symbol, data) in [(editor.records, library.records), (editor.list, library.list)] {
                 guard let a = symbols[symbol], a >= base, Int(a - base) + data.count <= code.count else {
                     throw PatchError("eq_editor of \"\(spec.displayTitle)\": \(symbol) is not in the patch.")
+                }
+                code.replaceSubrange(Int(a - base)..<Int(a - base) + data.count, with: data)
+            }
+        }
+        if let variables = spec.battery_curve, let curve {
+            for (symbol, data) in [(variables.raw, curve.bytes.raw), (variables.percent, curve.bytes.percent)] {
+                guard let a = symbols[symbol], a >= base, Int(a - base) + data.count <= code.count, a & 1 == 0 else {
+                    throw PatchError("battery_curve of \"\(spec.displayTitle)\": \(symbol) is not in the patch.")
                 }
                 code.replaceSubrange(Int(a - base)..<Int(a - base) + data.count, with: data)
             }

@@ -43,6 +43,7 @@ Thus, about 12,600 lines of the app are in Swift. The UI and the helper (about 6
 | `USBProbeLog.swift` | None |
 | `PlaybackLog.swift` | None |
 | `BatteryLog.swift` (the text of the battery log) | None. Only the app reads this log. |
+| `BatteryCurve.swift` (a curve from a battery log) | None. The Python build uses the curve in `battery_display.c`. |
 | `CustomEQ.swift` (the coefficients of `custom-eq`) | `custom_eq.py`. `SharedEQ` (the `.ipodeq` file) and `applePresets` have no Python version. |
 | `PlaylistFolders.swift` (the folder file of `playlist-folders`) | None. `re/playlist-folders/harness/folders.py` writes the same file for the emulator tests. |
 | `ITunesLibrary.swift` (the playlists of `iTunes Library.itl`) | None. Only the app imports iTunes folders. |

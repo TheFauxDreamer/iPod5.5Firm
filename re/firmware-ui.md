@@ -172,7 +172,7 @@ The tag is 4 bytes. The tag says the kind of the element.
 | The tag | The kind | The number | The reader |
 |---|---|---|---|
 | `enoN` | the empty element | 366 | 0x141184 |
-| ` rtS` | the text | 144 | 0xa6bd0 |
+| ` rtS` | the text | 144 | not known (0xa6bd0 reads the EQ presets, not a View) |
 | `paMB` | the picture | 86 | 0xab7f0 |
 | `warD` | the drawing | 13 | 0x12f150 |
 | `ltnC` | the control | 6 | 0x16c080 |
@@ -182,6 +182,8 @@ The tag is 4 bytes. The tag says the kind of the element.
 The tags are in the strings of the image. `enoN` is at 0x1411fc, `paMB` at
 0xab8a4, ` rtS` at 0xa6d28, `warD` at 0x12f1a0, `ltnC` at 0x16c0e8 and
 `mTtD` at 0x10d2b0.
+
+Correction (3 November 2026): word 1 of an element is the class ID. The function 0x170954 registers the classes and their constructors. For example, the class 0x1580 is a text label with the constructor 0x243850. Refer to [battery.md](battery.md#version-04-emulator-tests-and-the-text-path-3-november-2026).
 
 Each reader makes the object of the element. The class of the element of the
 tag `enoN` has the table at 0x668250. The table has 8 slots. The first slot is

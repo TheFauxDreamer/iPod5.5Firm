@@ -3362,3 +3362,53 @@ final class BatteryLogTests: XCTestCase {
         XCTAssertEqual(BatteryLog.text(data), "BL01 0000000092 5 min\n1439 476 20 1\n")
     }
 }
+
+final class BatteryCurveTests: XCTestCase {
+    private func log(_ raws: [Int], charger: [Int] = []) -> String {
+        let all = charger + raws
+        let lines = all.enumerated().map { "\(60 + $0.offset * 300) \($0.element) 10 1" }
+        return (["BL01 0000000100 5 min", "start"] + lines).joined(separator: "\n")
+    }
+
+    /// The curve has 16 points, from 100 % to 0 %, and the raw values decrease.
+    func testCurveFromLog() throws {
+        let curve = try BatteryCurve.make(log: log(stride(from: 430, to: 130, by: -3).map { $0 }))
+        XCTAssertEqual(curve.raw.count, BatteryCurve.points)
+        XCTAssertEqual(curve.percent.first, 100)
+        XCTAssertEqual(curve.percent.last, 0)
+        XCTAssertEqual(curve.raw.last, 133)
+        XCTAssertEqual(zip(curve.raw, curve.raw.dropFirst()).filter { $0 <= $1 }.count, 0)
+        XCTAssertEqual(curve.hours, 99 * 300 / 3600, accuracy: 0.5)
+    }
+
+    /// A rise at the start (time on a charger) does not count as play time.
+    func testCurveStartsAtHighestValue() throws {
+        let curve = try BatteryCurve.make(log: log(stride(from: 430, to: 130, by: -3).map { $0 }, charger: [380, 400, 420, 430]))
+        XCTAssertGreaterThan(curve.raw[0], 420)
+    }
+
+    /// The longest run counts if the log has more than one start.
+    func testCurveUsesLongestRun() throws {
+        let text = log([400, 399]) + "\n" + log(stride(from: 430, to: 130, by: -3).map { $0 })
+        XCTAssertEqual(try BatteryCurve.make(log: text).raw.last, 133)
+    }
+
+    /// The build writes the imported curve into the two variables of the patch.
+    func testCurveGoesIntoPatch() throws {
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let all = Patcher.list(in: repo.appendingPathComponent("patches"))
+        let spec = try XCTUnwrap(all.first { $0.spec.name == "battery-display" }).spec
+        let curve = try BatteryCurve.make(log: log(stride(from: 430, to: 130, by: -3).map { $0 }))
+        var code = [UInt8](repeating: 0, count: 0x100)
+        try Patcher.setOptions(spec, values: [:], curve: curve, in: &code, base: 0x1000, symbols: [
+            "display_mode": 0x1000, "battery_data": 0x1004, "smoothing": 0x1008, "curve_raw": 0x1010, "curve_pct": 0x1030])
+        XCTAssertEqual(Int(code[0x10]) | Int(code[0x11]) << 8, curve.raw[0])
+        XCTAssertEqual(Int(code[0x4e]) | Int(code[0x4f]) << 8, 0)
+    }
+
+    func testCurveRefusesShortLogs() {
+        XCTAssertThrowsError(try BatteryCurve.make(log: log([430, 420, 410])))
+        XCTAssertThrowsError(try BatteryCurve.make(log: log(Array(repeating: 420, count: 50))))
+    }
+}

@@ -30,6 +30,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [custom-eq](#custom-eq) | Code patch (extended) | Patches | 1 `bl`, 1 `b`, 2 words (`bytes`) | Version 0.1: yes, a basic test by the owner. Version 0.2 and later: no |
 | [playlist-folders](#playlist-folders) | Code patch (extended) | Patches | 4 `bl`, 2 `b` and 1 vtable word (with `chain`) | Version 0.1: emulator only (29 October 2026). Not tested on the real iPod |
 | [playback-log](#playback-log) | Code patch (test, extended) | Patches | 8 `bl`, 5 `b` (all 5 with `chain`) | Version 1.0: yes (30 October 2026). Version 1.2: no. Not tested in the emulator |
+| [battery-display](#battery-display) | Code patch (extended) | Patches | 5 `bl` | Emulator (layout, Light and Dark Gray). Not tested on a real iPod |
 | [battery-log](#battery-log) | Code patch (test, extended) | Patches | 1 `bl` | Version 0.1: yes, 18.3 hours on a real iPod. Version 0.2: not tested on a real iPod. Not tested in the emulator |
 | [diagnostic-log](#diagnostic-log) | Code patch (test, extended) | Patches | 12 `bl`, 8 `b` (all 8 with `chain`), 1 `word` (`chain`) | No. Not tested in the emulator |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
@@ -1122,6 +1123,20 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 **Caution.** Do not install this patch together with `usb-host-probe`. The two patches use the hook site 0x1d8260. `Patcher.conflicts` finds this: the app does not turn on the second patch, the Patches pane shows "Changes the same place as …", and the build fails. The test `testPlaybackLogConflicts` checks it.
 
 **Test status.** Swift and Python tests (29 October 2026): the log text, the size, each hook word and the chain wrappers. A build with the 17 patches that are not `test` or `internal` links with no conflict. Not tested in the emulator. Real iPod 5.5G (owner, 30 October 2026, version 1.0): the log operates, with 17 patches and 5202 songs. The value `track` is not correct: it is the text `FILE`. Version 1.1 removes it, adds the settings and records a song ID. Version 1.2 gave `song=0`. Version 1.3 uses the dbid. Versions 1.1 and 1.2 are not tested on the real iPod. Refer to [re/playback-log.md](../re/playback-log.md#first-log-from-a-real-ipod).
+
+## battery-display
+
+**User interface.** Patches pane > Battery Display, letter `y`, in the category Display. Version 1.0 is a normal patch, not a test patch. The option "Display" gives Icon, Icon + Percent or Percent. The option "Battery Data" gives Apple or Custom Battery. The option "Smoothing" gives Off (the default) or On. The tool `battery-curve` gives the section "Battery Curve": **Import from iPod**, **Import Log File…** and **Use the Built-In Curve**. To change an option or the curve, flash the iPod again.
+
+**Effect.** The status bar shows the battery as the icon, as a percentage, or as both. During a charge, the iPod shows the charge icon and the percentage, unless Display is Icon. The percentage reads high during a charge. With Custom Battery, the battery picture and the percentage use a curve from a larger battery. The firmware logic for a low battery does not change.
+
+**Method.** 5 `bl` hooks. 0xb4abc sets the byte of `_show_voltage` after the read of the switches. 0x1e8af8 gives the text of the percentage. 0x1ae820 records the provider before each show. 0x1ae838 gives the icon value of the battery picture. 0x1ae6b8 shows a second child: the icon for Icon + Percent, or the text during a charge. It also gives the text child its own Type record (Podium Sans 14, with the colour of Type 24223) and sets bit 0x200 in label + 0xc0, so that the Type colour applies. The rectangles are screen positions. The icon stays, and the text is in a 38-pixel box at its left. The patch keeps the stock rectangles of each view and writes absolute values. The text shows only after the first valid percentage. Apple data is the icon value × 5. Custom Battery uses the average of the last 8 raw values, read at most each 30 seconds, and a curve of 16 points. Smoothing uses 32 values and hides a rise of less than 5 %. With Apple data, Smoothing calculates a line between the 15 limits of the firmware table. `BatteryCurve.make` makes a curve from the longest run of a log. The run starts at its highest smoothed value. The percentage is the part of the play time that remains. `Patcher.setOptions` writes the curve into `curve_raw` and `curve_pct`.
+
+**Caution.** The built-in Custom Battery curve is provisional. It does not start from a full charge, and it is for one battery. An imported log must start from a full charge and continue until the iPod stops. The app cannot prove this.
+
+**Test status.** Swift tests (3 November 2026). Emulator (owner, 3 November 2026, version 0.4, Icon + Percent, firmware from the Python tools): the text is complete, black in Light and white in Dark Gray, at the left of the icon. At the start, only the icon shows until the first value. Not tested: Percent mode, Now Playing, the charge view, the Swift build path and a real iPod.
+
+**Research.** Refer to [re/battery.md](../re/battery.md).
 
 ## battery-log
 
