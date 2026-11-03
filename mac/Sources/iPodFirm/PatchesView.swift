@@ -789,6 +789,11 @@ struct AppearanceDetail: View {
                 .disabled(AppModel.splitTheme == nil)
                 .help("Split shows the cover and the current song beside the main menu. All other screens stay stock.")
                 if model.layout == .split {
+                    Picker("Split Width", selection: $model.splitWidth) {
+                        ForEach(AppModel.SplitWidth.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 380)
                     Picker("Panel Text", selection: $model.splitText) {
                         ForEach(AppModel.SplitText.allCases) { Text($0.title).tag($0) }
                     }

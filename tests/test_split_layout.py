@@ -1,4 +1,5 @@
 """The Split layout theme and its main menu View."""
+import hashlib
 import importlib.util
 import json
 import struct
@@ -6,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from ipodfw.themeimport import Theme, ThemeError, apply_theme, moved_layout, small_text, view_elements
+from ipodfw.themeimport import Theme, ThemeError, apply_theme, half_width, moved_layout, small_text, view_elements
 
 ROOT = Path(__file__).resolve().parents[1]
 THEME = ROOT / "themes/layouts/Split.ipodtheme"
@@ -94,3 +95,21 @@ def test_small_text_uses_types_of_size_14():
     dark = moved_layout(small, b"", True).changes[0].new
     assert dark.count(struct.pack("<I", 0x5E990000)) == 4
     assert dark.count(struct.pack("<I", 0x5E980000)) == 0
+
+
+# The SHA-256 of the View at 1/2 width. testSplitLayoutFile in Swift checks the same value.
+HALF_WIDTH_VIEW_SHA256 = "29c1bb4a53c28565f350e98e06e5aa19dad23137becb5752a331e95307035dc0"
+
+
+def test_half_width_moves_only_the_edges():
+    theme = Theme.from_json(THEME.read_text())
+    half = half_width(theme)
+    view = half.changes[0].new
+    assert len(view) == len(theme.changes[0].new)
+    assert [struct.unpack_from("<i", view, at)[0] for at in (76, 256, 280, 352, 464, 560, 656)] == \
+        [-160, 186, -27, 166, 166, 166, 166]
+    assert hashlib.sha256(view).hexdigest() == HALF_WIDTH_VIEW_SHA256
+    assert half.changes[1] == theme.changes[1]
+    # The order with the small text does not change the result, and a second call changes nothing.
+    assert half_width(small_text(theme)).changes[0].new == small_text(half).changes[0].new
+    assert half_width(half).changes[0].new == view

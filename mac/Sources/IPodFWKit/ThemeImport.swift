@@ -209,6 +209,25 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
         return out
     }
 
+    /// The edges of the Split View that the width changes: (offset in the View, value at 2/3, value at 1/2).
+    /// The scroll bar, the left and right edges of the cover, and the left edge of the 4 text lines.
+    static let halfWidthEdges: [(at: Int, old: Int32, new: Int32)] = [
+        (76, -107, -160), (256, 213, 186), (280, 0, -27), (352, 219, 166), (464, 219, 166), (560, 219, 166), (656, 219, 166),
+    ]
+
+    /// The layout with the list and the panel at 1/2 of the screen in place of 2/3 and 1/3.
+    /// The cover keeps its size and is in the centre of the panel. The size of the View does not change.
+    public func withHalfWidth() -> ImportedTheme {
+        guard let first = changes.first else { return self }
+        var view = [UInt8](first.new)
+        guard view.count == 704,
+              Self.halfWidthEdges.allSatisfy({ Int32(bitPattern: le32(view, $0.at)) == $0.old }) else { return self }
+        for e in Self.halfWidthEdges { put32(&view, e.at, UInt32(bitPattern: e.new)) }
+        var out = self
+        out.changes[0].new = Data(view)
+        return out
+    }
+
     /// Apply the theme to osos. Returns (changes applied, changes not applied because of other edits).
     ///
     /// A theme in format 2 holds no old bytes: the hash of the old bytes stands in

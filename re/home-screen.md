@@ -338,6 +338,31 @@ Open points for the larger song line, from a scan of the code on 2 November 2026
 - The function 0x243fb0 gives a label a text style. It has one direct call, at 0x168f70. Thus a live style change of the song element through this function is not likely, but this scan does not find an indirect call.
 - No data word has the value of Types 24223 or 24227. Type 24222 is at 0x1d0568.
 
+## Half width
+
+Status: in the app on branch `split-small-text`. Measured on 3 November 2026. Not tested in the emulator or on a real iPod.
+
+The owner asked for a second width: the list and the panel each use 1/2 of the screen (160 pixels). The owner decided that the cover keeps its size of 107 pixels, in the centre of the panel. Thus the 4 text lines get 160 pixels.
+
+The method is the same as the small text: the build changes values in the View of `Split.ipodtheme`. The file does not change. Measured offsets in the View of 704 bytes:
+
+| Offset | Edge | ⅔ – ⅓ | ½ – ½ |
+|---|---|---|---|
+| 76 | Scroll bar, right | −107 | −160 |
+| 256 | Cover, left | 213 | 186 |
+| 280 | Cover, right | 0 | −27 |
+| 352, 464, 560, 656 | Text lines, left | 219 | 166 |
+
+The list has no edge of its own at the right. Its right edge is the left edge of the scroll bar, so one value moves the two. Offset 76 is not in a copy range, so the file holds the value. A dark theme does not change these offsets.
+
+Measured checks:
+
+- Swift (`withHalfWidth`) and Python (`half_width`) give the same View (SHA-256 29c1bb4a…).
+- The order with the small text does not change the result.
+- Switch on iPod with the half width and the small text: the added size is the same as Split, and the switch table goes back to the same osos when it runs 2 times.
+
+Open risk: an earlier comment says that a menu of 1/2 needs much new code. This is not proved. Examine in the emulator that the rows, the arrows and the highlight follow the width of 160 pixels.
+
 ## Split with Switch on iPod
 
 Status: on branch `split-switch`. Not tested on a real iPod.

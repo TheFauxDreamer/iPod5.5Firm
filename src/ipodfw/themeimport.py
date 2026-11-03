@@ -541,6 +541,24 @@ def small_text(theme: Theme) -> Theme:
     return replace(theme, changes=[replace(view, new=new), *theme.changes[1:]])
 
 
+# The edges of the Split View that the width changes: (offset in the View, value at 2/3, value at 1/2).
+# The scroll bar, the left and right edges of the cover, and the left edge of the 4 text lines.
+LAYOUT_HALF_WIDTH_EDGES = ((76, -107, -160), (256, 213, 186), (280, 0, -27),
+                           (352, 219, 166), (464, 219, 166), (560, 219, 166), (656, 219, 166))
+
+
+def half_width(theme: Theme) -> Theme:
+    """The layout with the list and the panel at 1/2 of the screen in place of 2/3 and 1/3.
+    The cover keeps its size and is in the centre of the panel."""
+    view = theme.changes[0]
+    new = bytearray(view.new)
+    if len(new) != 704 or any(struct.unpack_from("<i", new, at)[0] != old for at, old, _ in LAYOUT_HALF_WIDTH_EDGES):
+        return theme
+    for at, _, value in LAYOUT_HALF_WIDTH_EDGES:
+        struct.pack_into("<i", new, at, value)
+    return replace(theme, changes=[replace(view, new=bytes(new)), *theme.changes[1:]])
+
+
 def apply_theme(theme: Theme, osos: bytearray, original_sha256: str) -> tuple[int, int]:
     """Apply the theme to osos. Returns (changes applied, changes not applied because of other edits).
 
