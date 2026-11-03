@@ -340,7 +340,7 @@ Open points for the larger song line, from a scan of the code on 2 November 2026
 
 ## Half width
 
-Status: in the app on branch `split-small-text`. Measured on 3 November 2026. Not tested in the emulator or on a real iPod.
+Status: in the app on branch `split-small-text`. Measured on 3 November 2026. Light and Dark operate in the emulator. Not tested on a real iPod.
 
 The owner asked for a second width: the list and the panel each use 1/2 of the screen (160 pixels). The owner decided that the cover keeps its size of 107 pixels, in the centre of the panel. Thus the 4 text lines get 160 pixels.
 
@@ -361,7 +361,63 @@ Measured checks:
 - The order with the small text does not change the result.
 - Switch on iPod with the half width and the small text: the added size is the same as Split, and the switch table goes back to the same osos when it runs 2 times.
 
-Open risk: an earlier comment says that a menu of 1/2 needs much new code. This is not proved. Examine in the emulator that the rows, the arrows and the highlight follow the width of 160 pixels.
+The earlier comment said that a menu of 1/2 needs much new code. The emulator tests show that this is not correct for this method.
+
+Owner tests on 3 November 2026 (emulator, firmware from the Python tools, folder library, no other patches): Light and Dark Gray both look correct. Switch on iPod, the Swift build path and a real iPod are not tested.
+
+## Panel shade
+
+Status: research only. The code fill operates in the emulator. The owner decided on 3 November 2026 not to put it in the app. Keep the research and the code for later.
+
+The owner asked on 3 November 2026 for a panel with a slightly different shade.
+
+Static results on stock 1.3:
+
+- No stock element fills an area with a colour. The 2 colour words of an element (+76, +80) are the highlight colours.
+- The dark theme gets its background from a `Draw` element with a full-screen picture (21997).
+- In each stock View, a `BMap` element has the same size as its picture.
+- No stock picture has only one colour.
+
+Emulator test on 3 November 2026 (Light, ½ – ½, firmware from the Python tools): a `BMap` element of 88 bytes with picture 24291 (320 × 4, 4 grey rows) and the edges of the whole panel. The element was element 2, before the cover. The owner saw only a thin grey strip at the top of the panel. Thus a `BMap` element does not stretch or repeat its picture. It draws the picture one time at the top left of its area.
+
+Thus a shade needs a picture of the full panel size, more than one element with a strip picture, or code that fills the area.
+
+Estimates for the 3 methods (not measured):
+
+| Method | Data | Colours |
+|---|---|---|
+| One grey picture of the full panel (4-bit grey) | Approximately 17.4 KB at ½ – ½, 11.7 KB at ⅔ – ⅓ | Greys only |
+| A strip picture of 160 × 24 in 9 elements | Approximately 2.7 KB | Greys only |
+| Code that fills the area | 408 bytes (measured) | All colours |
+
+The owner selected the code fill.
+
+### Code fill
+
+The code is in [split-shade/](split-shade/):
+
+- `patch/` is a test patch (`split_shade.c`, `patch.json`). It replaces the draw method of the general label class (vtable word 0x677a14, `chain`). Album-art hooks the same word, and the chain lets the two patches operate together.
+- `build-code-test.py` makes the test firmware: Split ½ – ½ in Light, a label element behind the panel, and the patch.
+- `build-picture-test.py` makes the firmware of the `BMap` test above.
+
+Method:
+
+1. The View gets one more label element (type 0x1580, 96 bytes) as element 2, before the cover. Its edges are the edges of the panel. The View becomes 792 bytes, and the table entry gets the new size.
+2. The hook reads the element ID (u16 at view + 0x1c). If the label is the panel label, the hook calls `gc_prepare` (0x21a27c), `view_bounds` (0x255ac4), `gc_set_mode` 0 (0x210290), `gc_set_color` (0x2106e4) and `gc_fill_rect` (0x211a00). It does not draw the text.
+3. Each other label goes to the previous target of the word.
+
+Emulator results on 3 November 2026 (firmware from the Python tools, folder library, no other patches):
+
+- First test: the label had its own ID, 0x7e40. No shade showed. Counters in the patch showed 41 label draws, of the IDs 0x5fbc, 0x302, 0x301, 0x63be, 0x63bf and 0x63c3, and no draw of 0x7e40. Thus the firmware does not draw a label that has no data.
+- Second test: the label has the ID of the count (0x63c3), which always has a text. The hook finds the panel label by its height (100 pixels or more; the count line is 22 pixels). The owner reported that the light grey (240, 240, 240) panel looks okay.
+
+The test patch still has the counters (`dbg`, 0x737104 in the test firmware, physical address 0x10737104). They are not necessary for the fill.
+
+Work that is not done:
+
+- Dark (a suggested colour of (32, 32, 32)), Switch on iPod and ⅔ – ⅓.
+- An internal patch that the Split build adds, as the build adds `dark-mode`. The app control, the size in the Patches pane, the Swift build and the tests.
+- A test on a real iPod. The hook runs for each label draw, so measure the time of the list draws.
 
 ## Split with Switch on iPod
 
