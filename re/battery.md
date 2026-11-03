@@ -265,6 +265,8 @@ Next steps:
 
 ## The patch `battery-log` (31 October 2026)
 
+The raw logs are in [battery-logs/](battery-logs/).
+
 The test patch records the complete raw value and thus answers the question of the value 43.
 
 0x1d91dc is the UI timer handler that reads the icon value. It calls 0x1e7fe4 at 0x1d91f8 (`bl`, eb003b79), starts the timer at + 0xa0 again and marks the status elements. The emulator showed the battery reads approximately each 30 s. Static: 0x1d91dc has one caller, 0x1d8ebc in 0x1d8e68.
