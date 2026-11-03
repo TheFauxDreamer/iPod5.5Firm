@@ -196,6 +196,7 @@ A test in the emulator is strong evidence, but not proof:
 | Split Panel Text Small | No. Emulator, Light and Dark (2 November 2026): the owner accepted the result. In Light, the song line shows larger than the other lines. Switch on iPod is not tested. |
 | Split Width ½ – ½ | No. Emulator, Light and Dark (3 November 2026): the owner reported that the two look correct. Switch on iPod is not tested. |
 | Dark Mode switch | Yes | Version 1.1: yes (28 October 2026). The three appearances Light, Dark and Switch on iPod operate. Version 1.2 (Split View item): emulator only. |
+| Dark theme highlight at +80 (`keepHighlightWords`) | No | No (3 November 2026). Refer to [../re/dark-theme.md](../re/dark-theme.md#the-highlight-bar). |
 | Split View switch (Layout > Switch on iPod) | No. Emulator prototype (3 November 2026, Switch on iPod): the 2 items operate. Emulator, app build 0.1.256 (3 November 2026): the owner reported that the switch operates. Not tested on a real iPod. |
 | Software version | Not recorded | Yes (28 October 2026) |
 | The copy of the games (`games_RO`) | Not applicable (the emulator has no games) | Not recorded. The copy was tested on a copy of the folder `iPod_Control`: the 7 complete games were copied byte for byte, 226,577,300 bytes. The 2 games that are not complete were skipped. Real iPod (27 October 2026, test app "iPodFirm Game Key Test" 0.1.164): the copy of the games with the owner's own key file `IC-Info.sidb` (**Choose Key File…**) works; the owner reports "that works perfectly". |

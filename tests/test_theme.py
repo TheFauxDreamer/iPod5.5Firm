@@ -252,6 +252,22 @@ def test_apply_theme_keeps_the_blue_highlight():
     assert osos[24:28] == new[4:8]           # only View resources keep the blue colours
 
 
+@pytest.mark.parametrize("stripped", [False, True])
+def test_apply_theme_keeps_the_blue_highlight_in_a_part_word(stripped):
+    # The real theme: a 7-byte run, +76 and 3 bytes of +80 (the high byte 0xff does not change).
+    # A third run covers 3 bytes of a word that is not a highlight colour (the high byte is 0x00).
+    osos = bytearray(32)
+    struct.pack_into("<4I", osos, 8, 0xFFD06428, 0xFFE89858, 0x00E89858, 0x12345678)
+    changes = [themeimport.Change("View 22034", 8, bytes(osos[8:15]), bytes.fromhex("252525ff343434")),
+               themeimport.Change("View 22034", 16, bytes(osos[16:19]), bytes.fromhex("010203")),
+               themeimport.Change("View 22034", 21, bytes(osos[21:23]), bytes.fromhex("aabb"))]
+    if stripped:
+        changes = [themeimport.Change(c.resource, c.offset, b"", c.new, themeimport._sha256(c.old)) for c in changes]
+    th = themeimport.Theme("t", "", "abc", changes)
+    themeimport.apply_theme(th, osos, "abc")
+    assert struct.unpack_from("<4I", osos, 8) == (0xFFD06428, 0xFFE89858, 0x00030201, 0x12bbaa78)
+
+
 def test_edits_replace_the_theme_picture_and_survive_json():
     th = themeimport.Theme("t", "", "abc", [themeimport.Change("BMap 1", 4, b"\x00" * 4, b"\x11" * 4),
                                             themeimport.Change("BMap 2", 12, b"\x00", b"\x22")],

@@ -179,8 +179,35 @@ Two problems were found and corrected:
 The owner tested the dark theme on the real iPod. The grey highlight bar of the theme was difficult to see. Thus the build keeps Apple's blue bar in all lists.
 
 - Each View element has the two colours of the bar at +76 and +80. In 1.3 the values are `ffd06428` and `ffe89858` (ABGR, blue). The theme changes them to `ff252525` and `ff343434`.
-- 539 elements in 1.3 have these colours. Not only list rows have them: `Cntl`, `Draw` and `StSt` elements have them too.
+- 1,656 elements in 1.3 have these colours: 1,654 in the main block, 1 in block 22 and 1 in block 23 (measured 3 November 2026). Not only list rows have them: `Cntl`, `Draw` and `StSt` elements have them too.
 - The build does not change a word of a View if the Apple value is one of the two blue colours (`APPLE_HIGHLIGHT`, `ThemeImport.appleHighlight`). The rule operates when the theme is applied. Thus theme files from earlier versions get the blue bar too.
+
+### The fault in the +80 colour (3 November 2026)
+
+Up to app version 0.1.258, the rule examined only the complete words of a change. A theme run stops at the last byte that changes. The high byte of `ff343434` and `ffe89858` is the same (0xff). Thus a run that starts at +76 has 7 bytes: the word at +76 and 3 bytes of the word at +80. The rule kept the colour at +76 and did not see the colour at +80.
+
+Measured with firmware 1.3 and Dark Gray, before the correction:
+
+| Value | Light osos | Dark osos |
+|---|---|---|
+| `ffd06428` (+76) | 1,656 | 1,656 |
+| `ffe89858` (+80) | 1,656 | 539 |
+| `ff343434` | 0 | 1,117 |
+
+Thus in dark mode, 1,117 elements had a bar with Apple blue at +76 and dark grey at +80. The earlier count "539 elements" in this note came from this fault.
+
+The correction (`keepHighlightWords`, Python `_keep_highlight_words`):
+
+- `withOldBytes` has osos. For each View change, it makes each aligned word that the change covers in part or in full. The bytes inside the change come from the old bytes of the change. The other bytes come from osos.
+- If the word is an Apple highlight colour, the change keeps the old bytes in that word.
+- A change with no difference after this step is left out.
+
+Results after the correction (3 November 2026):
+
+- The dark osos has 1,656 words `ffe89858` and no word `ff343434`. A byte compare with the build before the correction gives only these 1,117 words (3,351 bytes).
+- The theme applies 3,615 changes, not 4,722.
+- The dark switch table of Switch on iPod is 681,853 bytes with 3,614 entries (before: 698,443 bytes, 4,720 entries). "Size on iPod (Switch on iPod)" is 722,371 bytes.
+- The correction changes the appearance Dark and Switch on iPod. It is not tested on a real iPod.
 
 ## Edits of the owner
 
