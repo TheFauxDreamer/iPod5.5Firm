@@ -224,7 +224,7 @@ folder. The table gives what each note covers.
 | [song-info.md](song-info.md) | The data of the song in the interface. | 8 functions. |
 | [languages.md](languages.md) | The languages of the image. | 23 functions. |
 | [dark-theme.md](dark-theme.md) | The dark theme. The views and the pictures. | 17 functions. |
-| [dark-mode-compression.md](dark-mode-compression.md) | The table of the switch of the dark mode. | The data only. |
+| [dark-mode-compression.md](dark-mode-compression.md) | The table of the switch of the dark mode. | The data, and a smaller table from the light pictures (IFD2, research only: [dark-table-map/](dark-table-map/)). |
 | [backlight-timer.md](backlight-timer.md) | The timer of the backlight. | 8 functions. |
 | [sleep.md](sleep.md) | The sleep of the system. | 32 functions. |
 | [piezo.md](piezo.md) | The piezo of the click wheel. | 8 functions. |
