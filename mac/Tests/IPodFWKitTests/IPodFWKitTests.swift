@@ -1313,12 +1313,13 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(words(small.movedLayout(after: [], dark: true).changes[0].new, 0x99), 4)
         XCTAssertEqual(words(small.movedLayout(after: [], dark: true).changes[0].new, 0x98), 0)
         XCTAssertEqual(words(theme.changes[0].new, 0xA3), 4)
-        // The half width: 7 edges change, the length stays the same, and Python gives the same View.
+        // The half width: 11 edges change, the length stays the same, and Python gives the same View.
         let half = theme.withHalfWidth()
         let hv = [UInt8](half.changes[0].new)
         XCTAssertEqual(hv.count, theme.changes[0].new.count)
-        XCTAssertEqual([76, 256, 280, 352, 464, 560, 656].map { Int32(bitPattern: le32(hv, $0)) }, [-160, 186, -27, 166, 166, 166, 166])
-        XCTAssertEqual(ThemeImport.sha256(hv), "29c1bb4a53c28565f350e98e06e5aa19dad23137becb5752a331e95307035dc0")
+        XCTAssertEqual([76, 256, 280, 352, 376, 464, 488, 560, 584, 656, 680].map { Int32(bitPattern: le32(hv, $0)) },
+                       [-160, 186, -27, 164, -6, 164, -6, 164, -6, 164, -6])
+        XCTAssertEqual(ThemeImport.sha256(hv), "748e8964aa99916d1b0dca9d130e58a76e82d6f63ceb99ca590b0444ef884109")
         XCTAssertEqual(half.changes[1].new, theme.changes[1].new)
         XCTAssertEqual(small.withHalfWidth().changes[0].new, half.withSmallText().changes[0].new)
         XCTAssertEqual(half.withHalfWidth().changes[0].new, half.changes[0].new)

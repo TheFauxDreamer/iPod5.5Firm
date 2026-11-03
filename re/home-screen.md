@@ -351,13 +351,16 @@ The method is the same as the small text: the build changes values in the View o
 | 76 | Scroll bar, right | −107 | −160 |
 | 256 | Cover, left | 213 | 186 |
 | 280 | Cover, right | 0 | −27 |
-| 352, 464, 560, 656 | Text lines, left | 219 | 166 |
+| 352, 464, 560, 656 | Text lines, left | 219 | 164 |
+| 376, 488, 584, 680 | Text lines, right | −4 | −6 |
+
+The first form had the text lines at 166 to 316 (centre 241). The owner saw that the text was not centred under the cover. Measured in an emulator screenshot on 3 November 2026: the 4 lines had their centre at 241.5 to 241.8, and the cover at 239.3. The text lines now use 164 to 314 (centre 239). Measured after the change: the lines are at 239.0 to 240.0, and the cover is at 239.0. The owner reported that it looks better. In ⅔ – ⅓, the text is at 219 to 316 (centre 267.5), and the cover centre is 266.5. That form does not change.
 
 The list has no edge of its own at the right. Its right edge is the left edge of the scroll bar, so one value moves the two. Offset 76 is not in a copy range, so the file holds the value. A dark theme does not change these offsets.
 
 Measured checks:
 
-- Swift (`withHalfWidth`) and Python (`half_width`) give the same View (SHA-256 29c1bb4a…).
+- Swift (`withHalfWidth`) and Python (`half_width`) give the same View (SHA-256 748e8964…).
 - The order with the small text does not change the result.
 - Switch on iPod with the half width and the small text: the added size is the same as Split, and the switch table goes back to the same osos when it runs 2 times.
 

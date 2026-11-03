@@ -98,7 +98,7 @@ def test_small_text_uses_types_of_size_14():
 
 
 # The SHA-256 of the View at 1/2 width. testSplitLayoutFile in Swift checks the same value.
-HALF_WIDTH_VIEW_SHA256 = "29c1bb4a53c28565f350e98e06e5aa19dad23137becb5752a331e95307035dc0"
+HALF_WIDTH_VIEW_SHA256 = "748e8964aa99916d1b0dca9d130e58a76e82d6f63ceb99ca590b0444ef884109"
 
 
 def test_half_width_moves_only_the_edges():
@@ -106,8 +106,8 @@ def test_half_width_moves_only_the_edges():
     half = half_width(theme)
     view = half.changes[0].new
     assert len(view) == len(theme.changes[0].new)
-    assert [struct.unpack_from("<i", view, at)[0] for at in (76, 256, 280, 352, 464, 560, 656)] == \
-        [-160, 186, -27, 166, 166, 166, 166]
+    assert [struct.unpack_from("<i", view, at)[0] for at in (76, 256, 280, 352, 376, 464, 488, 560, 584, 656, 680)] == \
+        [-160, 186, -27, 164, -6, 164, -6, 164, -6, 164, -6]
     assert hashlib.sha256(view).hexdigest() == HALF_WIDTH_VIEW_SHA256
     assert half.changes[1] == theme.changes[1]
     # The order with the small text does not change the result, and a second call changes nothing.

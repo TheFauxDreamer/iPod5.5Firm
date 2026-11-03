@@ -542,9 +542,11 @@ def small_text(theme: Theme) -> Theme:
 
 
 # The edges of the Split View that the width changes: (offset in the View, value at 2/3, value at 1/2).
-# The scroll bar, the left and right edges of the cover, and the left edge of the 4 text lines.
+# The scroll bar, the left and right edges of the cover, and the left and right edges of the 4 text
+# lines. The text has the same centre as the cover (239), as measured in the emulator.
 LAYOUT_HALF_WIDTH_EDGES = ((76, -107, -160), (256, 213, 186), (280, 0, -27),
-                           (352, 219, 166), (464, 219, 166), (560, 219, 166), (656, 219, 166))
+                           (352, 219, 164), (376, -4, -6), (464, 219, 164), (488, -4, -6),
+                           (560, 219, 164), (584, -4, -6), (656, 219, 164), (680, -4, -6))
 
 
 def half_width(theme: Theme) -> Theme:
