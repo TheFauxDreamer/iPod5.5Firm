@@ -1182,7 +1182,7 @@ An earlier version read the ATA IDENTIFY data in the firmware (a hook at 0x142f9
 
 - "Import iPodWizard Theme…" (also in the File menu).
 - The appearance control: Light, Dark or Switch on iPod.
-- The Layout control: Stock or Split. Refer to [Split layout](#split-layout).
+- The Layout control: Stock or Split. With Split, the Split Width and Panel Text controls. Refer to [Split layout](#split-layout).
 - The "Dark theme" picker, "Show Import Report" and "Delete Theme…". "Delete Theme…" asks for a confirmation.
 
 **Source.** An iPodWizard theme is a complete firmware partition for an older firmware, usually 1.2.1. iPodFirm needs the theme and the Apple firmware that the theme came from ("base"). The target is always the Apple firmware 1.3. Refer to [re/dark-theme.md](../re/dark-theme.md).
@@ -1341,7 +1341,9 @@ This change does not exist yet. The research found a USB Audio Class 1 source in
 
 **Status.** Tested in the emulator and on a real iPod (31 October 2026). All items operate. The cover sometimes takes approximately 1 s to show, most often after Previous.
 
-**User interface.** Patches pane > iPod Appearance > Layout. Split operates with Light, Dark and Switch on iPod. The pane shows the size. With Split, the Panel Text control selects Standard or Small.
+**User interface.** Patches pane > iPod Appearance > Layout. Split operates with Light, Dark and Switch on iPod. The pane shows the size. With Split, the Split Width control selects ⅔ – ⅓ or ½ – ½. The Panel Text control selects Standard or Small.
+
+**Split Width.** ⅔ – ⅓ is the default: the list uses 213 pixels and the panel uses 107 pixels. With ½ – ½, the list and the panel each use 160 pixels. The cover keeps its size of 107 pixels and is in the centre of the panel. The build changes 11 edge values of the View (`withHalfWidth`): the right edge of the scroll bar, the 2 side edges of the cover, and the 2 side edges of the 4 text lines. The text lines use 164 to 314 pixels, so that the text has the same centre as the cover. The list follows the scroll bar. The file `Split.ipodtheme` does not change, and the size on the iPod stays the same. The research is in [../re/home-screen.md](../re/home-screen.md#half-width). The owner reported that Light and Dark look correct in the emulator (3 November 2026). Switch on iPod is not tested. Not tested on a real iPod.
 
 **Panel Text.** Small uses Type 24216 (size 14) in place of Type 24227 (size 16). With Dark, it uses Type 24217 (size 14, white in stock). The build changes 4 words of the View (`withSmallText`). The file `Split.ipodtheme` does not change, and the size on the iPod stays the same. The research is in [../re/home-screen.md](../re/home-screen.md#small-panel-text). In the emulator (Light), the song line shows larger than the other lines. The owner accepted this on 2 November 2026. The owner reported that Dark looks good in the emulator. Switch on iPod is not tested. Not tested on a real iPod.
 
