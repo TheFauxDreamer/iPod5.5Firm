@@ -44,6 +44,38 @@ def test_settings_menu_gets_the_item_after_clicker():
         darkmode.settings_menu(new)
 
 
+def test_settings_menu_gets_the_split_view_item():
+    def item(key, label):
+        it = bytearray(40)
+        struct.pack_into("<III", it, 0x18, label, key, label)
+        return bytes(it)
+    menu = struct.pack("<I", 3) + item(darkmode.TEMPLATE_KEY, 0xFF69) + item(darkmode.INSERT_AFTER_KEY, 0xFF68) + item(0x600060AD, 0xFF67)
+    both = darkmode.settings_menu(menu, dark=True, layout=True)
+    keys = [struct.unpack_from("<I", both, 4 + 40 * i + 0x1C)[0] for i in range(5)]
+    assert keys == [darkmode.TEMPLATE_KEY, darkmode.INSERT_AFTER_KEY, darkmode.DARK_KEY, darkmode.LAYOUT_KEY, 0x600060AD]
+    assert struct.unpack_from("<I", both, 4 + 120 + 0x18)[0] == darkmode.LAYOUT_LABEL_ID
+    only = darkmode.settings_menu(menu, dark=False, layout=True)
+    keys = [struct.unpack_from("<I", only, 4 + 40 * i + 0x1C)[0] for i in range(4)]
+    assert keys == [darkmode.TEMPLATE_KEY, darkmode.INSERT_AFTER_KEY, darkmode.LAYOUT_KEY, 0x600060AD]
+    with pytest.raises(darkmode.DarkModeError):
+        darkmode.settings_menu(only, dark=False, layout=True)
+
+
+def test_layout_table_switches_the_table_entry_both_ways():
+    osos = bytearray(64)
+    stock, split = bytes(range(8)), bytes(range(100, 108))
+    osos[16:24] = split
+    table = darkmode.layout_table(16, stock, split)
+    assert len(table) == 28
+    darkmode.apply_switch_table(osos, table)
+    assert osos[16:24] == stock
+    darkmode.apply_switch_table(osos, table)
+    assert osos[16:24] == split
+    empty = bytearray(osos)
+    darkmode.apply_switch_table(empty, darkmode.EMPTY_TABLE)
+    assert empty == osos
+
+
 ENV = ("IPODFW_THEME", "IPODFW_THEME_BASE", "IPODFW_IPSW")
 
 

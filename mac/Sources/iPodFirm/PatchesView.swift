@@ -787,8 +787,8 @@ struct AppearanceDetail: View {
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 380)
                 .disabled(AppModel.splitTheme == nil)
-                .help("Split shows the cover and the current song beside the main menu. All other screens stay stock.")
-                if model.layout == .split {
+                .help("Split shows the cover and the current song beside the main menu. All other screens stay stock. Switch on iPod adds a \"Split View\" item to Settings on the iPod. The firmware then starts with Split.")
+                if model.layout.hasSplit {
                     Picker("Split Width", selection: $model.splitWidth) {
                         ForEach(AppModel.SplitWidth.allCases) { Text($0.title).tag($0) }
                     }
@@ -807,6 +807,10 @@ struct AppearanceDetail: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     LabeledContent("Size on iPod (Split)", value: PatchSpec.byteText(split.addedSize))
+                    if model.layout == .onIPod && model.appearance != .onIPod {
+                        LabeledContent("Size on iPod (Switch on iPod)",
+                                       value: model.layoutSwitchSize.map(PatchSpec.byteText) ?? "Open the firmware 1.3 to calculate")
+                    }
                 }
             }
             Section("Dark Theme") {

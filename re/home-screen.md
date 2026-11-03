@@ -422,6 +422,90 @@ Work that is not done:
 - An internal patch that the Split build adds, as the build adds `dark-mode`. The app control, the size in the Patches pane, the Swift build and the tests.
 - A test on a real iPod. The hook runs for each label draw, so measure the time of the list draws.
 
+## Layout switch on the iPod
+
+Status: a prototype operates in the emulator (3 November 2026). The app has it on branch `layout-switch-research` (`dark-mode` 1.2, Layout > Switch on iPod). Not tested on a real iPod.
+
+The owner asked for a switch on the iPod between Stock and Split, in Light and in Dark. Thus the iPod gets 4 forms: Light Stock, Light Split, Dark Stock and Dark Split.
+
+### Why the method of Dark Mode is sufficient
+
+The `dark-mode` patch applies an XOR switch table at the first lookup of a `View`, before RetailOS makes its screens. A layout switch needs the same time, because RetailOS reads View 24430 one time, at the start. A switch table can change any address, so the same method can change the layout.
+
+Measured on stock 1.3:
+
+| Item | Value |
+|---|---|
+| Table entry of View 24430 | 0x337424: ID, then offset and size at 0x337428 |
+| Stock offset and size | 0x1a41c4, 0xd0 (208 bytes) |
+| Split offset and size (Light, View at 0x736800) | 0x3fe20c, 0x2c0 (704 bytes) |
+| One Settings item | 40 bytes (Menu 24598: 724 bytes, 18 items) |
+
+The stock View stays in the firmware with Split. Thus the 2 Views are both present, and only the 8 bytes of the table entry select the View. The layout switch table is one run of 8 bytes: 12 bytes of header, 8 bytes of run and 8 bytes of XOR data, a total of 28 bytes.
+
+### The 2 switches are independent
+
+- The dark switch table already has the colour bytes of the 2 Views: the theme changes 6 bytes in the stock View, and the build adds runs for the Split View (`layoutParts`).
+- The layout switch table changes only the 8 bytes of the table entry. The dark table does not change these bytes.
+
+Thus the 2 tables use different addresses, and their order is not important. Split Width and Panel Text change only the Split View, so they operate in the 2 layouts.
+
+### Proposed design
+
+1. Change `dark-mode` into a general switch patch with 2 tables: `dark_table` and `layout_table`. Each table can be empty.
+2. Add a second Settings item, "Split View", with On and Off (stock strings 0x602e and 0x602f), after Dark Mode. Use the key 0x60007e15 and the label ID 0x7e14. No patch and no Menu resource uses these values.
+3. Keep the setting in a separate file, `iPod_Control\iTunes\iPodFirmLayout`. Thus an old firmware still reads `iPodFirmDarkMode` correctly. The firmware open function makes the file if it is missing.
+4. A change of the item writes the file, saves the settings and restarts the iPod, as Dark Mode does.
+5. In the app, the Layout control gets a third value: Stock, Split or Switch on iPod. It operates with each appearance:
+   - Light: only the Split View item. There is no dark table.
+   - Dark: only the Split View item. The firmware is always dark.
+   - Switch on iPod: the Dark Mode item and the Split View item.
+6. Write the layout into the iPodFirm list (`FirmwareManifest`), as the appearance.
+
+### Prototype
+
+The prototype is in [layout-switch/](layout-switch/):
+
+- `patch/layout_switch.c` is a copy of `dark-mode` with a second table (`layout_table`), a second key (0x60007e15), a second label (0x7e14, "Split View") and a second file (`iPodFirmLayout`).
+- `build.py` makes the firmware for Light, Dark or Switch on iPod, with Split and an optional `--half`.
+
+The image has the Split main menu. If `iPodFirmLayout` contains '0', the patch applies the layout table, and the stock View comes back. No file means Split. Thus the iPod starts with the layout that the owner selected in the app.
+
+Measured with the prototype on 3 November 2026:
+
+| Item | Light | Dark | Switch on iPod |
+|---|---|---|---|
+| Code | 1,299 bytes | 1,299 bytes | 1,299 bytes |
+| Settings menu | 764 bytes (1 new item) | 764 bytes | 804 bytes (2 new items) |
+| Dark table | 12 bytes (empty) | 12 bytes (empty) | 4,726 runs, as now |
+| Layout table | 28 bytes | 28 bytes | 28 bytes |
+| More than the Split build of today | 2,115 bytes | 2,115 bytes | 434 bytes |
+
+The code of `dark-mode` is 945 bytes. Thus the second item costs 354 bytes of code.
+
+Checks:
+
+- The layout table changes 0x337428 from the Split entry (offset 0x3fe20c or later, size 0x2c0) to the stock entry (0x1a41c4, 0xd0). A second run gives back the Split entry.
+- View 24430 is a child of View 24085 (element at +0x190), and the UI script `TCmd` 9088 names it at +0x2260. No code uses the ID 24430 directly. Thus RetailOS makes the main menu at the start, with the other screens, and a restart is necessary, as for Dark Mode.
+
+Emulator results on 3 November 2026 (Switch on iPod, Dark Gray, Split ½ – ½, folder library, no other patches):
+
+- First test: the items did not restart the iPod. A control test with the released `dark-mode` restarted correctly. The cause was the emulator limit: `IPODFW_RESET_AFTER=1000000000` ignores a restart before 1,000,000,000 instructions. Wait approximately 20 s after the main menu shows.
+- Second test, on a new drive: the owner reported that the 2 items operate correctly.
+
+Light and Dark alone (only the Split View item) are not tested in the emulator.
+
+Caution: the emulator test used the key 0x600060ec. That key is a firmware key: Daylight Saving in Menu 24604 (Settings > Date & Time). Thus the prototype also took that item. The key is now 0x60007e15. A scan of all Menu resources found no item with 0x60007e15. The `up-next` patch met the same problem before (refer to `up_next.c`).
+
+### Risks and open points
+
+- A change of the layout restarts the iPod, as Dark Mode does.
+- `no-now-playing-timer` stays on in the 2 layouts. The Split layout turns it on one time. Tell the owner, or ask if the Stock layout must turn it off.
+- The Swift build and the Python build must give the same osos. Extend `testSplitLayoutFile` and the switch tests: each table must give back the same osos when it runs 2 times.
+- Test Light and Dark alone in the emulator. Then test on a real iPod.
+- A change without a restart needs code that moves the list and hides the 5 panel elements in the live views. That is not researched.
+- With all patches, 434 bytes more can be too many. Measure with the 16 KB margin.
+
 ## Split with Switch on iPod
 
 Status: on branch `split-switch`. Not tested on a real iPod.

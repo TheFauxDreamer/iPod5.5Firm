@@ -1,8 +1,8 @@
 {
   "name": "dark-mode",
-  "version": "1.1",
-  "size": 945,
-  "description": "Dark Mode On/Off in Settings. The build adds the switch table and the Settings item; iPodFirm uses this patch for the appearance \"Switch on iPod\".",
+  "version": "1.2",
+  "size": 1299,
+  "description": "Dark Mode On/Off and Split View On/Off in Settings. The build adds the switch tables and the Settings items. iPodFirm uses this patch for the appearance and the layout \"Switch on iPod\".",
   "internal": true,
   "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
   "targets": [

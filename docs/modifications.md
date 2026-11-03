@@ -36,7 +36,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
-| [Dark Mode switch](#dark-mode-switch) | Code and data | Patches > iPod Appearance | 1 `b` and 2 vtable words, a table and a menu | Version 1.1: yes (28 October 2026) |
+| [Dark Mode switch](#dark-mode-switch) | Code and data | Patches > iPod Appearance | 1 `b` and 2 vtable words, 2 tables and a menu | Version 1.1: yes (28 October 2026). Version 1.2 (Split View item): emulator prototype only |
 | [Move of rsrc](#move-of-rsrc) | Partition layout | Automatic | 1 directory entry | Yes |
 
 ## The build sequence
@@ -1265,18 +1265,22 @@ In the Pictures pane, the "Dark Theme" switch shows the theme pictures. "Replace
 
 ## Dark Mode switch
 
-**User interface.** Patches pane > iPod Appearance > Switch on iPod. On the iPod: Settings > Dark Mode.
+**User interface.** Patches pane > iPod Appearance > Switch on iPod. On the iPod: Settings > Dark Mode. Patches pane > iPod Appearance > Layout > Switch on iPod. On the iPod: Settings > Split View. The 2 switches operate together or alone.
 
-**Effect.** The firmware starts light. The Dark Mode item changes between light and dark. The iPod saves its settings and restarts.
+**Effect.** The firmware starts light. The Dark Mode item changes between light and dark. The firmware starts with the Split main menu. The Split View item changes between Split and the stock main menu. After a change, the iPod saves its settings and restarts.
 
 **Why a restart is necessary.** RetailOS makes its main screens one time, at the start, from the View resources. The views copy the positions, the heights and the colours when the firmware makes them (`FUN_0021a4f4`). A language change does not make the screens again. Thus the patch applies the dark changes at the start, before the first View is read.
 
 **Build.** `DarkMode.build` in [DarkMode.swift](../mac/Sources/IPodFWKit/DarkMode.swift) puts these items after 0x736800, below 0x7F8000:
 
-1. The theme data outside osos (for example the background picture). It is in the image for both modes.
-2. The switch table, aligned to 16 bytes.
-3. The new Settings menu (Menu 24598), aligned to 16 bytes. The resource table entry points to it.
-4. The code of the `dark-mode` patch, aligned to 16 bytes. The build gives the symbol `dark_table` the address of the switch table.
+1. The theme data outside osos (for example the background picture). It is in the image for both modes. With the appearance Dark, the build applies the whole theme. With Light, there is no theme.
+2. The Split View, if the layout is Split or Switch on iPod, aligned to 16 bytes. The table entry of View 24430 points to it.
+3. The dark switch table, aligned to 16 bytes.
+4. The layout switch table, aligned to 16 bytes. It has one run: the 8 bytes of the table entry of View 24430, Split XOR stock (28 bytes).
+5. The new Settings menu (Menu 24598), aligned to 16 bytes. The resource table entry points to it. It has the Dark Mode item if the appearance is Switch on iPod, and the Split View item after it if the layout is Switch on iPod.
+6. The code of the `dark-mode` patch, aligned to 16 bytes. The build gives the symbols `dark_table` and `layout_table` the addresses of the tables.
+
+A switch that is off has a table with no changes (12 bytes). `DarkMode.build` and Python `darkmode.build` have the arguments `darkSwitch` (`dark_switch`) and `layoutSwitch` (`layout_switch`).
 
 The switch table has this format (little-endian):
 
@@ -1293,11 +1297,12 @@ The XOR data switches the bytes in both directions. A change that the owner edit
 **Size.** Patches pane > iPod Appearance > Dark Theme shows the new space for each appearance:
 
 - "Size on iPod (Dark)": the theme data after 0x736800 (`ImportedTheme.addedSize`).
-- "Size on iPod (Switch on iPod)": items 1 to 4 above, with the alignment (`DarkMode.addedSize`). It needs the open firmware 1.3. The app calculates this value away from the main thread (`refreshSwitchOnIPodSize`), because it takes 1.5 s to 2.6 s. The row shows the last known value until the new value is ready. It shows "Measuring…" only if the app has no value. The app stores the result for each firmware, theme file and layout in its preferences. A different app version calculates again.
+- "Size on iPod (Switch on iPod)": items 1 to 6 above, with the alignment (`DarkMode.addedSize`). It needs the open firmware 1.3. The app calculates this value away from the main thread (`refreshSwitchOnIPodSize`), because it takes 1.5 s to 2.6 s. The row shows the last known value until the new value is ready. It shows "Measuring…" only if the app has no value. The app stores the result for each firmware, theme file and layout in its preferences. A different app version calculates again.
+- Layout > "Size on iPod (Switch on iPod)": with the layout Switch on iPod and the appearance Light or Dark. It is items 2 to 6 with no theme (`AppModel.layoutSwitchSize`). Measured on stock 1.3 with Split ½ – ½: 2,819 bytes (704 bytes of the View and 2,115 bytes for the switch).
 
 The tooltip of the row "Size on iPod (Dark)" gives the bytes inside osos that the theme changes (`ImportedTheme.changedSize`). These changes use no new space. The measured values for the theme "Dark Gray" are 38,428 bytes (Dark), 738,593 bytes (Switch on iPod) and 660,678 changed bytes. The limit of the area is 792,576 bytes (0x736800–0x7F8000; 759,808 bytes before 9 October 2026). The test `testExtendedPatchAfterSwitchBuild` makes sure that `DarkMode.addedSize` agrees with `DarkMode.build`.
 
-The new Settings menu is a copy of the Apple menu with one more item after Clicker (key 0x60006088). The new item is a copy of the Sound Check item (key 0x600060b7) with the key 0x600060e0 and the label ID 0x7e00.
+The new Settings menu is a copy of the Apple menu with one more item after Clicker (key 0x60006088). The new item is a copy of the Sound Check item (key 0x600060b7) with the key 0x600060e0 and the label ID 0x7e00. The Split View item is a copy of the same item with the key 0x60007e15 and the label ID 0x7e14. It comes after Dark Mode, or after Clicker if there is no Dark Mode item. Do not use 0x600060ec: that is Daylight Saving in Menu 24604.
 
 **Hooks.**
 
@@ -1309,17 +1314,19 @@ The new Settings menu is a copy of the Apple menu with one more item after Click
 
 **Runtime logic.**
 
-- `hook_lookup`, at the first lookup of a `View`: read `iPod_Control\iTunes\iPodFirmDarkMode`. If the first byte is `1`, apply the switch table.
-- `hook_lookup`, for `Str ` with ID 0x7e00: return "Dark Mode".
+- `hook_lookup`, at the first lookup of a `View`: read `iPod_Control\iTunes\iPodFirmDarkMode`. If the first byte is `1`, apply the dark switch table. Then read `iPod_Control\iTunes\iPodFirmLayout`. If the first byte is `0`, apply the layout switch table (the stock main menu). No file: Split.
+- `hook_lookup`, for `Str ` with ID 0x7e00: return "Dark Mode". For ID 0x7e14: return "Split View".
 - `hook_lookup`, all other lookups: run `push {r3-r7, lr}` and continue at 0x21f258.
-- `hook_settings_get`, for key 0x60e0: return the string "On" (0x602e) or "Off" (0x602f) for the operations `prID` and `Str `.
-- `hook_settings_set`, for key 0x60e0:
-  1. Write the other value to the file (open for read and write, 0x08f3f8). The open function makes the file if it does not exist.
+- `hook_settings_get`, for key 0x60e0 (Dark Mode) and key 0x7e15 (Split View): return the string "On" (0x602e) or "Off" (0x602f) for the operations `prID` and `Str `.
+- `hook_settings_set`, for key 0x60e0 or 0x7e15:
+  1. Write the other value to the file of the key (open for read and write, 0x08f3f8). The open function makes the file if it does not exist.
   2. Save all settings (0x1ee8b8 with the application object at 0x1081da18).
   3. Prepare a restart (0x094e08).
   4. Restart (0x001630). This writes 4 to `DEV_RS` (0x60006004).
 
 **Test status.** Emulator: the item changed the mode in both directions, and the settings were kept. The same result came without the file on the disk. The Swift build and the Python build give the same osos. Real iPod 5.5G (owner, 28 October 2026, `dark-mode` version 1.1): the three appearances Light, Dark and Switch on iPod operate.
+
+Version 1.2 (Split View item, code 1,299 bytes): the Swift build and the Python build give the same osos for Light, Dark and Switch on iPod (`testLayoutSwitchBuilds`). The owner tested a prototype of the same code in the emulator on 3 November 2026 (Switch on iPod): the 2 items operate in each direction. The prototype used the key 0x600060ec. The app build of version 1.2 is not tested in the emulator. Not tested on a real iPod. The research is in [../re/home-screen.md](../re/home-screen.md#layout-switch-on-the-ipod).
 
 ## Move of rsrc
 
@@ -1356,7 +1363,7 @@ This change does not exist yet. The research found a USB Audio Class 1 source in
 
 **Status.** Tested in the emulator and on a real iPod (31 October 2026). All items operate. The cover sometimes takes approximately 1 s to show, most often after Previous.
 
-**User interface.** Patches pane > iPod Appearance > Layout. Split operates with Light, Dark and Switch on iPod. The pane shows the size. With Split, the Split Width control selects ⅔ – ⅓ or ½ – ½. The Panel Text control selects Standard or Small.
+**User interface.** Patches pane > iPod Appearance > Layout: Stock, Split or Switch on iPod. Split operates with Light, Dark and Switch on iPod. The pane shows the size. Switch on iPod adds a Split View item to Settings on the iPod. Refer to [Dark Mode switch](#dark-mode-switch). With Split or Switch on iPod, the Split Width control selects ⅔ – ⅓ or ½ – ½. The Panel Text control selects Standard or Small.
 
 **Split Width.** ⅔ – ⅓ is the default: the list uses 213 pixels and the panel uses 107 pixels. With ½ – ½, the list and the panel each use 160 pixels. The cover keeps its size of 107 pixels and is in the centre of the panel. The build changes 11 edge values of the View (`withHalfWidth`): the right edge of the scroll bar, the 2 side edges of the cover, and the 2 side edges of the 4 text lines. The text lines use 164 to 314 pixels, so that the text has the same centre as the cover. The list follows the scroll bar. The file `Split.ipodtheme` does not change, and the size on the iPod stays the same. The research is in [../re/home-screen.md](../re/home-screen.md#half-width). The owner reported that Light and Dark look correct in the emulator (3 November 2026). Switch on iPod is not tested. Not tested on a real iPod.
 
@@ -1371,7 +1378,9 @@ The first change has a `copy` list. The file holds zeros in these ranges: the 20
 
 With Dark, the build puts the View after the theme data (`movedLayout`), because the dark background is at 0x736800. The panel text uses Type 24223 (size 18) in place of Type 24227 (size 16), because the dark theme makes only the styles of size 18 white.
 
-With Switch on iPod, the build puts the View after the theme data, in its light form. The table entry stays the same in the 2 modes. The switch table has extra runs for the colours and the text styles of the View. The `dark-mode` patch does not change.
+With Switch on iPod, the build puts the View after the theme data, in its light form. The table entry stays the same in the 2 modes. The switch table has extra runs for the colours and the text styles of the View.
+
+With the layout Switch on iPod, the `dark-mode` build puts the Split View in the firmware and adds the Split View item. The stock View stays in the firmware. The layout switch table changes only the table entry of View 24430. Refer to [Dark Mode switch](#dark-mode-switch).
 
 The osos becomes 0x737000 bytes, and rsrc moves, as with the dark theme. The research is in [../re/home-screen.md](../re/home-screen.md).
 
