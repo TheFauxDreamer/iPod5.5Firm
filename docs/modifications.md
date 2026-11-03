@@ -1126,7 +1126,7 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 
 ## battery-display
 
-**User interface.** Patches pane > Battery Display, letter `y`, in the category Display. Version 1.0 is a normal patch, not a test patch. The option "Display" gives Icon, Icon + Percent or Percent. The option "Battery Data" gives Apple or Custom Battery. The option "Smoothing" gives Off (the default) or On. The tool `battery-curve` gives the section "Battery Curve": **Import from iPod**, **Import Log File…** and **Use the Built-In Curve**. To change an option or the curve, flash the iPod again.
+**User interface.** Patches pane > Battery Percentage, letter `y`, in the category Display. Version 1.0 is a normal patch, not a test patch. Version 1.1 changes only the title, from "Battery Display" to "Battery Percentage". The option "Display" gives Icon, Icon + Percent or Percent. The option "Battery Data" gives Apple or Custom Battery. The option "Smoothing" gives Off (the default) or On. The tool `battery-curve` gives the section "Battery Curve": **Import from iPod**, **Import Log File…** and **Use the Built-In Curve**. To change an option or the curve, flash the iPod again.
 
 **Effect.** The status bar shows the battery as the icon, as a percentage, or as both. During a charge, the iPod shows the charge icon and the percentage, unless Display is Icon. The percentage reads high during a charge. With Custom Battery, the battery picture and the percentage use a curve from a larger battery. The firmware logic for a low battery does not change.
 

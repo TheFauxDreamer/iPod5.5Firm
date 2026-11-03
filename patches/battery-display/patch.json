@@ -1,11 +1,11 @@
 {
   "name": "battery-display",
-  "title": "Battery Display",
+  "title": "Battery Percentage",
   "summary": "Shows a battery percentage beside the icon.",
   "symbol": "battery.75percent",
   "category": "display",
   "version_letter": "y",
-  "version": "1.0",
+  "version": "1.1",
   "size": 3572,
   "description": "Shows the battery as an icon, as a percentage, or as both. It can also use a curve from a larger battery in place of the Apple table.",
   "details": [
