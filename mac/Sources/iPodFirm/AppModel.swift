@@ -131,7 +131,7 @@ final class AppModel: ObservableObject {
         didSet {
             UserDefaults.standard.set(layout.rawValue, forKey: "layout")
             switchesChanged(oldValue != layout)
-            if oldValue != .split && layout == .split && !mirroring { turnOnSplitPatch() }
+            if !oldValue.hasSplit && layout.hasSplit && !mirroring { turnOnSplitPatch() }
         }
     }
 
@@ -236,9 +236,11 @@ final class AppModel: ObservableObject {
 
     /// The layout of the iPod software.
     enum Layout: String, CaseIterable, Identifiable {
-        case stock, split
+        case stock, split, onIPod
         var id: String { rawValue }
-        var title: String { rawValue.capitalized }
+        var title: String { self == .onIPod ? "Switch on iPod" : rawValue.capitalized }
+        /// True if the firmware has the Split View: Split, or Switch on iPod (a Split View item in Settings).
+        var hasSplit: Bool { self != .stock }
     }
 
     enum SplitText: String, CaseIterable, Identifiable {
@@ -259,8 +261,11 @@ final class AppModel: ObservableObject {
         case layout(ImportedTheme)
         /// The theme is in the firmware: always dark. The layout can follow it.
         case dark(ImportedTheme, layout: ImportedTheme?)
-        /// Light firmware with a Dark Mode item in Settings (DarkMode.build).
-        case switchOnIPod(ImportedTheme, PatchInfo, layout: ImportedTheme?)
+        /// Light firmware with a Dark Mode item in Settings (DarkMode.build). With `layoutSwitch`, also a
+        /// Split View item.
+        case switchOnIPod(ImportedTheme, PatchInfo, layout: ImportedTheme?, layoutSwitch: Bool)
+        /// Always light (no theme) or always dark, with the Split View and a Split View item in Settings.
+        case layoutSwitch(ImportedTheme?, PatchInfo, layout: ImportedTheme)
     }
 
     /// An imported theme in the Themes folder.
@@ -694,7 +699,7 @@ final class AppModel: ObservableObject {
 
     /// The Split layout with the selected text size and width. Nil for the Stock layout.
     var activeSplit: ImportedTheme? {
-        guard layout == .split, var split = Self.splitTheme else { return nil }
+        guard layout.hasSplit, var split = Self.splitTheme else { return nil }
         if splitText == .small { split = split.withSmallText() }
         if splitWidth == .half { split = split.withHalfWidth() }
         return split
@@ -702,18 +707,35 @@ final class AppModel: ObservableObject {
 
     /// The appearance build for the output: nothing for Light with the Stock layout.
     var activeAppearance: AppearanceBuild? {
+        let split = activeSplit, layoutSwitch = layout == .onIPod
         if appearance == .light {
-            return activeSplit.map { .layout($0) }
+            if layoutSwitch, let split, let patch = Self.darkModePatch { return .layoutSwitch(nil, patch, layout: split) }
+            return split.map { .layout($0) }
         }
         guard let theme = selectedTheme?.theme else { return nil }
         switch appearance {
         case .light: return nil
-        case .dark: return .dark(theme, layout: activeSplit)
+        case .dark:
+            if layoutSwitch, let split, let patch = Self.darkModePatch { return .layoutSwitch(theme, patch, layout: split) }
+            return .dark(theme, layout: split)
         case .onIPod:
-            let split = activeSplit
-            return Self.darkModePatch.map { .switchOnIPod(theme, $0, layout: split) }
+            return Self.darkModePatch.map { .switchOnIPod(theme, $0, layout: split, layoutSwitch: layoutSwitch) }
         }
     }
+
+    /// The bytes that the Split View, the Split View item and the switch code add, for the layout
+    /// "Switch on iPod" with the appearance Light or Dark. Nil without the open firmware 1.3.
+    var layoutSwitchSize: Int? {
+        guard layout == .onIPod, let editor, let split = activeSplit, isCompatible(split),
+              let patch = Self.darkModePatch else { return nil }
+        let key = "\(revision) \(splitText.rawValue) \(splitWidth.rawValue)"
+        if let c = layoutSwitchSizeCache, c.key == key { return c.size }
+        let size = try? DarkMode.addedSize(partition: editor.partition, osos: editor.osos, theme: nil, darkSwitch: false,
+                                           codeSize: patch.spec.size ?? 0, layout: split, layoutSwitch: true)
+        layoutSwitchSizeCache = (key, size)
+        return size
+    }
+    private var layoutSwitchSizeCache: (key: String, size: Int?)?
 
     /// The version for the About screen: the custom version (or 1.3) and the letters of the switched-on patches.
     /// Nothing when the result is the Apple version.
@@ -751,7 +773,7 @@ final class AppModel: ObservableObject {
         guard key != switchSizeDone else { return }
         measuringSwitchSize = true
         let partition = editor.partition, osos = editor.osos, split = activeSplit
-        let version = version, layoutName = layout.rawValue
+        let version = version, layoutName = layout.rawValue, layoutSwitch = layout == .onIPod
         let size = await Task.detached(priority: .utility) { () -> Int? in
             let defaults = UserDefaults.standard
             let themeBytes = (try? Data(contentsOf: file.url)) ?? Data()
@@ -760,7 +782,8 @@ final class AppModel: ObservableObject {
                 ? defaults.dictionary(forKey: "switchSizes") as? [String: Int] ?? [:] : [:]
             if let size = sizes[input] { return size }
             guard let size = try? DarkMode.addedSize(partition: partition, osos: osos, theme: file.theme,
-                                                     codeSize: patch.spec.size ?? 0, layout: split) else { return nil }
+                                                     codeSize: patch.spec.size ?? 0, layout: split,
+                                                     layoutSwitch: layoutSwitch) else { return nil }
             sizes[input] = size
             defaults.set(sizes, forKey: "switchSizes")
             defaults.set(version, forKey: "switchSizesVersion")
@@ -1318,10 +1341,14 @@ final class AppModel: ObservableObject {
                 AppLog.step("Build: apply the layout \(layout.name)")
                 try layout.movedLayout(after: osos, dark: true).apply(to: &osos, originalSHA256: editor.originalOSOSHash)
             }
-        case .switchOnIPod(let theme, let patch, let layout):
+        case .switchOnIPod(let theme, let patch, let layout, let layoutSwitch):
             AppLog.step("Build: add Dark Mode with the theme \(theme.name) and the patch \(patch.spec.name) \(patch.spec.versionText)")
             osos = try DarkMode.build(partition: editor.partition, osos: osos, theme: theme, patch: patch,
-                                      originalSHA256: editor.originalOSOSHash, layout: layout).0
+                                      originalSHA256: editor.originalOSOSHash, layout: layout, layoutSwitch: layoutSwitch).0
+        case .layoutSwitch(let theme, let patch, let layout):
+            AppLog.step("Build: add Split View with the layout \(layout.name), the theme \(theme?.name ?? "-") and the patch \(patch.spec.name) \(patch.spec.versionText)")
+            osos = try DarkMode.build(partition: editor.partition, osos: osos, theme: theme, darkSwitch: false, patch: patch,
+                                      originalSHA256: editor.originalOSOSHash, layout: layout, layoutSwitch: true).0
         case nil:
             break
         }

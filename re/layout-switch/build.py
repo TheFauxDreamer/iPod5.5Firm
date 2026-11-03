@@ -22,7 +22,7 @@ from ipodfw.themeimport import (OSOS_LIMIT, Theme, _Image, _sha256, _with_copied
                                 half_width, moved_layout)
 
 PATCH_DIR = Path(__file__).resolve().parent / "patch"
-LAYOUT_KEY = 0x600060EC             # the key of the Split View item (patch: LAYOUT_KEY)
+LAYOUT_KEY = 0x60007E15             # the key of the Split View item (patch: LAYOUT_KEY)
 LAYOUT_LABEL = 0x7E14               # the label "Split View" (patch: LAYOUT_LABEL)
 EMPTY_TABLE = struct.pack("<III", darkmode.MAGIC, 0, 12)
 

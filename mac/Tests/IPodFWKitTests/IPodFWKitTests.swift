@@ -730,7 +730,7 @@ final class PatchAndArtTests: XCTestCase {
     /// Each patch records its size on the iPod in patch.json, and the value is the measured size.
     func testPatchSizes() throws {
         for p in Patcher.list(in: Self.repo.appendingPathComponent("patches")) {
-            let measured = try Patcher.codeSize(p, symbols: ["dark_table": 0])   // the Dark Mode build gives dark_table
+            let measured = try Patcher.codeSize(p, symbols: ["dark_table": 0, "layout_table": 0])   // the Dark Mode build gives the tables
             XCTAssertEqual(p.spec.size, measured, "\(p.spec.name): set \"size\": \(measured) in patch.json")
         }
     }
@@ -2019,6 +2019,43 @@ final class DarkModeTests: XCTestCase {
         XCTAssertEqual(Patcher.maxOSOSSize + size, info.patchAt + dark.spec.size!)
         if let path = env["IPODFW_SPLIT_SWITCH_RESULT"] {
             XCTAssertEqual(ThemeImport.sha256(out), ThemeImport.sha256([UInt8](try Data(contentsOf: URL(fileURLWithPath: path)))))
+        }
+    }
+
+    /// The layout "Switch on iPod" with each appearance: the size in the Patches pane agrees with the build,
+    /// the Settings menu has the correct items, and the layout table changes the table entry of View 24430
+    /// to the stock entry and back. Needs IPODFW_IPSW and IPODFW_THEME. With IPODFW_LAYOUT_SWITCH_LIGHT,
+    /// _DARK and _SWITCH (osos files from ipodfw.darkmode.build), Swift and Python must agree.
+    func testLayoutSwitchBuilds() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let ipsw = env["IPODFW_IPSW"], let themePath = env["IPODFW_THEME"] else { throw XCTSkip("set IPODFW_IPSW and IPODFW_THEME") }
+        let partition = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data)
+        let osos = try partition.image("osos")
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        let patch = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "dark-mode" }!
+        let theme = try ImportedTheme.load(URL(fileURLWithPath: themePath))
+        let split = try ImportedTheme.load(repo.appendingPathComponent("themes/layouts/Split.ipodtheme")).withHalfWidth()
+        let forms: [(name: String, theme: ImportedTheme?, darkSwitch: Bool)] = [("LIGHT", nil, false), ("DARK", theme, false), ("SWITCH", theme, true)]
+        for f in forms {
+            let (out, info) = try DarkMode.build(partition: partition, osos: osos, theme: f.theme, darkSwitch: f.darkSwitch, patch: patch,
+                                                 originalSHA256: ThemeImport.sha256(osos), layout: split, layoutSwitch: true)
+            let size = try DarkMode.addedSize(partition: partition, osos: osos, theme: f.theme, darkSwitch: f.darkSwitch,
+                                              codeSize: patch.spec.size!, layout: split, layoutSwitch: true)
+            XCTAssertEqual(Patcher.maxOSOSSize + size, info.patchAt + patch.spec.size!, f.name)
+            let menu = Array(out[info.menu.at..<info.menu.at + info.menu.length])
+            let keys = (0..<Int(le32(menu, 0))).map { le32(menu, 4 + 40 * $0 + 0x1C) }
+            XCTAssertTrue(keys.contains(DarkMode.layoutKey), f.name)
+            XCTAssertEqual(keys.contains(DarkMode.darkKey), f.darkSwitch, f.name)
+            XCTAssertEqual(info.layoutTable.length, 28, f.name)
+            let table = Array(out[info.layoutTable.at..<info.layoutTable.at + info.layoutTable.length])
+            var work = out
+            DarkMode.applySwitchTable(&work, table)
+            XCTAssertEqual(work[0x337428..<0x337430], osos[0x337428..<0x337430], f.name)
+            DarkMode.applySwitchTable(&work, table)
+            XCTAssertEqual(work, out, f.name)
+            if let path = env["IPODFW_LAYOUT_SWITCH_\(f.name)"] {
+                XCTAssertEqual(ThemeImport.sha256(out), ThemeImport.sha256([UInt8](try Data(contentsOf: URL(fileURLWithPath: path)))), f.name)
+            }
         }
     }
 

@@ -40,7 +40,7 @@ extern const unsigned layout_table[];                                           
 #define OP_TEXT_ID   0x70724944u                       /* 'prID': the ID of the value text */
 #define OP_TEXT      0x53747220u                       /* 'Str ': the value text */
 #define DARK_KEY     0x60e0u                           /* the Dark Mode item */
-#define LAYOUT_KEY   0x60ecu                           /* the Split View item */
+#define LAYOUT_KEY   0x7e15u                           /* the Split View item (not a firmware key) */
 #define DARK_LABEL   0x7e00                            /* the label "Dark Mode" */
 #define LAYOUT_LABEL 0x7e14                            /* the label "Split View" */
 #define STR_ON       0x602e

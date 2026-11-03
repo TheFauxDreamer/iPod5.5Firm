@@ -424,7 +424,7 @@ Work that is not done:
 
 ## Layout switch on the iPod
 
-Status: research only (3 November 2026). A prototype operates in the emulator. It is not in the app.
+Status: a prototype operates in the emulator (3 November 2026). The app has it on branch `layout-switch-research` (`dark-mode` 1.2, Layout > Switch on iPod). Not tested on a real iPod.
 
 The owner asked for a switch on the iPod between Stock and Split, in Light and in Dark. Thus the iPod gets 4 forms: Light Stock, Light Split, Dark Stock and Dark Split.
 
@@ -453,7 +453,7 @@ Thus the 2 tables use different addresses, and their order is not important. Spl
 ### Proposed design
 
 1. Change `dark-mode` into a general switch patch with 2 tables: `dark_table` and `layout_table`. Each table can be empty.
-2. Add a second Settings item, "Split View", with On and Off (stock strings 0x602e and 0x602f), after Dark Mode. Use a new key and a new label ID, for example 0x600060ec and 0x7e14. No patch uses these values now.
+2. Add a second Settings item, "Split View", with On and Off (stock strings 0x602e and 0x602f), after Dark Mode. Use the key 0x60007e15 and the label ID 0x7e14. No patch and no Menu resource uses these values.
 3. Keep the setting in a separate file, `iPod_Control\iTunes\iPodFirmLayout`. Thus an old firmware still reads `iPodFirmDarkMode` correctly. The firmware open function makes the file if it is missing.
 4. A change of the item writes the file, saves the settings and restarts the iPod, as Dark Mode does.
 5. In the app, the Layout control gets a third value: Stock, Split or Switch on iPod. It operates with each appearance:
@@ -466,7 +466,7 @@ Thus the 2 tables use different addresses, and their order is not important. Spl
 
 The prototype is in [layout-switch/](layout-switch/):
 
-- `patch/layout_switch.c` is a copy of `dark-mode` with a second table (`layout_table`), a second key (0x600060ec), a second label (0x7e14, "Split View") and a second file (`iPodFirmLayout`).
+- `patch/layout_switch.c` is a copy of `dark-mode` with a second table (`layout_table`), a second key (0x60007e15), a second label (0x7e14, "Split View") and a second file (`iPodFirmLayout`).
 - `build.py` makes the firmware for Light, Dark or Switch on iPod, with Split and an optional `--half`.
 
 The image has the Split main menu. If `iPodFirmLayout` contains '0', the patch applies the layout table, and the stock View comes back. No file means Split. Thus the iPod starts with the layout that the owner selected in the app.
@@ -494,6 +494,8 @@ Emulator results on 3 November 2026 (Switch on iPod, Dark Gray, Split ½ – ½,
 - Second test, on a new drive: the owner reported that the 2 items operate correctly.
 
 Light and Dark alone (only the Split View item) are not tested in the emulator.
+
+Caution: the emulator test used the key 0x600060ec. That key is a firmware key: Daylight Saving in Menu 24604 (Settings > Date & Time). Thus the prototype also took that item. The key is now 0x60007e15. A scan of all Menu resources found no item with 0x60007e15. The `up-next` patch met the same problem before (refer to `up_next.c`).
 
 ### Risks and open points
 

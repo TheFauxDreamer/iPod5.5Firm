@@ -1,15 +1,18 @@
-/* Dark Mode On/Off in the Settings menu of RetailOS 1.3 (iPod Video).
+/* Dark Mode On/Off and Split View On/Off in the Settings menu of RetailOS 1.3 (iPod Video).
  *
  * The build (ipodfw.darkmode / DarkMode.swift) puts these items in the osos image:
- *  - the switch table at dark_table: "IFDM", u32 count N, u32 data offset, N entries
- *    { u32 address, u32 length }, then the data: old XOR new for each change of the dark theme;
- *  - the Settings menu (Menu 24598) with an item for the key KEY and the label LABEL_ID.
+ *  - dark_table and layout_table: "IFDM", u32 count N, u32 data offset, N entries
+ *    { u32 address, u32 length }, then the data: old XOR new. A table with N = 0 does nothing;
+ *  - the Settings menu (Menu 24598) with the Dark Mode item (key DARK_KEY) if the appearance is
+ *    "Switch on iPod", and the Split View item (key LAYOUT_KEY) if the layout is "Switch on iPod".
  *
  * RetailOS makes its screens one time, at the start, from the View resources. Thus the patch
- * applies the table at the start, before the first View is read: at the first lookup of a View,
- * it reads iPod_Control\iTunes\iPodFirmDarkMode. If the file contains '1', it applies the table.
- * When the owner selects the item, the patch writes the other value, saves the settings of the
- * iPod and restarts it.
+ * applies the tables at the start, before the first View is read, at the first lookup of a View:
+ *  - dark_table if iPod_Control\iTunes\iPodFirmDarkMode contains '1' (no file: light);
+ *  - layout_table if iPod_Control\iTunes\iPodFirmLayout contains '0' (no file: Split). The image has
+ *    the Split main menu, and the table changes the table entry of View 24430 back to the stock View.
+ * When the owner selects an item, the patch writes the other value, saves the settings of the iPod
+ * and restarts it.
  *
  * Hooks:
  *  - the first instruction of the general resource lookup (0x21f254): all resource and string
@@ -32,27 +35,32 @@ void save_all(void *app);                                                       
 void prepare_restart(void);                                                        /* 0x94e08 */
 void restart(void);                                                                /* 0x1630 */
 extern const unsigned dark_table[];                                                /* set by the build */
+extern const unsigned layout_table[];                                              /* set by the build */
 
-#define MAGIC      0x4d444649u                         /* "IFDM" */
-#define TAG_VIEW   0x56696577u                         /* 'View' */
-#define TAG_STR    0x53747220u                         /* 'Str ' */
-#define OP_TEXT_ID 0x70724944u                         /* 'prID': the ID of the value text */
-#define OP_TEXT    0x53747220u                         /* 'Str ': the value text */
-#define KEY        0x60e0u                             /* the Dark Mode item */
-#define LABEL_ID   0x7e00                              /* the label "Dark Mode" */
-#define STR_ON     0x602e
-#define STR_OFF    0x602f
-#define APP        (*(void **)0x1081da18)              /* the application object */
-#define FILE_PATH  "iPod_Control\\iTunes\\iPodFirmDarkMode"
-#define MODE_DATA  0x64617461u                         /* 'data' */
+#define MAGIC        0x4d444649u                       /* "IFDM" */
+#define TAG_VIEW     0x56696577u                       /* 'View' */
+#define TAG_STR      0x53747220u                       /* 'Str ' */
+#define OP_TEXT_ID   0x70724944u                       /* 'prID': the ID of the value text */
+#define OP_TEXT      0x53747220u                       /* 'Str ': the value text */
+#define DARK_KEY     0x60e0u                           /* the Dark Mode item */
+#define LAYOUT_KEY   0x7e15u                           /* the Split View item (not a firmware key) */
+#define DARK_LABEL   0x7e00                            /* the label "Dark Mode" */
+#define LAYOUT_LABEL 0x7e14                            /* the label "Split View" */
+#define STR_ON       0x602e
+#define STR_OFF      0x602f
+#define APP          (*(void **)0x1081da18)            /* the application object */
+#define DARK_FILE    "iPod_Control\\iTunes\\iPodFirmDarkMode"
+#define LAYOUT_FILE  "iPod_Control\\iTunes\\iPodFirmLayout"
+#define MODE_DATA    0x64617461u                       /* 'data' */
 
-static const char label[] = "Dark Mode";
-static int dark;                                       /* the mode since the start */
+static const char dark_label[] = "Dark Mode";
+static const char layout_label[] = "Split View";
+static int dark;                                       /* the modes since the start */
+static int split;
 static int decided;
 
-static void apply_table(void)
+static void apply_table(const unsigned *t)
 {
-    const unsigned *t = dark_table;
     unsigned n, i;
     const unsigned char *data;
     if (t[0] != MAGIC)
@@ -68,34 +76,34 @@ static void apply_table(void)
     }
 }
 
-static void make_path(unsigned *path)
+static void make_path(unsigned *path, const char *name)
 {
     fw_memset0(path, 0x108);
-    fw_strcpy((char *)path + 4, FILE_PATH);
+    fw_strcpy((char *)path + 4, name);
 }
 
-/* Returns 1 if the file contains '1'. No file or an error: 0 (light). */
-static int read_setting(void)
+/* The first byte of the file, or 0 if there is no file or an error. */
+static unsigned char read_setting(const char *name)
 {
     unsigned path[0x108 / 4], fh[0x30 / 4], got = 1;
     unsigned char c = 0;
     int err;
-    make_path(path);
+    make_path(path, name);
     fw_memset0(fh, sizeof fh);
     if (file_open(path, fh, 0, MODE_DATA) != 0)
         return 0;
     err = file_read(fh, &got, &c);
     file_close(fh);
-    return err == 0 && got == 1 && c == '1';
+    return err == 0 && got == 1 ? c : 0;
 }
 
-/* Writes '1' or '0' at the start of the file. The file must exist (iPodFirm writes it). */
-static int write_setting(int on)
+/* Writes '1' or '0' at the start of the file. The open function makes the file if it is missing. */
+static int write_setting(const char *name, int on)
 {
     unsigned path[0x108 / 4], fh[0x30 / 4], len = 1;
     unsigned char c = on ? '1' : '0';
     int err, err2;
-    make_path(path);
+    make_path(path, name);
     fw_memset0(fh, sizeof fh);
     err = file_open_rw(path, fh, 0x1000, MODE_DATA);
     if (err != 0)
@@ -118,19 +126,24 @@ void *hook_lookup(void *provider, unsigned type, int id)
 {
     if (!decided && type == TAG_VIEW) {
         decided = 1;
-        dark = read_setting();
+        dark = read_setting(DARK_FILE) == '1';
+        split = read_setting(LAYOUT_FILE) != '0';
         if (dark)
-            apply_table();
+            apply_table(dark_table);
+        if (!split)
+            apply_table(layout_table);
     }
-    if (type == TAG_STR && id == LABEL_ID)
-        return (void *)label;
+    if (type == TAG_STR && id == DARK_LABEL)
+        return (void *)dark_label;
+    if (type == TAG_STR && id == LAYOUT_LABEL)
+        return (void *)layout_label;
     return lookup_original(provider, type, id);
 }
 
 int hook_settings_get(void *self, unsigned op, unsigned key, void *out)
 {
-    if (key == KEY) {
-        short value = dark ? STR_ON : STR_OFF;
+    if (key == DARK_KEY || key == LAYOUT_KEY) {
+        short value = (key == DARK_KEY ? dark : split) ? STR_ON : STR_OFF;
         if (op == OP_TEXT_ID) {
             *(short *)((char *)self + 0x88) = value;
             *(void **)out = (char *)self + 0x88;
@@ -147,8 +160,9 @@ int hook_settings_get(void *self, unsigned op, unsigned key, void *out)
 
 int hook_settings_set(void *self, unsigned op, unsigned key, void *value)
 {
-    if (key == KEY) {
-        if (write_setting(!dark) == 0) {
+    if (key == DARK_KEY || key == LAYOUT_KEY) {
+        int err = key == DARK_KEY ? write_setting(DARK_FILE, !dark) : write_setting(LAYOUT_FILE, !split);
+        if (err == 0) {
             if (APP)
                 save_all(APP);              /* the settings of the iPod, as before a sleep */
             prepare_restart();
