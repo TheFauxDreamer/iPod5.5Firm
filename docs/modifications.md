@@ -36,7 +36,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
-| [Dark Mode switch](#dark-mode-switch) | Code and data | Patches > iPod Appearance | 1 `b` and 2 vtable words, 2 tables and a menu | Version 1.1: yes (28 October 2026). Version 1.2 (Split View item): emulator prototype only |
+| [Dark Mode switch](#dark-mode-switch) | Code and data | Patches > iPod Appearance | 1 `b` and 2 vtable words, 2 tables and a menu | Version 1.1: yes (28 October 2026). Version 1.2 (Split View item): emulator only |
 | [Move of rsrc](#move-of-rsrc) | Partition layout | Automatic | 1 directory entry | Yes |
 
 ## The build sequence
@@ -1326,7 +1326,7 @@ The new Settings menu is a copy of the Apple menu with one more item after Click
 
 **Test status.** Emulator: the item changed the mode in both directions, and the settings were kept. The same result came without the file on the disk. The Swift build and the Python build give the same osos. Real iPod 5.5G (owner, 28 October 2026, `dark-mode` version 1.1): the three appearances Light, Dark and Switch on iPod operate.
 
-Version 1.2 (Split View item, code 1,299 bytes): the Swift build and the Python build give the same osos for Light, Dark and Switch on iPod (`testLayoutSwitchBuilds`). The owner tested a prototype of the same code in the emulator on 3 November 2026 (Switch on iPod): the 2 items operate in each direction. The prototype used the key 0x600060ec. The app build of version 1.2 is not tested in the emulator. Not tested on a real iPod. The research is in [../re/home-screen.md](../re/home-screen.md#layout-switch-on-the-ipod).
+Version 1.2 (Split View item, code 1,299 bytes): the Swift build and the Python build give the same osos for Light, Dark and Switch on iPod (`testLayoutSwitchBuilds`). The owner tested a prototype of the same code in the emulator on 3 November 2026 (Switch on iPod): the 2 items operate in each direction. The prototype used the key 0x600060ec. The owner tested the app build of version 1.2 (app 0.1.256, key 0x60007e15) in the emulator on 3 November 2026: the switch operates. Not tested on a real iPod. The research is in [../re/home-screen.md](../re/home-screen.md#layout-switch-on-the-ipod).
 
 ## Move of rsrc
 

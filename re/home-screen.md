@@ -424,7 +424,7 @@ Work that is not done:
 
 ## Layout switch on the iPod
 
-Status: a prototype operates in the emulator (3 November 2026). The app has it on branch `layout-switch-research` (`dark-mode` 1.2, Layout > Switch on iPod). Not tested on a real iPod.
+Status: the app has it (`dark-mode` 1.2, Layout > Switch on iPod), merged to `main` on 3 November 2026. The prototype and the app build operate in the emulator. Not tested on a real iPod.
 
 The owner asked for a switch on the iPod between Stock and Split, in Light and in Dark. Thus the iPod gets 4 forms: Light Stock, Light Split, Dark Stock and Dark Split.
 
@@ -494,6 +494,8 @@ Emulator results on 3 November 2026 (Switch on iPod, Dark Gray, Split ½ – ½,
 - Second test, on a new drive: the owner reported that the 2 items operate correctly.
 
 Light and Dark alone (only the Split View item) are not tested in the emulator.
+
+Emulator result on 3 November 2026 (app build 0.1.256 from branch `layout-switch-research`, key 0x60007e15): the owner reported that the switch operates.
 
 Caution: the emulator test used the key 0x600060ec. That key is a firmware key: Daylight Saving in Menu 24604 (Settings > Date & Time). Thus the prototype also took that item. The key is now 0x60007e15. A scan of all Menu resources found no item with 0x60007e15. The `up-next` patch met the same problem before (refer to `up_next.c`).
 
