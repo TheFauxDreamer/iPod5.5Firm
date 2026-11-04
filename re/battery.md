@@ -473,7 +473,7 @@ In the Dark Gray build, the rows that are not selected had no arrow. A Dark Gray
 
 ### Version 1.0 (3 November 2026)
 
-The owner decided that `battery-display` is a normal patch, in the category Display. The code is the same as in version 0.4. The letter is now `y`, because `no-now-playing-timer` uses `t` on `main`. The patch `battery-log` stays a test patch.
+The owner decided that `battery-display` is a normal patch, in the category Display. The code is the same as in version 0.4. The letter is now `y`, because `no-now-playing-timer` uses `t` on `main`. The patch `battery-log` stays a test patch. Later, in version 1.3, the owner moved the patch to the category Power and Storage.
 
 ### Version 1.2 (3 November 2026)
 
