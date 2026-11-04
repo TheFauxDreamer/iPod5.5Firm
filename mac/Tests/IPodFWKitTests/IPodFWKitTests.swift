@@ -3444,6 +3444,17 @@ final class BatteryCurveTests: XCTestCase {
         XCTAssertEqual(Int(code[0x4e]) | Int(code[0x4f]) << 8, 0)
     }
 
+    /// Battery Data has Apple (0), 3000 mAh (2) and Custom (1). Custom keeps the value 1 of the old
+    /// choice Custom Battery, so that an imported curve stays in use.
+    func testBatteryDataChoices() throws {
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let spec = try XCTUnwrap(Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "battery-display" }).spec
+        let data = try XCTUnwrap(spec.options?.first { $0.id == "data" })
+        XCTAssertEqual(data.choices.map(\.title), ["Apple", "3000 mAh", "Custom"])
+        XCTAssertEqual(data.choices.map(\.value), [0, 2, 1])
+    }
+
     func testCurveRefusesShortLogs() {
         XCTAssertThrowsError(try BatteryCurve.make(log: log([430, 420, 410])))
         XCTAssertThrowsError(try BatteryCurve.make(log: log(Array(repeating: 420, count: 50))))

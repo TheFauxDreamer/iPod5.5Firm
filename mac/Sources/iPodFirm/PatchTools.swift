@@ -379,27 +379,27 @@ struct BatteryLogContent: View {
 
 // MARK: battery-curve
 
-/// The curve of the option Custom Battery in the battery-display patch. It comes from a battery log.
+/// The curve of the Battery Data choice Custom in the battery-display patch. It comes from a battery log.
 struct BatteryCurveSection: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
         Section {
-            Text("To make a curve for your battery, charge the iPod to full. Clear the battery log. Then play music until the iPod stops. Import the log, and flash the iPod again.")
+            Text("To make a curve for your battery, charge the iPod to full. Clear the battery log. Then play music until the iPod stops. Import the log. Set Battery Data to Custom, and flash the iPod again.")
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("Import from iPod") { model.importBatteryCurveFromIPod() }.disabled(model.currentIPod == nil)
                 Button("Import Log File…") { model.chooseBatteryLogFile() }
                 Spacer()
                 if model.batteryCurve != nil {
-                    Button("Use the Built-In Curve") { model.batteryCurve = nil }
+                    Button("Remove Imported Curve") { model.batteryCurve = nil }
                 }
             }
             if let curve = model.batteryCurve {
                 Text("Imported curve: \(curve.hours, specifier: "%.1f") hours, raw value \(curve.raw[0]) to \(curve.raw[curve.raw.count - 1]).")
                     .foregroundStyle(.secondary)
             } else {
-                Text("The patch uses its built-in curve. This curve is provisional, and it is for one larger battery.")
+                Text("No curve is imported. Custom uses the 3000 mAh curve.")
                     .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         } header: {

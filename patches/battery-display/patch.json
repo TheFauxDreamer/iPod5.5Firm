@@ -5,18 +5,19 @@
   "symbol": "battery.75percent",
   "category": "display",
   "version_letter": "y",
-  "version": "1.1",
-  "size": 3572,
-  "description": "Shows the battery as an icon, as a percentage, or as both. It can also use a curve from a larger battery in place of the Apple table.",
+  "version": "1.2",
+  "size": 3684,
+  "description": "Shows the battery as an icon, as a percentage, or as both. It can also use the curve of a 3000 mAh battery or a curve from your own battery in place of the Apple table.",
   "details": [
     "During a charge, the iPod shows the charge icon and the percentage. With Display set to Icon, it shows only the charge icon.",
     "The Apple data moves in steps of 5 %. The Apple icon has only 16 levels.",
-    "Custom Battery changes the battery picture and the percentage. It does not change when the iPod stops.",
-    "Battery Curve imports a battery log, so that you can make a curve for your own battery.",
+    "3000 mAh and Custom change the battery picture and the percentage. They do not change when the iPod stops.",
+    "Battery Curve imports a battery log, so that you can make a curve for your own battery. Custom uses this curve.",
+    "Without an imported log, Custom uses the 3000 mAh curve.",
     "After a start, the percentage shows when the first value is ready. Until then, the iPod shows the icon."
   ],
   "notes": [
-    "The built-in Custom Battery curve is provisional. It comes from one larger battery and is not from a full charge. Import a log for your own battery.",
+    "The 3000 mAh curve comes from one battery. Other batteries are different. Import a log for your own battery.",
     "The percentage reads high during a charge, because the charge raises the voltage.",
     "The layout is tested only in the emulator. Check the text and the title on each screen of the iPod."
   ],
@@ -111,10 +112,16 @@
           "description": "The Apple table. Use this for a battery of the original size."
         },
         {
+          "value": 2,
+          "title": "3000 mAh",
+          "description": "The curve of a 3000 mAh battery. It changes the icon and the percentage.",
+          "caution": "The curve is from one battery. Other batteries are different."
+        },
+        {
           "value": 1,
-          "title": "Custom Battery",
-          "description": "A curve from a larger battery. It changes the icon and the percentage.",
-          "caution": "The curve is provisional. It is for one battery, and other batteries are different."
+          "title": "Custom",
+          "description": "The curve from your battery log in Battery Curve. It changes the icon and the percentage.",
+          "caution": "Without an imported log, this choice uses the 3000 mAh curve."
         }
       ]
     },

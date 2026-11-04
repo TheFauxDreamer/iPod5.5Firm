@@ -1,7 +1,7 @@
 import Foundation
 
 /// A curve from a battery log: the raw battery value at each percentage. The patch battery-display
-/// uses it for Custom Battery. The percentage is the part of the play time that remained.
+/// uses it for the Battery Data choice Custom. The percentage is the part of the play time that remained.
 public struct BatteryCurve: Codable, Hashable {
     /// The count of points in the patch variables `curve_raw` and `curve_pct`.
     public static let points = 16

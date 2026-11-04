@@ -2,7 +2,8 @@
  *
  * Options in patch.json:
  *   display_mode: 0 icon, 1 icon and percent, 2 percent.
- *   battery_data: 0 Apple (the icon value x 5), 1 custom battery (the table below).
+ *   battery_data: 0 Apple (the icon value x 5), 1 Custom (the table that the app writes), 2 the
+ *   3000 mAh battery (the fixed table below).
  *   smoothing: 1 uses a longer average and stops small rises of the percentage. It also gives Apple
  *   data steps of 1 %, with a line between the limits of the firmware table.
  *
@@ -65,11 +66,18 @@ unsigned display_mode = 2;                                /* an option in patch.
 unsigned battery_data = 0;                                /* an option in patch.json */
 unsigned smoothing = 0;                                   /* an option in patch.json */
 
-/* Provisional: the second log of the owner's larger battery, with 20.3 hours from raw 438. The app
- * writes a curve from an imported log over these values. The raw values decrease. */
+/* The 3000 mAh battery of the owner: re/battery-curve-combine.py with the log from a full charge
+ * (4 November 2026) and the log of 1 November. 20.4 hours from raw 440. The raw values decrease. */
 #define CURVE_POINTS 16u
-unsigned short curve_raw[CURVE_POINTS] = { 438, 423, 415, 405, 380, 363, 350, 337, 325, 311, 300, 284, 250, 200, 150, 116 };
-unsigned short curve_pct[CURVE_POINTS] = { 100,  89,  83,  77,  68,  61,  55,  50,  43,  37,  34,  31,  24,  12,   4,   0 };
+#define MAH3000_RAW  { 440, 422, 413, 404, 389, 373, 356, 341, 329, 313, 290, 261, 227, 197, 163, 104 }
+#define MAH3000_PCT  { 100,  93,  87,  80,  73,  67,  60,  53,  47,  40,  33,  27,  20,  13,   7,   0 }
+static const unsigned short mah3000_raw[CURVE_POINTS] = MAH3000_RAW;
+static const unsigned short mah3000_pct[CURVE_POINTS] = MAH3000_PCT;
+
+/* Custom: the app writes a curve from an imported log over these values. Without a log, Custom is
+ * the same as the 3000 mAh battery. */
+unsigned short curve_raw[CURVE_POINTS] = MAH3000_RAW;
+unsigned short curve_pct[CURVE_POINTS] = MAH3000_PCT;
 
 static unsigned samples[LONG_AVERAGE], sample_count, sample_next, sample_sum;
 static unsigned last_read;
@@ -103,16 +111,17 @@ static unsigned mean_raw(void)
     return sample_count ? sample_sum / sample_count : 0;
 }
 
-static int custom_percent(unsigned mean)
+/* A line between the points of a curve. */
+static int curve_percent(unsigned mean, const unsigned short *raw, const unsigned short *pct)
 {
     unsigned i, span;
 
-    if (mean >= curve_raw[0])
+    if (mean >= raw[0])
         return 100;
     for (i = 1; i < CURVE_POINTS; i++) {
-        if (mean >= curve_raw[i]) {
-            span = curve_raw[i - 1] - curve_raw[i];
-            return curve_pct[i] + (mean - curve_raw[i]) * (curve_pct[i - 1] - curve_pct[i]) / span;
+        if (mean >= raw[i]) {
+            span = raw[i - 1] - raw[i];
+            return pct[i] + (mean - raw[i]) * (pct[i - 1] - pct[i]) / span;
         }
     }
     return 0;
@@ -153,7 +162,8 @@ static int percent(void *provider)
         unsigned mean = mean_raw();
         if (!mean)
             return last_percent < 0 ? 0 : last_percent;
-        value = battery_data ? custom_percent(mean) : apple_percent(mean);
+        value = battery_data == 2 ? curve_percent(mean, mah3000_raw, mah3000_pct)
+              : battery_data ? curve_percent(mean, curve_raw, curve_pct) : apple_percent(mean);
         if (smoothing && last_percent >= 0 && value > last_percent && value < last_percent + RISE_PERCENT)
             return last_percent;
     } else {

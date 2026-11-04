@@ -474,3 +474,90 @@ In the Dark Gray build, the rows that are not selected had no arrow. A Dark Gray
 ### Version 1.0 (3 November 2026)
 
 The owner decided that `battery-display` is a normal patch, in the category Display. The code is the same as in version 0.4. The letter is now `y`, because `no-now-playing-timer` uses `t` on `main`. The patch `battery-log` stays a test patch.
+
+### Version 1.2 (3 November 2026)
+
+The owner asked for three choices in "Battery Data": Apple, 3000 mAh and Custom.
+
+| Choice | Value | Table |
+|---|---|---|
+| Apple | 0 | The firmware table, as before |
+| 3000 mAh | 2 | `mah3000_raw` and `mah3000_pct`, fixed in the code |
+| Custom | 1 | `curve_raw` and `curve_pct`. The app writes the imported curve into them |
+
+Custom keeps the value 1 of the old choice Custom Battery. Thus an iPod with an imported curve keeps its curve. Without an imported curve, Custom has the 3000 mAh values. The measured size is 3684 bytes (version 1.1: 3572 bytes).
+
+The 3000 mAh table comes from the final log and the second log. Refer to [Fifth log](#fifth-log-from-a-full-charge-to-empty-4-november-2026).
+
+#### The method for the final 3000 mAh table
+
+The owner asked to use all logs for the final table. The script [battery-curve-combine.py](battery-curve-combine.py) does this. Each log gives a different part of the data:
+
+| Log | Use |
+|---|---|
+| The final log, from a full charge until the iPod stops | The top of the curve, the full play time and a curve to empty |
+| Second log (1 November), to empty from raw 421 | A second measurement of the hours that remain at each raw value |
+| First log (31 October), raw 436 to 417 | A check of the fall rate at the top. It does not change the table |
+| Third log (2 November), on a charger | The script shows a caution for a start value above raw 460 |
+| Fourth log (3 November), raw 456 to 451 | It shows the fast fall after a charge. The method starts each log at its highest mean value |
+
+The procedure:
+
+1. Add the final log to `battery-logs/`.
+2. Run the script. Put the final log first:
+
+   ```
+   python3 re/battery-curve-combine.py --empty re/battery-logs/<final log> re/battery-logs/2026-11-01-battery-2-to-empty.txt --check re/battery-logs/2026-10-31-battery-1.txt
+   ```
+
+3. Compare the hours that remain at the first common raw value. If the two logs differ by more than 10 %, examine the cause before you use the mean. A different backlight time, EQ or volume can be the cause.
+4. Compare the check line of the first log. A large difference shows that the top of the final log is not typical.
+5. Put the two lines `MAH3000_RAW` and `MAH3000_PCT` into `battery_display.c`.
+
+The script reads each log with the method of `BatteryCurve.make`. Below the top of the second log, it uses the mean of the hours that remain. Above that value, it keeps the shape of the final log. The 0 % value is the mean of the last raw value of each log.
+
+The script finds the raw value where the hours that remain reach each percentage. `BatteryCurve.make` reads the raw value at equal times. The script must use the raw value, because it combines two logs at the same raw value.
+
+With only the second log, the script gives the values below. The largest difference from `BatteryCurve.make` is 4 raw units (161 in the app, 165 in the script, at 7 %):
+
+```
+#define MAH3000_RAW  { 421, 414, 405, 390, 372, 360, 346, 334, 322, 305, 279, 253, 224, 196, 165, 116 }
+#define MAH3000_PCT  { 100,  93,  87,  80,  73,  67,  60,  53,  47,  40,  33,  27,  20,  13,   7,   0 }
+```
+
+### Fifth log: from a full charge to empty (4 November 2026)
+
+The owner charged the iPod to full and played music until the iPod stopped. The file is `battery-logs/2026-11-04-full-charge-to-empty.txt`.
+
+- The log has one run of 253 samples, from 60 s to 75699 s (21.0 hours). The time between samples is 300–301 s, with no gap.
+- The first raw value is 443, and the highest mean is 440. The last raw values are 108, 102 and 92.
+- The largest rise is 6 raw units (48686 s: 296 to 302). No sample is near the charger values (476–478). Thus a charger was not connected.
+- The fourth column is 1 in each sample.
+
+Raw values at each hour:
+
+| Hour | 0 | 2 | 4 | 6 | 8 | 10 | 12 | 14 | 16 | 18 | 20 | 21 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Raw | 443 | 419 | 408 | 388 | 361 | 338 | 320 | 290 | 245 | 201 | 143 | 92 |
+
+The result of `battery-curve-combine.py` with the fifth log and the second log, and the first log as a check:
+
+| Item | Value |
+|---|---|
+| Hours that remain at raw 421, fifth log | 19.43 |
+| Hours that remain at raw 421, second log | 18.26 (6 % less) |
+| Combined curve | Raw 440 to 104, 20.43 hours |
+| The 0 % value | 104: the mean of 92 (fifth log) and 116 (second log) |
+| Check with the first log, raw 436 to 417 | 2.75 hours in the log, 1.75 hours in the curve (+57 %) |
+
+The difference at raw 421 is less than 10 %, so the mean is correct to use. The first log does not agree at the top of the curve. It did not start from a full charge, and its load is not known. Thus the top 7 % of the curve is the least certain part.
+
+The iPod stopped at raw 92 in the fifth log and at raw 116 in the second log. The stop value is not fixed. With the 0 % value 104, the fifth log gives 2 % at raw 123, 30 minutes before the stop. It gives 0 % from raw 108, 10 minutes before the stop.
+
+The table in `battery_display.c` (version 1.2):
+
+```
+#define MAH3000_RAW  { 440, 422, 413, 404, 389, 373, 356, 341, 329, 313, 290, 261, 227, 197, 163, 104 }
+#define MAH3000_PCT  { 100,  93,  87,  80,  73,  67,  60,  53,  47,  40,  33,  27,  20,  13,   7,   0 }
+```
+
