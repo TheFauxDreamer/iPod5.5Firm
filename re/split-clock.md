@@ -1,6 +1,6 @@
 # A clock in the Split panel
 
-Status (4 November 2026): version 1.1 operates in the emulator (Light, ⅔ – ⅓). Version 1.0 showed no clock. Refer to [The fault of version 1.0](#the-fault-of-version-10). Not tested on a real iPod.
+Status (4 November 2026): versions 1.1 and 1.2 operate in the emulator (Light, ⅔ – ⅓). Version 1.0 showed no clock. Refer to [The fault of version 1.0](#the-fault-of-version-10). Not tested on a real iPod.
 
 The owner wants the right panel of the Split main menu to show the time, the day and the date when there is no current song. The owner reports that the iPod classic 6G/7G does this. All addresses are osos offsets of firmware 1.3. The method is static research with Ghidra, project `osos13`, read-only, and a full decompile.
 
@@ -105,6 +105,29 @@ The emulator also gave all zeros from the clock chip. The firmware made "27 June
 
 Owner, 4 November 2026: Light, ⅔ – ⅓, folder library, Short Month, emulator patch 0003. The panel showed the time of the Mac, "Wednesday" and "Nov 4 2026", and the owner reported that it looks great.
 
+## Version 1.2: no "0 of 0", and the clock after a pause
+
+The owner asked on 4 November 2026 for 2 changes: no "0 of 0" with no song, and the clock again after a pause. The option "Clock After a Pause" gives Never, 1 Minute, 5 Minutes (the default) or 15 Minutes. Only Play brings the paused song back.
+
+A test copy recorded these values in the emulator (owner: play, pause, Now Playing):
+
+| Item | Result |
+|---|---|
+| 0x9ba00(provider + 0x1c) | 0 with no song, 1 during playback, 2 after Pause. |
+| Requests of the panel object | `'Str '` 0x63bd–0x63bf, 0x63c3, 0x7e41–0x7e43, `'Draw'` 0x63c7 (the cover), `'BMap'` 0x63ce, `'Cntl'` 0x63c2 and other IDs. |
+| Song title requests from another object | 30, all from the main provider itself. Thus Now Playing asks the main provider directly, not the panel object. |
+
+The design:
+
+- The lookup hook gives no answer to the panel object for 0x63c3 when the song title is empty.
+- At each minute event, the patch reads the play state. More than `pause_minutes` events in the state 2 set the pause clock. Then the panel object gets no answer for the song lines, the count and the cover, and the clock lines show.
+- At each notify on the main provider while the pause clock shows, the state 1 clears it. Thus Play brings the song back at once.
+- Each change notifies the song lines, the count, `'Draw'` 0x63c7 and the clock lines on the panel object.
+
+The size is 1392 bytes with `__attribute__((minsize))` (1854 bytes without it).
+
+The emulator was slow for approximately 30 s after each Pause and Next. The cause was in the emulator, not in the patch. Refer to [emulator.md](emulator.md#the-cop-sleep-fix). With the emulator patches 0001–0004, the owner reported that version 1.2 works.
+
 ## The fonts
 
 | Type | Font | Alignment | Colour in Dark Gray |
@@ -122,7 +145,7 @@ The key of Settings > Date & Time > Time in Title is 0x600060a8 (Menu 24604). Th
 
 ## Open points
 
-- The change from a song to the clock is not tested. The emulator plays music, so it can test this.
+- The change from a stopped song (the end of the play list) to the clock is not tested. The pause and Play are tested in the emulator.
 - Dark, ½ – ½, Switch on iPod, Long Month and the Swift build path are not tested.
 - After a sleep, the old minute can show until the timer event comes.
 - The patch keeps the data object of the last clock request. If the firmware makes the main menu again, the next request gives the new object.

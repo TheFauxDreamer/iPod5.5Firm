@@ -80,6 +80,20 @@ With the patch:
 
 The patch changes no other register. `trace` with `--rtc=` still sets the time with `set_clock`.
 
+## The COP sleep fix
+
+The patch `mac/Resources/emulator-patches/0004-ipodfirm-cop-sleep.patch` changes the `COP_CTL` write path in `tools/ipod-machine/src/lib.rs`.
+
+The fault: after Pause or Next, the emulated iPod did not answer the buttons for approximately 30 s. Measured on 4 November 2026 with `IPODFW_PROFILE=1` and `hist` each 3 s:
+
+- During the stall, the top blocks were 0x1fc700 and 0x1fc5c0 (the interrupt dispatcher 0x1fc5b8) and the handler 0xded04. The minute timer of `split-clock` still ran, so the UI task was not stopped.
+- 0xded04 writes `PROC_SLEEP` (0x80000000) to `COP_CTL` (0x60007004) in a loop until the COP clears the flag at RAM 0x14937139.
+- The emulator stopped the COP at once on each write of the sleep bit, also a write by the CPU. The COP then could not clear the flag, and the CPU stayed in the interrupt until another interrupt woke the COP.
+
+On the real iPod this loop ends, so a `PROC_SLEEP` from the CPU does not stop a COP that runs. The patch models this: the COP sleeps only when it writes `PROC_SLEEP` itself, or when it already sleeps. A wake from the CPU (0) operates as before. All 392 tests of `ipod-machine` pass. The owner reported on 4 November 2026 that Pause and Next operate.
+
+Caution: build the emulator from a source with all patches. On 4 November 2026, a build from `emulator-src` had only patch 0001, because the build of 31 October used a second folder (`emulator-src-playback`). `install-emulator.sh` applies all files in `emulator-patches` in name order.
+
 ## The music playback fix
 
 The patch `mac/Resources/emulator-patches/0002-ipodfirm-music-playback.patch` makes songs play. Before this patch, the song time stayed at 0:00. The patch makes two changes in `tools/ipod-machine/src/lib.rs`:

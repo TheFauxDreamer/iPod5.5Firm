@@ -7,16 +7,26 @@
  * The hooks:
  *   0x21f254: the general lookup ("b", chain). A panel label asks its data object, then the language
  *             manager and the root object. The main provider is not in this chain: the data object
- *             sends it only the music IDs. Thus the patch answers the clock IDs here, and only if the
- *             song title is empty. The clock and the song do not show at the same time.
+ *             sends it only the music IDs. Thus the patch answers the clock IDs here. The clock shows
+ *             if the song title is empty, or after a pause of pause_minutes. Then the patch also gives
+ *             no answer for the song lines, the count and the cover of the panel. Now Playing asks the
+ *             main provider directly, so it keeps the paused song.
  *   0x670fa8: the notify method of the main provider (0x21f37c, chain). A notify of the song title
  *             also goes to the clock lines.
  *   0x6701ec: the event method of the status object (0x1d93c4, chain). The first event makes the
  *             timer of the patch with the status object as its owner. The timer comes at each minute.
+ *             It counts the minutes of a pause (0x9ba00 gives 2).
  */
 
 #define TAG_STR      0x53747220u         /* 'Str ' */
-#define SONG_TITLE   0x63bd
+#define TAG_DRAW     0x44726177u         /* 'Draw' */
+#define SONG_TITLE   0x63bd              /* then 0x63be the artist, 0x63bf the album */
+#define SONG_COUNT   0x63c3              /* "%d of %d" */
+#define SONG_COVER   0x63c7              /* asked with 'Draw' */
+#define PLAYING      1                   /* 0x9ba00 */
+#define PAUSED       2
+#define OBJ_PROVIDER 0x18                /* status object + 0x18: the main provider */
+#define PROVIDER_LIBRARY 0x1c            /* main provider + 0x1c: the library */
 #define CLOCK_TIME   0x7e41
 #define LINES        3                   /* the time, the day, the date */
 #define EV_TIMER     9
@@ -37,6 +47,7 @@ void *language_manager(void);                                        /* 0x21f3b8
 void timer_make(void *owner, void *timer, int a, int b);             /* 0x13d7c8 */
 void timer_period(void *timer, unsigned ms);                         /* 0x151c24 */
 void timer_start(void *timer);                                       /* 0x151694 */
+int play_state(void *library);                                       /* 0x9ba00 */
 
 /* 0x11: the short time (12-hour or 24-hour). 2: the name of the day. The date is date_style. */
 static const unsigned char styles[LINES - 1] = { 0x11, 2 };
@@ -45,8 +56,14 @@ static const unsigned char styles[LINES - 1] = { 0x11, 2 };
  * 8: the long date (string 0xab, for example "4 November 2026"). */
 unsigned date_style = 14;
 
+/* An option in patch.json: the minutes of a pause before the clock shows. 0: never. */
+unsigned pause_minutes = 5;
+
 static unsigned timer[10];               /* a firmware timer: 0x28 bytes */
 static void *owner, *labels;             /* labels: the data object that the clock labels ask */
+static void *library;
+static unsigned paused_ticks;            /* minute events with the music paused */
+static int pause_clock;                  /* 1: the clock shows in place of the paused song */
 static char text[LINES][TEXT_SIZE];
 
 /* The replaced first instruction of 0x21f254. Without an earlier hook, lookup_next is this function. */
@@ -74,18 +91,55 @@ static const char *make_text(int line)
     return text[line][0] ? text[line] : 0;
 }
 
-static void notify_lines(void)
+__attribute__((minsize)) static void notify(unsigned type, int id)
+{
+    (*(notify_fn *)(*(char **)labels + NOTIFY_SLOT))(labels, type, id);
+}
+
+/* The clock lines, and with `song` also the song lines, the count and the cover of the panel. */
+__attribute__((minsize)) static void notify_lines(int song)
 {
     int line;
 
     if (!labels)
         return;
     for (line = 0; line < LINES; line++)
-        (*(notify_fn *)(*(char **)labels + NOTIFY_SLOT))(labels, TAG_STR, CLOCK_TIME + line);
+        notify(TAG_STR, CLOCK_TIME + line);
+    if (!song)
+        return;
+    for (line = SONG_TITLE; line <= SONG_TITLE + 2; line++)
+        notify(TAG_STR, line);
+    notify(TAG_STR, SONG_COUNT);
+    notify(TAG_DRAW, SONG_COVER);
+}
+
+__attribute__((minsize)) static void set_pause_clock(int on)
+{
+    if (pause_clock == on)
+        return;
+    pause_clock = on;
+    notify_lines(1);
+}
+
+/* At each minute event. A pause shows the clock after more than pause_minutes events, thus after
+ * pause_minutes to pause_minutes + 1 minutes. */
+__attribute__((minsize)) static void count_pause(void)
+{
+    int state = library ? play_state(library) : 0;
+
+    if (state != PAUSED) {
+        paused_ticks = 0;
+        set_pause_clock(0);
+        return;
+    }
+    if (paused_ticks <= pause_minutes)
+        paused_ticks++;
+    if (pause_minutes && paused_ticks > pause_minutes)
+        set_pause_clock(1);
 }
 
 /* The timer for the next minute. */
-static void start_timer(void)
+__attribute__((minsize)) static void start_timer(void)
 {
     unsigned calendar[3], seconds;
 
@@ -97,38 +151,56 @@ static void start_timer(void)
     timer_start(timer);
 }
 
-void *hook_lookup(void *start, unsigned type, int id)
+__attribute__((minsize)) void *hook_lookup(void *start, unsigned type, int id)
 {
     unsigned line = (unsigned)(id - CLOCK_TIME);
     const char *song;
 
+    if (labels && start == labels && pause_clock &&
+        ((type == TAG_STR && (unsigned)(id - SONG_TITLE) < 3) || (type == TAG_DRAW && id == SONG_COVER)))
+        return 0;
+    if (type == TAG_STR && id == SONG_COUNT && labels && start == labels) {
+        song = lookup_next(start, TAG_STR, SONG_TITLE);
+        if (pause_clock || !song || !*song)
+            return 0;                       /* no "0 of 0" with no song */
+    }
     if (type != TAG_STR || line >= LINES)
         return lookup_next(start, type, id);
     labels = start;
-    song = lookup_next(start, TAG_STR, SONG_TITLE);
-    if (song && *song)
-        return 0;
+    if (!pause_clock) {
+        song = lookup_next(start, TAG_STR, SONG_TITLE);
+        if (song && *song)
+            return 0;
+    }
     return (void *)make_text(line);
 }
 
-int hook_notify(void *self, unsigned type, int id)
+__attribute__((minsize)) int hook_notify(void *self, unsigned type, int id)
 {
     int result = notify_next(self, type, id);
 
     if (type == TAG_STR && id == SONG_TITLE)
-        notify_lines();
+        notify_lines(0);
+    /* Play brings the paused song back at once. */
+    if (pause_clock && library && play_state(library) == PLAYING) {
+        paused_ticks = 0;
+        set_pause_clock(0);
+    }
     return result;
 }
 
-int hook_event(void *self, const int *event)
+__attribute__((minsize)) int hook_event(void *self, const int *event)
 {
     if (!owner) {
         owner = self;
+        void *provider = *(void **)((char *)self + OBJ_PROVIDER);
+        library = provider ? *(void **)((char *)provider + PROVIDER_LIBRARY) : 0;
         timer_make(self, timer, 0, 0);
         start_timer();
     }
     if (self == owner && event[1] == EV_TIMER && event[2] == (int)timer) {
-        notify_lines();
+        notify_lines(0);
+        count_pause();
         start_timer();
         return 1;
     }

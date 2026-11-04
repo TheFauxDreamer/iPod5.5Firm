@@ -350,7 +350,7 @@ The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not ch
 
 ## The emulator
 
-The Emulator pane uses [siggifly/ipod-emulator](https://github.com/siggifly/ipod-emulator), built from source. iPodFirm adds the patches in [emulator-patches](../mac/Resources/emulator-patches/) before the build: 0001 (the instruments), 0002 (the music playback) and 0003 (a clock that runs). Refer to [re/emulator.md](../re/emulator.md).
+The Emulator pane uses [siggifly/ipod-emulator](https://github.com/siggifly/ipod-emulator), built from source. iPodFirm adds the patches in [emulator-patches](../mac/Resources/emulator-patches/) before the build: 0001 (the instruments), 0002 (the music playback), 0003 (a clock that runs) and 0004 (the COP sleep fix). Refer to [re/emulator.md](../re/emulator.md).
 
 "Run in Emulator" does these steps:
 
