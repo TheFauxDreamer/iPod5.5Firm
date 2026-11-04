@@ -117,6 +117,7 @@ The table shows the status that the test notes record. For the full test record,
 | Something Comforting | m | An example patch. A Settings item plays a short song on the internal speaker of the iPod. | Yes |
 | USB-C Audio | u | Plays the music through USB-C headphones. Refer to [USB-C Audio](#usb-c-audio). | Yes (version 1.9) |
 | Battery Percentage | y | Shows the battery as an icon, a percentage or both. It can use Apple data or a curve from a larger battery. The options are in the Patches pane. | No. Tested in the emulator only. |
+| Split Clock | z | With the Split layout, the right panel of the main menu shows the time, the day and the date when there is no current song. | No |
 | Playback Log | g | A test patch. It records the shuffle, the playback, the memory and the installed patches in a log on the iPod. The iPod pane shows the log in the section **Logs on This iPod**. Turn on Enable Test Patches to see it. Use it when the music stops. "Save the Log to Share…" makes a text file. "Report on GitHub…" also opens a new issue (a GitHub account is necessary). | No |
 | Diagnostic Log | d | A test patch. It records the playback, the memory, the power, the artwork and the performance in a log on the iPod. A switch selects each area. Turn on Enable Test Patches to see it. Only one of Playback Log and Diagnostic Log can be on. | No |
 | USB Host Probe | h | A test patch for research only. Refer to [USB Host Probe](#usb-host-probe). | Yes (up to version 1.29) |

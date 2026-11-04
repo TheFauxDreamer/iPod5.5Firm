@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from ipodfw.themeimport import Theme, ThemeError, apply_theme, half_width, moved_layout, small_text, view_elements
+from ipodfw.themeimport import (Theme, ThemeError, apply_theme, half_width, moved_layout, small_text, view_elements,
+                                with_clock)
 
 ROOT = Path(__file__).resolve().parents[1]
 THEME = ROOT / "themes/layouts/Split.ipodtheme"
@@ -113,3 +114,36 @@ def test_half_width_moves_only_the_edges():
     # The order with the small text does not change the result, and a second call changes nothing.
     assert half_width(small_text(theme)).changes[0].new == small_text(half).changes[0].new
     assert half_width(half).changes[0].new == view
+
+
+# The SHA-256 of the View at 1/2 width with the clock lines. testSplitLayoutFile in Swift checks the same value.
+HALF_WIDTH_CLOCK_VIEW_SHA256 = "8805963c20cb4f2cf2e8012762d11b302dddb03ac1e5f7028ff7fca0e94424dd"
+
+
+def test_clock_adds_three_lines_after_the_panel():
+    theme = Theme.from_json(THEME.read_text())
+    clock = with_clock(theme)
+    view = clock.changes[0].new
+    assert len(view) == 704 + 3 * 96
+    assert view[:4] == struct.pack("<I", 10) and view[4:704] == theme.changes[0].new[4:704]
+    assert clock.changes[1].new == theme.changes[1].new[:4] + struct.pack("<I", len(view))
+    for i, (ident, top) in enumerate(((0x7E41, 72), (0x7E42, 96), (0x7E43, 118))):
+        line = view[704 + 96 * i:800 + 96 * i]
+        assert struct.unpack_from("<II", line, 8) == (0x53747220, ident)
+        assert struct.unpack_from("<i", line, 36)[0] == top
+        assert line[40:] == view[456:512]
+    # A second call changes nothing. The width must come first: half_width needs the View of 704 bytes.
+    assert with_clock(clock).changes[0].new == view
+    assert half_width(clock).changes[0].new == view
+    half = with_clock(half_width(theme)).changes[0].new
+    assert struct.unpack_from("<i", half, 704 + 48)[0] == 164
+    assert hashlib.sha256(half).hexdigest() == HALF_WIDTH_CLOCK_VIEW_SHA256
+
+
+def test_clock_lines_get_the_dark_and_small_text():
+    theme = with_clock(Theme.from_json(THEME.read_text()))
+    assert moved_layout(theme, b"", True).changes[0].new.count(struct.pack("<I", 0x5E9F0000)) == 7
+    small = with_clock(small_text(Theme.from_json(THEME.read_text()))).changes[0].new
+    assert small.count(struct.pack("<I", 0x5E980000)) == 7
+    moved = moved_layout(theme, bytes(0x73fe1d))
+    assert moved.changes[1].new[4:] == struct.pack("<I", 992)

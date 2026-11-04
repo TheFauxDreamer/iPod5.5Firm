@@ -31,6 +31,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [playlist-folders](#playlist-folders) | Code patch (extended) | Patches | 4 `bl`, 2 `b` and 1 vtable word (with `chain`) | Version 0.1: emulator only (29 October 2026). Not tested on the real iPod |
 | [playback-log](#playback-log) | Code patch (test, extended) | Patches | 8 `bl`, 5 `b` (all 5 with `chain`) | Version 1.0: yes (30 October 2026). Version 1.2: no. Not tested in the emulator |
 | [battery-display](#battery-display) | Code patch (extended) | Patches | 5 `bl` | Emulator (layout, Light and Dark Gray). Not tested on a real iPod |
+| [split-clock](#split-clock) | Code patch (extended) and 3 View elements | Patches | 3 vtable words (all with `chain`) | No. Not tested in the emulator |
 | [battery-log](#battery-log) | Code patch (test, extended) | Patches | 1 `bl` | Version 0.1: yes, 18.3 hours on a real iPod. Version 0.2: not tested on a real iPod. Not tested in the emulator |
 | [diagnostic-log](#diagnostic-log) | Code patch (test, extended) | Patches | 12 `bl`, 8 `b` (all 8 with `chain`), 1 `word` (`chain`) | No. Not tested in the emulator |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
@@ -1137,6 +1138,28 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 **Test status.** Swift tests (3 November 2026). Emulator (owner, 3 November 2026, version 0.4, Icon + Percent, firmware from the Python tools): the text is complete, black in Light and white in Dark Gray, at the left of the icon. At the start, only the icon shows until the first value. Not tested: Percent mode, Now Playing, the charge view, the Swift build path and a real iPod.
 
 **Research.** Refer to [re/battery.md](../re/battery.md).
+
+## split-clock
+
+**User interface.** Patches pane > Split Clock, letter `z`, in the category Display. The patch needs the Split layout (iPod Appearance > Layout: Split or Switch on iPod). With the Stock layout, the patch has no effect. "Size on iPod (Split)" includes the 3 clock lines when the patch is on.
+
+**Effect.** When there is no current song, the right panel of the Split main menu shows 3 lines: the time, the name of the day and the date. The time obeys Settings > Date & Time > Time (12-hour or 24-hour). The names and the formats use the language of the iPod. When a song starts, the panel shows the cover and the song again. A paused song stays in the panel.
+
+**Layout.** `ImportedTheme.withClock` (Python `with_clock`) adds 3 text elements of 96 bytes after the 7 elements of the Split View. Each element is a copy of the artist line (offset 416) with the ID 0x7e41, 0x7e42 or 0x7e43 and the top edge 72, 96 or 118. Thus the lines get the width, the size and the colour of the panel text in each form. The View becomes 992 bytes, and the table entry gets the new size. The build adds the lines only when the patch is on. Use `withClock` after `withHalfWidth` and `withSmallText`, because these two need the View of 704 bytes.
+
+**Method.** 3 `word` hooks, all with `chain`:
+
+| Word | Expect | To | Action |
+|---|---|---|---|
+| 0x670fb0 | 0x001e804c | `hook_text` | For type `'Str '` and the 3 clock IDs: if the song title (0x63bd) is not empty, it gives 0, so the line does not draw. Else it calls 0xd252c and the format method of the language manager (slot + 0x7c, style 0x11, 2 or 8). |
+| 0x670fa8 | 0x0021f37c | `hook_notify` | After a notify of 0x63bd, it also notifies the 3 clock IDs. |
+| 0x6701ec | 0x001d93c4 | `hook_event` | At the first event of the status object, it makes a timer with this object as the owner. At its timer event, it notifies the 3 clock IDs and starts the timer for the next minute (the rest of the minute + 100 ms). |
+
+**Load address.** `extended`. The code and the data are 907 bytes.
+
+**Test status.** Swift and Python tests (4 November 2026). Not tested in the emulator or on a real iPod.
+
+**Research.** Refer to [re/split-clock.md](../re/split-clock.md).
 
 ## battery-log
 

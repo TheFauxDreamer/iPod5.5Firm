@@ -806,7 +806,7 @@ struct AppearanceDetail: View {
                               systemImage: "xmark.octagon.fill").labelStyle(StatusLabelStyle(tint: .orange))
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    LabeledContent("Size on iPod (Split)", value: PatchSpec.byteText(split.addedSize))
+                    LabeledContent("Size on iPod (Split)", value: PatchSpec.byteText((model.activeSplit ?? split).addedSize))
                     if model.layout == .onIPod && model.appearance != .onIPod {
                         LabeledContent("Size on iPod (Switch on iPod)",
                                        value: model.layoutSwitchSize.map(PatchSpec.byteText) ?? "Open the firmware 1.3 to calculate")

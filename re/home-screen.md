@@ -539,5 +539,6 @@ Work:
 
 Later:
 
-1. No automatic Now Playing. Refer to [Automatic Now Playing](#automatic-now-playing).
-2. Find what the gate 0x94bbc(0x19) tests, if the cover delay needs a fix.
+1. A clock in the panel when there is no current song: the patch `split-clock`. Refer to [split-clock.md](split-clock.md).
+2. No automatic Now Playing. Refer to [Automatic Now Playing](#automatic-now-playing).
+3. Find what the gate 0x94bbc(0x19) tests, if the cover delay needs a fix.

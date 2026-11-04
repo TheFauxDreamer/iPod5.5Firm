@@ -1324,6 +1324,20 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(small.withHalfWidth().changes[0].new, half.withSmallText().changes[0].new)
         XCTAssertEqual(half.withHalfWidth().changes[0].new, half.changes[0].new)
         XCTAssertEqual(words(half.movedLayout(after: [], dark: true).changes[0].new, 0x9F), 4)
+        // The clock lines of split-clock: 3 elements after the View, the new size in the table entry,
+        // and Python gives the same View. The width must come first.
+        let clock = half.withClock()
+        let cv = [UInt8](clock.changes[0].new)
+        XCTAssertEqual(cv.count, 704 + 3 * 96)
+        XCTAssertEqual(le32(cv, 0), 10)
+        XCTAssertEqual([704, 800, 896].map { le32(cv, $0 + 12) }, [0x7E41, 0x7E42, 0x7E43])
+        XCTAssertEqual([704, 800, 896].map { Int32(bitPattern: le32(cv, $0 + 36)) }, [72, 96, 118])
+        XCTAssertEqual(le32([UInt8](clock.changes[1].new), 4), UInt32(cv.count))
+        XCTAssertEqual(le32([UInt8](clock.changes[1].new), 0), le32([UInt8](theme.changes[1].new), 0))
+        XCTAssertEqual(ThemeImport.sha256(cv), "8805963c20cb4f2cf2e8012762d11b302dddb03ac1e5f7028ff7fca0e94424dd")
+        XCTAssertEqual(clock.withClock().changes[0].new, clock.changes[0].new)
+        XCTAssertEqual(clock.withHalfWidth().changes[0].new, clock.changes[0].new)
+        XCTAssertEqual(words(theme.withClock().movedLayout(after: [], dark: true).changes[0].new, 0x9F), 7)
         var wrong = [UInt8](repeating: 0, count: 0x736000)
         XCTAssertThrowsError(try theme.apply(to: &wrong, originalSHA256: theme.osos_sha256))
         let env = ProcessInfo.processInfo.environment

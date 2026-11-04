@@ -583,6 +583,32 @@ def half_width(theme: Theme) -> Theme:
     return replace(theme, changes=[replace(view, new=bytes(new)), *theme.changes[1:]])
 
 
+# The 3 lines of the split-clock patch: the time, the day and the date. Each line is a copy of the
+# artist line (offset 416, 96 bytes, no scroll) with a new ID and a new top edge (offset 36 in the
+# element). Thus the lines have the width, the text size and the colour of the panel text.
+LAYOUT_CLOCK_LINE = (416, 96)
+LAYOUT_CLOCK_LINES = ((0x7E41, 72), (0x7E42, 96), (0x7E43, 118))
+
+
+def with_clock(theme: Theme) -> Theme:
+    """The layout with the 3 lines of the split-clock patch after the other elements, and the new
+    size in the table entry. Use it after half_width and small_text."""
+    view, entry = theme.changes[:2]
+    new = bytearray(view.new)
+    if len(new) != 704 or struct.unpack_from("<I", new)[0] != 7:
+        return theme
+    at, size = LAYOUT_CLOCK_LINE
+    for ident, top in LAYOUT_CLOCK_LINES:
+        line = bytearray(new[at:at + size])
+        struct.pack_into("<I", line, 12, ident)
+        struct.pack_into("<i", line, 36, top)
+        new += line
+    struct.pack_into("<I", new, 0, 7 + len(LAYOUT_CLOCK_LINES))
+    return replace(theme, changes=[replace(view, new=bytes(new)),
+                                   replace(entry, new=entry.new[:4] + struct.pack("<I", len(new))),
+                                   *theme.changes[2:]])
+
+
 def apply_theme(theme: Theme, osos: bytearray, original_sha256: str) -> tuple[int, int]:
     """Apply the theme to osos. Returns (changes applied, changes not applied because of other edits).
 

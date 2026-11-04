@@ -223,6 +223,8 @@ The list of all playlists: db (library + 0xcf8) + 0x2c, linked by playlist + 0x0
 | 0x10a15c | Converts an mhod-52 sort type to a slot (album 4 → 6). | Static |
 | 0x1e804c | The property method of the main provider (class 0x670f54) for the music screens. | Static |
 | 0x21f254 | (provider, type, ID): asks the provider and its parents for a property (vtable + 0x5c). | Static |
+| 0x670fb0 | The word of slot + 0x5c (0x1e804c) in the vtable of the main provider. (provider, type, ID, &out): writes the address of a C string to `out` and gives 1, or gives 0 for an unknown ID. The patch `split-clock` hooks it. | Static |
+| 0x21f37c | The notify method (word 0x670fa8, slot + 0x54): (object, type, ID). The song change 0x1e9818 sends `'Str '` with 0x63bd, 0x63be, 0x63bf and 0x63c3. The patch `split-clock` hooks the word. | Static |
 
 ### Text drawing
 
@@ -964,6 +966,14 @@ the power chip of the PP5020 of Apple. The facts are Static.
 | 0x1fca88 | Copies the table of the clock into the registers. |
 | 0xd252c | Gives the current time of day in the calendar structure. Refer to [re/date-time.md](../re/date-time.md). |
 | 0xa09c4 | Gets the time. If bit 0 of the flags is 0, it uses 1 January 2002. |
+| 0xc8fd0 (+ 8) | Writes the day of the week to calendar + 8: the day number modulo 7. 0 is Sunday. Refer to [re/split-clock.md](../re/split-clock.md). |
+| 0xcce88 | Gives the language manager (the word at + 0x14 of the object from 0x14b460). |
+| 0x250c50 | Slot + 0x7c of the language manager (vtable 0x668f1c): (manager, text, size, style, calendar). Style 0x11 is the short time (manager + 0x473, 12-hour or 24-hour), style 2 the name of the day, style 8 the long date. The patch `split-clock` calls it. |
+| 0xe6880 | The `strftime` of the firmware: (text, size, format, `tm`, locale). |
+| 0x105dc8 | Copies the names and the formats of `LDTm` 128 into the locale at manager + 0x44. |
+| 0x1d9430 | Makes the status object (vtable 0x6701bc). It makes 6 timers with 0x13d7c8. The timer at + 0xa0 has 30 000 ms, the timer at + 0xc8 has 300 000 ms. |
+| 0x1d93c4 | The event method of the status object (word 0x6701ec, slot + 0x30). Type 9 goes to 0x1d8e68, which compares the timer with its 6 timers. The patch `split-clock` hooks the word. |
+| 0x13d7c8, 0x151c24, 0x151694 | Make a timer of 0x28 bytes for an owner, set its period in ms, and start it one time. The owner gets event type 9 with the timer at event + 8. |
 | 0xb0038, 0xbc63c | Read and write the clock chip: 7 BCD bytes. Year = 2000 + 2 digits, so the last year is 2099. |
 | 0xc8f3c, 0xc8fd0 | Change a calendar structure to a day number, and a day number to a structure. The year is unsigned 16 bits. |
 | 0xd59cc | Compares two calendar structures. |

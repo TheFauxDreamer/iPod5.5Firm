@@ -232,6 +232,34 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
         return out
     }
 
+    /// The 3 lines of the split-clock patch: the time, the day and the date. Each line is a copy of the
+    /// artist line (offset 416, 96 bytes, no scroll) with a new ID and a new top edge (offset 36 in the
+    /// element). Thus the lines have the width, the text size and the colour of the panel text.
+    static let clockLine = (at: 416, size: 96)
+    static let clockLines: [(id: UInt32, top: Int32)] = [(0x7E41, 72), (0x7E42, 96), (0x7E43, 118)]
+
+    /// The layout with the 3 lines of the split-clock patch after the other elements, and the new size
+    /// in the table entry. Use it after `withHalfWidth` and `withSmallText`.
+    public func withClock() -> ImportedTheme {
+        guard changes.count >= 2 else { return self }
+        var view = [UInt8](changes[0].new)
+        guard view.count == 704, le32(view, 0) == 7 else { return self }
+        let template = Array(view[Self.clockLine.at..<Self.clockLine.at + Self.clockLine.size])
+        for line in Self.clockLines {
+            var element = template
+            put32(&element, 12, line.id)
+            put32(&element, 36, UInt32(bitPattern: line.top))
+            view += element
+        }
+        put32(&view, 0, UInt32(7 + Self.clockLines.count))
+        var entry = [UInt8](changes[1].new)
+        put32(&entry, 4, UInt32(view.count))
+        var out = self
+        out.changes[0].new = Data(view)
+        out.changes[1].new = Data(entry)
+        return out
+    }
+
     /// Apply the theme to osos. Returns (changes applied, changes not applied because of other edits).
     ///
     /// A theme in format 2 holds no old bytes: the hash of the old bytes stands in
