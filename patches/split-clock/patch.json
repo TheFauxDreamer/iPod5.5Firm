@@ -1,0 +1,56 @@
+{
+  "name": "split-clock",
+  "title": "Split Clock",
+  "summary": "A clock in the Split panel when no song plays.",
+  "symbol": "clock",
+  "category": "display",
+  "version_letter": "z",
+  "version": "1.1",
+  "size": 1042,
+  "description": "The right panel of the Split main menu shows the time, the day of the week and the date when there is no current song. When a song starts, the panel shows the cover and the song again.",
+  "details": [
+    "The time changes at each new minute.",
+    "The time obeys Settings > Date & Time > Time (12-hour or 24-hour).",
+    "The names of the day and the month use the language of the iPod.",
+    "Date gives a short month (\"Nov 4 2026\") or a long month (\"4 November 2026\").",
+    "A paused song stays in the panel. The clock shows when there is no current song."
+  ],
+  "requires": [
+    "The Split layout (iPod Appearance > Layout: Split or Switch on iPod)."
+  ],
+  "notes": [
+    "With the Stock layout, the patch has no effect.",
+    "Set the date and the time on the iPod in Settings > Date & Time.",
+    "This patch is not tested on a real iPod."
+  ],
+  "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251",
+  "targets": [
+    { "model": "iPod Video (5G/5.5G)", "firmware": "1.3", "osos_sha256": "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251" }
+  ],
+  "load_address": "extended",
+  "symbols": {
+    "current_time": "0x0d252c",
+    "language_manager": "0x21f3b8",
+    "timer_make": "0x13d7c8",
+    "timer_period": "0x151c24",
+    "timer_start": "0x151694",
+    "lookup_continue": "0x21f258"
+  },
+  "options": [
+    {
+      "id": "date",
+      "title": "Date",
+      "symbol": "date_style",
+      "default": 14,
+      "choices": [
+        { "value": 14, "title": "Short Month", "description": "For example \"Nov 4 2026\". It fits in each Split width." },
+        { "value": 8, "title": "Long Month", "description": "For example \"4 November 2026\".", "caution": "A long month can be cut off in the Split width ⅔ – ⅓." }
+      ]
+    }
+  ],
+  "hooks": [
+    { "kind": "b", "at": "0x21f254", "expect": "0xe92d40f8", "to": "hook_lookup", "chain": "lookup_next", "chain_default": "lookup_original" },
+    { "kind": "word", "at": "0x670fa8", "expect": "0x0021f37c", "to": "hook_notify", "chain": "notify_next" },
+    { "kind": "word", "at": "0x6701ec", "expect": "0x001d93c4", "to": "hook_event", "chain": "event_next" }
+  ]
+}

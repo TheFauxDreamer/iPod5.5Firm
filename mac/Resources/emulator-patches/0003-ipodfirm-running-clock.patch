@@ -1,0 +1,106 @@
+diff --git a/tools/ipod-machine/src/hw/pmu.rs b/tools/ipod-machine/src/hw/pmu.rs
+index c76ecd9..174bc98 100644
+--- a/tools/ipod-machine/src/hw/pmu.rs
++++ b/tools/ipod-machine/src/hw/pmu.rs
+@@ -118,6 +118,10 @@ pub struct Pcf50605 {
+     pub adc_by_channel: BTreeMap<u8, (u64, u16)>,
+     pub reads: u64,
+     pub writes: u64,
++    /// iPodFirm local patch: the clock runs. `rtc_base` is the local time (seconds from 1970) that
++    /// the clock registers had at `rtc_at`. A read gives `rtc_base` plus the host time since then.
++    rtc_base: i64,
++    rtc_at: std::time::Instant,
+ }
+ 
+ impl Default for Pcf50605 {
+@@ -153,6 +157,8 @@ impl Pcf50605 {
+             adc_by_channel: BTreeMap::new(),
+             reads: 0,
+             writes: 0,
++            rtc_base: rtc_host_now(),
++            rtc_at: std::time::Instant::now(),
+         }
+     }
+ 
+@@ -184,6 +190,29 @@ impl Pcf50605 {
+         for (i, &v) in tm.iter().enumerate() {
+             self.regs[0x0a + i] = bcd(v);
+         }
++        self.rtc_rebase();
++    }
++
++    /// iPodFirm local patch: write the running time into the clock registers 0x0a..0x10.
++    fn rtc_refresh(&mut self) {
++        let t = self.rtc_base + self.rtc_at.elapsed().as_secs() as i64;
++        let [y, mo, d, h, mi, se] = civil_from_unix(t);
++        let wd = (t.div_euclid(86_400) + 4).rem_euclid(7); // 1970-01-01 was a Thursday
++        let bcd = |v: i64| (((v / 10) << 4) | (v % 10)) as u8;
++        let year = (y - 2000).clamp(0, 99);
++        for (i, v) in [se, mi, h, wd, d, mo, year].into_iter().enumerate() {
++            self.regs[0x0a + i] = bcd(v);
++        }
++    }
++
++    /// iPodFirm local patch: the firmware wrote the clock registers. The clock runs from this time.
++    fn rtc_rebase(&mut self) {
++        let dec = |b: u8| i64::from(b >> 4) * 10 + i64::from(b & 0xf);
++        let r = &self.regs;
++        let (se, mi, h) = (dec(r[0x0a]), dec(r[0x0b]), dec(r[0x0c]));
++        let (d, mo, y) = (dec(r[0x0e]), dec(r[0x0f]), 2000 + dec(r[0x10]));
++        self.rtc_base = rtc_days_from_civil(y, mo.clamp(1, 12), d.clamp(1, 31)) * 86_400 + h * 3600 + mi * 60 + se;
++        self.rtc_at = std::time::Instant::now();
+     }
+ 
+     /// One I²C transfer. `ctrl` is the PP controller's CTRL word — bit `0x20` selects a read, bits
+@@ -244,6 +273,11 @@ impl Pcf50605 {
+             // INT1..INT3 clear on read. A driver that polls them depends on this: leaving a source
+             // latched would make one event look like an endless stream of them.
+             0x02..=0x04 => std::mem::take(&mut self.regs[r]),
++            // iPodFirm local patch: the clock registers give the running time.
++            0x0a..=0x10 => {
++                self.rtc_refresh();
++                self.regs[r]
++            }
+             // ADCS1/ADCS2/ADCS3 are plain result registers here. Whether a conversion is in flight
+             // is carried by ADCS2 bit 7 alone — cleared when the conversion starts, set by `latch`
+             // when it finishes — so nothing in this function needs to know about `busy`, and a
+@@ -265,7 +299,15 @@ impl Pcf50605 {
+         if (0x30..=0x32).contains(&r) {
+             return;
+         }
++        // iPodFirm local patch: a write of one clock register keeps the running value of the others.
++        let clock = (0x0a..=0x10).contains(&r);
++        if clock {
++            self.rtc_refresh();
++        }
+         self.regs[r] = val;
++        if clock {
++            self.rtc_rebase();
++        }
+         // ADCC1/ADCC2 carry the start bit and the channel select. A real conversion takes far less
+         // time than the firmware's polling loop, so it resolves immediately rather than being
+         // modelled as taking time — the same call made for the PLL.
+@@ -353,3 +395,23 @@ impl Pcf50605 {
+         self.regs[0x32] |= 0x01;
+     }
+ }
++
++/// iPodFirm local patch: the local time of the host, in seconds from 1970.
++fn rtc_host_now() -> i64 {
++    let unix = std::time::SystemTime::now()
++        .duration_since(std::time::UNIX_EPOCH)
++        .map(|d| d.as_secs() as i64)
++        .unwrap_or(0);
++    unix + host_utc_offset_seconds()
++}
++
++/// iPodFirm local patch: the days from 1970-01-01 to a date (the inverse of `civil_from_unix`).
++fn rtc_days_from_civil(y: i64, m: i64, d: i64) -> i64 {
++    let y = if m <= 2 { y - 1 } else { y };
++    let era = y.div_euclid(400);
++    let yoe = y - era * 400;
++    let mp = (m + 9) % 12;
++    let doy = (153 * mp + 2) / 5 + d - 1;
++    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
++    era * 146_097 + doe - 719_468
++}

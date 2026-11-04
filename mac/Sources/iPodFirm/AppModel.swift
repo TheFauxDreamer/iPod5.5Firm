@@ -711,8 +711,13 @@ final class AppModel: ObservableObject {
         guard layout.hasSplit, var split = Self.splitTheme else { return nil }
         if splitText == .small { split = split.withSmallText() }
         if splitWidth == .half { split = split.withHalfWidth() }
+        if enabledPatches.contains(Self.splitClockPatch) { split = split.withClock() }
         return split
     }
+
+    /// The patch that needs the 3 clock lines in the Split View.
+    static let splitClockPatch = "split-clock"
+    var splitClockKey: String { enabledPatches.contains(Self.splitClockPatch) ? "clock" : "" }
 
     /// The appearance build for the output: nothing for Light with the Stock layout.
     var activeAppearance: AppearanceBuild? {
@@ -737,7 +742,7 @@ final class AppModel: ObservableObject {
     var layoutSwitchSize: Int? {
         guard layout == .onIPod, let editor, let split = activeSplit, isCompatible(split),
               let patch = Self.darkModePatch else { return nil }
-        let key = "\(revision) \(splitText.rawValue) \(splitWidth.rawValue)"
+        let key = "\(revision) \(splitText.rawValue) \(splitWidth.rawValue) \(splitClockKey)"
         if let c = layoutSwitchSizeCache, c.key == key { return c.size }
         let size = try? DarkMode.addedSize(partition: editor.partition, osos: editor.osos, theme: nil, darkSwitch: false,
                                            codeSize: patch.spec.size ?? 0, layout: split, layoutSwitch: true)
@@ -767,7 +772,7 @@ final class AppModel: ObservableObject {
     /// The input of `switchOnIPodSize`. Nil if no theme agrees with the open firmware.
     var switchSizeKey: String? {
         guard editor != nil, let file = selectedTheme, isCompatible(file.theme), Self.darkModePatch != nil else { return nil }
-        return "\(revision) \(themeRevision) \(file.name) \(layout.rawValue)"
+        return "\(revision) \(themeRevision) \(file.name) \(layout.rawValue) \(splitClockKey)"
     }
 
     /// Calculate `switchOnIPodSize` away from the main thread. The calculation takes seconds, so the
@@ -782,7 +787,7 @@ final class AppModel: ObservableObject {
         guard key != switchSizeDone else { return }
         measuringSwitchSize = true
         let partition = editor.partition, osos = editor.osos, split = activeSplit
-        let version = version, layoutName = layout.rawValue, layoutSwitch = layout == .onIPod
+        let version = version, layoutName = "\(layout.rawValue) \(splitClockKey)", layoutSwitch = layout == .onIPod
         let size = await Task.detached(priority: .utility) { () -> Int? in
             let defaults = UserDefaults.standard
             let themeBytes = (try? Data(contentsOf: file.url)) ?? Data()

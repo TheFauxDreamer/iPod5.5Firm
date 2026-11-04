@@ -392,6 +392,7 @@ Apple's code ends at 0x7358c0. The bytes `55 AA 55 AA` at 0x7358c0 are a marker.
 | `cover-flow` | `extended` | After all other data (11384 bytes; approximately 600 KB for the screen copy, the covers and the read buffer come from the allocator while Cover Flow shows) | Extended patch. |
 | `up-next` | `extended` | After all other data (1807 bytes), then the Settings menu (19 items, 764 bytes). Alone: code 0x736800–0x736f0f, menu at 0x736f10, osos end 0x737800 | Extended patch. |
 | `custom-eq` | `extended` | After all other data (1690 bytes, with 1000 bytes of filter records and 350 bytes for the list of EQs). | Extended patch. It also changes 2 words (`bytes`). |
+| `split-clock` | `extended` | After all other data (1042 bytes). The Split View gets 3 elements (288 bytes) | Extended patch. It needs the Split layout. |
 | `playlist-folders` | `extended` | After all other data (4952 bytes; the 64 KB file buffer, the folder table and the views come from the allocator). Alone: code 0x736800–0x737b58, osos end 0x738000 | Extended patch. |
 
 The variables of a patch are in its area. The firmware loads osos into RAM, so the variables can change. Apple's code does not use this RAM.
