@@ -1,0 +1,19 @@
+diff --git a/tools/ipod-machine/src/lib.rs b/tools/ipod-machine/src/lib.rs
+index ed9b163..27845c1 100644
+--- a/tools/ipod-machine/src/lib.rs
++++ b/tools/ipod-machine/src/lib.rs
+@@ -2498,7 +2526,13 @@ impl Bus for Memory {
+         // polls the same address for the sleep bit to come back, which is why a seeded value could
+         // never work — the code that waits for it is the code that just cleared it.
+         if self.second_core && addr & !3 == Core::Cop.ctrl() {
+-            let now = val & 0x8000_0000 != 0;
++            // iPodFirm local patch: a `PROC_SLEEP` that the CPU writes does not stop a COP that
++            // runs. RetailOS 1.3 writes it in a loop in the timer interrupt 0xded04 and waits there
++            // until the COP clears a flag in RAM. With an immediate sleep the COP cannot clear the
++            // flag, and the CPU stays in the interrupt until another interrupt wakes the COP:
++            // a stall of approximately 30 s after a pause or Next. The COP still sleeps when it
++            // writes `PROC_SLEEP` itself, as in its startup code.
++            let now = val & 0x8000_0000 != 0 && (self.cop_asleep || self.asking == Core::Cop);
+             if now != self.cop_asleep {
+                 if now {
+                     self.cop_sleeps += 1

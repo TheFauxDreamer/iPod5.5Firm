@@ -3,9 +3,10 @@
 
 Research only. Refer to re/split-clock.md.
 
-Usage: uv run python re/split-clock/build-test.py iPod_25.1.3.ipsw OUTPUT.ipsw [--half] [--dark THEME] [--patch DIR]
+Usage: uv run python re/split-clock/build-test.py iPod_25.1.3.ipsw OUTPUT.ipsw [--half] [--dark THEME] [--patch DIR] [--option ID=VALUE]...
 
 --patch uses a test copy of the patch, for example a copy with counters.
+--option sets an option of patch.json, for example --option pause=1.
 """
 import json
 import sys
@@ -26,6 +27,7 @@ def main() -> None:
     ipsw, out_path = Path(args[0]), Path(args[1])
     theme = Theme.from_json(Path(args[args.index("--dark") + 1]).read_text()) if "--dark" in args else None
     patch_dir = Path(args[args.index("--patch") + 1]) if "--patch" in args else repo / "patches/split-clock"
+    options = {a.split("=")[0]: int(a.split("=")[1]) for k, a in zip(args, args[1:]) if k == "--option"}
     split = Theme.from_json((repo / "themes/layouts/Split.ipodtheme").read_text())
     if "--half" in args:
         split = half_width(split)
@@ -40,7 +42,7 @@ def main() -> None:
     layout = moved_layout(split, bytes(darkmode._align(max(len(osos), darkmode.PATCH_AREA_END), 16)), theme is not None)
     apply_theme(layout, osos, sha)
     code, report = patcher.apply(bytes(osos), patch_dir, patcher.PATCH_AREA_END,
-                                 original_sha256=sha)
+                                 original_sha256=sha, options=options)
     fw.make_room(len(code))
     fw.replace_image("osos", code)
     repack_ipsw(ipsw, fw.to_bytes(), out_path)
