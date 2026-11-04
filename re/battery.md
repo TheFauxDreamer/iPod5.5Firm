@@ -561,3 +561,53 @@ The table in `battery_display.c` (version 1.2):
 #define MAH3000_PCT  { 100,  93,  87,  80,  73,  67,  60,  53,  47,  40,  33,  27,  20,  13,   7,   0 }
 ```
 
+### Open fault: the stock text at the first play (4 November 2026)
+
+Status: open. The owner stopped the work for now. Continue only if the owner asks.
+
+#### The report
+
+The owner uses Display = Icon + Percent, Custom data and Smoothing On, on a real iPod (version 1.1, flashed from iPodFirm Highlight Test 0.1.260). After a power-on, the first play causes a fault. The fault shows on the menu and on Now Playing. For approximately 5 seconds:
+
+- the percentage is on the battery icon;
+- a part of the text is missing;
+- the size or the colour of the text is wrong.
+
+Then the text goes back to its correct place without an action.
+
+#### The analysis (static)
+
+The three symptoms are the stock state of the battery label: the stock rectangle at + 0x58, the stock Type record at + 0xc8, and no bit 0x200 at + 0xc0. Thus, for approximately 5 seconds, `hook_show` does not style or move that label.
+
+`hook_show` sets the style and the rectangle again at each call, and 0x1ae6d0 runs approximately 45 times each second (version 0.4). Thus a simple reset of the label by the firmware is not sufficient. The fault needs a period with no correct call.
+
+The possible causes, in order of probability:
+
+| Cause | Mechanism | Agrees with "it stops after 5 seconds"? |
+|---|---|---|
+| 1. No call | At the first play, the status bar gets the play icon and does a new layout. The layout resets the label. 0x1ae774 and 0x1ae6d0 then do not run for that view until the next battery update | Yes |
+| 2. A full view table | `view_slot` has 8 slots (`VIEWS`) and never frees a slot. A new view gets -1, and `hook_show` returns | Only if the view is temporary |
+| 3. An early return | `index >= NO_CHILD`, or `ready` is false, while the audio and the disk start | Possible |
+| 4. A small view | In a view with `VIEW_SMALL`, layout 0 puts the text and the icon (`SMALL_ICON`) in the same stock box. The text then has the patch font, but it is on the icon and cut | Only if the small view is temporary |
+
+A photo of the fault can separate cause 4 from causes 1–3. With cause 4, the text has the patch font (Podium Sans 14). With causes 1–3, it has the stock font.
+
+#### The emulator test
+
+The owner ran iPodFirm 0.1.261 (battery-display 1.2) in the emulator and played a song after the start. The fault did not show. Thus the fault probably needs a part of the real iPod: the hard drive, which starts to turn at the first play, or real battery values under load.
+
+#### Tools for a later test
+
+- The emulator window accepts `--control=SOCKET` with `--cold`. Thus `peek`, `regs` and `evlog` work while the owner uses the window. Start the program `ipod-emulator` in `ipod-emulator.app` directly with `IPOD_EMULATOR_DATA` set to the iPodFirm profile and `IPODFW_RESET_AFTER=1000000000`, as `EmulatorManager.openWindow` does.
+- `IPODFW_REGS_AT=0x1ae6b8,COUNT` records each call of `hook_show` with no change to the patch: r0 is the view, r1 is the index. Each record also adds a marker with the emulated µs to `evlog`. A gap in the records shows cause 1. More than 8 views show cause 2. An index of 0x1c or more shows cause 3.
+- On a real iPod, a diagnostic copy of the patch must write the same records to a file, in the same way as `battery-log`. Each record needs the time, the view, the index, the small flag, the slot, `ready`, the reason for a return, and the label rectangle and Type pointer before the patch writes them.
+
+#### Possible fixes (not made)
+
+- Cause 1: find the layout function in Ghidra that resets the label at the first play. Add a hook after it that calls `style_text` and `place_text` for the known battery labels. An alternative is the label draw method 0x244924, only for labels in the `views` table.
+- Cause 2: when no slot is free, use the slot of the oldest view.
+- Cause 3: keep the last style and rectangle in each path of the return.
+- Cause 4: in a small view with Icon + Percent, show only one of the icon and the text.
+
+The branch `battery-show-fix` (worktree `../iPod5.5Firm-battery-show`) is ready for this work. It has no commits yet.
+
