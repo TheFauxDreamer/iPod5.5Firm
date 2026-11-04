@@ -1,6 +1,6 @@
 # A clock in the Split panel
 
-Status (4 November 2026): versions 1.1 and 1.2 operate in the emulator (Light, ⅔ – ⅓). Version 1.0 showed no clock. Refer to [The fault of version 1.0](#the-fault-of-version-10). Not tested on a real iPod.
+Status (4 November 2026): versions 1.1, 1.2 and 1.4 operate in the emulator (Light, ⅔ – ⅓). Version 1.3 operates on a real iPod, with one fault that 1.4 corrects. Version 1.0 showed no clock. Refer to [The fault of version 1.0](#the-fault-of-version-10).
 
 The owner wants the right panel of the Split main menu to show the time, the day and the date when there is no current song. The owner reports that the iPod classic 6G/7G does this. All addresses are osos offsets of firmware 1.3. The method is static research with Ghidra, project `osos13`, read-only, and a full decompile.
 
@@ -129,6 +129,14 @@ The size is 1392 bytes with `__attribute__((minsize))` (1854 bytes without it).
 Version 1.3 (4 November 2026): the owner asked for 30 Seconds. The timer now comes at each :00 and :30, and the pause counts seconds in steps of 30. Thus the clock shows `pause_seconds` to `pause_seconds` + 30 seconds after the pause. The option values are seconds: 0, 30, 60, 300 (the default) and 900, with the new `id` `pause_time`. The code has no division, so it needs no `__aeabi_uidiv`. The size is 1396 bytes.
 
 The emulator was slow for approximately 30 s after each Pause and Next. The cause was in the emulator, not in the patch. Refer to [emulator.md](emulator.md#the-cop-sleep-fix). With the emulator patches 0001–0004, the owner reported that version 1.2 works.
+
+## Version 1.4: "0 of 0" at the start
+
+Owner report (real iPod, version 1.3, 4 November 2026): the clock shows, but at the start the panel also showed "0 of 0". After Play and Pause, it did not show.
+
+Cause (static): the lookup hook hides the count line only for the panel object, and the patch learns that object at the first lookup of a clock line. In the Split View the count line is element 6 and the clock lines are elements 7–9. Thus the count line asked first and got "0 of 0". No notify reached it until a song change or a change of the pause clock.
+
+Fix: when the patch learns the panel object (the first time, or a new object), it notifies the count line on that object one time. The notify posts a message (0x21f37c, 0x14a29c), so the count line asks again after this lookup, not inside it. The size is 1444 bytes. The owner reported that the emulator test is good.
 
 ## The fonts
 

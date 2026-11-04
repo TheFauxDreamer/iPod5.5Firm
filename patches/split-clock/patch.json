@@ -5,8 +5,8 @@
   "symbol": "clock",
   "category": "display",
   "version_letter": "z",
-  "version": "1.3",
-  "size": 1396,
+  "version": "1.4",
+  "size": 1444,
   "description": "The right panel of the Split main menu shows the time, the day of the week and the date when there is no current song. When a song starts, the panel shows the cover and the song again.",
   "details": [
     "The time changes at each new minute. The panel checks the time each 30 seconds.",
