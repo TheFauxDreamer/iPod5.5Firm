@@ -302,7 +302,9 @@ The owner asked for a version to test on a real iPod. The implementation follows
 - With Dark Gray and Switch on iPod, the added size is 106,307 bytes (722,371 bytes with `dark-mode` 1.2).
 - Emulator: with the build of version 1.3, 201 words of the table ranges, read with `peek`, were the same as the expected dark image.
 
+Real iPod 5.5G (owner, 4 November 2026, app 0.1.261, Dark Gray, stopwatch): the restart from light to dark took 54 s. The restart from dark to light took 54 s. The light start does not apply the table. Thus the IFD2 apply (185 ms in the emulator) adds no time that a stopwatch can measure.
+
 ## Open items
 
-- A test on the real iPod: the dark theme, the switch in both directions, and the start time with a stopwatch.
+- The owner's report of the screens in dark mode on the real iPod (colours and highlight bar).
 - Old results (9 October 2026): the dark bytes compress better than the XOR data, and deflate gives approximately 6×. A table from the light pictures gives a smaller result than deflate (65,084 bytes against 117,227 bytes) and needs no RAM for a window.
