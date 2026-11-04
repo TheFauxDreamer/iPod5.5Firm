@@ -169,7 +169,12 @@ __attribute__((minsize)) void *hook_lookup(void *start, unsigned type, int id)
     }
     if (type != TAG_STR || line >= LINES)
         return lookup_next(start, type, id);
-    labels = start;
+    if (start != labels) {
+        /* The count line is before the clock lines in the View, so it asked before the patch knew
+         * the panel object. Ask it to ask again: then it gets no answer, and "0 of 0" goes away. */
+        labels = start;
+        notify(TAG_STR, SONG_COUNT);
+    }
     if (!pause_clock) {
         song = lookup_next(start, TAG_STR, SONG_TITLE);
         if (song && *song)

@@ -31,7 +31,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [playlist-folders](#playlist-folders) | Code patch (extended) | Patches | 4 `bl`, 2 `b` and 1 vtable word (with `chain`) | Version 0.1: emulator only (29 October 2026). Not tested on the real iPod |
 | [playback-log](#playback-log) | Code patch (test, extended) | Patches | 8 `bl`, 5 `b` (all 5 with `chain`) | Version 1.0: yes (30 October 2026). Version 1.2: no. Not tested in the emulator |
 | [battery-display](#battery-display) | Code patch (extended) | Patches | 5 `bl` | Emulator (layout, Light and Dark Gray). Not tested on a real iPod |
-| [split-clock](#split-clock) | Code patch (extended) and 3 View elements | Patches | 1 `b` and 2 vtable words (all with `chain`) | No. Version 1.2: emulator (Light, ⅔ – ⅓). Version 1.3: no result recorded |
+| [split-clock](#split-clock) | Code patch (extended) and 3 View elements | Patches | 1 `b` and 2 vtable words (all with `chain`) | Version 1.3: the clock operates, "0 of 0" at the start (corrected in 1.4). Version 1.4: emulator |
 | [battery-log](#battery-log) | Code patch (test, extended) | Patches | 1 `bl` | Version 0.1: yes, 18.3 hours on a real iPod. Version 0.2: not tested on a real iPod. Not tested in the emulator |
 | [diagnostic-log](#diagnostic-log) | Code patch (test, extended) | Patches | 12 `bl`, 8 `b` (all 8 with `chain`), 1 `word` (`chain`) | No. Not tested in the emulator |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
@@ -1159,9 +1159,9 @@ Version 1.2: in the lookup, the kept panel object gets no answer for 0x63c3 when
 
 Version 1.0 hooked the text method of the main provider (word 0x670fb0). The panel labels never reach that method for an unknown ID, so version 1.0 showed no clock. Refer to [re/split-clock.md](../re/split-clock.md#the-fault-of-version-10).
 
-**Load address.** `extended`. The code and the data are 1396 bytes.
+**Load address.** `extended`. The code and the data are 1444 bytes.
 
-**Test status.** Swift and Python tests (4 November 2026). Emulator (owner, 4 November 2026, version 1.1 with Short Month, Light, ⅔ – ⅓, emulator patch 0003): the 3 lines show with the time of the Mac, and the owner reported that it looks great. Version 1.2 (owner, 4 November 2026, Clock After a Pause = 1 Minute, emulator patches 0001–0004): the owner reported that it works. Version 1.3 (30 Seconds): built for the emulator with Clock After a Pause = 30 Seconds; the owner asked for the merge, and no separate result is recorded. Not tested: Long Month, Dark, ½ – ½, Switch on iPod, the Swift build path and a real iPod.
+**Test status.** Swift and Python tests (4 November 2026). Emulator (owner, 4 November 2026, version 1.1 with Short Month, Light, ⅔ – ⅓, emulator patch 0003): the 3 lines show with the time of the Mac, and the owner reported that it looks great. Version 1.2 (owner, 4 November 2026, Clock After a Pause = 1 Minute, emulator patches 0001–0004): the owner reported that it works. Version 1.3 (30 Seconds): built for the emulator with Clock After a Pause = 30 Seconds; the owner asked for the merge, and no separate result is recorded. Version 1.3 on a real iPod (owner, 4 November 2026): the clock shows, but at the start the panel also showed "0 of 0". After Play and Pause, "0 of 0" did not show. Cause: the count line (element 6) asked before the clock lines (elements 7–9), so the patch did not know the panel object yet. Version 1.4 notifies the count line once when the patch learns the panel object. Version 1.4 in the emulator (owner, 4 November 2026): good. Not tested: Long Month, Dark, ½ – ½, Switch on iPod, the Swift build path and a real iPod.
 
 **Research.** Refer to [re/split-clock.md](../re/split-clock.md).
 
