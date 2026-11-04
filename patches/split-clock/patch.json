@@ -1,17 +1,18 @@
 {
   "name": "split-clock",
   "title": "Split Clock",
-  "summary": "Shows the time, the day and the date in the Split panel when no song plays.",
+  "summary": "A clock in the Split panel when no song plays.",
   "symbol": "clock",
   "category": "display",
   "version_letter": "z",
-  "version": "1.0",
-  "size": 907,
+  "version": "1.1",
+  "size": 1042,
   "description": "The right panel of the Split main menu shows the time, the day of the week and the date when there is no current song. When a song starts, the panel shows the cover and the song again.",
   "details": [
     "The time changes at each new minute.",
     "The time obeys Settings > Date & Time > Time (12-hour or 24-hour).",
     "The names of the day and the month use the language of the iPod.",
+    "Date gives a short month (\"Nov 4 2026\") or a long month (\"4 November 2026\").",
     "A paused song stays in the panel. The clock shows when there is no current song."
   ],
   "requires": [
@@ -29,13 +30,26 @@
   "load_address": "extended",
   "symbols": {
     "current_time": "0x0d252c",
-    "language_manager": "0x0cce88",
+    "language_manager": "0x21f3b8",
     "timer_make": "0x13d7c8",
     "timer_period": "0x151c24",
-    "timer_start": "0x151694"
+    "timer_start": "0x151694",
+    "lookup_continue": "0x21f258"
   },
+  "options": [
+    {
+      "id": "date",
+      "title": "Date",
+      "symbol": "date_style",
+      "default": 14,
+      "choices": [
+        { "value": 14, "title": "Short Month", "description": "For example \"Nov 4 2026\". It fits in each Split width." },
+        { "value": 8, "title": "Long Month", "description": "For example \"4 November 2026\".", "caution": "A long month can be cut off in the Split width ⅔ – ⅓." }
+      ]
+    }
+  ],
   "hooks": [
-    { "kind": "word", "at": "0x670fb0", "expect": "0x001e804c", "to": "hook_text", "chain": "text_next" },
+    { "kind": "b", "at": "0x21f254", "expect": "0xe92d40f8", "to": "hook_lookup", "chain": "lookup_next", "chain_default": "lookup_original" },
     { "kind": "word", "at": "0x670fa8", "expect": "0x0021f37c", "to": "hook_notify", "chain": "notify_next" },
     { "kind": "word", "at": "0x6701ec", "expect": "0x001d93c4", "to": "hook_event", "chain": "event_next" }
   ]

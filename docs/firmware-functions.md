@@ -223,8 +223,12 @@ The list of all playlists: db (library + 0xcf8) + 0x2c, linked by playlist + 0x0
 | 0x10a15c | Converts an mhod-52 sort type to a slot (album 4 → 6). | Static |
 | 0x1e804c | The property method of the main provider (class 0x670f54) for the music screens. | Static |
 | 0x21f254 | (provider, type, ID): asks the provider and its parents for a property (vtable + 0x5c). | Static |
-| 0x670fb0 | The word of slot + 0x5c (0x1e804c) in the vtable of the main provider. (provider, type, ID, &out): writes the address of a C string to `out` and gives 1, or gives 0 for an unknown ID. The patch `split-clock` hooks it. | Static |
+| 0x670fb0 | The word of slot + 0x5c (0x1e804c) in the vtable of the main provider. (provider, type, ID, &out): writes the address of a C string to `out` and gives 1, or gives 0 for an unknown ID. A panel label does not reach it for an unknown ID (refer to 0x244594). | Static, Emulator |
 | 0x21f37c | The notify method (word 0x670fa8, slot + 0x54): (object, type, ID). The song change 0x1e9818 sends `'Str '` with 0x63bd, 0x63be, 0x63bf and 0x63c3. The patch `split-clock` hooks the word. | Static |
+| 0x1ebbe0 | Slot + 0x58 of the main provider: a change of a property. For 0x60a8 (Time in Title) it keeps the setting at provider + 0x408, then it calls the notify method. | Static |
+| 0x17def4 | Method + 0xf4 of a group (vtable 0x66b298): makes each element of a View with 0x21a4f4. The loop uses the count word of the View and has no other limit. | Static, Emulator |
+| 0x21a4f4 | Makes one element. Element word 4 (for example 0x2b00) selects the data object. | Static |
+| 0x244594 | Gets the text of a label one time: 0x21f254(label + 0x14, `'Str '`, label + 0x1c). In the Split panel the chain is the data object of the label, the language manager, then the root object. The data object gives only the music IDs to the main provider. Thus a patch answers its own ID at 0x21f254. | Static, Emulator |
 
 ### Text drawing
 
@@ -967,8 +971,8 @@ the power chip of the PP5020 of Apple. The facts are Static.
 | 0xd252c | Gives the current time of day in the calendar structure. Refer to [re/date-time.md](../re/date-time.md). |
 | 0xa09c4 | Gets the time. If bit 0 of the flags is 0, it uses 1 January 2002. |
 | 0xc8fd0 (+ 8) | Writes the day of the week to calendar + 8: the day number modulo 7. 0 is Sunday. Refer to [re/split-clock.md](../re/split-clock.md). |
-| 0xcce88 | Gives the language manager (the word at + 0x14 of the object from 0x14b460). |
-| 0x250c50 | Slot + 0x7c of the language manager (vtable 0x668f1c): (manager, text, size, style, calendar). Style 0x11 is the short time (manager + 0x473, 12-hour or 24-hour), style 2 the name of the day, style 8 the long date. The patch `split-clock` calls it. |
+| 0xcce88 | Gives an object at + 0x14 of the object from 0x14b460. 0x1680dc calls slot + 0x7c of it. It is not proven to be the language manager: `split-clock` uses `str_table()` 0x21f3b8. |
+| 0x250c50 | Slot + 0x7c of the language manager (vtable 0x668f1c): (manager, text, size, style, calendar). Style 0x11 is the short time (manager + 0x473, 12-hour or 24-hour), style 2 the name of the day, style 8 the long date (string 0xab), style 14 the short date (string 0xb3). The patch `split-clock` calls it. | 
 | 0xe6880 | The `strftime` of the firmware: (text, size, format, `tm`, locale). |
 | 0x105dc8 | Copies the names and the formats of `LDTm` 128 into the locale at manager + 0x44. |
 | 0x1d9430 | Makes the status object (vtable 0x6701bc). It makes 6 timers with 0x13d7c8. The timer at + 0xa0 has 30 000 ms, the timer at + 0xc8 has 300 000 ms. |

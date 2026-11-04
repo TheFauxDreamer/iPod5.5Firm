@@ -31,7 +31,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [playlist-folders](#playlist-folders) | Code patch (extended) | Patches | 4 `bl`, 2 `b` and 1 vtable word (with `chain`) | Version 0.1: emulator only (29 October 2026). Not tested on the real iPod |
 | [playback-log](#playback-log) | Code patch (test, extended) | Patches | 8 `bl`, 5 `b` (all 5 with `chain`) | Version 1.0: yes (30 October 2026). Version 1.2: no. Not tested in the emulator |
 | [battery-display](#battery-display) | Code patch (extended) | Patches | 5 `bl` | Emulator (layout, Light and Dark Gray). Not tested on a real iPod |
-| [split-clock](#split-clock) | Code patch (extended) and 3 View elements | Patches | 3 vtable words (all with `chain`) | No. Not tested in the emulator |
+| [split-clock](#split-clock) | Code patch (extended) and 3 View elements | Patches | 1 `b` and 2 vtable words (all with `chain`) | No. Version 1.1: emulator (Light, ⅔ – ⅓) |
 | [battery-log](#battery-log) | Code patch (test, extended) | Patches | 1 `bl` | Version 0.1: yes, 18.3 hours on a real iPod. Version 0.2: not tested on a real iPod. Not tested in the emulator |
 | [diagnostic-log](#diagnostic-log) | Code patch (test, extended) | Patches | 12 `bl`, 8 `b` (all 8 with `chain`), 1 `word` (`chain`) | No. Not tested in the emulator |
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
@@ -1141,23 +1141,25 @@ The patch does not change the slot 0x6701f0 of the UI handler: [cover-flow](#cov
 
 ## split-clock
 
-**User interface.** Patches pane > Split Clock, letter `z`, in the category Display. The patch needs the Split layout (iPod Appearance > Layout: Split or Switch on iPod). With the Stock layout, the patch has no effect. "Size on iPod (Split)" includes the 3 clock lines when the patch is on.
+**User interface.** Patches pane > Split Clock, letter `z`, in the category Display. The patch needs the Split layout (iPod Appearance > Layout: Split or Switch on iPod). With the Stock layout, the patch has no effect. "Size on iPod (Split)" includes the 3 clock lines when the patch is on. The option "Date" gives Short Month (`date_style` 14, the default) or Long Month (8). To change the option, flash the iPod again.
 
-**Effect.** When there is no current song, the right panel of the Split main menu shows 3 lines: the time, the name of the day and the date. The time obeys Settings > Date & Time > Time (12-hour or 24-hour). The names and the formats use the language of the iPod. When a song starts, the panel shows the cover and the song again. A paused song stays in the panel.
+**Effect.** When there is no current song, the right panel of the Split main menu shows 3 lines: the time, the name of the day and the date. The time obeys Settings > Date & Time > Time (12-hour or 24-hour). The names and the formats use the language of the iPod: Short Month is string 0xb3 of the language (English "Nov 4 2026"), Long Month is string 0xab (English "4 November 2026"). When a song starts, the panel shows the cover and the song again. A paused song stays in the panel. If the clock chip gives no date (day 0 or month 0), the clock does not show.
 
 **Layout.** `ImportedTheme.withClock` (Python `with_clock`) adds 3 text elements of 96 bytes after the 7 elements of the Split View. Each element is a copy of the artist line (offset 416) with the ID 0x7e41, 0x7e42 or 0x7e43 and the top edge 72, 96 or 118. Thus the lines get the width, the size and the colour of the panel text in each form. The View becomes 992 bytes, and the table entry gets the new size. The build adds the lines only when the patch is on. Use `withClock` after `withHalfWidth` and `withSmallText`, because these two need the View of 704 bytes.
 
-**Method.** 3 `word` hooks, all with `chain`:
+**Method.** 3 hooks, all with `chain`:
 
-| Word | Expect | To | Action |
-|---|---|---|---|
-| 0x670fb0 | 0x001e804c | `hook_text` | For type `'Str '` and the 3 clock IDs: if the song title (0x63bd) is not empty, it gives 0, so the line does not draw. Else it calls 0xd252c and the format method of the language manager (slot + 0x7c, style 0x11, 2 or 8). |
-| 0x670fa8 | 0x0021f37c | `hook_notify` | After a notify of 0x63bd, it also notifies the 3 clock IDs. |
-| 0x6701ec | 0x001d93c4 | `hook_event` | At the first event of the status object, it makes a timer with this object as the owner. At its timer event, it notifies the 3 clock IDs and starts the timer for the next minute (the rest of the minute + 100 ms). |
+| Kind | At | Expect | To | Action |
+|---|---|---|---|---|
+| `b` | 0x21f254 | 0xe92d40f8 | `hook_lookup` | The general lookup. For type `'Str '` and the 3 clock IDs: if the song title (0x63bd, from the same first object) is not empty, it gives 0, so the line does not draw. Else it calls 0xd252c and the format method of the language manager (`str_table()` 0x21f3b8, slot + 0x7c, style 0x11, 2 or `date_style`). It keeps the first object of the lookup. |
+| `word` | 0x670fa8 | 0x0021f37c | `hook_notify` | After a notify of 0x63bd on the main provider, it notifies the 3 clock IDs on the kept object. |
+| `word` | 0x6701ec | 0x001d93c4 | `hook_event` | At the first event of the status object, it makes a timer with this object as the owner. At its timer event, it notifies the 3 clock IDs on the kept object and starts the timer for the next minute (the rest of the minute + 100 ms). |
 
-**Load address.** `extended`. The code and the data are 907 bytes.
+Version 1.0 hooked the text method of the main provider (word 0x670fb0). The panel labels never reach that method for an unknown ID, so version 1.0 showed no clock. Refer to [re/split-clock.md](../re/split-clock.md#the-fault-of-version-10).
 
-**Test status.** Swift and Python tests (4 November 2026). Not tested in the emulator or on a real iPod.
+**Load address.** `extended`. The code and the data are 1042 bytes.
+
+**Test status.** Swift and Python tests (4 November 2026). Emulator (owner, 4 November 2026, version 1.1 with Short Month, Light, ⅔ – ⅓, emulator patch 0003): the 3 lines show with the time of the Mac, and the owner reported that it looks great. Not tested: Long Month, Dark, ½ – ½, Switch on iPod, the change from a song to the clock, the Swift build path and a real iPod.
 
 **Research.** Refer to [re/split-clock.md](../re/split-clock.md).
 

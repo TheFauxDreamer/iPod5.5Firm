@@ -1,6 +1,6 @@
 # A clock in the Split panel
 
-Status (4 November 2026): static research is complete. The patch `split-clock` is on the branch `split-clock`. It is not tested in the emulator or on a real iPod.
+Status (4 November 2026): version 1.1 operates in the emulator (Light, ⅔ – ⅓). Version 1.0 showed no clock. Refer to [The fault of version 1.0](#the-fault-of-version-10). Not tested on a real iPod.
 
 The owner wants the right panel of the Split main menu to show the time, the day and the date when there is no current song. The owner reports that the iPod classic 6G/7G does this. All addresses are osos offsets of firmware 1.3. The method is static research with Ghidra, project `osos13`, read-only, and a full decompile.
 
@@ -15,11 +15,11 @@ A web search found reports of a full-screen clock on the iPod classic 6G. The cl
 
 - The firmware has a function that gives the current time in the calendar structure. Refer to [date-time.md](date-time.md).
 - The language manager has a method that formats the calendar structure with the formats of the current language. The time obeys the 12-hour or 24-hour setting.
-- A label in the panel gets its text from the main provider by its element ID. A label with no answer does not draw.
+- A label in the panel gets its text by its element ID through the general lookup 0x21f254. A label with no answer does not draw.
 - The firmware tells the provider when the song changes. A patch can send the same message for the clock lines.
 - The status object has 6 timers. A patch can add its own timer to this object, for an event at each minute.
 
-Thus a patch with 3 `word` hooks and 3 new text elements in the Split View can show the clock. No change to a shared View or a shared Type is necessary.
+Thus a patch with 3 hooks and 3 new text elements in the Split View can show the clock. No change to a shared View or a shared Type is necessary.
 
 ## The parts
 
@@ -53,21 +53,57 @@ The styles that the patch uses, measured in `LDTm` 128 and the English main bloc
 |---|---|---|---|
 | 0x11 | + 0x473 | 0xb5 | `%-I:%M %p`, or `%H:%M` with the 24-hour setting |
 | 2 | + 0x23c + 32 × day | — | The full name of the day |
-| 8 | + 0x3b3 | 0xab | `%-d %B %Y` |
+| 8 | + 0x3b3 | 0xab | `%-d %B %Y` (the option Long Month) |
+| 14 | + 0x453 | 0xb3 | `%b %-d %Y` (the option Short Month, the default) |
 
-Each language block has its own `LDTm` 128. Thus the names and the formats follow the language of the iPod.
+Each language block has its own `LDTm` 128. Thus the names and the formats follow the language of the iPod. All 24 language blocks have string 0xb3 with the year, for example German `%-d. %b %Y`, French `%-d %b %Y` and Japanese `%Y/%b/%-d`.
+
+The owner reported on 4 November 2026 that "4 November 2026" was cut off in ⅔ – ⅓. Thus Short Month is the default.
 
 ## The patch
 
-| Hook | Word | Expect | Action |
+Version 1.1:
+
+| Hook | Kind and place | Expect | Action |
 |---|---|---|---|
-| Text | 0x670fb0 | 0x001e804c | For the 3 clock IDs: if the song title (0x63bd) is empty, give the text. Else give 0. |
-| Notify | 0x670fa8 | 0x0021f37c | After a notify of 0x63bd, notify the 3 clock IDs. |
-| Event | 0x6701ec | 0x001d93c4 | At the first event, make and start the patch timer. At the patch timer event, notify the changed clock lines and start the timer for the next minute. |
+| Lookup | `b` at 0x21f254 | 0xe92d40f8 | For the 3 clock IDs: if the song title (0x63bd, from the same first object) is empty, give the text. Else give 0. Keep the first object of the lookup. |
+| Notify | word 0x670fa8 | 0x0021f37c | After a notify of 0x63bd, notify the 3 clock IDs on the kept object. |
+| Event | word 0x6701ec | 0x001d93c4 | At the first event, make and start the patch timer. At the patch timer event, notify the 3 clock IDs on the kept object, and start the timer for the next minute. |
+
+The language manager is `str_table()` 0x21f3b8. A clock chip with day 0 or month 0 gives no text, so the clock does not show.
 
 The clock IDs are 0x7e41 (time), 0x7e42 (day) and 0x7e43 (date). A scan found no use in the code, the Views, the Menus or `TCmd` 9088. No other patch hooks the 3 words.
 
 The text test uses the song title, so the clock and the song never show at the same time.
+
+## The fault of version 1.0
+
+Version 1.0 hooked the text method of the main provider (word 0x670fb0) and used 0xcce88 for the language manager. In the emulator, the panel showed only "0 of 0".
+
+A test copy with counters gave these values (emulator, owner at the main menu, 4 November 2026):
+
+| Counter | Value |
+|---|---|
+| Calls of the text hook | 729 |
+| Calls for 0x7e41–0x7e43 | 0 |
+| Event hook calls, patch timer events | 183, 56 |
+
+A second test copy hooked 0x21f254 and recorded the chain of each lookup (the first word of the vtable of each object):
+
+| Item | Result |
+|---|---|
+| Chain for a clock ID and for the artist line 0x63be | The data object (first method 0x207304), the language manager (first word 0), the root object (0x1aeb30). The main provider is not in the chain. |
+| The answer of the chain for a clock ID | 0 (no object answers). |
+| Clock requests, texts made, song shown | 33, 33, 0 |
+| Notifies to the data object, timer events | 27, 23 |
+
+Thus the data object of the panel gives only the music IDs to the main provider. A hook on the vtable of the main provider cannot see the clock IDs. The fix answers the IDs at 0x21f254, as other patches do for their texts. The notify also goes to the data object, because the labels listen to it.
+
+The emulator also gave all zeros from the clock chip. The firmware made "27 June 64432" from day 0 of month 0 of year 0. The emulator patch 0003 corrects this. Refer to [emulator.md](emulator.md#the-running-clock).
+
+## The emulator test of version 1.1
+
+Owner, 4 November 2026: Light, ⅔ – ⅓, folder library, Short Month, emulator patch 0003. The panel showed the time of the Mac, "Wednesday" and "Nov 4 2026", and the owner reported that it looks great.
 
 ## The fonts
 
@@ -86,5 +122,7 @@ The key of Settings > Date & Time > Time in Title is 0x600060a8 (Menu 24604). Th
 
 ## Open points
 
-- The emulator plays no music. Thus only a real iPod can test the change from a song to the clock.
+- The change from a song to the clock is not tested. The emulator plays music, so it can test this.
+- Dark, ½ – ½, Switch on iPod, Long Month and the Swift build path are not tested.
 - After a sleep, the old minute can show until the timer event comes.
+- The patch keeps the data object of the last clock request. If the firmware makes the main menu again, the next request gives the new object.

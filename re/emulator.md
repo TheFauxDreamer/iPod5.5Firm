@@ -68,6 +68,18 @@ The patch `mac/Resources/emulator-patches/0001-ipodfirm-instrumentation.patch` a
 | `IPODFW_MARK_AT=ADDR,ADDR,...` | Adds a marker to the `evlog` output (address 0xFFFFFFFD, byte = index in the list) each time that one of the addresses runs. A button frame also adds a marker (address 0xFFFFFFFE, byte = buttons). The `evlog` also records writes to the I²C controller (0x7000C000–0x7000C0FF). |
 | `IPODFW_RESET_AFTER=N` | Restarts the emulated iPod when the firmware writes 4 to `DEV_RS` (0x60006004), after N instructions. |
 
+## The running clock
+
+The patch `mac/Resources/emulator-patches/0003-ipodfirm-running-clock.patch` changes `tools/ipod-machine/src/hw/pmu.rs`. Before this patch, the emulator window did not set the clock registers 0x0a–0x10 of the PCF50605, and the registers did not count. The firmware then read day 0, month 0 and year 0, and Settings > Date & Time showed a year that it could not change (for example 6441). Measured on 4 November 2026 with `split-clock`.
+
+With the patch:
+
+- At each start, the clock registers get the local time of the Mac.
+- A read of a clock register gives the time of the last set plus the host time since then. Thus the clock runs at real time, also when the emulator runs faster or slower.
+- A write of a clock register (Settings > Date & Time) sets the new time, and the clock continues from it.
+
+The patch changes no other register. `trace` with `--rtc=` still sets the time with `set_clock`.
+
 ## The music playback fix
 
 The patch `mac/Resources/emulator-patches/0002-ipodfirm-music-playback.patch` makes songs play. Before this patch, the song time stayed at 0:00. The patch makes two changes in `tools/ipod-machine/src/lib.rs`:
