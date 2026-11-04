@@ -126,6 +126,8 @@ The design:
 
 The size is 1392 bytes with `__attribute__((minsize))` (1854 bytes without it).
 
+Version 1.3 (4 November 2026): the owner asked for 30 Seconds. The timer now comes at each :00 and :30, and the pause counts seconds in steps of 30. Thus the clock shows `pause_seconds` to `pause_seconds` + 30 seconds after the pause. The option values are seconds: 0, 30, 60, 300 (the default) and 900, with the new `id` `pause_time`. The code has no division, so it needs no `__aeabi_uidiv`. The size is 1396 bytes.
+
 The emulator was slow for approximately 30 s after each Pause and Next. The cause was in the emulator, not in the patch. Refer to [emulator.md](emulator.md#the-cop-sleep-fix). With the emulator patches 0001–0004, the owner reported that version 1.2 works.
 
 ## The fonts
