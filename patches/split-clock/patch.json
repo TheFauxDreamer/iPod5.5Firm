@@ -5,11 +5,11 @@
   "symbol": "clock",
   "category": "display",
   "version_letter": "z",
-  "version": "1.2",
-  "size": 1392,
+  "version": "1.3",
+  "size": 1396,
   "description": "The right panel of the Split main menu shows the time, the day of the week and the date when there is no current song. When a song starts, the panel shows the cover and the song again.",
   "details": [
-    "The time changes at each new minute.",
+    "The time changes at each new minute. The panel checks the time each 30 seconds.",
     "The time obeys Settings > Date & Time > Time (12-hour or 24-hour).",
     "The names of the day and the month use the language of the iPod.",
     "Date gives a short month (\"Nov 4 2026\") or a long month (\"4 November 2026\").",
@@ -50,15 +50,16 @@
       ]
     },
     {
-      "id": "pause",
+      "id": "pause_time",
       "title": "Clock After a Pause",
-      "symbol": "pause_minutes",
-      "default": 5,
+      "symbol": "pause_seconds",
+      "default": 300,
       "choices": [
         { "value": 0, "title": "Never", "description": "A paused song stays in the panel." },
-        { "value": 1, "title": "1 Minute", "description": "The clock shows 1 to 2 minutes after a pause." },
-        { "value": 5, "title": "5 Minutes", "description": "The clock shows 5 to 6 minutes after a pause." },
-        { "value": 15, "title": "15 Minutes", "description": "The clock shows 15 to 16 minutes after a pause." }
+        { "value": 30, "title": "30 Seconds", "description": "The clock shows 30 to 60 seconds after a pause." },
+        { "value": 60, "title": "1 Minute", "description": "The clock shows 1 minute to 1 minute 30 seconds after a pause." },
+        { "value": 300, "title": "5 Minutes", "description": "The clock shows 5 minutes to 5 minutes 30 seconds after a pause." },
+        { "value": 900, "title": "15 Minutes", "description": "The clock shows 15 minutes to 15 minutes 30 seconds after a pause." }
       ]
     }
   ],

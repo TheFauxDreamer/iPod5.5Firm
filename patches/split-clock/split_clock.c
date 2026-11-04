@@ -8,14 +8,14 @@
  *   0x21f254: the general lookup ("b", chain). A panel label asks its data object, then the language
  *             manager and the root object. The main provider is not in this chain: the data object
  *             sends it only the music IDs. Thus the patch answers the clock IDs here. The clock shows
- *             if the song title is empty, or after a pause of pause_minutes. Then the patch also gives
+ *             if the song title is empty, or after a pause of pause_seconds. Then the patch also gives
  *             no answer for the song lines, the count and the cover of the panel. Now Playing asks the
  *             main provider directly, so it keeps the paused song.
  *   0x670fa8: the notify method of the main provider (0x21f37c, chain). A notify of the song title
  *             also goes to the clock lines.
  *   0x6701ec: the event method of the status object (0x1d93c4, chain). The first event makes the
- *             timer of the patch with the status object as its owner. The timer comes at each minute.
- *             It counts the minutes of a pause (0x9ba00 gives 2).
+ *             timer of the patch with the status object as its owner. The timer comes at each half
+ *             minute (:00 and :30). It counts the half minutes of a pause (0x9ba00 gives 2).
  */
 
 #define TAG_STR      0x53747220u         /* 'Str ' */
@@ -33,8 +33,8 @@
 #define FORMAT_SLOT  0x7c                /* the format method of the language manager (0x250c50) */
 #define NOTIFY_SLOT  0x54                /* the notify method of an object (0x21f37c) */
 #define TEXT_SIZE    40
-#define MINUTE_MS    60000u
-#define LATE_MS      100u                /* the timer comes just after the new minute */
+#define TICK_S       30u                 /* the timer comes at each half minute */
+#define LATE_MS      100u                /* the timer comes just after :00 or :30 */
 
 typedef int (*format_fn)(void *manager, char *text, unsigned size, unsigned style, const void *calendar);
 typedef int (*notify_fn)(void *object, unsigned type, int id);
@@ -56,13 +56,14 @@ static const unsigned char styles[LINES - 1] = { 0x11, 2 };
  * 8: the long date (string 0xab, for example "4 November 2026"). */
 unsigned date_style = 14;
 
-/* An option in patch.json: the minutes of a pause before the clock shows. 0: never. */
-unsigned pause_minutes = 5;
+/* An option in patch.json: the seconds of a pause before the clock shows (0: never). A multiple of
+ * TICK_S. */
+unsigned pause_seconds = 300;
 
 static unsigned timer[10];               /* a firmware timer: 0x28 bytes */
 static void *owner, *labels;             /* labels: the data object that the clock labels ask */
 static void *library;
-static unsigned paused_ticks;            /* minute events with the music paused */
+static unsigned paused_s;                /* the seconds of the pause, in steps of TICK_S */
 static int pause_clock;                  /* 1: the clock shows in place of the paused song */
 static char text[LINES][TEXT_SIZE];
 
@@ -121,24 +122,24 @@ __attribute__((minsize)) static void set_pause_clock(int on)
     notify_lines(1);
 }
 
-/* At each minute event. A pause shows the clock after more than pause_minutes events, thus after
- * pause_minutes to pause_minutes + 1 minutes. */
+/* At each timer event. The first event of a pause counts TICK_S, but it comes 0 to TICK_S seconds
+ * after the pause. Thus the clock shows pause_seconds to pause_seconds + TICK_S seconds after it. */
 __attribute__((minsize)) static void count_pause(void)
 {
     int state = library ? play_state(library) : 0;
 
     if (state != PAUSED) {
-        paused_ticks = 0;
+        paused_s = 0;
         set_pause_clock(0);
         return;
     }
-    if (paused_ticks <= pause_minutes)
-        paused_ticks++;
-    if (pause_minutes && paused_ticks > pause_minutes)
+    if (paused_s <= pause_seconds)
+        paused_s += TICK_S;
+    if (pause_seconds && paused_s > pause_seconds)
         set_pause_clock(1);
 }
 
-/* The timer for the next minute. */
+/* The timer for the next :00 or :30. */
 __attribute__((minsize)) static void start_timer(void)
 {
     unsigned calendar[3], seconds;
@@ -147,7 +148,9 @@ __attribute__((minsize)) static void start_timer(void)
     seconds = calendar[0] & 0xff;
     if (seconds > 59)
         seconds = 59;
-    timer_period(timer, MINUTE_MS - seconds * 1000u + LATE_MS);
+    if (seconds >= TICK_S)
+        seconds -= TICK_S;
+    timer_period(timer, (TICK_S - seconds) * 1000u + LATE_MS);
     timer_start(timer);
 }
 
@@ -183,7 +186,7 @@ __attribute__((minsize)) int hook_notify(void *self, unsigned type, int id)
         notify_lines(0);
     /* Play brings the paused song back at once. */
     if (pause_clock && library && play_state(library) == PLAYING) {
-        paused_ticks = 0;
+        paused_s = 0;
         set_pause_clock(0);
     }
     return result;
