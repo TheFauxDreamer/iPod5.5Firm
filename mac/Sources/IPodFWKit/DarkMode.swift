@@ -161,12 +161,36 @@ public enum DarkMode {
         return t
     }
 
+    /// Bytes that are different with the Split View On and Off: the `bytes` of a patch with `split_only`.
+    public struct LayoutBytes: Equatable {
+        public var at: Int
+        public var stock: [UInt8]
+        public var split: [UInt8]
+        public init(at: Int, stock: [UInt8], split: [UInt8]) { self.at = at; self.stock = stock; self.split = split }
+
+        /// The `bytes` of each patch with `split_only`: `expect` with Split View Off, `value` with On.
+        public static func of(_ patches: [PatchInfo]) throws -> [LayoutBytes] {
+            try patches.filter { $0.spec.split_only == true }.flatMap { p in
+                try (p.spec.bytes ?? []).map {
+                    LayoutBytes(at: Int(try Patcher.hex($0.at)), stock: try Patcher.hexBytes($0.expect), split: try Patcher.hexBytes($0.value))
+                }
+            }
+        }
+    }
+
     /// The layout switch table: one run of the 8 bytes (offset and size) of the table entry of View 24430,
-    /// with the Split entry XOR the stock entry.
-    static func layoutTable(entryAt: Int, stock: [UInt8], split: [UInt8]) -> [UInt8] {
-        var t = [UInt8](repeating: 0, count: 20)
-        put32(&t, 0, magic); put32(&t, 4, 1); put32(&t, 8, 20); put32(&t, 12, UInt32(entryAt)); put32(&t, 16, 8)
-        return t + zip(stock, split).map { $0 ^ $1 }
+    /// with the Split entry XOR the stock entry, and one run for each entry of `extra`. The runs are in
+    /// address order.
+    static func layoutTable(entryAt: Int, stock: [UInt8], split: [UInt8], extra: [LayoutBytes] = []) -> [UInt8] {
+        let runs = ([LayoutBytes(at: entryAt, stock: stock, split: split)] + extra).sorted { $0.at < $1.at }
+        let head = 12 + 8 * runs.count
+        var t = [UInt8](repeating: 0, count: head)
+        put32(&t, 0, magic); put32(&t, 4, UInt32(runs.count)); put32(&t, 8, UInt32(head))
+        for (i, r) in runs.enumerated() {
+            put32(&t, 12 + 8 * i, UInt32(r.at)); put32(&t, 16 + 8 * i, UInt32(r.stock.count))
+        }
+        for r in runs { t += zip(r.stock, r.split).map { $0 ^ $1 } }
+        return t
     }
 
     /// The end of the theme data after the end of osos, or `patchAreaEnd` if there is none.
@@ -212,7 +236,8 @@ public enum DarkMode {
     /// - no `theme`: always light.
     /// With `layout`, the main menu is Split. With `layoutSwitch` also, a Split View item changes it back to stock.
     static func parts(partition: FirmwarePartition, osos: [UInt8], theme: ImportedTheme?, darkSwitch: Bool,
-                      originalSHA256: String, layout splitLayout: ImportedTheme?, layoutSwitch: Bool) throws -> Parts {
+                      originalSHA256: String, layout splitLayout: ImportedTheme?, layoutSwitch: Bool,
+                      layoutBytes: [LayoutBytes] = []) throws -> Parts {
         if let theme, originalSHA256 != theme.osos_sha256 {
             throw ThemeError("The theme \"\(theme.name)\" is for a different firmware.")
         }
@@ -249,7 +274,9 @@ public enum DarkMode {
             let stockEntry = Array(out[entry.offset..<entry.offset + entry.new.count])
             out.replaceSubrange(entry.offset..<entry.offset + entry.new.count, with: entry.new)
             end = at + view.count
-            if layoutSwitch { layoutTable = Self.layoutTable(entryAt: entry.offset, stock: stockEntry, split: [UInt8](entry.new)) }
+            if layoutSwitch {
+                layoutTable = Self.layoutTable(entryAt: entry.offset, stock: stockEntry, split: [UInt8](entry.new), extra: layoutBytes)
+            }
         }
         var darkTable = emptyTable, leftOut = 0
         if darkSwitch, let theme { (darkTable, leftOut) = switchTable(theme, osos: osos, extra: extra) }
@@ -265,9 +292,11 @@ public enum DarkMode {
     /// Split View, the switch tables, the Settings menu and the code of the patch (`codeSize`, the `size`
     /// in patch.json). The value is the same as the layout of `build`. The Patches pane shows it.
     public static func addedSize(partition: FirmwarePartition, osos: [UInt8], theme: ImportedTheme?, darkSwitch: Bool = true,
-                                 codeSize: Int, layout splitLayout: ImportedTheme? = nil, layoutSwitch: Bool = false) throws -> Int {
+                                 codeSize: Int, layout splitLayout: ImportedTheme? = nil, layoutSwitch: Bool = false,
+                                 layoutBytes: [LayoutBytes] = []) throws -> Int {
         let p = try parts(partition: partition, osos: osos, theme: theme, darkSwitch: darkSwitch,
-                          originalSHA256: theme?.osos_sha256 ?? ThemeImport.sha256(osos), layout: splitLayout, layoutSwitch: layoutSwitch)
+                          originalSHA256: theme?.osos_sha256 ?? ThemeImport.sha256(osos), layout: splitLayout, layoutSwitch: layoutSwitch,
+                          layoutBytes: layoutBytes)
         return p.positions.patch + codeSize - patchAreaEnd
     }
 
@@ -276,9 +305,9 @@ public enum DarkMode {
     /// With `layout`, both modes have the Split main menu.
     public static func build(partition: FirmwarePartition, osos: [UInt8], theme: ImportedTheme?, darkSwitch: Bool = true,
                              patch: PatchInfo, originalSHA256: String, layout splitLayout: ImportedTheme? = nil,
-                             layoutSwitch: Bool = false) throws -> ([UInt8], Info) {
+                             layoutSwitch: Bool = false, layoutBytes: [LayoutBytes] = []) throws -> ([UInt8], Info) {
         let p = try parts(partition: partition, osos: osos, theme: theme, darkSwitch: darkSwitch,
-                          originalSHA256: originalSHA256, layout: splitLayout, layoutSwitch: layoutSwitch)
+                          originalSHA256: originalSHA256, layout: splitLayout, layoutSwitch: layoutSwitch, layoutBytes: layoutBytes)
         let at = p.positions
         // The patch, then the tables and the menu.
         var out = try Patcher.apply(patch, to: p.out, originalSHA256: originalSHA256, loadAddress: UInt32(at.patch),

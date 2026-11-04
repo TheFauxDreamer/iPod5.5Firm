@@ -2133,6 +2133,32 @@ final class DarkTableTests: XCTestCase {
 }
 
 final class DarkModeTests: XCTestCase {
+    /// The layout table with the timer byte of no-now-playing-timer (`split_only`): the same bytes as
+    /// Python (test_layout_table_also_switches_the_split_only_bytes), and 2 runs give back the image.
+    func testLayoutTableWithSplitOnlyBytes() throws {
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        let all = Patcher.list(in: repo.appendingPathComponent("patches"))
+        let timer = try XCTUnwrap(all.first { $0.spec.name == "no-now-playing-timer" })
+        XCTAssertEqual(timer.spec.split_only, true)
+        let extra = try DarkMode.LayoutBytes.of(all)
+        XCTAssertEqual(extra, [DarkMode.LayoutBytes(at: 0x4B5E38, stock: [0x96], split: [0x07])])
+        XCTAssertEqual(try DarkMode.LayoutBytes.of(all.filter { $0.spec.split_only != true }), [])
+        let stock = try Patcher.hexBytes("c4411a00d0000000"), split = try Patcher.hexBytes("0ce23f00e0030000")
+        let table = DarkMode.layoutTable(entryAt: 0x337428, stock: stock, split: split, extra: extra)
+        XCTAssertEqual(table.map { String(format: "%02x", $0) }.joined(),
+                       "4946444d020000001c0000002874330008000000385e4b0001000000c8a325003003000091")
+        var osos = [UInt8](repeating: 0, count: 0x4B5E40)
+        osos.replaceSubrange(0x337428..<0x337430, with: split)
+        osos[0x4B5E38] = 0x07
+        DarkMode.applySwitchTable(&osos, table)
+        XCTAssertEqual(Array(osos[0x337428..<0x337430]), stock)
+        XCTAssertEqual(osos[0x4B5E38], 0x96)
+        DarkMode.applySwitchTable(&osos, table)
+        XCTAssertEqual(Array(osos[0x337428..<0x337430]), split)
+        XCTAssertEqual(osos[0x4B5E38], 0x07)
+        XCTAssertEqual(DarkMode.layoutTable(entryAt: 16, stock: stock, split: split).count, 28)
+    }
+
     /// The owner's case: "Switch on iPod" with a large theme, then an extended patch (usb-host-probe).
     /// Needs IPODFW_IPSW and IPODFW_THEME (an .ipodtheme file).
     /// Split with Switch on iPod: the same osos as Python, and a correct size in the Patches pane.

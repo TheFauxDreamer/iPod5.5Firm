@@ -114,3 +114,21 @@ The order of the native calls gives the three rows 0x25c, 0x2c4 and 0x256. The o
 1. Test the 1 byte on a real iPod.
 2. Identify 0xfe2–0xfe4, 0x11b3, 0x11b4 and the event of 0x1028.
 3. Find the meaning of 0x18145c, the switch byte 0x1081dfdc and the value 0x602e.
+
+## Only with Split View On
+
+Status (4 November 2026): version 0.3 operates in the emulator.
+
+With Layout = Switch on iPod, the owner can turn Split View off on the iPod. Before version 0.3, the timer stayed off with the stock main menu too, so Now Playing did not open by itself. The owner reported this as incorrect.
+
+The method:
+
+- `patch.json` has `"split_only": true`.
+- The build puts the byte into the layout switch table of `dark-mode`: the run 0x4b5e38, length 1, data 0x91 (0x96 XOR 0x07). The table also has the run of the table entry of View 24430.
+- `dark-mode` applies the table at the start, at the first View lookup, if `iPodFirmLayout` contains '0'. Then the byte is 0x96, the stock value.
+- The script runs in place in osos (refer to [list-rendering.md](list-rendering.md)), and the timer reads the byte after the start. Thus the change operates.
+
+Measured: the Python and Swift builds give the same table (37 bytes). Two applications give back the image.
+
+Emulator (owner, 4 November 2026, Light, Layout = Switch on iPod): with Split View On, Now Playing did not open by itself. With Split View Off, it opened after 10 seconds. With On again, it did not open. The owner reported that it works great.
+
