@@ -304,7 +304,9 @@ The owner asked for a version to test on a real iPod. The implementation follows
 
 Real iPod 5.5G (owner, 4 November 2026, app 0.1.261, Dark Gray, stopwatch): the restart from light to dark took 54 s. The restart from dark to light took 54 s. The light start does not apply the table. Thus the IFD2 apply (185 ms in the emulator) adds no time that a stopwatch can measure.
 
+The owner reported that all screens in dark mode are correct.
+
 ## Open items
 
-- The owner's report of the screens in dark mode on the real iPod (colours and highlight bar).
+- Merge the branch `dark-table-ifd2` into `main`, only if the owner asks.
 - Old results (9 October 2026): the dark bytes compress better than the XOR data, and deflate gives approximately 6×. A table from the light pictures gives a smaller result than deflate (65,084 bytes against 117,227 bytes) and needs no RAM for a window.
