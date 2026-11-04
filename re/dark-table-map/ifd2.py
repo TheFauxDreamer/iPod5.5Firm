@@ -12,6 +12,8 @@ Each record: u32 address, u32 (kind << 28 | length in bytes), then the data of t
              boundary, the indices (MSB first), zeros to a 4-byte boundary. The decoder writes each
              u16 of the range from the palette.
 RAW records after a MAP record correct the pixels that the map does not give.
+The decoder stops at an unknown kind and at a record that does not fit in the table. It skips a
+record whose range is not below 0x800000.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
 MAGIC = 0x32444649          # "IFD2"
+IFDM = 0x4D444649           # "IFDM": the table of dark-mode 1.2
 RAW, MAP, PAL = 0, 1, 2
 GAP = 8                     # join two RAW runs if fewer bytes than this separate them
 
@@ -71,7 +74,11 @@ def encode(light: bytes, dark: bytes, pictures: list[tuple[int, int]], kinds=(RA
     records: list[bytes] = []
     stats = Stats()
     covered = []
-    for a, e in sorted(pictures):
+    pictures = sorted(set(pictures))
+    for (a, e), (b, _) in zip(pictures, pictures[1:]):
+        if b < e:      # a second MAP on the same pixels gives wrong colours (MAP is not idempotent)
+            raise ValueError(f"The pixel ranges 0x{a:x} and 0x{b:x} overlap.")
+    for a, e in pictures:
         if a % 2 or e % 2 or light[a:e] == dark[a:e]:
             continue
         covered.append((a, e))
@@ -115,17 +122,12 @@ def encode(light: bytes, dark: bytes, pictures: list[tuple[int, int]], kinds=(RA
             stats.map_steps += search_steps(lx, [x for x, _ in table])
         elif kind == PAL:
             stats.pal_pixels += len(dx)
-    # all other differences
-    edges = sorted(covered)
-    k = 0
+    # all other differences: the parts of each run outside the pictures (the records above did those)
     for s, t in _runs(light, dark, 0, len(light)):
-        while k < len(edges) and edges[k][1] <= s:
-            k += 1
-        if k < len(edges) and edges[k][0] < t:     # inside a picture: done above
-            continue
-        records.append(_raw(s, t, dark))
-        stats.other_runs += 1
-        stats.other_bytes += 8 + len(_pad(dark[s:t]))
+        for s, t in _outside(s, t, covered):
+            records.append(_raw(s, t, dark))
+            stats.other_runs += 1
+            stats.other_bytes += 8 + len(_pad(dark[s:t]))
     body = b"".join(records)
     offsets = list(_record_offsets(body))
     count = len(offsets)
@@ -134,6 +136,35 @@ def encode(light: bytes, dark: bytes, pictures: list[tuple[int, int]], kinds=(RA
         if ck >> 28 == RAW:
             stats.raw_bytes += ck & 0x0FFFFFFF
     return struct.pack("<III", MAGIC, count, 12 + len(body)) + body, stats
+
+
+def _outside(s: int, t: int, covered: list[tuple[int, int]]):
+    """The parts of s..t that are not in a covered range, without the equal bytes at each end."""
+    for a, e in covered:
+        if a < t and e > s:
+            if a > s:
+                yield from _outside(s, a, covered)
+            if e < t:
+                yield from _outside(e, t, covered)
+            return
+    yield s, t
+
+
+def covered_ranges(table: bytes) -> list[tuple[int, int]]:
+    """The address ranges that the decoder writes or can write (IFD2 or IFDM)."""
+    magic, count = struct.unpack_from("<II", table, 0)
+    if magic == IFDM:
+        return [(a, a + n) for a, n in (struct.unpack_from("<II", table, 12 + 8 * i) for i in range(count))]
+    out = []
+    for p in _record_offsets(table[12:]):
+        at, ck = struct.unpack_from("<II", table, 12 + p)
+        out.append((at, at + (ck & 0x0FFFFFFF)))
+    return out
+
+
+def choose(ifd2_table: bytes, ifdm_table: bytes) -> bytes:
+    """The smaller table. The decoder of the patch accepts both magic values."""
+    return ifd2_table if len(ifd2_table) < len(ifdm_table) else ifdm_table
 
 
 def search_steps(values, keys: list[int]) -> int:
@@ -177,15 +208,50 @@ def _record_offsets(body: bytes):
         p += _record_size(body, p)
 
 
-def decode(work: bytearray, table: bytes, base: int = 0) -> None:
-    """A model of the C decoder (re/dark-table-map/decode.c). `base` is the address of work[0]."""
+def _fits(table: bytes, p: int, end: int) -> int | None:
+    """The size of the record at p, or None if decode.c stops at it."""
+    if end - p < 8:
+        return None
+    _, ck = struct.unpack_from("<II", table, p)
+    kind, n = ck >> 28, ck & 0x0FFFFFFF
+    room = end - p - 8
+    if kind == RAW:
+        return 8 + n + (-n % 4) if n <= room - (room & 3) else None
+    if kind == MAP:
+        if room < 4:
+            return None
+        cnt = struct.unpack_from("<I", table, p + 8)[0]
+        return 12 + 4 * cnt if cnt <= (room - 4) >> 2 else None
+    if kind == PAL:
+        if room < 4:
+            return None
+        nc, bits = struct.unpack_from("<HH", table, p + 8)
+        if bits not in (1, 2, 4, 8):
+            return None
+        head = 4 + ((2 * nc + 3) & ~3)
+        nb = ((n >> 1) * bits + 7) >> 3
+        return 8 + head + ((nb + 3) & ~3) if head <= room and ((nb + 3) & ~3) <= room - head else None
+    return None
+
+
+def decode(work: bytearray, table: bytes, base: int = 0, limit: int = 0x800000) -> None:
+    """A model of the C decoder (re/dark-table-map/decode.c). `base` is the address of work[0]. The
+    model stops where decode.c stops. It writes only inside work (decode.c writes below `limit`)."""
     magic, count, size = struct.unpack_from("<III", table, 0)
-    assert magic == MAGIC and size == len(table)
+    if magic != MAGIC or size < 12:
+        return
+    end = min(size, len(table))
     p = 12
     for _ in range(count):
+        rs = _fits(table, p, end)
+        if rs is None:
+            return
         at, ck = struct.unpack_from("<II", table, p)
         kind, n = ck >> 28, ck & 0x0FFFFFFF
         a = at - base
+        if not (at < limit and n <= limit - at) or (kind != RAW and (at | n) & 1):
+            p += rs
+            continue
         if kind == RAW:
             work[a:a + n] = table[p + 8:p + 8 + n]
         elif kind == MAP:
@@ -203,7 +269,4 @@ def decode(work: bytearray, table: bytes, base: int = 0) -> None:
                 v = (table[idx + bit // 8] >> (8 - bits - bit % 8)) & mask
                 if v < nc:
                     struct.pack_into("<H", work, a + 2 * j, cols[v])
-        else:
-            raise ValueError(f"unknown kind {kind}")
-        p += _record_size(table, p)
-    assert p == len(table)
+        p += rs

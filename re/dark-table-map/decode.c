@@ -1,15 +1,15 @@
 /* Research only: the decoder of the "IFD2" dark switch table (re/dark-table-map/ifd2.py).
- * No patch uses this file. check.py compiles it with the flags of the patches (Patcher.clangFlags)
+ * No production patch uses this file. check.py compiles it with the flags of the patches (Patcher.clangFlags)
  * to measure the code size, and for the Mac to compare its result with the Python model.
  *
- * On the iPod, BASE is 0: the address in a record is the osos address. On the Mac (HOST), BASE is the
- * address of a copy of osos (host_main.c). */
+ * On the iPod, the address in a record is the osos address (an integer cast, as in dark_mode.c). On
+ * the Mac (HOST), the address is an offset in a copy of osos (host_main.c). */
 
 #ifdef HOST
 extern unsigned char *host_base;
-#define BASE host_base
+#define DST(at) (host_base + (at))
 #else
-#define BASE 0
+#define DST(at) ((unsigned char *)(at))
 #endif
 
 #define MAGIC2   0x32444649u                    /* "IFD2" */
@@ -63,38 +63,56 @@ void apply_table2(const unsigned *t)
 {
     const unsigned char *p, *end;
     unsigned n, i;
-    if (t[0] != MAGIC2)
+    if (t[0] != MAGIC2 || t[2] < 12)
         return;
     n = t[1];
     p = (const unsigned char *)(t + 3);
     end = (const unsigned char *)t + t[2];
-    for (i = 0; i < n && p + 8 <= end; i++) {
+    for (i = 0; i < n && end - p >= 8; i++) {
         const unsigned *h = (const unsigned *)p;
         unsigned at = h[0], kind = h[1] >> 28, len = h[1] & 0x0fffffffu;
+        unsigned room, size;                    /* the bytes after the record head, and the data size */
         int ok = at < LIMIT && len <= LIMIT - at;
-        unsigned char *dst = (unsigned char *)BASE + at;
+        unsigned char *dst = DST(at);
         p += 8;
+        room = (unsigned)(end - p);
         if (kind == RAW) {
             unsigned k;
+            if (len > room - (room & 3))
+                return;                         /* the data is not in the table: stop */
             if (ok)
                 for (k = 0; k < len; k++)
                     dst[k] = p[k];
-            p += (len + 3) & ~3u;
+            size = (len + 3) & ~3u;
         } else if (kind == MAP) {
-            unsigned count = *(const unsigned *)p;
+            unsigned count;
+            if (room < 4)
+                return;
+            count = *(const unsigned *)p;
+            if (count > (room - 4) >> 2)
+                return;
             if (ok && !((at | len) & 1))
                 apply_map((unsigned short *)dst, len >> 1, (const unsigned short *)(p + 4), count);
-            p += 4 + 4 * count;
+            size = 4 + 4 * count;
         } else if (kind == PAL) {
-            unsigned count = ((const unsigned short *)p)[0], bits = ((const unsigned short *)p)[1];
-            const unsigned char *index = p + 4 + ((2 * count + 3) & ~3u);
-            unsigned bytes = ((len >> 1) * bits + 7) >> 3;
-            if (ok && !((at | len) & 1) && (bits == 1 || bits == 2 || bits == 4 || bits == 8))
-                apply_pal((unsigned short *)dst, len >> 1, (const unsigned short *)(p + 4), count, index, bits);
-            p = index + ((bytes + 3) & ~3u);
+            unsigned count, bits, head, bytes;
+            if (room < 4)
+                return;
+            count = ((const unsigned short *)p)[0];
+            bits = ((const unsigned short *)p)[1];
+            if (bits != 1 && bits != 2 && bits != 4 && bits != 8)
+                return;
+            head = 4 + ((2 * count + 3) & ~3u);
+            bytes = ((len >> 1) * bits + 7) >> 3;
+            if (head > room || ((bytes + 3) & ~3u) > room - head)
+                return;
+            if (ok && !((at | len) & 1))
+                apply_pal((unsigned short *)dst, len >> 1, (const unsigned short *)(p + 4), count, p + head, bits);
+            size = head + ((bytes + 3) & ~3u);
         } else {
             return;                             /* an unknown kind: stop */
         }
+        p += size;
     }
 }
 
@@ -109,7 +127,7 @@ void apply_table1(const unsigned *t)
     n = t[1];
     data = (const unsigned char *)t + t[2];
     for (i = 0; i < n; i++) {
-        unsigned char *p = (unsigned char *)BASE + t[3 + 2 * i];
+        unsigned char *p = DST(t[3 + 2 * i]);
         unsigned len = t[4 + 2 * i], k;
         for (k = 0; k < len; k++)
             p[k] ^= data[k];
