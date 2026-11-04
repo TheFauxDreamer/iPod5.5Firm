@@ -36,7 +36,7 @@ All addresses are osos offsets for Apple firmware 1.3. Refer to [The address rul
 | [usb-host-probe](#usb-host-probe) | Code patch (test) | Patches | 8 `bl`, 2 `b` and 18 table words | Yes, as a test (2026-10-08). Version 1.29: yes (28 October 2026) |
 | [usb-audio-out](#usb-audio-out) | Code patch | Patches | 17 `bl`, 2 `b` and 4 words (3 with `chain`), a Settings menu | Yes (2026-10-17) |
 | [Dark theme](#dark-theme) | Resource data | Patches > iPod Appearance | BMap, View and Type bytes | Yes |
-| [Dark Mode switch](#dark-mode-switch) | Code and data | Patches > iPod Appearance | 1 `b` and 2 vtable words, 2 tables and a menu | Version 1.1: yes (28 October 2026). Version 1.2 (Split View item): emulator only |
+| [Dark Mode switch](#dark-mode-switch) | Code and data | Patches > iPod Appearance | 1 `b` and 2 vtable words, 2 tables and a menu | Version 1.1: yes (28 October 2026). Version 1.2 (Split View item): emulator only. Version 1.3 (IFD2 table): yes (4 November 2026) |
 | [Move of rsrc](#move-of-rsrc) | Partition layout | Automatic | 1 directory entry | Yes |
 
 ## The build sequence
@@ -1276,14 +1276,14 @@ In the Pictures pane, the "Dark Theme" switch shows the theme pictures. "Replace
 
 1. The theme data outside osos (for example the background picture). It is in the image for both modes. With the appearance Dark, the build applies the whole theme. With Light, there is no theme.
 2. The Split View, if the layout is Split or Switch on iPod, aligned to 16 bytes. The table entry of View 24430 points to it.
-3. The dark switch table, aligned to 16 bytes.
+3. The dark switch table, aligned to 16 bytes: IFD2, or IFDM if that is smaller (refer to below).
 4. The layout switch table, aligned to 16 bytes. It has one run: the 8 bytes of the table entry of View 24430, Split XOR stock (28 bytes).
 5. The new Settings menu (Menu 24598), aligned to 16 bytes. The resource table entry points to it. It has the Dark Mode item if the appearance is Switch on iPod, and the Split View item after it if the layout is Switch on iPod.
 6. The code of the `dark-mode` patch, aligned to 16 bytes. The build gives the symbols `dark_table` and `layout_table` the addresses of the tables.
 
 A switch that is off has a table with no changes (12 bytes). `DarkMode.build` and Python `darkmode.build` have the arguments `darkSwitch` (`dark_switch`) and `layoutSwitch` (`layout_switch`).
 
-The switch table has this format (little-endian):
+The layout switch table has the format IFDM (little-endian):
 
 | Field | Content |
 |---|---|
@@ -1293,15 +1293,37 @@ The switch table has this format (little-endian):
 | N × {u32, u32} | {osos address, length} |
 | data | For each change: old XOR new |
 
-The XOR data switches the bytes in both directions. A change that the owner edited is left out.
+The dark switch table has the format IFD2 since `dark-mode` 1.3 ([DarkTable.swift](../mac/Sources/IPodFWKit/DarkTable.swift), Python `darktable.py`). The light pictures are already in RAM when the patch applies the table. Thus most dark pictures are a colour map of the light picture (MAP) or a palette (PAL):
+
+| Field | Content |
+|---|---|
+| u32 | `IFD2` (0x32444649) |
+| u32 | Number of records |
+| u32 | Size of the table in bytes |
+| records | u32 address, u32 (kind << 28 \| length), then the data. Each record starts on a 4-byte boundary. |
+
+| Kind | Data | What the patch does |
+|---|---|---|
+| RAW (0) | The new bytes, then zeros to a 4-byte boundary | Copies the bytes. |
+| MAP (1) | u32 N, then N × {u16 light, u16 dark}, sorted by light | Finds each u16 of the range in the list (binary search), and writes the dark value. Another value does not change. |
+| PAL (2) | u16 number of colours, u16 bits (1, 2, 4 or 8), the colours, the indices (MSB first) | Writes each u16 of the range from the palette. |
+
+RAW records after a MAP record correct the pixels that the map does not give. The patch stops at an unknown kind and at a record that does not fit before the end of the table.
+
+Rules of the build:
+
+- The build makes the IFDM table first. Then it makes the IFD2 table from the image before the patch and from that image with the IFDM table applied. It uses the smaller table. The patch selects the decoder by the magic value.
+- A change that the owner edited is left out of both tables.
+- A MAP record reads the light pixels. Thus the IFD2 table is correct only if no later step changes a byte in its ranges. `DarkTable.check` applies both tables to the final osos and compares the results. `DarkMode.build` does this after the patch, and `AppModel.outputOSOS` does it again after all other patches and the firmware version. If the results are not the same, the build stops with an error. An audit of all patches found no change in a range of the table ([../re/dark-mode-compression.md](../re/dark-mode-compression.md#audit-of-the-build-order)).
+- The IFD2 table cannot switch back. The patch applies it one time at a dark start, as before. A change to light restarts the iPod, which loads the light image from the disk.
 
 **Size.** Patches pane > iPod Appearance > Dark Theme shows the new space for each appearance:
 
 - "Size on iPod (Dark)": the theme data after 0x736800 (`ImportedTheme.addedSize`).
-- "Size on iPod (Switch on iPod)": items 1 to 6 above, with the alignment (`DarkMode.addedSize`). It needs the open firmware 1.3. The app calculates this value away from the main thread (`refreshSwitchOnIPodSize`), because it takes 1.5 s to 2.6 s. The row shows the last known value until the new value is ready. It shows "Measuring…" only if the app has no value. The app stores the result for each firmware, theme file and layout in its preferences. A different app version calculates again.
-- Layout > "Size on iPod (Switch on iPod)": with the layout Switch on iPod and the appearance Light or Dark. It is items 2 to 6 with no theme (`AppModel.layoutSwitchSize`). Measured on stock 1.3 with Split ½ – ½: 2,819 bytes (704 bytes of the View and 2,115 bytes for the switch).
+- "Size on iPod (Switch on iPod)": items 1 to 6 above, with the alignment (`DarkMode.addedSize`). It needs the open firmware 1.3. The app calculates this value away from the main thread (`refreshSwitchOnIPodSize`). In a release test on 4 November 2026, one build with the IFD2 table and its check took 1.4 s with Dark Gray, together with the extraction of the firmware. The row shows the last known value until the new value is ready. It shows "Measuring…" only if the app has no value. The app stores the result for each firmware, theme file and layout in its preferences. A different app version calculates again.
+- Layout > "Size on iPod (Switch on iPod)": with the layout Switch on iPod and the appearance Light or Dark. It is items 2 to 6 with no theme (`AppModel.layoutSwitchSize`). Measured on stock 1.3 with Split ½ – ½ and `dark-mode` 1.3: 3,523 bytes (704 bytes of the View and 2,819 bytes for the switch).
 
-The tooltip of the row "Size on iPod (Dark)" gives the bytes inside osos that the theme changes (`ImportedTheme.changedSize`). These changes use no new space. The measured values for the theme "Dark Gray" are 38,428 bytes (Dark), 722,371 bytes (Switch on iPod, with a dark switch table of 681,853 bytes) and 660,678 changed bytes. The tooltip value comes from the theme file alone. Thus it does not include the highlight rule for a part word (`withOldBytes`). The limit of the area is 792,576 bytes (0x736800–0x7F8000; 759,808 bytes before 9 October 2026). The test `testExtendedPatchAfterSwitchBuild` makes sure that `DarkMode.addedSize` agrees with `DarkMode.build`.
+The tooltip of the row "Size on iPod (Dark)" gives the bytes inside osos that the theme changes (`ImportedTheme.changedSize`). These changes use no new space. The measured values for the theme "Dark Gray" are 38,428 bytes (Dark), 106,307 bytes (Switch on iPod, with an IFD2 dark switch table of 65,084 bytes; the IFDM table is 681,853 bytes) and 660,678 changed bytes. With Switch on iPod, 686,080 bytes stay free below 0x7F8000 (69,632 bytes with `dark-mode` 1.2). The tooltip value comes from the theme file alone. Thus it does not include the highlight rule for a part word (`withOldBytes`). The limit of the area is 792,576 bytes (0x736800–0x7F8000; 759,808 bytes before 9 October 2026). The test `testExtendedPatchAfterSwitchBuild` makes sure that `DarkMode.addedSize` agrees with `DarkMode.build`.
 
 The new Settings menu is a copy of the Apple menu with one more item after Clicker (key 0x60006088). The new item is a copy of the Sound Check item (key 0x600060b7) with the key 0x600060e0 and the label ID 0x7e00. The Split View item is a copy of the same item with the key 0x60007e15 and the label ID 0x7e14. It comes after Dark Mode, or after Clicker if there is no Dark Mode item. Do not use 0x600060ec: that is Daylight Saving in Menu 24604.
 
@@ -1326,6 +1348,8 @@ The new Settings menu is a copy of the Apple menu with one more item after Click
   4. Restart (0x001630). This writes 4 to `DEV_RS` (0x60006004).
 
 **Test status.** Emulator: the item changed the mode in both directions, and the settings were kept. The same result came without the file on the disk. The Swift build and the Python build give the same osos. Real iPod 5.5G (owner, 28 October 2026, `dark-mode` version 1.1): the three appearances Light, Dark and Switch on iPod operate.
+
+Version 1.3 (IFD2 dark switch table, code 2,003 bytes): the Swift build and the Python build give the same table and the same osos (`testDarkGrayTableAgreesWithPython`, `testBuildAgreesWithPython`, `testLayoutSwitchBuilds`). Emulator (4 November 2026): the research copy of the decoder gave a hash of each changed byte that is the same as expected, in dark, light and dark with the stock layout. The apply takes 13.9 million instructions (185 ms emulated), against 4.0 million (54 ms) for IFDM. With the build of version 1.3, 201 words of the table ranges read with `peek` were correct. Real iPod 5.5G (owner, 4 November 2026, app 0.1.261, Dark Gray): the restart from light to dark took 54 s, and the restart from dark to light also took 54 s (stopwatch). Thus the IFD2 apply adds no time that a stopwatch can measure. The owner reported that all screens are correct in dark mode.
 
 Version 1.2 (Split View item, code 1,299 bytes): the Swift build and the Python build give the same osos for Light, Dark and Switch on iPod (`testLayoutSwitchBuilds`). The owner tested a prototype of the same code in the emulator on 3 November 2026 (Switch on iPod): the 2 items operate in each direction. The prototype used the key 0x600060ec. The owner tested the app build of version 1.2 (app 0.1.256, key 0x60007e15) in the emulator on 3 November 2026: the switch operates. Not tested on a real iPod. The research is in [../re/home-screen.md](../re/home-screen.md#layout-switch-on-the-ipod).
 

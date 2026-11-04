@@ -27,6 +27,7 @@ Thus, about 12,600 lines of the app are in Swift. The UI and the helper (about 6
 | `Pictures.swift` | `pictures.py` |
 | `Editor.swift` | `theme.py` (`ipodfw unpack` and `ipodfw repack`) |
 | `DarkMode.swift` | `darkmode.py` |
+| `DarkTable.swift` (the IFD2 dark switch table) | `darktable.py` |
 | `ThemeImport.swift` | `themeimport.py` |
 | `Patcher.swift` (C compiler call and ELF linker) | `patcher.py` |
 | `IPSW.swift` | `ipsw.py` |
