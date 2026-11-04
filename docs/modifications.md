@@ -1226,7 +1226,7 @@ An earlier version read the ATA IDENTIFY data in the firmware (a hook at 0x142f9
 - Each change is applied only if the bytes are the old bytes. If they are already the new bytes, the change counts as done. Other bytes are an edit of the owner, and the change is left out.
 - Pictures 24342 and 24343 (the progress bar in Now Playing) keep the Apple version (`keepApple`). The dark themes make them almost invisible.
 - The highlight bar keeps the Apple blue colours `0xFFD06428` and `0xFFE89858` (`appleHighlight`). The grey bar of the theme was difficult to see on the real iPod.
-- The rule also examines a word that a change covers only in part (`keepHighlightWords`, Python `_keep_highlight_words`). `withOldBytes` does this step, because it has osos for the bytes outside the change. Up to app version 0.1.258, the rule did not see these words. In Dark Gray, 1,117 runs end 1 byte before the end of the +80 colour, so the bar got `0xFF343434` at +80. Refer to [../re/dark-theme.md](../re/dark-theme.md#the-highlight-bar). Test status: emulator yes (3 November 2026, Dark and Switch on iPod). Real iPod: not tested.
+- The rule also examines a word that a change covers only in part (`keepHighlightWords`, Python `_keep_highlight_words`). `withOldBytes` does this step, because it has osos for the bytes outside the change. Up to app version 0.1.258, the rule did not see these words. In Dark Gray, 1,117 runs end 1 byte before the end of the +80 colour, so the bar got `0xFF343434` at +80. Refer to [../re/dark-theme.md](../re/dark-theme.md#the-highlight-bar). Test status: emulator yes (3 November 2026, Dark and Switch on iPod). Real iPod: yes (4 November 2026, app build 0.1.260).
 
 ### The View format
 

@@ -209,7 +209,7 @@ Results after the correction (3 November 2026):
 - The dark switch table of Switch on iPod is 681,853 bytes with 3,614 entries (before: 698,443 bytes, 4,720 entries). "Size on iPod (Switch on iPod)" is 722,371 bytes.
 - The correction changes the appearance Dark and Switch on iPod.
 - Emulator (owner, 3 November 2026, app build 0.1.259, Dark Gray, no other patch): with the appearance Dark, the highlight bar is fully blue in the main menu, the lists and Settings. With Switch on iPod, the iPod started dark with the blue bar. Settings > Dark Mode changed it to light and back to dark. Both tests operated correctly.
-- Not tested on a real iPod.
+- Real iPod 5.5G (owner, 4 November 2026, app build 0.1.260, Dark Gray): all tests operated correctly. The owner found no problems.
 
 ## Edits of the owner
 
