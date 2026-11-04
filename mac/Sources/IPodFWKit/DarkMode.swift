@@ -12,8 +12,9 @@ import Foundation
 // The build puts these items after the end of osos (below ThemeImport.ososLimit):
 //   the theme data outside osos (for example the background picture: in both modes)
 //   the Split View, if the layout is Split
-//   the dark switch table: "IFDM", u32 count N, u32 data offset, N x {u32 address, u32 length}, data
-//                     (old XOR new for each change, so the same table switches in both directions)
+//   the dark switch table: "IFD2" (DarkTable.swift: colour maps and palettes of the light pictures), or
+//                     "IFDM" if that is smaller: u32 count N, u32 data offset, N x {u32 address,
+//                     u32 length}, data (old XOR new for each change)
 //   the layout switch table, in the same format (one run: the table entry of View 24430)
 //   the Settings menu with the items (the resource table entry points to it)
 //   the code of the patch (its symbols dark_table and layout_table are the addresses of the tables)
@@ -41,6 +42,10 @@ public enum DarkMode {
         public var patchAt: Int
         /// Changes left out because the owner changed the same bytes.
         public var changesLeftOut: Int
+        /// The dark table in the image (IFD2 or IFDM), and the IFDM table. After other patches, check the
+        /// result with `DarkTable.check`.
+        public var darkTable: [UInt8] = []
+        public var ifdmTable: [UInt8] = []
     }
 
     static func align(_ n: Int, _ a: Int) -> Int { (n + a - 1) / a * a }
@@ -105,7 +110,18 @@ public enum DarkMode {
         return (head + runs + data, leftOut)
     }
 
-    /// What the patch does at the start (for tests).
+    /// The IFD2 table for `light` (the image before the patch), or `ifdm` if IFD2 is not smaller.
+    static func smallerTable(light: [UInt8], ifdm: [UInt8], partition: FirmwarePartition) throws -> [UInt8] {
+        let image = try ThemeImport.Image(partition)
+        var dark = light
+        applySwitchTable(&dark, ifdm)
+        let positions = image.res.filter { $0.key.type == "BMap" }.map { image.pos($0.key) }
+        let table = try DarkTable.encode(light: light, dark: dark,
+                                         pictures: DarkTable.pictureRanges(light, positions: positions))
+        return table.count < ifdm.count ? table : ifdm
+    }
+
+    /// What the patch does at the start with an IFDM table (for tests).
     public static func applySwitchTable(_ osos: inout [UInt8], _ table: [UInt8]) {
         let n = Int(le32(table, 4))
         var dataAt = Int(le32(table, 8))
@@ -174,6 +190,7 @@ public enum DarkMode {
         var out: [UInt8]
         var end: Int
         var darkTable: [UInt8]
+        var ifdmTable: [UInt8]
         var layoutTable: [UInt8]
         var leftOut: Int
         var menu: [UInt8]
@@ -236,9 +253,11 @@ public enum DarkMode {
         }
         var darkTable = emptyTable, leftOut = 0
         if darkSwitch, let theme { (darkTable, leftOut) = switchTable(theme, osos: osos, extra: extra) }
+        let ifdm = darkTable
+        if darkSwitch { darkTable = try smallerTable(light: out, ifdm: ifdm, partition: partition) }
         let (menu, res, block) = try settingsMenu(partition: partition, osos: osos, dark: darkSwitch,
                                                   layout: layoutSwitch && splitLayout != nil)
-        return Parts(out: out, end: end, darkTable: darkTable, layoutTable: layoutTable, leftOut: leftOut,
+        return Parts(out: out, end: end, darkTable: darkTable, ifdmTable: ifdm, layoutTable: layoutTable, leftOut: leftOut,
                      menu: menu, res: res, block: block)
     }
 
@@ -271,7 +290,9 @@ public enum DarkMode {
         out.replaceSubrange(at.menu..<at.menu + p.menu.count, with: p.menu)
         put32(&out, p.res.tablePos + 4, UInt32(at.menu - p.block.dataStart))
         put32(&out, p.res.tablePos + 8, UInt32(p.menu.count))
+        try DarkTable.check(out, ifdm: p.ifdmTable, table: p.darkTable)
         return (out, Info(table: (at.dark, p.darkTable.count), layoutTable: (at.layout, p.layoutTable.count),
-                          menu: (at.menu, p.menu.count), patchAt: at.patch, changesLeftOut: p.leftOut))
+                          menu: (at.menu, p.menu.count), patchAt: at.patch, changesLeftOut: p.leftOut,
+                          darkTable: p.darkTable, ifdmTable: p.ifdmTable))
     }
 }

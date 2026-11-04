@@ -2000,6 +2000,124 @@ final class OSOSMarginTests: XCTestCase {
     }
 }
 
+final class DarkTableTests: XCTestCase {
+    /// A small random generator with a fixed seed (the same tables at each run).
+    struct Rand {
+        var s: UInt64
+        mutating func next(_ n: Int) -> Int {
+            s = s &* 6364136223846793005 &+ 1442695040888963407
+            return Int((s >> 33) % UInt64(n))
+        }
+    }
+
+    /// A light image with 16-bit pictures, and a dark image: colour maps, maps with errors, palettes,
+    /// noise, adjacent pictures, and byte changes across the picture edges at odd addresses.
+    static func synthetic(_ seed: UInt64) -> (light: [UInt8], dark: [UInt8], pictures: [(Int, Int)]) {
+        var r = Rand(s: seed)
+        let size = [4096, 30000, 90000][r.next(3)]
+        var light = (0..<size).map { _ in UInt8(r.next(256)) }
+        var pictures: [(Int, Int)] = []
+        var at = r.next(64) * 4
+        while true {
+            at += [0, 0, 4, 12, 100, r.next(4000)][r.next(6)] / 4 * 4
+            let n = [2, 4, 6, 64, 302, 2000, (r.next(4000) + 1) * 2][r.next(7)]
+            if at + n > size { break }
+            pictures.append((at, at + n))
+            at += n
+        }
+        var dark = light
+        for (a, e) in pictures {
+            let colours = (0..<[1, 2, 3, 16, 17, 70, 256, 300][r.next(8)]).map { _ in UInt16(r.next(0x10000)) }
+            for i in stride(from: a, to: e, by: 2) {
+                let c = colours[r.next(colours.count)]
+                light[i] = UInt8(c & 0xFF); light[i + 1] = UInt8(c >> 8)
+            }
+            var m: [UInt16: UInt16] = [:]
+            for c in colours { m[c] = UInt16(r.next(0x10000)) }
+            let mode = r.next(5)
+            for i in stride(from: a, to: e, by: 2) {
+                let x = UInt16(light[i]) | UInt16(light[i + 1]) << 8
+                let y: UInt16 = mode == 0 ? x : mode == 1 ? m[x]! : mode == 2 ? (r.next(50) == 0 ? UInt16(r.next(0x10000)) : m[x]!)
+                    : mode == 3 ? UInt16([0x1111, 0x2222, 0x3333][r.next(3)]) : UInt16(r.next(0x10000))
+                dark[i] = UInt8(y & 0xFF); dark[i + 1] = UInt8(y >> 8)
+            }
+        }
+        for _ in 0..<r.next(40) {
+            var s = r.next(size)
+            if !pictures.isEmpty, r.next(2) == 0 { let p = pictures[r.next(pictures.count)]; s = max(0, (r.next(2) == 0 ? p.0 : p.1) - r.next(12)) }
+            for i in s..<min(size, s + [1, 2, 3, 7, 9, 30][r.next(6)]) { dark[i] = UInt8(r.next(256)) }
+        }
+        return (light, dark, pictures)
+    }
+
+    func testSyntheticTablesGiveTheDarkImage() throws {
+        for seed in 0..<60 {
+            let (light, dark, pictures) = Self.synthetic(UInt64(seed))
+            let table = try DarkTable.encode(light: light, dark: dark, pictures: pictures)
+            XCTAssertEqual(table.count % 4, 0)
+            XCTAssertEqual(Int(le32(table, 8)), table.count)
+            var work = light
+            try DarkTable.apply(&work, table)
+            XCTAssertEqual(work, dark, "seed \(seed)")
+        }
+    }
+
+    func testTheEncoderRefusesOverlappingPictures() {
+        XCTAssertThrowsError(try DarkTable.encode(light: [UInt8](repeating: 0, count: 64), dark: [UInt8](repeating: 1, count: 64),
+                                                  pictures: [(0, 32), (16, 48)]))
+    }
+
+    func testARunAcrossAPictureEdgeKeepsTheBytesOutside() throws {
+        let light = (0..<64).map { UInt8($0) }
+        var dark = light
+        dark.replaceSubrange(14..<20, with: Array("ABCDEF".utf8))
+        var work = light
+        try DarkTable.apply(&work, try DarkTable.encode(light: light, dark: dark, pictures: [(16, 32)]))
+        XCTAssertEqual(work, dark)
+    }
+
+    /// A wrong count or size stops the decoder at the end of the table, as in dark_mode.c.
+    func testACorruptedTableStopsAtItsEnd() throws {
+        let (light, dark, pictures) = Self.synthetic(7)
+        let table = try DarkTable.encode(light: light, dark: dark, pictures: pictures)
+        var big = table
+        put32(&big, 4, 0xFFFF_FFFF)
+        var work = light
+        try DarkTable.apply(&work, big)
+        XCTAssertEqual(work, dark)
+        var cut = Array(table[0..<table.count / 2])
+        put32(&cut, 8, UInt32(cut.count))
+        work = light
+        try DarkTable.apply(&work, cut)
+    }
+
+    /// The same table as Python (src/ipodfw/darktable.py). IPODFW_DARK_TABLE is the table that
+    /// darktable.encode makes for Dark Gray in the build "Switch on iPod" without a layout.
+    func testDarkGrayTableAgreesWithPython() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let ipsw = env["IPODFW_IPSW"], let themePath = env["IPODFW_THEME"] else { throw XCTSkip("set IPODFW_IPSW and IPODFW_THEME") }
+        let partition = try FirmwarePartition(data: IPSW.extractFirmware(URL(fileURLWithPath: ipsw)).data)
+        let osos = try partition.image("osos")
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../..").standardized
+        let dark = Patcher.list(in: repo.appendingPathComponent("patches")).first { $0.spec.name == "dark-mode" }!
+        let theme = try ImportedTheme.load(URL(fileURLWithPath: themePath))
+        let (out, info) = try DarkMode.build(partition: partition, osos: osos, theme: theme, patch: dark,
+                                             originalSHA256: ThemeImport.sha256(osos))
+        XCTAssertEqual(le32(info.darkTable, 0), DarkTable.magic)
+        XCTAssertLessThan(info.darkTable.count, info.ifdmTable.count / 9)
+        XCTAssertEqual(Array(out[info.table.at..<info.table.at + info.table.length]), info.darkTable)
+        if let path = env["IPODFW_DARK_TABLE"] {
+            XCTAssertEqual(info.darkTable, [UInt8](try Data(contentsOf: URL(fileURLWithPath: path))))
+        }
+        // A patch that writes into the dark theme stops the build.
+        var bad = out
+        let pictureAt = Int(le32(info.darkTable, 12))
+        bad[pictureAt] ^= 0xFF
+        XCTAssertThrowsError(try DarkTable.check(bad, ifdm: info.ifdmTable, table: info.darkTable))
+        XCTAssertNoThrow(try DarkTable.check(out, ifdm: info.ifdmTable, table: info.darkTable))
+    }
+}
+
 final class DarkModeTests: XCTestCase {
     /// The owner's case: "Switch on iPod" with a large theme, then an extended patch (usb-host-probe).
     /// Needs IPODFW_IPSW and IPODFW_THEME (an .ipodtheme file).
@@ -2060,7 +2178,7 @@ final class DarkModeTests: XCTestCase {
     }
 
     /// The small text with "Switch on iPod": the size is the same as the Split layout, and the
-    /// switch table goes back to the same osos when it runs 2 times. Needs IPODFW_IPSW and IPODFW_THEME.
+    /// dark table gives the dark image of the IFDM table. Needs IPODFW_IPSW and IPODFW_THEME.
     func testSplitSmallTextSwitchBuild() throws {
         let env = ProcessInfo.processInfo.environment
         guard let ipsw = env["IPODFW_IPSW"], let themePath = env["IPODFW_THEME"] else { throw XCTSkip("set IPODFW_IPSW and IPODFW_THEME") }
@@ -2076,16 +2194,18 @@ final class DarkModeTests: XCTestCase {
         let size = try DarkMode.addedSize(partition: partition, osos: osos, theme: theme, codeSize: dark.spec.size!, layout: small)
         XCTAssertEqual(Patcher.maxOSOSSize + size, info.patchAt + dark.spec.size!)
         XCTAssertEqual(size, try DarkMode.addedSize(partition: partition, osos: osos, theme: theme, codeSize: dark.spec.size!, layout: split))
+        // The IFD2 table gives the same dark image as the IFDM table.
         let table = [UInt8](out[info.table.at..<info.table.at + info.table.length])
-        var work = out
-        DarkMode.applySwitchTable(&work, table)
+        XCTAssertEqual(le32(table, 0), DarkTable.magic)
+        var work = out, want = out
+        try DarkTable.applyDark(&work, table)
+        DarkMode.applySwitchTable(&want, info.ifdmTable)
         XCTAssertNotEqual(work, out)
-        DarkMode.applySwitchTable(&work, table)
-        XCTAssertEqual(work, out)
+        XCTAssertEqual(work, want)
     }
 
     /// Switch on iPod with Split at the half width and the small text: the same added size as Split, and the
-    /// switch table goes back to the same osos when it runs 2 times. Needs IPODFW_IPSW and IPODFW_THEME.
+    /// dark table gives the dark image of the IFDM table. Needs IPODFW_IPSW and IPODFW_THEME.
     func testSplitHalfWidthSwitchBuild() throws {
         let env = ProcessInfo.processInfo.environment
         guard let ipsw = env["IPODFW_IPSW"], let themePath = env["IPODFW_THEME"] else { throw XCTSkip("set IPODFW_IPSW and IPODFW_THEME") }
@@ -2101,12 +2221,14 @@ final class DarkModeTests: XCTestCase {
         let size = try DarkMode.addedSize(partition: partition, osos: osos, theme: theme, codeSize: dark.spec.size!, layout: small)
         XCTAssertEqual(Patcher.maxOSOSSize + size, info.patchAt + dark.spec.size!)
         XCTAssertEqual(size, try DarkMode.addedSize(partition: partition, osos: osos, theme: theme, codeSize: dark.spec.size!, layout: split))
+        // The IFD2 table gives the same dark image as the IFDM table.
         let table = [UInt8](out[info.table.at..<info.table.at + info.table.length])
-        var work = out
-        DarkMode.applySwitchTable(&work, table)
+        XCTAssertEqual(le32(table, 0), DarkTable.magic)
+        var work = out, want = out
+        try DarkTable.applyDark(&work, table)
+        DarkMode.applySwitchTable(&want, info.ifdmTable)
         XCTAssertNotEqual(work, out)
-        DarkMode.applySwitchTable(&work, table)
-        XCTAssertEqual(work, out)
+        XCTAssertEqual(work, want)
     }
 
     func testExtendedPatchAfterSwitchBuild() throws {

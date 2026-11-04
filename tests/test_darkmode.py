@@ -92,7 +92,8 @@ def test_switch_build_gives_the_dark_theme_at_the_start():
     # the start in dark mode: the table applied in RAM
     dark = bytearray(osos)
     table_at, table_len = info["table"]
-    darkmode.apply_switch_table(dark, bytes(osos[table_at:table_at + table_len]))
+    darkmode.apply_dark_table(dark, bytes(osos[table_at:table_at + table_len]))
+    assert info["format"] == "IFD2"
     built_in = bytearray(stock)
     themeimport.apply_theme(th, built_in, th.osos_sha256)
     menu_entry = None

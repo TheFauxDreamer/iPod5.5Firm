@@ -1340,6 +1340,7 @@ final class AppModel: ObservableObject {
     nonisolated static func outputOSOS(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?,
                                        version: FirmwareVersion?, list: FirmwareManifest? = nil) throws -> [UInt8] {
         var osos = editor.osos
+        var darkInfo: DarkMode.Info?
         switch appearance {
         case .layout(let theme):
             AppLog.step("Build: apply the layout \(theme.name)")
@@ -1353,8 +1354,10 @@ final class AppModel: ObservableObject {
             }
         case .switchOnIPod(let theme, let patch, let layout, let layoutSwitch):
             AppLog.step("Build: add Dark Mode with the theme \(theme.name) and the patch \(patch.spec.name) \(patch.spec.versionText)")
-            osos = try DarkMode.build(partition: editor.partition, osos: osos, theme: theme, patch: patch,
-                                      originalSHA256: editor.originalOSOSHash, layout: layout, layoutSwitch: layoutSwitch).0
+            let built = try DarkMode.build(partition: editor.partition, osos: osos, theme: theme, patch: patch,
+                                           originalSHA256: editor.originalOSOSHash, layout: layout, layoutSwitch: layoutSwitch)
+            osos = built.0
+            darkInfo = built.1
         case .layoutSwitch(let theme, let patch, let layout):
             AppLog.step("Build: add Split View with the layout \(layout.name), the theme \(theme?.name ?? "-") and the patch \(patch.spec.name) \(patch.spec.versionText)")
             osos = try DarkMode.build(partition: editor.partition, osos: osos, theme: theme, darkSwitch: false, patch: patch,
@@ -1368,6 +1371,11 @@ final class AppModel: ObservableObject {
         if let version {
             AppLog.step("Build: write the firmware version")
             try FirmwareVersion.apply(version, to: &osos)
+        }
+        if let darkInfo {
+            // The IFD2 table reads the light pictures. A patch must not change a byte of the dark theme.
+            AppLog.step("Build: check the dark switch table on the final firmware")
+            try DarkTable.check(osos, ifdm: darkInfo.ifdmTable, table: darkInfo.darkTable)
         }
         return osos
     }

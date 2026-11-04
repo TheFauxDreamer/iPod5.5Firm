@@ -2,7 +2,7 @@
 
 ## Goal
 
-The appearance "Switch on iPod" puts a switch table after the end of osos. With a large theme, the table uses most of the space below 0x7F0000 (`ThemeImport.ososLimit`). Then little space stays for extended patches. This note measures how much a compressed table can save. It is research only. No code uses compression.
+The appearance "Switch on iPod" puts a switch table after the end of osos. With a large theme, the table uses most of the space below 0x7F0000 (`ThemeImport.ososLimit`). Then little space stays for extended patches. This note measures how much a compressed table can save. Since `dark-mode` 1.3 (4 November 2026, branch `dark-table-ifd2`), the app uses the IFD2 table of the section [A table from the light pictures](#a-table-from-the-light-pictures-3-november-2026).
 
 ## Method
 
@@ -292,7 +292,17 @@ Not proved:
 4. Port `ifd2.encode` to Swift, and compare the Swift tables with the Python tables in a test.
 5. Test in the emulator, and then on the real iPod with a stopwatch for the start time.
 
+## The implementation (4 November 2026)
+
+The owner asked for a version to test on a real iPod. The implementation follows the steps above:
+
+- `patches/dark-mode/dark_mode.c` 1.3 has `apply_table2`. It selects the decoder by the magic value. The code is 2,003 bytes.
+- `DarkTable.swift` and `src/ipodfw/darktable.py` make the IFD2 table. The Swift table and the Python table are the same (`testDarkGrayTableAgreesWithPython`).
+- `DarkTable.check` compares the result of both tables on the final firmware, in `DarkMode.build` and again in `AppModel.outputOSOS` after all patches.
+- With Dark Gray and Switch on iPod, the added size is 106,307 bytes (722,371 bytes with `dark-mode` 1.2).
+- Emulator: with the build of version 1.3, 201 words of the table ranges, read with `peek`, were the same as the expected dark image.
+
 ## Open items
 
-- The steps of an implementation, only if the owner asks.
+- A test on the real iPod: the dark theme, the switch in both directions, and the start time with a stopwatch.
 - Old results (9 October 2026): the dark bytes compress better than the XOR data, and deflate gives approximately 6×. A table from the light pictures gives a smaller result than deflate (65,084 bytes against 117,227 bytes) and needs no RAM for a window.

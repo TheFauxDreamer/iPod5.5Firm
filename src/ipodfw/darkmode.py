@@ -10,8 +10,9 @@ start, before the first View is read, if the file iPod_Control/iTunes/iPodFirmDa
 The build puts these items after the end of osos (below OSOS_LIMIT):
     the theme data that is outside osos (for example the background picture: in both modes)
     the Split View, if the layout is Split
-    the dark switch table: "IFDM", u32 count N, u32 data offset, N x {u32 address, u32 length}, data
-                      (old XOR new for each change, so the same table switches in both directions)
+    the dark switch table: "IFD2" (darktable.py: colour maps and palettes of the light pictures), or
+                      "IFDM" if that is smaller: u32 count N, u32 data offset, N x {u32 address,
+                      u32 length}, data (old XOR new for each change)
     the layout switch table, in the same format (one run: the table entry of View 24430)
     the Settings menu with the items (the resource table entry points to it)
     the code of the patch (its symbols dark_table and layout_table are the addresses of the tables)
@@ -24,7 +25,7 @@ import hashlib
 import struct
 from pathlib import Path
 
-from . import patcher
+from . import darktable, patcher
 from .themeimport import OSOS_LIMIT, Change, Theme, _Image, _with_copied_bytes, apply_theme, moved_layout
 from .partition import FirmwarePartition
 
@@ -93,6 +94,23 @@ def switch_table(theme: Theme, osos: bytes, extra: tuple | list = ()) -> tuple[b
         data += bytes(a ^ b for a, b in zip(old, new))
     head = struct.pack("<III", MAGIC, len(runs), 12 + 8 * len(runs))
     return head + b"".join(runs) + bytes(data), skipped
+
+
+def smaller_table(light: bytes, ifdm: bytes, image: _Image) -> bytes:
+    """The IFD2 table for `light` (the image before the patch), or `ifdm` if IFD2 is not smaller."""
+    dark = bytearray(light)
+    apply_switch_table(dark, ifdm)
+    pictures = darktable.picture_ranges(light, [image.pos(k) for k in image.res if k[1] == "BMap"])
+    table = darktable.encode(light, bytes(dark), pictures)
+    return table if len(table) < len(ifdm) else ifdm
+
+
+def apply_dark_table(osos: bytearray, table: bytes) -> None:
+    """What the patch does with the dark table at a dark start: IFD2 or IFDM (for tests)."""
+    if struct.unpack_from("<I", table, 0)[0] == darktable.MAGIC:
+        darktable.apply_table2(osos, table)
+    else:
+        apply_switch_table(osos, table)
 
 
 def apply_switch_table(osos: bytearray, table: bytes) -> None:
@@ -168,12 +186,15 @@ def build(fw: FirmwarePartition, osos: bytes, theme: Theme | None, patch_dir: st
         end = view_at + len(view)
         if layout_switch:
             ltable = layout_table(entry.offset, stock_entry, entry.new)
-    # 2. the switch tables
+    # 2. the switch tables. The IFD2 table comes from the light image in RAM at the start.
+    image = _Image(fw)
     dtable, skipped = switch_table(theme, osos, extra) if dark_switch else (EMPTY_TABLE, 0)
+    ifdm = dtable
+    if dark_switch:
+        dtable = smaller_table(bytes(out), ifdm, image)
     dark_at = _align(end, 16)
     layout_at = _align(dark_at + len(dtable), 16)
     # 3. the Settings menu
-    image = _Image(fw)
     if SETTINGS_MENU not in image.res:
         raise DarkModeError("The firmware has no Settings menu (Menu 24598).")
     res, block = image.res[SETTINGS_MENU], image.block_of[SETTINGS_MENU]
@@ -192,7 +213,10 @@ def build(fw: FirmwarePartition, osos: bytes, theme: Theme | None, patch_dir: st
     out[layout_at:layout_at + len(ltable)] = ltable
     out[menu_at:menu_at + len(menu)] = menu
     struct.pack_into("<II", out, res.table_pos + 4, menu_at - block.data_start, len(menu))
-    info = {"table": [dark_at, len(dtable)], "layout_table": [layout_at, len(ltable)], "menu": [menu_at, len(menu)],
+    darktable.check_table(bytes(out), ifdm, dtable)
+    # "ifdm": the XOR table. A later step (other patches) must check its result with darktable.check_table.
+    info = {"table": [dark_at, len(dtable)], "format": "IFD2" if dtable is not ifdm else "IFDM", "ifdm": ifdm,
+            "layout_table": [layout_at, len(ltable)], "menu": [menu_at, len(menu)],
             "patch": report["code"], "changes_left_out": skipped, "end": len(out)}
     return bytes(out), info
 
