@@ -141,18 +141,30 @@ def settings_menu(menu: bytes, dark: bool = True, layout: bool = False) -> bytes
     return menu
 
 
-def layout_table(entry_at: int, stock: bytes, split: bytes) -> bytes:
-    """One run: the 8 bytes (offset and size) of the table entry of View 24430, stock XOR Split."""
-    return struct.pack("<IIIII", MAGIC, 1, 20, entry_at, 8) + bytes(a ^ b for a, b in zip(stock, split))
+def layout_table(entry_at: int, stock: bytes, split: bytes, extra=()) -> bytes:
+    """The runs, in address order: the 8 bytes (offset and size) of the table entry of View 24430,
+    stock XOR Split, and one run for each (address, stock bytes, Split bytes) of `extra`."""
+    runs = sorted([(entry_at, bytes(stock), bytes(split)), *((a, bytes(s), bytes(p)) for a, s, p in extra)])
+    head = 12 + 8 * len(runs)
+    out = struct.pack("<III", MAGIC, len(runs), head) + b"".join(struct.pack("<II", a, len(s)) for a, s, _ in runs)
+    return out + b"".join(bytes(x ^ y for x, y in zip(s, p)) for _, s, p in runs)
+
+
+def split_only_bytes(specs) -> list[tuple[int, bytes, bytes]]:
+    """The "bytes" of each patch spec with "split_only": (address, "expect", "value"). With Split View
+    Off, the layout table changes them back to "expect"."""
+    return [(int(e["at"], 16), bytes.fromhex(e["expect"]), bytes.fromhex(e["value"]))
+            for spec in specs if spec.get("split_only") for e in spec.get("bytes", [])]
 
 
 def build(fw: FirmwarePartition, osos: bytes, theme: Theme | None, patch_dir: str | Path,
           original_sha256: str, layout: Theme | None = None, dark_switch: bool = True,
-          layout_switch: bool = False) -> tuple[bytes, dict]:
+          layout_switch: bool = False, layout_bytes=()) -> tuple[bytes, dict]:
     """The osos with the switches. `osos` can have edits of the owner; `fw` gives its resources.
     `dark_switch`: light at the start, with a Dark Mode item (needs `theme`). `theme` without
     `dark_switch`: always dark. No `theme`: always light. With `layout`, the main menu is Split.
-    With `layout_switch` also, a Split View item changes it back to stock."""
+    With `layout_switch` also, a Split View item changes it back to stock, and the layout table
+    also changes `layout_bytes` (refer to split_only_bytes) back to stock."""
     if theme is not None and original_sha256 != theme.osos_sha256:
         raise DarkModeError(f"The theme \"{theme.name}\" is for a different firmware.")
     if dark_switch and theme is None:
@@ -185,7 +197,7 @@ def build(fw: FirmwarePartition, osos: bytes, theme: Theme | None, patch_dir: st
         out[entry.offset:entry.offset + len(entry.new)] = entry.new
         end = view_at + len(view)
         if layout_switch:
-            ltable = layout_table(entry.offset, stock_entry, entry.new)
+            ltable = layout_table(entry.offset, stock_entry, entry.new, layout_bytes)
     # 2. the switch tables. The IFD2 table comes from the light image in RAM at the start.
     image = _Image(fw)
     dtable, skipped = switch_table(theme, osos, extra) if dark_switch else (EMPTY_TABLE, 0)

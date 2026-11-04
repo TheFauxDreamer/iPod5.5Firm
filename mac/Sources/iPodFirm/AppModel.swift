@@ -742,10 +742,11 @@ final class AppModel: ObservableObject {
     var layoutSwitchSize: Int? {
         guard layout == .onIPod, let editor, let split = activeSplit, isCompatible(split),
               let patch = Self.darkModePatch else { return nil }
-        let key = "\(revision) \(splitText.rawValue) \(splitWidth.rawValue) \(splitClockKey)"
+        let key = "\(revision) \(splitText.rawValue) \(splitWidth.rawValue) \(splitClockKey) \(splitOnlyKey)"
         if let c = layoutSwitchSizeCache, c.key == key { return c.size }
         let size = try? DarkMode.addedSize(partition: editor.partition, osos: editor.osos, theme: nil, darkSwitch: false,
-                                           codeSize: patch.spec.size ?? 0, layout: split, layoutSwitch: true)
+                                           codeSize: patch.spec.size ?? 0, layout: split, layoutSwitch: true,
+                                           layoutBytes: (try? splitOnlyBytes()) ?? [])
         layoutSwitchSizeCache = (key, size)
         return size
     }
@@ -772,7 +773,7 @@ final class AppModel: ObservableObject {
     /// The input of `switchOnIPodSize`. Nil if no theme agrees with the open firmware.
     var switchSizeKey: String? {
         guard editor != nil, let file = selectedTheme, isCompatible(file.theme), Self.darkModePatch != nil else { return nil }
-        return "\(revision) \(themeRevision) \(file.name) \(layout.rawValue) \(splitClockKey)"
+        return "\(revision) \(themeRevision) \(file.name) \(layout.rawValue) \(splitClockKey) \(splitOnlyKey)"
     }
 
     /// Calculate `switchOnIPodSize` away from the main thread. The calculation takes seconds, so the
@@ -787,7 +788,8 @@ final class AppModel: ObservableObject {
         guard key != switchSizeDone else { return }
         measuringSwitchSize = true
         let partition = editor.partition, osos = editor.osos, split = activeSplit
-        let version = version, layoutName = "\(layout.rawValue) \(splitClockKey)", layoutSwitch = layout == .onIPod
+        let version = version, layoutName = "\(layout.rawValue) \(splitClockKey) \(splitOnlyKey)", layoutSwitch = layout == .onIPod
+        let layoutBytes = layoutSwitch ? ((try? splitOnlyBytes()) ?? []) : []
         let size = await Task.detached(priority: .utility) { () -> Int? in
             let defaults = UserDefaults.standard
             let themeBytes = (try? Data(contentsOf: file.url)) ?? Data()
@@ -797,7 +799,7 @@ final class AppModel: ObservableObject {
             if let size = sizes[input] { return size }
             guard let size = try? DarkMode.addedSize(partition: partition, osos: osos, theme: file.theme,
                                                      codeSize: patch.spec.size ?? 0, layout: split,
-                                                     layoutSwitch: layoutSwitch) else { return nil }
+                                                     layoutSwitch: layoutSwitch, layoutBytes: layoutBytes) else { return nil }
             sizes[input] = size
             defaults.set(sizes, forKey: "switchSizes")
             defaults.set(version, forKey: "switchSizesVersion")
@@ -1185,6 +1187,15 @@ final class AppModel: ObservableObject {
     }
 
     /// The switched-on patches, with the selected value of each option.
+    /// The bytes of the switched-on patches with `split_only`. With "Switch on iPod" for the layout, the
+    /// layout table changes them back to stock when Split View is Off.
+    func splitOnlyBytes() throws -> [DarkMode.LayoutBytes] { try DarkMode.LayoutBytes.of(activePatches) }
+
+    /// The names of the switched-on patches with `split_only`, for the keys of the size caches.
+    var splitOnlyKey: String {
+        activePatches.filter { $0.spec.split_only == true }.map(\.spec.name).sorted().joined(separator: ",")
+    }
+
     var activePatches: [PatchInfo] {
         patches.filter { enabledPatches.contains($0.spec.name) }.map { p in
             var p = p
@@ -1360,13 +1371,15 @@ final class AppModel: ObservableObject {
         case .switchOnIPod(let theme, let patch, let layout, let layoutSwitch):
             AppLog.step("Build: add Dark Mode with the theme \(theme.name) and the patch \(patch.spec.name) \(patch.spec.versionText)")
             let built = try DarkMode.build(partition: editor.partition, osos: osos, theme: theme, patch: patch,
-                                           originalSHA256: editor.originalOSOSHash, layout: layout, layoutSwitch: layoutSwitch)
+                                           originalSHA256: editor.originalOSOSHash, layout: layout, layoutSwitch: layoutSwitch,
+                                           layoutBytes: layoutSwitch ? try DarkMode.LayoutBytes.of(patches) : [])
             osos = built.0
             darkInfo = built.1
         case .layoutSwitch(let theme, let patch, let layout):
             AppLog.step("Build: add Split View with the layout \(layout.name), the theme \(theme?.name ?? "-") and the patch \(patch.spec.name) \(patch.spec.versionText)")
             osos = try DarkMode.build(partition: editor.partition, osos: osos, theme: theme, darkSwitch: false, patch: patch,
-                                      originalSHA256: editor.originalOSOSHash, layout: layout, layoutSwitch: true).0
+                                      originalSHA256: editor.originalOSOSHash, layout: layout, layoutSwitch: true,
+                                      layoutBytes: try DarkMode.LayoutBytes.of(patches)).0
         case nil:
             break
         }

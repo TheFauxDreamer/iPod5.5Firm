@@ -502,7 +502,7 @@ Caution: the emulator test used the key 0x600060ec. That key is a firmware key: 
 ### Risks and open points
 
 - A change of the layout restarts the iPod, as Dark Mode does.
-- `no-now-playing-timer` stays on in the 2 layouts. The Split layout turns it on one time. Tell the owner, or ask if the Stock layout must turn it off.
+- `no-now-playing-timer` stayed on in the 2 layouts. Closed on 4 November 2026: version 0.3 has `split_only`, so the layout table changes its byte back to stock when Split View is Off. Refer to [now-playing-open.md](now-playing-open.md#only-with-split-view-on).
 - The Swift build and the Python build must give the same osos. Extend `testSplitLayoutFile` and the switch tests: each table must give back the same osos when it runs 2 times.
 - Test Light and Dark alone in the emulator. Then test on a real iPod.
 - A change without a restart needs code that moves the list and hides the 5 panel elements in the live views. That is not researched.

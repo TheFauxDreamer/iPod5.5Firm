@@ -1,5 +1,6 @@
 """Tests for the "Switch on iPod" build (ipodfw.darkmode)."""
 
+import json
 import os
 import struct
 from pathlib import Path
@@ -74,6 +75,29 @@ def test_layout_table_switches_the_table_entry_both_ways():
     empty = bytearray(osos)
     darkmode.apply_switch_table(empty, darkmode.EMPTY_TABLE)
     assert empty == osos
+
+
+# The layout table with the timer byte of no-now-playing-timer. testLayoutTableWithSplitOnlyBytes in Swift
+# checks the same bytes.
+SPLIT_ONLY_TABLE = "4946444d020000001c0000002874330008000000385e4b0001000000c8a325003003000091"
+
+
+def test_layout_table_also_switches_the_split_only_bytes():
+    spec = json.loads((Path(__file__).resolve().parents[1] / "patches/no-now-playing-timer/patch.json").read_text())
+    extra = darkmode.split_only_bytes([spec])
+    assert extra == [(0x4B5E38, b"\x96", b"\x07")]
+    assert darkmode.split_only_bytes([{**spec, "split_only": False}]) == []
+    stock, split = bytes.fromhex("c4411a00d0000000"), bytes.fromhex("0ce23f00e0030000")
+    table = darkmode.layout_table(0x337428, stock, split, extra)
+    assert table.hex() == SPLIT_ONLY_TABLE
+    osos = bytearray(0x4B5E40)
+    osos[0x337428:0x337430] = split
+    osos[0x4B5E38] = 0x07
+    darkmode.apply_switch_table(osos, table)
+    assert osos[0x337428:0x337430] == stock and osos[0x4B5E38] == 0x96
+    darkmode.apply_switch_table(osos, table)
+    assert osos[0x337428:0x337430] == split and osos[0x4B5E38] == 0x07
+    assert darkmode.layout_table(16, stock, split) == darkmode.layout_table(16, stock, split, ())
 
 
 ENV = ("IPODFW_THEME", "IPODFW_THEME_BASE", "IPODFW_IPSW")

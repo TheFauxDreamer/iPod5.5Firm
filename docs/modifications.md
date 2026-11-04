@@ -704,11 +704,13 @@ Thus `0x130b30` always returns 1. The size on the iPod is 0 bytes. The pane show
 
 ## no-now-playing-timer
 
-**User interface.** Patches pane > Display > No Now Playing Timer, letter `t`, version 0.2. A change of the layout to Split turns the patch on one time. The patch keeps its own switch, and a change to Stock does not change it.
+**User interface.** Patches pane > Display > No Now Playing Timer, letter `t`, version 0.3. A change of the layout to Split turns the patch on one time. The patch keeps its own switch, and a change to Stock does not change it.
+
+Version 0.3 has `split_only`. With Layout = Switch on iPod, the layout switch table also changes the byte back to 0x96 when Split View is Off. Thus the stock main menu gets the stock timer, and Now Playing opens after 10 seconds again. The table applies at the start, at the first View lookup. The script runs in place in osos, and the timer reads the byte after the start, so the change operates. With Layout = Split, the byte is always 0x07.
 
 This patch stops the timer that opens Now Playing after 10 seconds with no input. It changes 1 byte of the `TCmd` 9088 script, at osos 0x4b5e38: 0x07 in place of 0x96. The function 0xf84 then calls 0x1007, which starts the timer again, and does not call 0x1096, which opens Now Playing. Play on a song and the Now Playing menu item do not change. Refer to [../re/now-playing-open.md](../re/now-playing-open.md).
 
-**Test status.** Emulator: the owner tested version 0.1 with the Split themes (31 October 2026) and reported that it works well. Real iPod: not tested.
+**Test status.** Emulator: the owner tested version 0.1 with the Split themes (31 October 2026) and reported that it works well. Version 0.3: Swift and Python tests (the same table bytes, 2 runs give back the image; 4 November 2026). Emulator (owner, 4 November 2026, Light, Layout = Switch on iPod): Split View On does not open Now Playing, Split View Off opens it after 10 seconds, and On again does not open it. The owner reported that it works great. Real iPod: not tested.
 
 ## click-speaker-only
 
@@ -1304,7 +1306,7 @@ In the Pictures pane, the "Dark Theme" switch shows the theme pictures. "Replace
 1. The theme data outside osos (for example the background picture). It is in the image for both modes. With the appearance Dark, the build applies the whole theme. With Light, there is no theme.
 2. The Split View, if the layout is Split or Switch on iPod, aligned to 16 bytes. The table entry of View 24430 points to it.
 3. The dark switch table, aligned to 16 bytes: IFD2, or IFDM if that is smaller (refer to below).
-4. The layout switch table, aligned to 16 bytes. It has one run: the 8 bytes of the table entry of View 24430, Split XOR stock (28 bytes).
+4. The layout switch table, aligned to 16 bytes. Its first run is the 8 bytes of the table entry of View 24430, Split XOR stock (28 bytes with no other run). The `bytes` of each switched-on patch with `split_only` give one more run each, in address order (`layoutBytes`, Python `layout_bytes`). With `no-now-playing-timer` the table is 37 bytes: the run 0x4b5e38 with the data 0x91 (0x96 XOR 0x07).
 5. The new Settings menu (Menu 24598), aligned to 16 bytes. The resource table entry points to it. It has the Dark Mode item if the appearance is Switch on iPod, and the Split View item after it if the layout is Switch on iPod.
 6. The code of the `dark-mode` patch, aligned to 16 bytes. The build gives the symbols `dark_table` and `layout_table` the addresses of the tables.
 

@@ -155,6 +155,7 @@ The changes stay in the app until Save or **Revert** (`AppModel.codeDrafts`), al
 | `details` | array of strings, optional | The changes that the owner sees on the iPod. The section "What It Does" shows each item as a bullet below `description`. Write one short sentence for each item. |
 | `requires` | array of strings, optional | The hardware or the files that the patch needs. The section "You Need" shows each item. |
 | `needs` | array of strings, optional | The names of other patches that this patch needs, for example `["shuffle-fixes"]`. Refer to [Patches that need other patches](#patches-that-need-other-patches). |
+| `split_only` | bool, optional | `true`: the `bytes` of the patch operate only with the Split main menu. With Layout = Switch on iPod, the build puts each `bytes` entry into the layout switch table (`expect` XOR `value`). Then Split View Off gives `expect`, and Split View On gives `value`. With Layout = Split or Stock, the patch applies as usual. `DarkMode.LayoutBytes.of` (Python `darkmode.split_only_bytes`) reads them. Only `no-now-playing-timer` uses this key. |
 | `notes` | array of strings, optional | More information. The section "Good to Know" shows each item. |
 | `caution` | string, optional | A caution. The pane shows it in orange above the switch of the patch. The install sheet also shows it. |
 | `symbol` | string | The name of an SF Symbol, for example `photo.on.rectangle.angled`. Do not use emoji. |

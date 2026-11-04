@@ -105,6 +105,9 @@ public struct PatchSpec: Codable, Identifiable, Hashable {
     public var symbols: [String: String]?
     public var hooks: [Hook]?
     public var bytes: [Bytes]?
+    /// true: the `bytes` operate only with the Split main menu. With Layout "Switch on iPod", the
+    /// layout table of the Split View item also changes them back to `expect` (refer to `DarkMode.LayoutBytes`).
+    public var split_only: Bool?
     /// Block index -> string key -> new text.
     public var strings: [String: [String: String]]?
     /// Items that the patch adds to the Settings menu.
