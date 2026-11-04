@@ -22,7 +22,8 @@ import Foundation
 //   import matches the elements and changes a field only where the target has the base value. It
 //   translates the resource IDs in the fields.
 // - Other resource types and program code: the import does not apply them.
-// - The highlight bar keeps Apple's blue colours (ThemeImport.appleHighlight). The blue bar is easier to see.
+// - The highlight bar keeps Apple's blue colours (ThemeImport.appleHighlight), also in a word that a change
+//   covers only in part (ImportedTheme.keepHighlightWords). The blue bar is easier to see.
 // - Edits: the owner can replace a picture of the theme in the app. An edit replaces the theme
 //   changes in the same bytes. ImportedTheme.edits keeps the edits apart from the import.
 
@@ -264,13 +265,15 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
     /// bytes. This function takes the old bytes from the firmware and checks
     /// the hash. A change whose bytes do not agree with the hash gets old bytes
     /// that agree with the firmware: the change then counts as a conflict, the
-    /// same as in format 1. The function gives back the same value when the
-    /// theme already holds the old bytes.
+    /// same as in format 1.
+    ///
+    /// The function also keeps Apple's highlight colours in each word that a
+    /// View change covers in part (`keepHighlightWords`). Only this function has
+    /// osos for the bytes of a word outside the change.
     public func withOldBytes(_ osos: [UInt8]) -> ImportedTheme {
-        guard changes.contains(where: { $0.old.isEmpty && !($0.oldSHA256 ?? "").isEmpty }) else { return self }
         var out = self
         out.changes = changes.map { c in
-            guard c.old.isEmpty, let h = c.oldSHA256, !h.isEmpty else { return c }
+            guard c.old.isEmpty, let h = c.oldSHA256, !h.isEmpty else { return Self.keepHighlightWords(c, osos: osos) }
             // The old bytes come from the firmware again. A read past the end of
             // osos gives zeros: apply extends osos with zeros before it compares,
             // so the bytes there are zeros. A change can start after the end of
@@ -291,9 +294,34 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
                 sent[0] ^= 0x80
                 old = sent
             }
-            return ThemeChange(resource: c.resource, offset: c.offset,
-                               old: Data(old), new: c.new, oldSHA256: h)
+            return Self.keepHighlightWords(ThemeChange(resource: c.resource, offset: c.offset,
+                                                       old: Data(old), new: c.new, oldSHA256: h), osos: osos)
         }
+        return out
+    }
+
+    /// The change with Apple's highlight colours in each aligned word that it covers in part or in full.
+    ///
+    /// A theme run can stop before the last byte of a word: "ff343434" over "ffe89858" changes only 3
+    /// bytes, because the high byte 0xff is the same. `keepHighlight` examines only complete words, so it
+    /// does not see this word. Here the bytes of the word outside the change come from osos (zeros after
+    /// the end of osos). The bytes inside the change come from the old bytes of the change.
+    static func keepHighlightWords(_ c: ThemeChange, osos: [UInt8]) -> ThemeChange {
+        guard c.resource.hasPrefix("View "), c.old.count == c.new.count, !c.new.isEmpty else { return c }
+        let old = [UInt8](c.old)
+        var new = [UInt8](c.new)
+        let end = c.offset + new.count
+        for w in stride(from: c.offset & ~3, to: end, by: 4) {
+            var word = (w..<w + 4).map { $0 < osos.count ? osos[$0] : 0 }
+            let lo = max(w, c.offset), hi = min(w + 4, end)
+            word.replaceSubrange(lo - w..<hi - w, with: old[lo - c.offset..<hi - c.offset])
+            if ThemeImport.appleHighlight.contains(le32(word, 0)) {
+                new.replaceSubrange(lo - c.offset..<hi - c.offset, with: old[lo - c.offset..<hi - c.offset])
+            }
+        }
+        guard new != [UInt8](c.new) else { return c }
+        var out = c
+        out.new = Data(new)
         return out
     }
 

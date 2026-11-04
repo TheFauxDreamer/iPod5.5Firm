@@ -18,7 +18,8 @@ Rules:
   The import matches the elements and changes a field only where the target has the base
   value. It translates the resource IDs in the fields.
 - Other resource types and program code: the import does not apply them.
-- The highlight bar keeps Apple's blue colours (APPLE_HIGHLIGHT). The blue bar is easier to see.
+- The highlight bar keeps Apple's blue colours (APPLE_HIGHLIGHT), also in a word that a change
+  covers only in part (_keep_highlight_words). The blue bar is easier to see.
 - Edits: the owner can replace a picture of the theme in the app. An edit replaces the theme
   changes in the same bytes. Theme.edits keeps the edits apart from the import.
 """
@@ -147,16 +148,17 @@ class Theme:
         bytes. This function takes the old bytes from the firmware and checks
         the hash. A change whose bytes do not agree with the hash becomes old
         bytes that agree with the firmware: the change then counts as a
-        conflict, the same as in format 1. The function gives back the same
-        object when the theme already holds the old bytes.
+        conflict, the same as in format 1.
+
+        The function also keeps Apple's highlight colours in each word that a View
+        change covers in part (`_keep_highlight_words`). Only this function has osos
+        for the bytes of a word outside the change.
         """
-        if all(c.old for c in self.changes):
-            return self
         out = replace(self)
         out.changes = []
         for c in self.changes:
             if c.old or not c.old_sha256:
-                out.changes.append(c)
+                out.changes.append(_keep_highlight_words(c, osos))
                 continue
             # The old bytes come from the firmware again. A read past the end of
             # osos gives zeros: apply_theme extends osos with zeros before it
@@ -172,7 +174,7 @@ class Theme:
                 # the new bytes, a conflict in every other case. The step never
                 # writes the change, so the owner's edit stays.
                 old = bytes([c.new[0] ^ 0x80]) + c.new[1:]
-            out.changes.append(Change(c.resource, c.offset, old, c.new, c.old_sha256, c.copy))
+            out.changes.append(_keep_highlight_words(Change(c.resource, c.offset, old, c.new, c.old_sha256, c.copy), osos))
         return out
 
 
@@ -185,6 +187,26 @@ def _keep_highlight(c: Change) -> Change:
         if struct.unpack_from("<I", c.old, i)[0] in APPLE_HIGHLIGHT:
             new[i:i + 4] = c.old[i:i + 4]
     return Change(c.resource, c.offset, c.old, bytes(new), c.old_sha256, c.copy)
+
+
+def _keep_highlight_words(c: Change, osos: bytes) -> Change:
+    """The change with Apple's highlight colours in each aligned word that it covers in part or in full.
+
+    A theme run can stop before the last byte of a word: "ff343434" over "ffe89858" changes only 3
+    bytes, because the high byte 0xff is the same. `_keep_highlight` examines only complete words, so
+    it does not see this word. Here the bytes of the word outside the change come from osos (zeros
+    after the end of osos). The bytes inside the change come from the old bytes of the change."""
+    if not c.resource.startswith("View ") or len(c.old) != len(c.new) or not c.new:
+        return c
+    end = c.offset + len(c.new)
+    new = bytearray(c.new)
+    for w in range(c.offset & ~3, end, 4):
+        word = bytearray(osos[w:min(w + 4, len(osos))].ljust(4, b"\0"))
+        lo, hi = max(w, c.offset), min(w + 4, end)
+        word[lo - w:hi - w] = c.old[lo - c.offset:hi - c.offset]
+        if struct.unpack("<I", word)[0] in APPLE_HIGHLIGHT:
+            new[lo - c.offset:hi - c.offset] = c.old[lo - c.offset:hi - c.offset]
+    return c if new == c.new else replace(c, new=bytes(new))
 
 
 def _with_copied_bytes(c: Change, osos: bytes) -> Change:

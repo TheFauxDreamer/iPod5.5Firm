@@ -2290,6 +2290,24 @@ final class DarkModeTests: XCTestCase {
         XCTAssertEqual(Array(osos[24..<28]), Array(new[4..<8]))
     }
 
+    /// The real theme: a 7-byte run, +76 and 3 bytes of +80 (the high byte 0xff does not change). A second
+    /// run covers 3 bytes of a word that is not a highlight colour, and a third run 2 bytes in a word.
+    /// Format 1 and format 2 give the same result.
+    func testThemeKeepsTheBlueHighlightInAPartWord() throws {
+        for stripped in [false, true] {
+            var osos = [UInt8](repeating: 0, count: 32)
+            for (i, v) in [UInt32(0xFFD0_6428), 0xFFE8_9858, 0x00E8_9858, 0x1234_5678].enumerated() { put32(&osos, 8 + 4 * i, v) }
+            var theme = ImportedTheme(name: "t", source_sha256: "", osos_sha256: "x")
+            theme.changes = [(8, [0x25, 0x25, 0x25, 0xFF, 0x34, 0x34, 0x34] as [UInt8]), (16, [1, 2, 3]), (21, [0xAA, 0xBB])].map { at, new in
+                let old = Array(osos[at..<at + new.count])
+                return stripped ? ThemeChange(resource: "View 22034", offset: at, old: Data(), new: Data(new), oldSHA256: ThemeImport.sha256(old))
+                                : ThemeChange(resource: "View 22034", offset: at, old: Data(old), new: Data(new))
+            }
+            try theme.apply(to: &osos, originalSHA256: "x")
+            XCTAssertEqual((0..<4).map { le32(osos, 8 + 4 * $0) }, [0xFFD0_6428, 0xFFE8_9858, 0x0003_0201, 0x12BB_AA78], "stripped \(stripped)")
+        }
+    }
+
     func testEditsReplaceTheThemePictureAndSurviveJSON() throws {
         var theme = ImportedTheme(name: "t", source_sha256: "", osos_sha256: "x")
         theme.changes = [ThemeChange(resource: "BMap 1", offset: 4, old: Data(count: 4), new: Data(repeating: 0x11, count: 4)),
