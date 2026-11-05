@@ -1774,14 +1774,28 @@ final class AppModel: ObservableObject {
         p.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Music/iTunes")
         guard p.runModal() == .OK, let url = p.url else { return }
         do {
-            let library = try ITunesLibrary.playlists([UInt8](try Data(contentsOf: url)))
-            var (folders, missing) = PlaylistFolders.imported(from: library, ipod: folderPlaylists)
-            folders.folderIcons = playlistFolders.folderIcons
-            playlistFolders = folders
-            var status = "Imported \(counted(folders.folders.count, "folder"))."
-            if !missing.isEmpty { status += " The iPod does not have \(counted(missing.count, "playlist")) of these folders." }
-            playlistFoldersStatus = status + " The copy of a custom iTunes order is not tested. Examine the order."
+            useImportedFolders(try ITunesLibrary.playlists([UInt8](try Data(contentsOf: url))),
+                               note: " The copy of a custom iTunes order is not tested. Examine the order.")
         } catch { fail("Cannot Import from iTunes", error) }
+    }
+
+    /// Replace the folders in the editor with the folders of the Music app. The iPod does not
+    /// change until "Write Folders to iPod".
+    func importMusicFolders() async {
+        do {
+            let library = try await Task.detached { try MusicLibrary.playlists() }.value
+            useImportedFolders(library, note: "")
+        } catch { fail("Cannot Import from Music", error) }
+    }
+
+    /// Put the folders of a library into the editor, and show the result in the status label.
+    private func useImportedFolders(_ library: [ITunesLibrary.Playlist], note: String) {
+        var (folders, missing) = PlaylistFolders.imported(from: library, ipod: folderPlaylists)
+        folders.folderIcons = playlistFolders.folderIcons
+        playlistFolders = folders
+        var status = "Imported \(counted(folders.folders.count, "folder"))."
+        if !missing.isEmpty { status += " The iPod does not have \(counted(missing.count, "playlist")) of these folders." }
+        playlistFoldersStatus = status + note
     }
 
     /// Write the folder file to the iPod.

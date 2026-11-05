@@ -148,4 +148,118 @@ final class ITunesLibraryTests: XCTestCase {
         ]
         XCTAssertEqual(PlaylistFolders.imported(from: library, ipod: [entry("C", 3)]).folders.folders.count, 1)
     }
+
+    /// The Music import drops the special playlists and keeps the order and the folders.
+    func testMusicConvert() {
+        let entries: [MusicLibrary.Entry] = [
+            .init(name: "Library", persistentID: 1, parentID: nil, isFolder: false, isSpecial: true),
+            .init(name: "Music", persistentID: 2, parentID: nil, isFolder: false, isSpecial: true),
+            .init(name: "Folder", persistentID: 3, parentID: nil, isFolder: true, isSpecial: false),
+            .init(name: "In Folder", persistentID: 4, parentID: 3, isFolder: false, isSpecial: false),
+            .init(name: "Loose", persistentID: 5, parentID: nil, isFolder: false, isSpecial: false),
+        ]
+        XCTAssertEqual(MusicLibrary.convert(entries), [
+            .init(name: "Folder", persistentID: 3, isFolder: true),
+            .init(name: "In Folder", persistentID: 4, parentID: 3),
+            .init(name: "Loose", persistentID: 5),
+        ])
+    }
+
+    /// The real Music library of this Mac, read only. Set IPODFW_MUSIC_TEST=1 to run it. The test
+    /// compares the read of `MusicLibrary` with the data that the Music app gives through AppleScript.
+    /// Then it imports the folders as if the iPod had each playlist of the library. The test prints
+    /// the names of the playlists, so do not copy its output into the repository.
+    func testRealMusicLibrary() throws {
+        guard ProcessInfo.processInfo.environment["IPODFW_MUSIC_TEST"] == "1" else { throw XCTSkip("set IPODFW_MUSIC_TEST=1") }
+        let library = try MusicLibrary.playlists()
+        let hex = { (v: UInt64) in String(format: "%016llX", v) }
+
+        // The data of the Music app: kind, persistent ID, parent ID, special kind and name.
+        let script = """
+        tell application "Music"
+          set out to ""
+          repeat with p in folder playlists
+            set par to ""
+            try
+              set par to persistent ID of parent of p
+            end try
+            set out to out & "F" & tab & (persistent ID of p) & tab & par & tab & "none" & tab & (name of p) & linefeed
+          end repeat
+          repeat with p in user playlists
+            if class of p is not folder playlist then
+              set par to ""
+              try
+                set par to persistent ID of parent of p
+              end try
+              set out to out & "P" & tab & (persistent ID of p) & tab & par & tab & ((special kind of p) as text) & tab & (name of p) & linefeed
+            end if
+          end repeat
+          return out
+        end tell
+        """
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        task.arguments = ["-e", script]
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        try task.run()
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        task.waitUntilExit()
+        XCTAssertEqual(task.terminationStatus, 0, "osascript failed")
+        struct Row { let folder: Bool; let id: String; let parent: String; let special: String; let name: String }
+        let rows = output.split(separator: "\n").compactMap { line -> Row? in
+            let f = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+            guard f.count >= 5 else { return nil }
+            return Row(folder: f[0] == "F", id: f[1], parent: f[2], special: f[3], name: f[4...].joined(separator: "\t"))
+        }
+        let music = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        print("Music app: \(rows.filter(\.folder).count) folders, \(rows.filter { !$0.folder }.count) playlists. MusicLibrary: \(library.count) items.")
+
+        // 1. Each item of MusicLibrary agrees with the Music app.
+        for p in library {
+            guard let m = music[hex(p.persistentID)] else { XCTFail("not in the Music app: \(p.name)"); continue }
+            XCTAssertEqual(m.name, p.name)
+            XCTAssertEqual(m.folder, p.isFolder, p.name)
+            XCTAssertEqual(m.parent, p.parentID == 0 ? "" : hex(p.parentID), p.name)
+        }
+        // 2. Each folder of the Music app is in MusicLibrary. Print the playlists that MusicLibrary drops.
+        let ours = Set(library.map { hex($0.persistentID) })
+        for m in rows where m.folder { XCTAssertTrue(ours.contains(m.id), "folder not read: \(m.name)") }
+        for m in rows where !m.folder && !ours.contains(m.id) { print("Dropped as special: \(m.name) (\(m.special))") }
+
+        // 3. The import, as if the iPod had each playlist of the library.
+        let ipod = library.filter { !$0.isFolder }.map {
+            ITunesDB.PlaylistEntry(name: $0.name, persistentID: $0.persistentID, trackIDs: [], isPodcast: false)
+        }
+        let (folders, missing) = PlaylistFolders.imported(from: library, ipod: ipod)
+        XCTAssertEqual(missing, [])
+        func top(_ id: String) -> Row? {
+            var at = music[id], seen = Set<String>()
+            while let a = at, !a.parent.isEmpty, let up = music[a.parent], seen.insert(up.id).inserted {
+                if up.parent.isEmpty { return up }
+                at = up
+            }
+            return nil
+        }
+        let playlistRows = rows.filter { !$0.folder && ours.contains($0.id) }
+        for m in rows where m.folder && m.parent.isEmpty {
+            let expected = playlistRows.filter { top($0.id)?.id == m.id }.map(\.id)
+            let got = folders.folders.first { $0.name == m.name }?.members.map(hex) ?? []
+            XCTAssertEqual(got, expected, "members of \(m.name)")
+        }
+
+        // 4. The top-level order of the iPod, and the order of Folders4Playlist (folders first).
+        let byID = Dictionary(library.map { ($0.persistentID, $0.name) }, uniquingKeysWith: { a, _ in a })
+        let shown = folders.shownItems(ipod).map { item -> String in
+            switch item {
+            case .folder(let id): return "[F] " + (folders.folders.first { $0.id == id }?.name ?? "?")
+            case .playlist(let id): return byID[id] ?? "?"
+            }
+        }
+        let theirs = rows.filter { r in r.folder && r.parent.isEmpty && folders.folders.contains { $0.name == r.name } }.map { "[F] " + $0.name }
+            + playlistRows.filter { top($0.id) == nil }.map(\.name)
+        print("iPodFirm top level:\n  " + shown.joined(separator: "\n  "))
+        print("Same order as Folders4Playlist: \(shown == theirs)")
+        if shown != theirs { print("Folders4Playlist top level:\n  " + theirs.joined(separator: "\n  ")) }
+    }
 }
