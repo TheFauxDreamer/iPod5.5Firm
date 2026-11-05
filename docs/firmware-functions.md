@@ -647,6 +647,40 @@ Refer to [../re/notes-links.md](../re/notes-links.md). The start code copies the
 | 0x1952a4 | Reads `nowplaying`: 1 `true`, 0 `false`, 2 not in the link. | Static |
 | 0x13e540, 0x13f6fc | Read a `<META NAME="…" CONTENT="…">` tag. | Static |
 
+### Contacts and Calendars
+
+Refer to [../re/calendar-contacts.md](../re/calendar-contacts.md). One line parser reads the vCard and the iCalendar files.
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x4ffae4 | Data: the vCard token table (30 pointers, `home` to `base64`). | Static |
+| 0x4ffc9c | Data: the iCalendar token table (60 pointers, `begin` to `priority`). | Static |
+| 0x4ffdc4 | Data: the day table `su` to `sa`. | Static |
+| 0x0c2240 | (UTF-16 text, ASCII token): 1 if equal. It ignores the case. | Static |
+| 0x1b9b3c | The loop of the task `LoadDataTasks`. On a message, it reads the notes, the contacts (0x1b9484) and the calendars (0x14a9b0) again. | Static |
+| 0xc9f88, 0xe5afc | Walk `Contacts/` (RAM 0x1081e1ac + 8) and `Calendars/` (+ 0x10). They call 0xd1fc4 and 0xfc99c for each file. No extension filter. | Static |
+| 0xdd480 | 1 if the path contains `.DS_Store`. The walk skips the file. | Static |
+| 0xd1fc4 | Reads the contacts of one file. It stops after 4000 contacts. | Static |
+| 0xc2720 | 1 if the free memory is less than 0x180000 bytes. The walks stop. | Static |
+| 0xe4be8 | The encoding from the first bytes: `FE FF` or 0 → 4 (UTF-16 BE), `FF FE` → 5 (UTF-16 LE), `EF BB BF` → 3 (UTF-8), else 10. | Static |
+| 0x10f0c0 | Changes code 10 to a code of the language (0x1705dc). 1 is Latin-1, 2 is Mac Roman. | Static |
+| 0x1de17c | Makes the decoder for an encoding code. | Static |
+| 0x170354 | Reads one line: name, group prefix removed at `.`, parameters, then the property handler. | Static |
+| 0x1afa9c | Reads the name and the parameters up to `:`. Maximum 0x400 characters. | Static |
+| 0x1c039c | Joins folded lines (a line end and a space or a tab). | Static |
+| 0x16fff0 | Reads a value. It keeps a maximum of 0x7040 characters. | Static |
+| 0x157af0 | The vCard property dispatcher. | Static |
+| 0x157f10 | Reads one contact. It keeps it if `N`, `FN`, `NICKNAME`, `ORG` or `EMAIL` set the flag + 0x74. | Static |
+| 0x15383c | The `TEL` types: home 1, cell 2, fax 4, work 8, pager 0x10, car 0x20, pref first. | Static |
+| 0x153a3c, 0x1539fc | The `PHOTO` parameters: only `ENCODING=BASE64`, and the types `JPEG` or `BASE64`. | Static |
+| 0x18dfbc | The `VCALENDAR` handler: `BEGIN`, `TZ`, `VERSION`, `X-WR-CALNAME`, `PRODID`. | Static |
+| 0x1dc600 | The property dispatcher of `VEVENT` and `VTODO`. | Static |
+| 0x19ca4c, 0x201d50 | The `VTIMEZONE` handler and the `STANDARD` and `DAYLIGHT` handler. | Static |
+| 0xc8e24 | Reads `YYYYMMDD[THHMMSS][Z]`. Returns 1 for `Z` (UTC). | Static |
+| 0x1dc264 | Links a `TZID` to a `VTIMEZONE` of the same calendar (0x2571fc). | Static |
+| 0x1f2014 | Reads the parts of an iCalendar 2.0 `RRULE`. `FREQ`: daily 4, weekly 5, monthly 6, yearly 7. | Static |
+| 0x1f8c68 | The `EXDATE` and `RDATE` parameters: `VALUE=DATE` or `VALUE=PERIOD` make the property not valid. | Static |
+
 ### The video processor
 
 Refer to [re/video-player.md](../re/video-player.md). The ARM code sends text commands to the BCM2722 (VideoCore). The test patch `video-log` (only on the branch `video-log`) hooks 0xe9358 and 0x2872c0. "Patch" in the evidence column means that patch, on a real iPod.

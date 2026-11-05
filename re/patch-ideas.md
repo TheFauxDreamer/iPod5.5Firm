@@ -95,6 +95,7 @@ The ideas in this section have no firmware research, except where a line gives a
 | Large cover in Now Playing | High | Medium | A key shows the 200 × 200 cover on a full screen. |
 | Scrobble log | High | Medium | Records the time of each play for Last.fm. `playback-log` has most of the hooks. |
 | On-device statistics | Medium | Medium | Most played songs, from the track object. |
+| Contacts and Calendars from macOS | High | Medium | App only, no firmware change. Idea of 5 November 2026. The app writes the contacts and the calendars of macOS in the dialect that the stock reader accepts. Research and design: [calendar-contacts.md](calendar-contacts.md). The emulator test is open. |
 | Now Playing switch in the Layout section | Medium | Low | App only, no firmware change. Idea of 4 November 2026, not started. When the layout is Split or Switch on iPod, iPod Appearance > Layout shows one more switch, for example "Open Now Playing After 10 Seconds" (the opposite of `no-now-playing-timer`). It changes the same patch, so the Layout section and Patches > Display always agree. With Stock, the Layout section does not show it. Keep the patch in Patches > Display, because it is also useful with Stock. The label has no help text (project rule). Ask the owner about the label first. |
 
 ### Ideas from Rockbox and from custom Rockbox builds

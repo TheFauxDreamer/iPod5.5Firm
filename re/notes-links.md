@@ -76,3 +76,26 @@ Not tested:
 - `%26` and `&amp;` in a playlist name (tests 08 and 09 were not recorded);
 - the limits of the size of a note and of the count of notes;
 - the real iPod.
+
+## The song-list version on a real iPod (5 November 2026)
+
+The owner gave a song-list version of Folders4Playlist to the user. It writes `p_<ID>.linx` and the pages `p_<ID>_N.linx` next to the `index.linx` of the folder. It did not operate on the user's real iPod with the Korean menu language.
+
+Emulator, 65 real playlists, 266 note files in one directory: the Notes menu showed each file as an item. Each page had the title of the playlist, so one playlist showed 39 times. The playlists were not in their folders. The fix: one directory for each playlist, with only one `index.linx`, and one subdirectory for each page.
+
+## The note reader (Ghidra, 5 November 2026)
+
+| Address | Function |
+|---|---|
+| 0x23d748 | Finds the file of a link. A link to a directory opens its `index.linx`. |
+| 0x12fc4c | Opens a note. It reads at most 0x1000 bytes. |
+| 0x13fe28 | Records "Note too long, truncated. (7)" if the file is larger than 0x1000 bytes. |
+| 0xe4be8 | Reads the byte order mark: `EF BB BF` gives UTF-8 (3), `FF FE` gives 5, `FE FF` or a first byte 0 gives 4 (UTF-16). Else 10. |
+| 0x10f0c0, 0x1705dc | With no byte order mark, the encoding comes from the language (0x192ca8): 0x606d gives 6 (Japanese), 0x606e gives 9 (Korean), 0x6074 gives 8, 0x6075 gives 7 (Chinese). Other languages give 1 (Latin-1) or 2 (Mac Roman). |
+| 0x13f33c | Reads `ENCODING="…"` in the `<?XML` tag. The names are in the table at 0x6a11ac (RAM 0x10822f08). An unknown name gives "Bad meta data, unknown encoding. (17)". The reader then reads the note again. |
+| 0x12f600 | Runs a music link. It compares the `playlist` value with each playlist name, selects the first equal playlist, and then compares the `song` value with the titles of that playlist. No equal name gives "No match for %s. (101)". |
+| 0x223354 | Compares two names. It decodes UTF-8 with 1 to 3 bytes (0x2234dc). A 4-byte character gives 0 and ends the name. Characters below U+0100 go through the table 0x22428c. It does no Unicode normalization. |
+
+Thus a note with Korean text and no byte order mark is probably read as EUC-KR on a Korean iPod. That the language 0x606e is Korean is a conclusion from its encoding. Not tested on a real iPod.
+
+A file for the author, with a check script, is not in the repository. The owner shares it.
