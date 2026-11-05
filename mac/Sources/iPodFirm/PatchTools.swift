@@ -126,6 +126,7 @@ struct PlaylistFoldersSection: View {
                     }
                     .disabled(model.playlistFolders.folders.count >= PlaylistFolders.maxFolders)
                     Button("Import from iTunes…") { model.importITunesFolders() }
+                    Button("Import from Music") { Task { await model.importMusicFolders() } }
                     Spacer()
                     Button("Write Folders to iPod") { Task { await model.writePlaylistFolders() } }
                         .buttonStyle(.borderedProminent)

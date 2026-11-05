@@ -48,6 +48,7 @@ Thus, about 12,600 lines of the app are in Swift. The UI and the helper (about 6
 | `CustomEQ.swift` (the coefficients of `custom-eq`) | `custom_eq.py`. `SharedEQ` (the `.ipodeq` file) and `applePresets` have no Python version. |
 | `PlaylistFolders.swift` (the folder file of `playlist-folders`) | None. `re/playlist-folders/harness/folders.py` writes the same file for the emulator tests. |
 | `ITunesLibrary.swift` (the playlists of `iTunes Library.itl`) | None. Only the app imports iTunes folders. |
+| `MusicLibrary.swift` (the playlists of the Music app) | None. Only the app imports Music folders. |
 | `AuthOpen.swift`, `DiskAccess` in `Device.swift` | None. The Python tool runs with `sudo`. |
 | `AppFolderReport.swift` | None. |
 | `UpdateCheck.swift` (the newest release on GitHub) | None. Only the app checks for updates. |
@@ -66,6 +67,7 @@ The Swift and Python versions of a module are two copies of the same logic. A ch
 | `/usr/libexec/authopen` | `AuthOpen.swift`, `DiskAccess` in `Device.swift` | Get the raw disk with Touch ID or an administrator password. No code of the app runs as root. | Windows and Linux have a different privilege model. Linux: `pkexec` or a `udev` rule. Windows: a UAC prompt. |
 | `/usr/bin/ditto`, `/usr/bin/zip` | `IPSW.swift`, `PatchLibrary.swift` | Unpack an `.ipsw` file. Unpack and make a `.ipodpatch` file. | A zip library. `ipsw.py` already uses `zipfile`. |
 | CommonCrypto, Compression | `ITunesLibrary.swift` | Decrypt and inflate `iTunes Library.itl`. | Any AES library and zlib. |
+| iTunesLibrary | `MusicLibrary.swift` | Read the playlists and folders of the Music app. | None. The Music library is only on macOS. Use "Import from iTunes…" or the editor. |
 | `/usr/bin/xcrun clang` | `Patcher.swift`, `PatchLibrary.swift` | Compile the C file of a patch. | `clang` from LLVM. `patcher.py` already calls `clang` without `xcrun`. An exported `.ipodpatch` file has a precompiled `patch.o`, so the user does not need a compiler for it. |
 | `/usr/bin/afconvert` | `ITunesDB.swift`, `itunesdb.py` | Make the test audio file for an emulated library. | `ffmpeg`, or a short WAV or AAC file in the repository. |
 | CoreGraphics, ImageIO, UniformTypeIdentifiers | `Pictures.swift`, `AlbumArt.swift`, `ArtworkDB.swift`, `ITunesDB.swift`, `MusicImport.swift`, `PlaylistFolders.swift` | Decode, resize and encode images. | Pillow. The Python modules already use it. |

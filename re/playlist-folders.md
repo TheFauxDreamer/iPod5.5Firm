@@ -46,6 +46,16 @@ The first min(limit, body length rounded down to 16) bytes of the body are AES-1
 
 **The name.** The name is the `mhoh` record of type 100 after the `miph` header: +8 total length, +12 type, +0x18 encoding (3 UTF-8, 1 UTF-16LE), +0x1c byte length, +0x28 the text.
 
+**The Music app.** The Music app does not write `iTunes Library.itl`. "Import from Music" reads the library with the Apple framework iTunesLibrary (`MusicLibrary.swift`). The framework gives the same values: the persistent ID, the parent ID and the folder kind. The idea comes from Folders4Playlist by u/Linusssk, which reads the same values with AppleScript.
+
+The test of 5 November 2026 used one real Music library: 4 folders, 65 playlists, no nested folder.
+
+- The order of `allPlaylists` is the order of the Music sidebar: each folder, then its playlists, then the other playlists. Each group is in alphabetical order.
+- The framework also gives the Apple Music playlists. AppleScript lists them as `subscription playlists`, not as `user playlists`. Thus Folders4Playlist does not find them.
+- With lazy load, a failed connection gives an empty list and no error. The app thus stops with an error if the list is empty.
+- A command-line program gets no access to the library, and macOS shows no prompt. An app with `NSAppleMusicUsageDescription` gets access.
+- In the emulator, the iPod showed the 4 folders first, then the playlists in the order of the Music app. Music Videos and Favourite Songs were last, because the import drops them.
+
 **The library XML.** The XML entry of a folder has `Folder` true and `All Items` true. Its `Playlist Items` has the merged songs. The app does not read the XML, so the user does not export the library.
 
 **Not known:**

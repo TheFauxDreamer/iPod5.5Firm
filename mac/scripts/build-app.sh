@@ -84,6 +84,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
     <key>NSHighResolutionCapable</key><true/>
+    <key>NSAppleMusicUsageDescription</key><string>iPodFirm reads the playlist folders of the Music library. iPodFirm does not change the library.</string>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSHumanReadableCopyright</key><string>GPL-2.0-or-later. Formats from iPodWizard and Rockbox ipodpatcher.</string>
     <key>NSAppTransportSecurity</key>

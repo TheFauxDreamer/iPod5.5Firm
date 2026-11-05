@@ -285,6 +285,8 @@ The paths in this table are in `~/Library/Application Support/iPodFirm/`, unless
 
 The one exception is `iTunes Library.itl`. The user selects this file for "Import from iTunes…" in Playlist Folders. The app only reads it.
 
+"Import from Music" in Playlist Folders reads the Music library with the framework iTunesLibrary. macOS asks for access to "Media & Apple Music" one time. `Info.plist` has the text `NSAppleMusicUsageDescription` for this request. The app only reads the library.
+
 | Path | Content |
 |---|---|
 | `Backups/*.bin`, `Backups/*.bin.json` | The firmware partition backups and their metadata. |

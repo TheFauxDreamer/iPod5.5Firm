@@ -162,6 +162,15 @@ To set your own order:
 
 The order does not change the iTunes library. A new playlist goes at the end of the list.
 
+To copy the folders from the Music app:
+
+1. Connect the iPod so that it shows in Finder.
+2. Click **Import from Music**.
+3. If macOS asks for access to your media library, click **Allow**.
+4. Examine the folders.
+5. Click **Write Folders to iPod**.
+6. Eject the iPod.
+
 To copy the folders from iTunes:
 
 1. Connect the iPod so that it shows in Finder.
@@ -524,7 +533,7 @@ The idea of SSD Mode comes from [rockpod](https://github.com/nuxcodes/rockpod). 
 
 The idea of Search on the 5G and the byte to change come from [RetroCux](https://github.com/RetroCux/Enable-the-Search-function-on-iPod-Video-5th-Gen).
 
-The idea of Playlist Folders comes from the Reddit user [u/Linusssk](https://www.reddit.com/user/Linusssk/).
+The idea of Playlist Folders and of the import from the Music app comes from the Reddit user [u/Linusssk](https://www.reddit.com/user/Linusssk/) (Folders4Playlist).
 
 The user braniak87 found the cause of a crash when the Patches pane opened (GitHub issue 1). braniak87 also gave the fix and tested it.
 
