@@ -632,6 +632,21 @@ Refer to [../re/playlist-folders.md](../re/playlist-folders.md). The `playlist-f
 
 `vtable+0x54(js, 'Str ', 0x6387)` makes the list read its labels again. The functions near 0x165000–0x16f000 that read the array are the iPod Accessory Protocol.
 
+### Notes links
+
+Refer to [../re/notes-links.md](../re/notes-links.md). The start code copies the data block at 0x6a1170 to RAM 0x10822ecc. The code uses the RAM address.
+
+| Address | Function | Evidence |
+|---|---|---|
+| 0x6a12a8 | Data (RAM 0x10823004): the base of the pointers to the link strings, from `ENCODING="` (+0x04) to `name="` (+0x54). | Static |
+| 0x1953f8 | Reads an `<A` tag: `href="` or `name="`, then the attributes `nopush` and `popall`. | Static |
+| 0x19514c | The type of a link: a file (1), `ipod:music?` (2) or `ipod:video?` (3). | Static |
+| 0x195338 | Makes the key table one time: `playlist`, `genre`, `artist`, `composer`, `album`, `song`, `video`, `nowplaying`. | Static |
+| 0x195540 | (link, key index, text, out): the value of a key. The value stops at the first `&`. | Static |
+| 0x195624 | Decodes `%XX` escapes in a value. | Static |
+| 0x1952a4 | Reads `nowplaying`: 1 `true`, 0 `false`, 2 not in the link. | Static |
+| 0x13e540, 0x13f6fc | Read a `<META NAME="…" CONTENT="…">` tag. | Static |
+
 ### The video processor
 
 Refer to [re/video-player.md](../re/video-player.md). The ARM code sends text commands to the BCM2722 (VideoCore). The test patch `video-log` (only on the branch `video-log`) hooks 0xe9358 and 0x2872c0. "Patch" in the evidence column means that patch, on a real iPod.
