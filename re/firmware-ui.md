@@ -177,11 +177,13 @@ The tag is 4 bytes. The tag says the kind of the element.
 | `warD` | the drawing | 13 | 0x12f150 |
 | `ltnC` | the control | 6 | 0x16c080 |
 | `tStS` | the state of the text | 3 | — |
-| `mTtD` | the title | 1 | 0x10d278 |
+| `mTtD` | the date and the time (`'DtTm'`) | 1 | — (the class 0x5a80, constructor 0x1aaeec) |
 
 The tags are in the strings of the image. `enoN` is at 0x1411fc, `paMB` at
 0xab8a4, ` rtS` at 0xa6d28, `warD` at 0x12f1a0, `ltnC` at 0x16c0e8 and
 `mTtD` at 0x10d2b0.
+
+Correction (6 November 2026): the tag `mTtD` is `'DtTm'`, the date and the time. It is not a title. Its only element is element 0 of View −568, the analogue clock of a row in the Clock list (class 0x5a80). The function 0x10d278 does not read a View: it asks the lookup for `'DtTm'` 0x5e25. Refer to [split-clock.md](split-clock.md#version-15-the-analogue-clock).
 
 Correction (3 November 2026): word 1 of an element is the class ID. The function 0x170954 registers the classes and their constructors. For example, the class 0x1580 is a text label with the constructor 0x243850. Refer to [battery.md](battery.md#version-04-emulator-tests-and-the-text-path-3-november-2026).
 

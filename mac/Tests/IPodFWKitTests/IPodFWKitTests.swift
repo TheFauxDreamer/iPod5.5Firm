@@ -1338,6 +1338,26 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(clock.withClock().changes[0].new, clock.changes[0].new)
         XCTAssertEqual(clock.withHalfWidth().changes[0].new, clock.changes[0].new)
         XCTAssertEqual(words(theme.withClock().movedLayout(after: [], dark: true).changes[0].new, 0x9F), 7)
+        // The option Analogue of split-clock: the face (class 0x5a80, ID 0x7e44, 90 × 90) and the lines of
+        // the day and the date. Python gives the same Views.
+        let analogue = theme.withClock(analogue: true)
+        let av = [UInt8](analogue.changes[0].new)
+        XCTAssertEqual(av.count, 704 + 3 * 96)
+        XCTAssertEqual(le32(av, 0), 10)
+        XCTAssertEqual((0..<7).map { le32(av, 704 + 4 * $0) }, [92, 0x5A80, 0x4474546D, 0x7E44, 0x2B00, 0, 0xA00])
+        XCTAssertEqual((0..<12).map { le32(av, 732 + 4 * $0) },
+                       [0, 0x8000_0002, 34, 0, 0x8000_0002, 222, 0, 0x8000_0008, 90, 0, 0x8000_0004, 90])
+        XCTAssertEqual((0..<6).map { UInt16(av[788 + 2 * $0]) | UInt16(av[789 + 2 * $0]) << 8 },
+                       [24403, 24405, 24407, 0, 0, 0])
+        XCTAssertEqual([800, 896].map { le32(av, $0 + 12) }, [0x7E42, 0x7E43])
+        XCTAssertEqual([800, 896].map { Int32(bitPattern: le32(av, $0 + 36)) }, [128, 150])
+        XCTAssertEqual(le32([UInt8](analogue.changes[1].new), 4), UInt32(av.count))
+        XCTAssertEqual(ThemeImport.sha256(av), "626bbc271c6164f6f56ff64a467f7c18ad93d109c1e38e47086c72f1e09971db")
+        let halfAnalogue = [UInt8](half.withClock(analogue: true).changes[0].new)
+        XCTAssertEqual(Int32(bitPattern: le32(halfAnalogue, 704 + 48)), 194)
+        XCTAssertEqual(ThemeImport.sha256(halfAnalogue), "4b2c49a78927a544d07fbf7e4136255a37bb69e51674d39a7787909f5a7f6095")
+        XCTAssertEqual(analogue.withClock(analogue: true).changes[0].new, analogue.changes[0].new)
+        XCTAssertEqual(words(analogue.movedLayout(after: [], dark: true).changes[0].new, 0x9F), 6)
         var wrong = [UInt8](repeating: 0, count: 0x736000)
         XCTAssertThrowsError(try theme.apply(to: &wrong, originalSHA256: theme.osos_sha256))
         let env = ProcessInfo.processInfo.environment

@@ -238,20 +238,56 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
     static let clockLine = (at: 416, size: 96)
     static let clockLines: [(id: UInt32, top: Int32)] = [(0x7E41, 72), (0x7E42, 96), (0x7E43, 118)]
 
-    /// The layout with the 3 lines of the split-clock patch after the other elements, and the new size
-    /// in the table entry. Use it after `withHalfWidth` and `withSmallText`.
-    public func withClock() -> ImportedTheme {
+    /// The option Analogue of split-clock: the clock face of the Clock app, then the day and the date.
+    /// The face is a copy of the artist line with the class of the analogue clock (0x5a80, View -568),
+    /// the tag 'DtTm', the ID 0x7e44 and a size of 90 × 90: the patch draws the face with the colours of
+    /// the 45 × 45 Apple face. The owner word 0x2b00 of the line stays, so the panel data object is the owner.
+    /// The 5 picture IDs at offset 84 are the day face, the night face, the "New Clock" face, and 0 for
+    /// the minute and the hour hands, so that 0x1ab4ac makes no hand bindings. Refer to
+    /// re/split-clock.md.
+    static let analogueLines: [(id: UInt32, top: Int32)] = [(0x7E42, 128), (0x7E43, 150)]
+    static let face = (id: UInt32(0x7E44), top: UInt32(34), size: UInt32(90))
+    static let facePictures: [UInt16] = [24403, 24405, 24407, 0, 0, 0]
+    /// The left edge of the face for the left edge of the text (offset 464): 2/3 and 1/2.
+    static let faceLeft: [Int32: UInt32] = [219: 222, 164: 194]
+
+    /// The face element of the option Analogue, from the template of a text line.
+    static func clockFace(_ template: [UInt8], left: UInt32) -> [UInt8] {
+        var face = template
+        for (at, value) in [(4, 0x5A80), (8, 0x4474546D), (12, Self.face.id), (20, 0), (24, 0xA00),
+                            (28, 0), (32, 0x8000_0002), (36, Self.face.top),
+                            (40, 0), (44, 0x8000_0002), (48, left),
+                            (52, 0), (56, 0x8000_0008), (60, Self.face.size),
+                            (64, 0), (68, 0x8000_0004), (72, Self.face.size)] as [(Int, UInt32)] {
+            put32(&face, at, value)
+        }
+        for (i, picture) in facePictures.enumerated() {
+            face[84 + 2 * i] = UInt8(picture & 0xFF)
+            face[85 + 2 * i] = UInt8(picture >> 8)
+        }
+        return face
+    }
+
+    /// The layout with the 3 elements of the split-clock patch after the other elements, and the new
+    /// size in the table entry. Digital gives the lines of the time, the day and the date. Analogue gives
+    /// the face, the day and the date. Use it after `withHalfWidth` and `withSmallText`.
+    public func withClock(analogue: Bool = false) -> ImportedTheme {
         guard changes.count >= 2 else { return self }
         var view = [UInt8](changes[0].new)
         guard view.count == 704, le32(view, 0) == 7 else { return self }
         let template = Array(view[Self.clockLine.at..<Self.clockLine.at + Self.clockLine.size])
-        for line in Self.clockLines {
+        let lines = analogue ? Self.analogueLines : Self.clockLines
+        if analogue {
+            guard let left = Self.faceLeft[Int32(bitPattern: le32(view, 464))] else { return self }
+            view += Self.clockFace(template, left: left)
+        }
+        for line in lines {
             var element = template
             put32(&element, 12, line.id)
             put32(&element, 36, UInt32(bitPattern: line.top))
             view += element
         }
-        put32(&view, 0, UInt32(7 + Self.clockLines.count))
+        put32(&view, 0, UInt32(7 + lines.count + (analogue ? 1 : 0)))
         var entry = [UInt8](changes[1].new)
         put32(&entry, 4, UInt32(view.count))
         var out = self
