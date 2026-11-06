@@ -544,6 +544,10 @@ Cover Flow uses 0.73 MB while it shows. The firmware uses almost all of its heap
 
 Recommended order: measure the free memory on the real iPod; then item 1 (the largest gain with no extra RAM); then item 3.
 
+## Research: the block cache of the file class (6 November 2026)
+
+The font research found a file object with a block cache (0x226000). The patch already uses this file class. A larger block cache does not make a cover read faster, because the aligned middle of a read goes past the cache. The real gain is to keep `F1029_1.ithmb` open after the close, as the firmware artwork task does. The full research is in [cover-flow-loads.md](cover-flow-loads.md#the-block-cache-of-the-file-class-6-november-2026).
+
 ## How to add the debug log again
 
 Use the log to measure Cover Flow on the real iPod, for example after a change of the draw or after a new sync. The log of versions 0.6.5 to 0.6.7 found the slow file open and the wheel ticks. The format of the lines is in [The lines of the log](#the-lines-of-the-log).

@@ -248,7 +248,8 @@ A label draws in the rectangle at view + 0x58 (top, left, bottom, right in its p
 | Address | Function | Evidence |
 |---|---|---|
 | 0xa1ff0 | Opens `iPod_Control\Artwork\ArtworkDB` when the music database loads (0xb4a64). | Static |
-| 0x205cfc, 0x205db4 | Starts the task `ArtworkLoadTask`, and its task function: a request queue, an image cache and reference-counted image objects. | Static |
+| 0x205cfc, 0x205db4 | Starts the task `ArtworkLoadTask`, and its task function: a request queue, an image cache and reference-counted image objects. The task keeps a map from a path to an open file object (0x226000) at task + 0x7c (header + 0x8c, count + 0x90). It opens each `.ithmb` file one time and keeps it open. It seeks (0x2258a4) and reads (0x225594) without the lock at task + 0x40. Refer to [../re/cover-flow-loads.md](../re/cover-flow-loads.md#the-block-cache-of-the-file-class-6-november-2026). | Static |
+| 0x206a38 | Closes one random file of the `ArtworkLoadTask` map when the map has more than 32 files (count at task + 0x90). | Static |
 | 0x88094 | Writes `Thumbs\F%d_%d.ithmb` of the Photos database. | Static |
 
 ### The display
@@ -307,6 +308,10 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x08f6f4 | Writes to a file (handle, pointer to length, buffer). | Patch |
 | 0x08f5c4 | Sets the file position. The 64-bit position is in r2:r3. | Patch |
 | 0x08f184 | Closes a file. Writes the buffer to the disk. | Patch |
+| 0x226000, 0x225f38 | (object of 0x54 bytes, path, read-only flag, disk channel, block size, block count, 0): the two constructors of the C++ file class of RetailOS. They open the file (0x225450, through the volume vtable + 0x14). The block size goes through 0x224d88 (a multiple of the sector size, a maximum of 0x40000). The block count goes through 0x224df4 (1–16, else 1). 0x225304 makes one cache entry of 0x18 bytes for each block. Most callers use one block of 0x400 bytes. The fonts (0x242e50) use 3 blocks of 0x2000. Object: + 0x18 the handle (−1: closed), + 0x1c the last error, + 0x20 the file size, + 0x2c the block size, + 0x30 the block count, + 0x34 the position. | Static |
+| 0x120ee0 | (path, flags, block size): the open of the C file functions (0x08f38c → 0xa582c → 0xa449c → 0x120ee0). Calls 0x225f38 with 1 block of 0x400 bytes. Thus 0x08f38c makes a file object of the C++ file class. | Static |
+| 0x2255b0 | The read of the C++ file class (0x225594 jumps to it). The block cache gives only the start and the end of a read that are not aligned to a block. The aligned middle goes directly to the volume read (vtable + 0x1c). 0x08f464 → 0xa5894 → 0xa4504 → 0x120f9c → 0x225594. | Static |
+| 0x2258a4 | (file, −, position, position high, origin): the seek of the C++ file class. Origin 0: from the start, 1: from the position, 2: from the end. It refuses a position past the end of the file (returns 5). 0x08f5c4 → 0xa58cc → 0x121004 → 0x2258a4. | Static |
 | 0x0e468c | (path record, type, folder, name): joins the folder and the name into the path record (0xc6994), deletes an old file (0xa4770) and makes an empty file (0xa449c with mode 2, then 0xa4400). The firmware uses it for `OTGPlaylistInfo` (type `'itun'`). The `up-next` patch uses it for its file; after a restart in the emulator, the value was still there. | Static, Emulator, Patch |
 | 0xb4a64 | Loads the music database from `iPod_Control\iTunes\iTunesDB`. Runs at the start and after each USB session. At 0xb4ad4 it adds the usage-log event 0xf ("Exit Disk Mode"). It measures the free heap before and after each load and writes the events 0x16 "Music Database Size", 0x17 "Photo Database Size" and 0x18 "Artwork Database Size". If the load fails, it tries `System\Control\iTunes\iTunesDB`, then makes an empty database (0xa9348). Refer to [../re/ram-limit.md](../re/ram-limit.md). | Static, Patch (`album-art`) |
 | 0xa2310 | Makes the music database object and calls 0xb4a64 (at 0xa23fc). | Static |
