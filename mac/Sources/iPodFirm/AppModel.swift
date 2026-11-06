@@ -711,13 +711,24 @@ final class AppModel: ObservableObject {
         guard layout.hasSplit, var split = Self.splitTheme else { return nil }
         if splitText == .small { split = split.withSmallText() }
         if splitWidth == .half { split = split.withHalfWidth() }
-        if enabledPatches.contains(Self.splitClockPatch) { split = split.withClock() }
+        if enabledPatches.contains(Self.splitClockPatch) { split = split.withClock(analogue: splitClockAnalogue) }
         return split
     }
 
-    /// The patch that needs the 3 clock lines in the Split View.
+    /// The patch that needs the 3 clock elements in the Split View.
     static let splitClockPatch = "split-clock"
-    var splitClockKey: String { enabledPatches.contains(Self.splitClockPatch) ? "clock" : "" }
+    /// The option of split-clock that selects the analogue face (value 1) in place of the digital time.
+    static let splitClockFaceOption = "face"
+    /// True if split-clock is on and its option "Clock Face" is Analogue.
+    var splitClockAnalogue: Bool {
+        guard enabledPatches.contains(Self.splitClockPatch),
+              let patch = patches.first(where: { $0.spec.name == Self.splitClockPatch }),
+              let option = patch.spec.options?.first(where: { $0.id == Self.splitClockFaceOption }) else { return false }
+        return optionValue(patch, option) == 1
+    }
+    var splitClockKey: String {
+        enabledPatches.contains(Self.splitClockPatch) ? (splitClockAnalogue ? "clock-analogue" : "clock") : ""
+    }
 
     /// The appearance build for the output: nothing for Light with the Stock layout.
     var activeAppearance: AppearanceBuild? {

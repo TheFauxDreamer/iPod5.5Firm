@@ -2,6 +2,8 @@
 
 Status (4 November 2026): versions 1.1, 1.2 and 1.4 operate in the emulator (Light, ⅔ – ⅓). Version 1.3 operates on a real iPod, with one fault that 1.4 corrects. Version 1.0 showed no clock. Refer to [The fault of version 1.0](#the-fault-of-version-10).
 
+Status (6 November 2026): version 1.5 adds the analogue clock of the Clock app as an option. The research is static. Refer to [Version 1.5: the analogue clock](#version-15-the-analogue-clock).
+
 The owner wants the right panel of the Split main menu to show the time, the day and the date when there is no current song. The owner reports that the iPod classic 6G/7G does this. All addresses are osos offsets of firmware 1.3. The method is static research with Ghidra, project `osos13`, read-only, and a full decompile.
 
 ## The behaviour of the classic
@@ -137,6 +139,121 @@ Owner report (real iPod, version 1.3, 4 November 2026): the clock shows, but at 
 Cause (static): the lookup hook hides the count line only for the panel object, and the patch learns that object at the first lookup of a clock line. In the Split View the count line is element 6 and the clock lines are elements 7–9. Thus the count line asked first and got "0 of 0". No notify reached it until a song change or a change of the pause clock.
 
 Fix: when the patch learns the panel object (the first time, or a new object), it notifies the count line on that object one time. The notify posts a message (0x21f37c, 0x14a29c), so the count line asks again after this lookup, not inside it. The size is 1444 bytes. The owner reported that the emulator test is good.
+
+## Version 1.5: the analogue clock
+
+The owner asked on 6 November 2026 if the panel can use the analogue clock of Extras > Clock. The owner selected these items:
+
+- A new option "Clock Face": Digital (the clock of version 1.4, the default) or Analogue (the face, then the day and the date).
+- The face colour of the Clock app: white from 6:00 to 17:59, and black at other times.
+- The size of the Apple pictures, 45 × 45, with no scale.
+
+### The pictures
+
+All clock pictures are 45 × 45. No larger clock picture is in the firmware. The 5 pictures of 142 × 142 (24395–24399) are the dial of Screen Lock.
+
+| Pictures | Content |
+|---|---|
+| 24403, 24404 | The day face, and the day face with a blue ring (the selected row). |
+| 24405, 24406 | The night face, and the night face with a blue ring. |
+| 24407, 24408 | The grey and the blue outline of the row "New Clock". |
+| 25007–25021 | The minute hand of the day face: 15 angles of one quadrant, in steps of 6°. |
+| 25022–25036 | The minute hand of the night face. |
+| 25037–25042 | The hour hand of the day face: 6 angles, in steps of 15°. |
+| 25043–25048 | The hour hand of the night face. |
+| 25049, 25050 | The centre dot of the day face and of the night face. |
+
+The corners of each face are white. The hands of the day face have a white ground, and the hands of the night face have a black ground. The theme Dark Gray changes most of these pictures to flat faces, but it keeps the white corners and the grounds.
+
+### The class of the clock
+
+The firmware has one analogue clock: the View element class 0x5a80. Only View −568, the row of the Clock list, uses it. Element 0 of View −568 has the class 0x5a80, the tag `'DtTm'`, the ID 0x618a and the owner word 0x6180.
+
+| Address | Fact | Evidence |
+|---|---|---|
+| 0x170874, 0x219b7c | Registers the class 0x5a80 with the constructor 0x1aaeec at each start. | Static |
+| 0x1aaeec, 0x1ab4ac | Allocates 0x14c bytes, and calls the base constructor 0x21af84. Reads 5 IDs at class word + 0x50: the day face, the night face, the "New Clock" face, the first minute hand and the first hour hand. View −568 gives 24999, 25001, 25003, 25007 and 25037. | Static |
+| 0x1ab4ac | Makes 50 picture bindings with 0x149e64 (binding, owner, ID). The faces are at + 0x80 to + 0x94 (each ID and ID + 1). The 30 minute hands are at + 0x98. The 12 hour hands and the 2 dots are at + 0x110 (the dots at + 0x140 and + 0x144). | Static |
+| 0x1ab4ac | + 0x148 = slot + 0x14 of the owner, with the class ID 0x6180. | Static |
+| 0x21af84 | The base element: + 0x14 the owner, + 0x18 the tag, + 0x1c the ID (16 bits), + 0x20 the flags, + 0x28 the 4 edges. | Static |
+| 0x21a4f4 | Makes an element of a View. The word at class word + 0xc selects the owner. The panel labels use 0x2b00. | Static |
+| 0x2370f0 | Slot + 0x5c of the Clock provider. For `'BMap'` and the IDs 24999–25004 it gives the pictures 24403–24408. | Static |
+| 0x250760 | Resolves a binding at its first draw: `lookup(owner, 'BMap', ID)`. | Static |
+| vtable 0x66d770 | + 4 is 0x1ab664: the base destructor 0x21b064, then `free`. It does not free the 50 bindings. + 0x70 is 0x1ab460, the draw. | Static |
+| 0x1ab460 | Makes the graphics context (0x211bd4, 0x21aad0) and the rectangle (0x2559d8). Then `bl 0x1ab064` at 0x1ab498 (0xebfffef1). This is the only call of 0x1ab064. | Static (FindXrefs) |
+| 0x1ab064 | The draw of a row. It reads the list (`*(*(self + 0x10) + 0x10)`) and the time of the row (0x236f58 with + 0x148). An hour from 6 to 17 gives the day face (+ 0x80), else the night face (+ 0x88). Selected rows use + 0x84 and + 0x8c. | Static |
+| 0x1ab064 | Keeps the colour (0x2551dc) and the mode (0x2551d4). Sets the colour white (0x2106dc) and the mode 0x20, and draws the face (0x250714, 0x2506bc). Calls 0x1ab1e4, 0x1aafa4 and 0x1aaf38. Sets the colour and the mode again. | Static |
+| 0x1ab1e4 | The minute hand (element, gc, rectangle, face, time). The angle is minutes × 6. The picture is (angle in the quadrant) / 6, + 15 for the night face. | Static |
+| 0x1aafa4 | The hour hand. The angle is (hours modulo 12) × 30, + 15 for minutes 15–44, + 30 for minutes 45–59. The picture is (angle in the quadrant) / 15, + 6 for the night face. | Static |
+| 0x1ab270 | Copies the hand into a surface of 45 × 45 (0x13b91c, 0x211ac8) and turns it for the other quadrants (0x21190c, 0x2118b4). Blits it with 0x210114. The key colour is white for a day face and black for a night face. | Static |
+| 0x1aaf38 | The centre dot: + 0x140 for a day face, + 0x144 for a night face. | Static |
+
+The time of 0x236f58 and the calendar structure of 0xd252c have the same layout: + 1 the minutes, + 2 the hours. Thus the patch can give the current time to 0x1ab1e4 and 0x1aafa4.
+
+The mode 0x20 with the colour white makes the white corners of the face transparent. 0x1ab270 sets the key colour of each hand.
+
+### Slot + 0x14: the type test
+
+Slot + 0x14 of an object gives the object if the class ID agrees. Else it asks the base class, and the last base gives 0.
+
+| Object | Slot + 0x14 | Class IDs that agree |
+|---|---|---|
+| The Clock provider (vtable 0x677148) | 0x236f04 | 0x6180, 0x2480, 0x180, 6, 5, then the base 0x13cdf4 |
+| The panel data object (vtable 0x673428) | 0x206ec8 | 0x2b00, then the base 0x21f23c (5, 4, 3, 1) |
+| The clock element (vtable 0x66d770) | 0x1aaf20 | 0x5a80, 0x1080, 0x1000, then the base 0x13cdf4 |
+
+Thus a clock element with the owner word 0x2b00 gets the panel data object as its owner. Then + 0x148 is 0. In the Clock app, + 0x148 is the Clock provider, never 0. The patch uses this value to tell the panel clock from a row of the Clock app.
+
+The base element code has one lookup with the ID of the element: the tag `'ClrR'` at 0x2194b4 (in the body of 0x21acac). It runs only for elements with all the flag bits 0x38000. The clock element has the flags 0xa00. The methods of the class 0x5a80 (vtable 0x66d770: + 4, + 0x14, + 0x70 and the base methods) do not ask for data with the ID of the element. Other classes ask for `'DtTm'` with their own code, for example at 0x1bc760.
+
+### The design
+
+The build adds a copy of the clock element to the Split View. The element has the ID 0x7e44, the owner word 0x2b00 and the direct picture IDs 24403, 24405 and 24407. The hand IDs are 0: refer to [The scale](#the-scale-static-6-november-2026). Only the Clock provider answers the IDs 24999–25004, so the copy uses the picture IDs. The picture lookups go to the language manager and the root object, as for the other pictures.
+
+A scan found no use of 0x7e44 in the code, the Views, the Menus or `TCmd` 9088.
+
+| Hook | Kind and place | Expect | Action |
+|---|---|---|---|
+| Draw | `bl` at 0x1ab498 | 0xebfffef1 | If + 0x148 is not 0, call 0x1ab064 (the Clock app). Else keep the element. If the clock shows, draw the clock at 90 × 90 with the current time. Refer to [The scale](#the-scale-static-6-november-2026). |
+| Delete | `word` 0x66d774 | 0x001ab664 | For the panel element: forget the element, and free its bindings as the label destructor 0x244aac does (0x149e8c, then `free` 0x25a8f4). Then call 0x1ab664. |
+
+The clock shows with the same test as the text lines: no song title, or the pause clock. At each notify of the clock lines, the patch also calls `view_invalidate` (0x21ac04) on the element. Thus the hands change at each timer event, and the face goes away when a song starts.
+
+With Analogue, the build adds the face and the lines of the day and the date. It does not add the line of the time.
+
+### The first emulator test (45 × 45)
+
+Owner, 6 November 2026: Light, ⅔ – ⅓, Clock After a Pause = 30 Seconds, test library. The analogue face showed in the panel. The owner reported that the face is probably too small. The other steps (the minute change, a song, a pause, the Clock app) are not reported.
+
+### The scale (static, 6 November 2026)
+
+The owner asked if the firmware can draw the clock larger. It cannot:
+
+| Address | Fact |
+|---|---|
+| 0x1216a0 | The blit core. It clips the source and the target rectangles and copies the pixels 1:1. It has no step and no division. Its only callers are 0x210114, 0xbff74 and 0xdcb9c. |
+| 0x2506bc, 0x2507b4, 0x210114 | Each picture draw goes to 0x1216a0. |
+| 0x21190c | Swaps the pixels of a square surface of 16 bits across the diagonal, in place. With 0x2118b4 (a mirror through 0x121eb4), this turns a hand. |
+| 0x13b91c, 0x13b6c8 | Makes a work surface (0xb4 bytes) for a rectangle and a format. A rectangle is (top, left, bottom, right): 0x255894 gives the height ([2] − [0]) and 0x255884 the width ([3] − [1]). The pixels come from the heap (0x11ca20, tag 0x1a). The surface stores the pixels in rows: + 4 the pixels, + 8 the bytes of one row (from the width), + 0xc the bits of one pixel, + 0x14 the format (bit 0x2000 swaps the bytes), + 0x18 the clip. |
+| 0x211ac8, 0x211c04 | Makes and frees a graphics context (0x44 bytes) on a surface. + 0x1c is the surface. |
+| 0x13ba74 | Frees a work surface and its pixels. |
+| RAM 0x10883614 + 0x1a | The format that 0x1ab270 uses for its work surfaces. |
+
+A search of the full decompile for functions with 2 loops, a division and 16-bit pixel copies found only sound sample code. No string has "scale" or "zoom".
+
+The owner compared 3 methods in a mock-up from the real pictures and selected bilinear with a round mask. The emulator test of that build (owner, 6 November 2026) showed a face of 90 × 90 at the correct place, but the owner reported that it was very blurry. A scale of a 45 × 45 picture cannot add detail. The owner then compared 4 methods in a second mock-up and selected the Apple face with sharp hands. The emulator test of that build (owner, 6 November 2026): the hands were sharp, but the face was not. Thus version 1.5 draws all parts at 90 × 90, and takes the colours from the Apple face:
+
+1. Draws the Apple face at 45 × 45 on white in a work surface, as 0x1ab064 draws it. The theme and the day or night face give the colours.
+2. Draws the ground at 90 × 90 in a second work surface. Out of a circle of radius 44, the key colour white. From radius 42 to 44, the rim colour: pixel (37, 7) of the Apple face (radius 21 at 45°, between 2 ticks). In the circle of radius 42, the colour of column 17 of the Apple face at the same height (row 2 to 42). Column 17 has no tick, and it gives the shine and the gradient.
+3. Draws 12 ticks from radius 44 to radius 35, 2.5 pixels wide, in the colour of pixel (22, 2) of the Apple face (the tick at 12).
+4. Draws the hour hand (22 pixels, 1° steps), the minute hand (36 pixels, 6° steps) and a dot (radius 5). The colour is the colour of the Apple dot: (49, 48, 49) for the day face, (239, 239, 239) for the night face.
+5. Changes a white pixel in the face to 0xffdf, and blits the result into the panel with the key colour white (mode 0x20).
+
+Each shape uses 4 × 4 samples in each pixel, so the edges are smooth. A table of 91 bytes gives sin(0°–90°) × 255. The code has no division. The layout gives 0 as the IDs of the first minute hand and the first hour hand. Then 0x1ab4ac makes only the 6 face bindings. It does not write the 44 hand words, so the delete hook frees the hand bindings only if the IDs are not 0.
+
+The first build of this method drew the hands reflected across the diagonal, and the shine as vertical bands. The cause was a wrong order of x and y. A rectangle of the firmware is (top, left, bottom, right), and a work surface stores the pixels in rows. A headless emulator run (6 November 2026, 22:06, night face, Light, ⅔ – ⅓, test copy with counters) then showed the correct hands, a horizontal shine and sharp ticks. The counters gave 17 panel draws, 17 faces drawn, 15 invalidates, 1 panel element, no draw for the Clock app and no delete.
+
+The face element is 90 × 90: top 34, left 222 (⅔ – ⅓) or 194 (½ – ½). The day line is at 128 and the date line at 150. The work objects are static, because only the UI task draws. The 2 surfaces use approximately 20 KB of the heap during one draw.
 
 ## The fonts
 
