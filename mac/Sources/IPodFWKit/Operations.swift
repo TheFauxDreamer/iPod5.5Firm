@@ -122,7 +122,7 @@ public struct OperationResult {
     public static let firmwareUnreadable = "firmware-unreadable"
     /// The iPod is not an iPod Video (5G/5.5G), for example an iPod classic.
     public static let unsupportedIPod = "unsupported-ipod"
-    /// The iPod has a Rockbox boot loader in osos. iPodFirm does not support such an iPod: the flash stops.
+    /// osos has a boot loader that is not from Apple (Rockbox). iPodFirm does not support such an iPod: the flash stops.
     public static let rockbox = "rockbox"
     public var ok: Bool
     public var message: String

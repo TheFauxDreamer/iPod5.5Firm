@@ -155,7 +155,7 @@ The app reads the disk size to identify a probable original hard drive. Refer to
 1. It identifies an iPod with a Samsung CPU (iPod classic). Its directory is at the value at 0x104 + 0x1000, because it uses 4096-byte sectors (`FirmwarePartition.samsungImageHeader`). Refer to [re/ipod-classic-6g.md](../re/ipod-classic-6g.md).
 2. It reads the model code in the osos directory entry (`vers >> 8`). The iPod Video has 0xB0.
 
-`Operations.flash` also refuses a flash to an iPod that has a Rockbox boot loader (`FirmwareFlasher.refuseRockbox`). It returns the code `rockbox`, and the app shows the alert "Cannot Flash" before it writes a byte. The test is `FirmwarePartition.hasRockbox`: the entryOffset of osos is not 0. A restore of a backup and the rescue restore continue.
+`Operations.flash` also refuses a flash to an iPod that has a Rockbox boot loader (`FirmwareFlasher.refuseRockbox`). It returns the code `rockbox`, and the app shows the alert "Cannot Flash" before it writes a byte. The test is `FirmwarePartition.hasAddedBootLoader`: the entryOffset of osos is not 0. Rockbox `ipodpatcher` uses the same test to find its boot loader. This value is 0 in the Apple firmware 1.3, in a firmware file from iPodFirm and in the backup of the iPod of the author (measured on 15 November 2026). iPodFirm never changes the value. Thus the check has no effect on an iPod without an added boot loader. The alert tells the user the cause, the reason and the correction. If the boot loader contains the text "rockbox" (`addedBootLoaderIsRockbox`), the alert names Rockbox. If not, the alert names a boot loader that is not from Apple. A restore of a backup and the rescue restore continue.
 
 ## Privileged access
 

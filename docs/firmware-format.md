@@ -38,7 +38,7 @@ The directory has a maximum of 10 entries of 40 bytes. An entry is valid if it s
 | +12 | devOffset | The start of the image, relative to the image base. |
 | +16 | len | The length of the image in bytes. |
 | +20 | addr | The load address in SDRAM. For osos it is 0x10000000. |
-| +24 | entryOffset | The entry point. If it is not 0, iPodFirm uses it as the length of Apple's code, so that an added Rockbox boot loader is not included. `hasRockbox` uses this value: the flash stops if it is not 0. |
+| +24 | entryOffset | The entry point. If it is not 0, iPodFirm uses it as the length of Apple's code, so that an added Rockbox boot loader is not included. `hasAddedBootLoader` uses this value: the flash stops if it is not 0. |
 | +28 | chksum | The checksum of the image. |
 | +32 | vers | The version. Bits 8 and up identify the model, for example 0xB0 = "Video (5G/5.5G)". |
 | +36 | loadAddr | A second load address. |

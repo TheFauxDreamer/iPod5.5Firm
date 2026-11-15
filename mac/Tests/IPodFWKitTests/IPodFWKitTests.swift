@@ -1596,15 +1596,31 @@ final class ThemeTests: XCTestCase {
     func testFlashRefusesRockbox() throws {
         var data = ipodLayout()
         let fw = try FirmwarePartition(data: data)
-        XCTAssertFalse(fw.hasRockbox)
+        XCTAssertFalse(fw.hasAddedBootLoader)
+        XCTAssertFalse(fw.addedBootLoaderIsRockbox)
         XCTAssertNoThrow(try FirmwareFlasher.refuseRockbox(current: fw, reason: "flash"))
         // entryOffset of osos is at +24 in its directory entry.
         let at = fw.dirOffset + (try fw.entry("osos")).index * 40 + 24
-        data.replaceSubrange(at..<at + 4, with: [0x00, 0x60, 0x73, 0x00])
+        let range = try fw.imageRange("osos")
+        let loaderAt = UInt32(range.count - 0x100)
+        data.replaceSubrange(at..<at + 4, with: (0..<4).map { UInt8(truncatingIfNeeded: loaderAt >> (8 * $0)) })
+        // A boot loader that is not from Apple, without the text "rockbox".
+        let other = try FirmwarePartition(data: data)
+        XCTAssertTrue(other.hasAddedBootLoader)
+        XCTAssertFalse(other.addedBootLoaderIsRockbox)
+        XCTAssertThrowsError(try FirmwareFlasher.refuseRockbox(current: other, reason: "flash")) { e in
+            XCTAssertEqual((e as? FirmwareError)?.code, OperationResult.rockbox)
+            XCTAssertTrue(e.localizedDescription.contains("not from Apple"), e.localizedDescription)
+        }
+        // The Rockbox boot loader has the path of its program.
+        let text = Array("/.rockbox/rockbox.ipod".utf8)
+        data.replaceSubrange((range.upperBound - 0x80)..<(range.upperBound - 0x80 + text.count), with: text)
         let current = try FirmwarePartition(data: data)
-        XCTAssertTrue(current.hasRockbox)
+        XCTAssertTrue(current.addedBootLoaderIsRockbox)
         XCTAssertThrowsError(try FirmwareFlasher.refuseRockbox(current: current, reason: "flash")) { e in
             XCTAssertEqual((e as? FirmwareError)?.code, OperationResult.rockbox)
+            XCTAssertTrue(e.localizedDescription.contains("because the iPod has Rockbox"), e.localizedDescription)
+            XCTAssertTrue(e.localizedDescription.contains("can then fail to start"), e.localizedDescription)
         }
         XCTAssertNoThrow(try FirmwareFlasher.refuseRockbox(current: current, reason: "restore"))
     }

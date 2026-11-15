@@ -369,7 +369,7 @@ For the iPod Classic (6th generation and 7th generation), refer to RepriseOS by 
 
 ## Rockbox
 
-iPodFirm does not support an iPod that has Rockbox or a version of Rockbox, for example RockWheel. The app does not flash such an iPod.
+iPodFirm does not support an iPod that has Rockbox or a version of Rockbox, for example RockWheel. The app does not flash such an iPod, and an alert tells you the reason. A flash removes the Rockbox boot loader, and the iPod can then fail to start.
 
 1. Remove the Rockbox boot loader with Rockbox Utility.
 2. Flash the iPod with iPodFirm.

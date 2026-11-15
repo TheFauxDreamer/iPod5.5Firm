@@ -398,10 +398,20 @@ public enum FirmwareFlasher {
     /// removes the boot loader, and the iPod possibly does not start: stop. A restore of a backup
     /// (`reason` "restore") continues, because the owner asked for that state of the iPod.
     public static func refuseRockbox(current: FirmwarePartition, reason: String) throws {
-        guard reason == "flash", current.hasRockbox else { return }
+        guard reason == "flash", current.hasAddedBootLoader else { return }
         AppLog.step("Layout of the iPod:\n\(current.layoutDescription)")
-        throw FirmwareError("The iPod has a Rockbox boot loader. iPodFirm does not support an iPod with Rockbox. Remove the boot loader with Rockbox Utility. Then flash again.",
-                            code: OperationResult.rockbox)
+        throw FirmwareError(rockboxMessage(isRockbox: current.addedBootLoaderIsRockbox), code: OperationResult.rockbox)
+    }
+
+    /// The text of the alert: what the app found, why the flash stops, and what the user must do.
+    static func rockboxMessage(isRockbox: Bool) -> String {
+        let why = "A flash removes this boot loader, and the iPod can then fail to start. Your iPod did not change."
+        if isRockbox {
+            return "iPodFirm did not flash the iPod, because the iPod has Rockbox. iPodFirm does not fully support an iPod with Rockbox. "
+                + why + " Remove Rockbox with Rockbox Utility. Then flash again."
+        }
+        return "iPodFirm did not flash the iPod, because the iPod has a boot loader that is not from Apple, for example Rockbox. iPodFirm does not support it. "
+            + why + " Restore the iPod with Finder. Then flash again."
     }
 
     /// Put the osos and rsrc of a firmware file into the iPod's own layout.

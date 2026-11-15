@@ -220,9 +220,14 @@ def plan_writes(current: bytes, new: bytes, bs: int, protected: tuple[int, int])
 
 def refuse_rockbox(current: FirmwarePartition, restore: bool) -> None:
     """Stop a flash on an iPod with a Rockbox boot loader. A restore of a backup continues."""
-    if not restore and current.has_rockbox():
-        raise FirmwareError("the iPod has a Rockbox boot loader; ipodfw does not support an iPod with Rockbox; "
-                            "remove the boot loader with Rockbox Utility, then flash again")
+    if restore or not current.has_added_boot_loader():
+        return
+    why = "a flash removes this boot loader, and the iPod can then fail to start; the iPod did not change"
+    if current.added_boot_loader_is_rockbox():
+        raise FirmwareError("the iPod has Rockbox, and ipodfw does not fully support an iPod with Rockbox; "
+                            f"{why}; remove Rockbox with Rockbox Utility, then flash again")
+    raise FirmwareError("the iPod has a boot loader that is not from Apple, for example Rockbox; "
+                        f"{why}; restore the iPod with Finder, then flash again")
 
 
 def flash(ipod: IPodDisk, new_bytes: bytes, backup_bytes: bytes, dry_run: bool,
