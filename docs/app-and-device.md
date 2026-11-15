@@ -99,7 +99,7 @@ The Emulator pane shows the iPod at a fixed size (370 × 620 points) in the cent
 
 1. It increases the version and the build number in [mac/version.env](../mac/version.env).
 2. It runs `swift build -c release --arch arm64` with the option `-file-prefix-map <project folder>=.`. The compiler then writes `./mac/Sources/...` in place of the full path of each source file. Thus the build does not change with the location of the project folder.
-3. It makes `iPodFirm.app` with the app, the plist of the old daemon, the emulator files and the patches.
+3. It makes `iPodFirm.app` with the app, the plist of the old daemon, the emulator files, the built-in themes, the Split layout and the patches. It stops with an error if `Themes/Dark Gray.ipodtheme` or `Layouts/Split.ipodtheme` is not in the app.
 4. It runs `strip -S` on the app. This removes the debug map of the linker. The app does not use it.
 5. It writes `Info.plist`. The bundle identifier is `com.thefauxdreamer.ipodfirm`.
 6. It signs the app. It uses the first "Apple Development" or "Developer ID Application" identity, or `CODESIGN_IDENTITY`. It turns on the hardened runtime (`--options runtime`) for the two programs.
@@ -292,7 +292,7 @@ The one exception is `iTunes Library.itl`. The user selects this file for "Impor
 | `Backups/*.bin`, `Backups/*.bin.json` | The firmware partition backups and their metadata. |
 | `Backups/Original (first backup).bin` | The first backup. The app never replaces it. |
 | `Firmware/iPod_25.1.3.ipsw` | The cached Apple firmware. |
-| `Themes/*.ipodtheme` | The themes of the owner (JSON). A file in format 1 holds the old bytes of each change. A file in format 2 holds the hash of the old bytes and no byte of the Apple firmware. The app makes the folder and copies the built-in themes into it at the first start. |
+| `Themes/*.ipodtheme` | The themes of the owner (JSON). A file in format 1 holds the old bytes of each change. A file in format 2 holds the hash of the old bytes and no byte of the Apple firmware. The app makes the folder and copies the built-in themes into it at the first start (`ThemeLibrary.load`). If the copy fails, the app uses the theme from `Contents/Resources/Themes` and records a warning in the log. |
 | `Patches/<name>/` | The patches that the owner installed or made with New Patch…. At the start, the app writes the measured `size` into a `patch.json` that has no size. |
 | `~/Library/Caches/iPodFirm/Staging/flash.bin` | The partition that the app writes to the iPod. |
 | `~/Library/Caches/iPodFirm/Staging/patch-<UUID>/` | A `.ipodpatch` file during the install or the export, or a copy of the code during Check Code. The app deletes it after use. |

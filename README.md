@@ -190,7 +190,7 @@ A folder cannot have the name of a playlist. A folder has no colour square at th
 
 CAUTION: Use only a theme for firmware 1.2.1 and import it with iPodFirm. An old theme that you apply directly can damage the firmware.
 
-The app comes with the theme "Dark Gray". The app copies it to `~/Library/Application Support/iPodFirm/Themes/` at the first start. You can also import your own theme:
+The app comes with the theme "Dark Gray". The app copies it to `~/Library/Application Support/iPodFirm/Themes/` at the first start. If the copy fails, the app uses the theme from the app. The app also comes with the Split layout. You can also import your own theme:
 
 1. Get the theme file and the Apple firmware 1.2.1 (`iPod_25.1.2.1.ipsw`). The [iPod Wizard Themes](https://archive.org/details/b5ad5489368ba5f0fe19935e983faf2b) collection on the Internet Archive has both.
 2. In iPodFirm, select File > Import iPodWizard Theme….

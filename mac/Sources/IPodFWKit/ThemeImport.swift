@@ -442,6 +442,65 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
     }
 }
 
+/// The list of the dark themes: the themes in the folder of the owner and the themes that come
+/// with the app.
+public enum ThemeLibrary {
+    /// A theme and the file that a save writes to. The file is always in the folder of the owner.
+    public struct File: Identifiable {
+        public var id: String { name }
+        public var name: String
+        public var url: URL
+        public var theme: ImportedTheme
+
+        public init(name: String, url: URL, theme: ImportedTheme) {
+            self.name = name
+            self.url = url
+            self.theme = theme
+        }
+    }
+
+    /// The themes in `userDir`, then each theme in `builtInDir` that `userDir` does not have.
+    /// The function copies a built-in theme into `userDir`, so the owner can change it like an
+    /// imported theme. If the copy fails, the theme comes from `builtInDir`. Its `url` stays in
+    /// `userDir`, thus a save never writes into the app.
+    public static func load(userDir: URL, builtInDir: URL?) -> [File] {
+        let fm = FileManager.default
+        func themeFiles(_ dir: URL) -> [URL] {
+            ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+                .filter { $0.pathExtension == "ipodtheme" }
+        }
+        var out = themeFiles(userDir).compactMap { url in
+            (try? ImportedTheme.load(url)).map { File(name: $0.name, url: url, theme: $0) }
+        }
+        for url in builtInDir.map(themeFiles) ?? [] {
+            guard let theme = try? ImportedTheme.load(url) else {
+                AppLog.error("The built-in theme \(url.lastPathComponent) does not load.")
+                continue
+            }
+            if out.contains(where: { $0.name == theme.name }) { continue }
+            let dest = userDir.appendingPathComponent(url.lastPathComponent)
+            if !fm.fileExists(atPath: dest.path) {
+                do {
+                    // At the first start, the folder is not there. Without it, the copy fails (issue 1).
+                    try fm.createDirectory(at: userDir, withIntermediateDirectories: true)
+                    try fm.copyItem(at: url, to: dest)
+                } catch {
+                    AppLog.warning("The copy of the built-in theme \(theme.name) failed. The app uses the theme from the app. \(AppLog.describe(error))")
+                }
+            }
+            if let copied = try? ImportedTheme.load(dest) {
+                out.append(File(name: copied.name, url: dest, theme: copied))
+            } else {
+                if fm.fileExists(atPath: dest.path) {
+                    AppLog.warning("The file \(dest.lastPathComponent) in the folder Themes does not load. The app uses the theme from the app.")
+                }
+                out.append(File(name: theme.name, url: dest, theme: theme))
+            }
+        }
+        return out.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+}
+
 public enum ThemeImport {
     public static let format = 1
     /// Format 2 stores, for each change, the SHA-256 of the old bytes in place of

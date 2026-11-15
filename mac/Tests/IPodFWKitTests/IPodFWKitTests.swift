@@ -3363,6 +3363,56 @@ final class StrippedThemeTests: XCTestCase {
         XCTAssertTrue(text.contains("old_sha256"))
     }
 
+    /// The folder `themes` of the repository. The build copies it into the app.
+    private static var builtInThemes: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("themes")
+    }
+
+    /// A fresh install: the folder of the owner is not there. The list has Dark Gray, and the file is a copy.
+    func testBuiltInThemeCopiesAtFirstStart() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let user = home.appendingPathComponent("Themes")
+        let list = ThemeLibrary.load(userDir: user, builtInDir: Self.builtInThemes)
+        XCTAssertEqual(list.map(\.name), ["Dark Gray"])
+        XCTAssertEqual(list[0].url, user.appendingPathComponent("Dark Gray.ipodtheme"))
+        XCTAssertEqual(try Data(contentsOf: list[0].url),
+                       try Data(contentsOf: Self.builtInThemes.appendingPathComponent("Dark Gray.ipodtheme")))
+        // The second start uses the copy.
+        XCTAssertEqual(ThemeLibrary.load(userDir: user, builtInDir: Self.builtInThemes).map(\.name), ["Dark Gray"])
+    }
+
+    /// The app cannot write the folder of the owner. The list has Dark Gray from the app, and a save goes to the folder of the owner.
+    func testBuiltInThemeLoadsIfTheCopyFails() throws {
+        let fm = FileManager.default
+        let home = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: home, withIntermediateDirectories: true)
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: home.path)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: home.path)
+            try? fm.removeItem(at: home)
+        }
+        let user = home.appendingPathComponent("Themes")
+        let list = ThemeLibrary.load(userDir: user, builtInDir: Self.builtInThemes)
+        XCTAssertEqual(list.map(\.name), ["Dark Gray"])
+        XCTAssertFalse(fm.fileExists(atPath: user.path))
+        XCTAssertEqual(list[0].url, user.appendingPathComponent("Dark Gray.ipodtheme"))
+        XCTAssertFalse(list[0].theme.changes.isEmpty)
+    }
+
+    /// The dark theme and the Split layout that come with the app: format 2, for the osos of Apple 1.3.
+    func testBuiltInThemesAgreeWithApple13() throws {
+        let apple13 = "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251"
+        for (path, name) in [("Dark Gray.ipodtheme", "Dark Gray"), ("layouts/Split.ipodtheme", "Split")] {
+            let theme = try ImportedTheme.load(Self.builtInThemes.appendingPathComponent(path))
+            XCTAssertEqual(theme.name, name)
+            XCTAssertEqual(theme.format, ThemeImport.formatStripped)
+            XCTAssertEqual(theme.osos_sha256, apple13)
+            XCTAssertFalse(theme.changes.isEmpty)
+        }
+    }
+
     func testStrippedThemeAppliesLikeTheOriginal() throws {
         let stripped = try loadMini()
         var a: [UInt8] = [0x78, 0x78, 0x78, 0x78, 0x4F, 0x4C, 0x44, 0x21]

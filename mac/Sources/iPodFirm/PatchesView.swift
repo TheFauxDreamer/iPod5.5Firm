@@ -776,7 +776,7 @@ struct AppearanceDetail: View {
                 }
                 .frame(maxWidth: 380)
                 .accessibilityLabel("Appearance")
-                .help("Light uses the Apple colours. Dark uses an imported dark theme. Switch on iPod adds a \"Dark Mode\" item to Settings on the iPod. The firmware then starts light.")
+                .help("Light uses the Apple colours. Dark uses the dark theme. Switch on iPod adds a \"Dark Mode\" item to Settings on the iPod. The firmware then starts light.")
             } header: {
                 Text("Appearance")
             }
@@ -815,7 +815,7 @@ struct AppearanceDetail: View {
             }
             Section("Dark Theme") {
                 if model.themes.isEmpty {
-                    Label("Import a dark theme first.", systemImage: "info.circle").foregroundStyle(.secondary)
+                    Label("The app found no dark theme. Import a dark theme.", systemImage: "info.circle").foregroundStyle(.secondary)
                 } else if let current = model.selectedTheme {
                     Picker("Dark theme", selection: Binding(get: { current.name }, set: { model.selectedThemeName = $0 })) {
                         ForEach(model.themes) { Text($0.name).tag($0.name) }

@@ -278,12 +278,7 @@ final class AppModel: ObservableObject {
     }
 
     /// An imported theme in the Themes folder.
-    struct ThemeFile: Identifiable {
-        var id: String { name }
-        var name: String
-        var url: URL
-        var theme: ImportedTheme
-    }
+    typealias ThemeFile = ThemeLibrary.File
 
     struct AlertInfo: Identifiable {
         let id = UUID()
@@ -670,31 +665,9 @@ final class AppModel: ObservableObject {
 
     // MARK: appearance (dark theme)
 
+    /// The themes of the owner and the themes that come with the app (Contents/Resources/Themes).
     static func loadThemes() -> [ThemeFile] {
-        let files = (try? FileManager.default.contentsOfDirectory(at: themesDir, includingPropertiesForKeys: nil)) ?? []
-        var out = files.filter { $0.pathExtension == "ipodtheme" }
-            .compactMap { url in (try? ImportedTheme.load(url)).map { ThemeFile(name: $0.name, url: url, theme: $0) } }
-        // The themes that come with the app (Contents/Resources/Themes). The app
-        // copies a built-in theme into the folder of the owner at the first start,
-        // so the owner can change it like an imported theme.
-        let bundled = Bundle.main.resourceURL.map { $0.appendingPathComponent("Themes") }
-        let builtIn = (try? FileManager.default.contentsOfDirectory(at: bundled!, includingPropertiesForKeys: nil)) ?? []
-        for url in builtIn.filter({ $0.pathExtension == "ipodtheme" }) {
-            guard let theme = try? ImportedTheme.load(url) else { continue }
-            if out.contains(where: { $0.name == theme.name }) { continue }
-            let dest = themesDir.appendingPathComponent(url.lastPathComponent)
-            if !FileManager.default.fileExists(atPath: dest.path) {
-                // At the first start, the folder is not there. Without it, the copy fails (issue 1).
-                try? FileManager.default.createDirectory(at: themesDir, withIntermediateDirectories: true)
-                try? FileManager.default.copyItem(at: url, to: dest)
-                if let copied = try? ImportedTheme.load(dest) {
-                    out.append(ThemeFile(name: copied.name, url: dest, theme: copied))
-                }
-            } else if let copied = try? ImportedTheme.load(dest) {
-                out.append(ThemeFile(name: copied.name, url: dest, theme: copied))
-            }
-        }
-        return out.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        ThemeLibrary.load(userDir: themesDir, builtInDir: Bundle.main.resourceURL?.appendingPathComponent("Themes"))
     }
 
     var selectedTheme: ThemeFile? { themes.first { $0.name == selectedThemeName } ?? themes.first }
