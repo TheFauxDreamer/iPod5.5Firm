@@ -1398,7 +1398,7 @@ Version 1.2 (Split View item, code 1,299 bytes): the Swift build and the Python 
 
 **Research.** [../re/fonts.md](../re/fonts.md). RetailOS opens a font by name (0x242e50) and reads it through a block cache (0x226000).
 
-**Test status.** Swift tests with the Apple file, and `fsck_msdos` on a changed volume (6 November 2026). Not tested in the emulator or on a real iPod.
+**Test status.** Swift tests with the Apple file, and `fsck_msdos` on a changed volume (6 November 2026). The `CJK.ttf` of ipod-cjk-patch passed the import check and a build (15 November 2026). Not tested in the emulator or on a real iPod.
 
 ## Move of rsrc
 

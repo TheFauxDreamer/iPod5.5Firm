@@ -68,6 +68,21 @@ Thus RetailOS reads the glyphs from the file when it needs them. The size of a f
 
 The tests are in `mac/Tests/IPodFWKitTests/ResourceVolumeTests.swift`.
 
+## Test with a font from a different project (15 November 2026)
+
+The project [ipod-cjk-patch](https://github.com/bydash-xyz/ipod-cjk-patch) (commit 5f42055) builds a `CJK.ttf` for firmware 1.3. It adds glyphs to the Apple 18 ppem, 4-bit strike. The build gave the published SHA-256 of its firmware.
+
+`ResourceVolumeTests.testAFontFile` passed with this `CJK.ttf`:
+
+| Item | Value |
+|---|---|
+| Apple `CJK.ttf` | 3,446,748 bytes |
+| New `CJK.ttf` | 3,524,480 bytes |
+| Free bytes in the volume before | 632,832 |
+| Free bytes in the volume after | 555,008 |
+
+`IPodFonts.check` accepted the font, and the rsrc checksum was correct.
+
 ## Open
 
 - Test in the emulator: a changed `CJK.ttf` must show on the screen.
