@@ -394,6 +394,16 @@ public enum FirmwareFlasher {
         }
     }
 
+    /// iPodFirm does not support an iPod with a Rockbox boot loader. A flash replaces osos and thus
+    /// removes the boot loader, and the iPod possibly does not start: stop. A restore of a backup
+    /// (`reason` "restore") continues, because the owner asked for that state of the iPod.
+    public static func refuseRockbox(current: FirmwarePartition, reason: String) throws {
+        guard reason == "flash", current.hasRockbox else { return }
+        AppLog.step("Layout of the iPod:\n\(current.layoutDescription)")
+        throw FirmwareError("The iPod has a Rockbox boot loader. iPodFirm does not support an iPod with Rockbox. Remove the boot loader with Rockbox Utility. Then flash again.",
+                            code: OperationResult.rockbox)
+    }
+
     /// Put the osos and rsrc of a firmware file into the iPod's own layout.
     ///
     /// A firmware file that has a larger osos has rsrc and aupd moved forward (see makeRoom). On the

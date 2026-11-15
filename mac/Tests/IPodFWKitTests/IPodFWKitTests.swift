@@ -1592,6 +1592,23 @@ final class ThemeTests: XCTestCase {
     }
 
     /// The file has a hibe image, the restored iPod has none: the result follows the iPod.
+    /// A flash stops on an iPod with a Rockbox boot loader. A restore of a backup does not stop.
+    func testFlashRefusesRockbox() throws {
+        var data = ipodLayout()
+        let fw = try FirmwarePartition(data: data)
+        XCTAssertFalse(fw.hasRockbox)
+        XCTAssertNoThrow(try FirmwareFlasher.refuseRockbox(current: fw, reason: "flash"))
+        // entryOffset of osos is at +24 in its directory entry.
+        let at = fw.dirOffset + (try fw.entry("osos")).index * 40 + 24
+        data.replaceSubrange(at..<at + 4, with: [0x00, 0x60, 0x73, 0x00])
+        let current = try FirmwarePartition(data: data)
+        XCTAssertTrue(current.hasRockbox)
+        XCTAssertThrowsError(try FirmwareFlasher.refuseRockbox(current: current, reason: "flash")) { e in
+            XCTAssertEqual((e as? FirmwareError)?.code, OperationResult.rockbox)
+        }
+        XCTAssertNoThrow(try FirmwareFlasher.refuseRockbox(current: current, reason: "restore"))
+    }
+
     func testFitLayoutDropsTheFilesHibeWhenTheIPodHasNone() throws {
         let current = try FirmwarePartition(data: restoredLayout())
         let file = try FirmwarePartition(data: ipodLayout())

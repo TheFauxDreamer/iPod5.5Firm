@@ -218,8 +218,19 @@ def plan_writes(current: bytes, new: bytes, bs: int, protected: tuple[int, int])
     return ranges
 
 
-def flash(ipod: IPodDisk, new_bytes: bytes, backup_bytes: bytes, dry_run: bool) -> list[tuple[int, int]]:
-    """Write new_bytes over the firmware partition, touching only changed blocks."""
+def refuse_rockbox(current: FirmwarePartition, restore: bool) -> None:
+    """Stop a flash on an iPod with a Rockbox boot loader. A restore of a backup continues."""
+    if not restore and current.has_rockbox():
+        raise FirmwareError("the iPod has a Rockbox boot loader; ipodfw does not support an iPod with Rockbox; "
+                            "remove the boot loader with Rockbox Utility, then flash again")
+
+
+def flash(ipod: IPodDisk, new_bytes: bytes, backup_bytes: bytes, dry_run: bool,
+          restore: bool = False) -> list[tuple[int, int]]:
+    """Write new_bytes over the firmware partition, touching only changed blocks.
+
+    A flash stops on an iPod with a Rockbox boot loader. A restore (restore=True) continues.
+    """
     with RawDisk(ipod) as disk:
         part_start, part_size = locate_firmware_partition(disk)
         current_bytes = disk.read(part_start, part_size)
@@ -227,6 +238,7 @@ def flash(ipod: IPodDisk, new_bytes: bytes, backup_bytes: bytes, dry_run: bool) 
         raise FirmwareError(f"image ({len(new_bytes)} bytes) is larger than the firmware partition ({part_size})")
 
     current = FirmwarePartition(current_bytes)
+    refuse_rockbox(current, restore)
     new_bytes = fit_layout(new_bytes, current)
     new_bytes = preserve_hibernation(new_bytes, current)
     new = FirmwarePartition(new_bytes)

@@ -367,6 +367,15 @@ To add a model, make a fork of the project. Each model and each firmware version
 
 For the iPod Classic (6th generation and 7th generation), refer to RepriseOS by osos-lab.
 
+## Rockbox
+
+iPodFirm does not support an iPod that has Rockbox or a version of Rockbox, for example RockWheel. The app does not flash such an iPod.
+
+1. Remove the Rockbox boot loader with Rockbox Utility.
+2. Flash the iPod with iPodFirm.
+
+A restore of a backup continues to operate on an iPod with Rockbox.
+
 ## AI disclosure
 
 This project started as a personal project. I used Claude Code for much of the reverse engineering in Ghidra and for solutions when I got stuck on difficult problems. Claude Code also keeps the documents and the code comments up to date with each change and each finding.

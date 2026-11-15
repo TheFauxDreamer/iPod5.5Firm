@@ -122,6 +122,8 @@ public struct OperationResult {
     public static let firmwareUnreadable = "firmware-unreadable"
     /// The iPod is not an iPod Video (5G/5.5G), for example an iPod classic.
     public static let unsupportedIPod = "unsupported-ipod"
+    /// The iPod has a Rockbox boot loader in osos. iPodFirm does not support such an iPod: the flash stops.
+    public static let rockbox = "rockbox"
     public var ok: Bool
     public var message: String
     public var code: String?
@@ -215,6 +217,7 @@ public enum Operations {
             throw FirmwareError("The firmware on the iPod is damaged (\(error.localizedDescription)). Use the rescue restore.",
                                 code: OperationResult.firmwareUnreadable, cause: error)
         }
+        try FirmwareFlasher.refuseRockbox(current: current, reason: reason)
         AppLog.step("Flash (\(reason)): read the new image \(imageURL.lastPathComponent)")
         var newBytes = [UInt8](try Data(contentsOf: imageURL))
         guard newBytes.count <= currentBytes.count else {

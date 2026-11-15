@@ -243,6 +243,13 @@ public final class FirmwarePartition {
         return Int(e.entryOffset != 0 ? e.entryOffset : e.length)
     }
 
+    /// True if osos has a Rockbox boot loader. Rockbox `ipodpatcher` puts its boot loader after
+    /// the Apple code and sets the entryOffset of osos to it. Apple osos has entryOffset 0.
+    public var hasRockbox: Bool {
+        guard let e = try? entry("osos") else { return false }
+        return e.entryOffset != 0
+    }
+
     /// The directory of the partition, for a report: positions, versions and hashes, and no image data.
     /// `hibe` has no hash, because it holds the RAM of the iPod.
     public var layoutDescription: String {

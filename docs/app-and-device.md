@@ -155,6 +155,8 @@ The app reads the disk size to identify a probable original hard drive. Refer to
 1. It identifies an iPod with a Samsung CPU (iPod classic). Its directory is at the value at 0x104 + 0x1000, because it uses 4096-byte sectors (`FirmwarePartition.samsungImageHeader`). Refer to [re/ipod-classic-6g.md](../re/ipod-classic-6g.md).
 2. It reads the model code in the osos directory entry (`vers >> 8`). The iPod Video has 0xB0.
 
+`Operations.flash` also refuses a flash to an iPod that has a Rockbox boot loader (`FirmwareFlasher.refuseRockbox`). It returns the code `rockbox`, and the app shows the alert "Cannot Flash" before it writes a byte. The test is `FirmwarePartition.hasRockbox`: the entryOffset of osos is not 0. A restore of a backup and the rescue restore continue.
+
 ## Privileged access
 
 The raw disk `/dev/rdiskN` has the owner root and the mode 640. No code of iPodFirm runs as root. The app gets an open disk from the Apple program `/usr/libexec/authopen`, and the app does all the work with the user's rights. The measurements are in [re/privilege-analysis.md](../re/privilege-analysis.md).

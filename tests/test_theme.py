@@ -212,6 +212,20 @@ def test_fit_layout_drops_the_files_hibe_when_the_ipod_has_none(partition_bytes)
     device.check_compatible(current, fitted, "new firmware")
 
 
+def test_flash_refuses_rockbox(partition_bytes):
+    data = ipod_layout(partition_bytes)
+    fw = FirmwarePartition(data)
+    assert not fw.has_rockbox()
+    device.refuse_rockbox(fw, restore=False)
+    out = bytearray(data)
+    struct.pack_into("<I", out, fw.dir_offset + fw.entry("osos").index * ENTRY_SIZE + 24, 0x736000)
+    current = FirmwarePartition(bytes(out))
+    assert current.has_rockbox()
+    with pytest.raises(FirmwareError):
+        device.refuse_rockbox(current, restore=False)
+    device.refuse_rockbox(current, restore=True)
+
+
 def test_merge_words_changes_only_agreeing_words():
     base = struct.pack("<4I", 1, 2, 3, 4)
     theme = struct.pack("<4I", 1, 9, 3, 8)
