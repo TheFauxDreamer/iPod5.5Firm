@@ -21,6 +21,7 @@ final class EmulatorSession: ObservableObject {
     }
 
     func start(prepare: @escaping () async throws -> Void) {
+        AppLog.debug("Emulator: start a session")
         stop()
         phase = .preparing
         screen = nil
@@ -49,6 +50,7 @@ final class EmulatorSession: ObservableObject {
         p.standardError = FileHandle.nullDevice
         p.terminationHandler = { [weak self] proc in
             Task { @MainActor in
+                AppLog.debug("Emulator: the headless emulator stopped with the status \(proc.terminationStatus)")
                 guard let self, self.process === proc else { return }
                 self.process = nil
                 self.pollTask?.cancel()
@@ -56,6 +58,7 @@ final class EmulatorSession: ObservableObject {
             }
         }
         try p.run()
+        AppLog.debug("Emulator: start the headless emulator, process \(p.processIdentifier)")
         process = p
         phase = .booting(0)
     }
@@ -108,6 +111,7 @@ final class EmulatorSession: ObservableObject {
     }
 
     func stop() {
+        AppLog.debug("Emulator: stop the session (\(process == nil ? "no process" : "stop the process"))")
         pollTask?.cancel()
         pollTask = nil
         phase = .stopped

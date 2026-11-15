@@ -836,8 +836,10 @@ public enum Patcher {
         p.arguments = ["clang"] + clangFlags + [sources[0].path, "-o", obj.path]
         let err = Pipe()
         p.standardError = err
+        let began = Date()
         try p.run()
         p.waitUntilExit()
+        AppLog.debugProcess(p, since: began)
         guard p.terminationStatus == 0 else {
             let msg = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
             throw PatchError("The compiler failed. Xcode or its command line tools are necessary.\n\(msg)")

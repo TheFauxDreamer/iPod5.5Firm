@@ -107,6 +107,7 @@ extension AppModel {
     /// Use a new state. If the owner did not change a switch since the last flash, restore or read,
     /// the switches, the options and the appearance go to the iPod state.
     func applyIPodState(_ state: IPodPatchState) {
+        AppLog.debug("iPod state: set the switches from the iPod")
         ipodState = state
         ipodReadStatus = nil
         guard !switchesChangedSinceSync else { return }
@@ -115,6 +116,7 @@ extension AppModel {
 
     /// Set the switches, the options and the appearance from the iPod state.
     func matchIPod() {
+        AppLog.debug("Action: match the iPod")
         guard let state = ipodState else { return }
         mirroring = true
         defer { mirroring = false }
@@ -140,6 +142,7 @@ extension AppModel {
     /// Read the patches on the connected iPod. Nothing is written to the iPod. `automatic`: no read, because
     /// a read opens a macOS prompt, and no prompt must open when an iPod connects.
     func readIPodPatches(automatic: Bool) async {
+        AppLog.debug("iPod state: read the patches on the iPod (\(automatic ? "automatic" : "from the button"))")
         guard let ipod = currentIPod, busy == nil else { return }
         guard !automatic else {
             ipodReadStatus = "Click Read iPod to see the patches on the iPod."
@@ -159,6 +162,7 @@ extension AppModel {
 
     /// After a write to the iPod: the state of the image that the app wrote. The switches then show it.
     func recordWrittenImage(_ image: URL, ipod: IPodDisk) {
+        AppLog.debug("iPod state: record the written image \(image.lastPathComponent)")
         guard let p = try? FirmwarePartition(contentsOf: image), let osos = try? p.image("osos") else { return }
         switchesChangedSinceSync = false
         applyIPodState(patchState(osos: osos, ipod: ipod))

@@ -49,8 +49,10 @@ public enum IPSW {
         p.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
         p.currentDirectoryURL = dir
         p.arguments = ["-q", "-X", "-r", output.path, "."]
+        let began = Date()
         try p.run()
         p.waitUntilExit()
+        AppLog.debugProcess(p, since: began)
         guard p.terminationStatus == 0 else { throw FirmwareError("zip failed while writing \(output.lastPathComponent).") }
     }
 }

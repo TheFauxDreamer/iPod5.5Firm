@@ -304,6 +304,15 @@ To do this with no fault, select Help > Save Log… or Help > Report a Problem o
 
 To read the most recent log, select Help > Open Log.
 
+Usually, the log records only the steps and the faults. To record each action of the app, use the verbose log:
+
+1. Select Help > Verbose Log. You can also use Settings > Log > Verbose Log.
+2. Do the operation that has the problem again.
+3. Select Help > Save Log….
+4. Select Help > Verbose Log again to turn it off.
+
+The verbose log also records each program that the app starts, each read and write of the disk and each network request.
+
 ### How the app protects the iPod
 
 - The app makes a backup of the firmware partition before each write or restore. It does not overwrite a backup.

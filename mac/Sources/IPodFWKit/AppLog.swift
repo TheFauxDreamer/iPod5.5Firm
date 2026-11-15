@@ -11,8 +11,21 @@ public protocol LocatedError: Error {
 /// The log of iPodFirm. Each line goes to the file `~/Library/Logs/iPodFirm/iPodFirm.log` and to the
 /// unified log of macOS (Console.app). The log has no home folder path and no user name (`redact`).
 /// The user saves the log with Help > Save Log…, or from the alert of a fault.
+/// With Help > Verbose Log, the log also gets the `debug` lines: each action of the user, each
+/// change of the state, each external program, each open of the disk and each network request.
 public enum AppLog {
-    public enum Level: String { case info = "INFO", warning = "WARN", error = "ERROR" }
+    public enum Level: String { case debug = "DEBUG", info = "INFO", warning = "WARN", error = "ERROR" }
+
+    /// The `UserDefaults` key of the verbose log.
+    public static let verboseKey = "verboseLog"
+    /// True: the log also gets the `debug` lines. Help > Verbose Log and the settings window set it.
+    public static var verbose = UserDefaults.standard.bool(forKey: verboseKey) {
+        didSet {
+            guard verbose != oldValue else { return }
+            UserDefaults.standard.set(verbose, forKey: verboseKey)
+            write(.info, "Verbose log: \(verbose ? "on" : "off")")
+        }
+    }
 
     /// The folder of the log file. nil: no file, only the unified log. Only the app writes the file:
     /// the tests do not. The helper runs as root and sets nil, because it must not write in the home
@@ -54,7 +67,7 @@ public enum AppLog {
                     try fm.moveItem(at: dir, to: aside)
                     logger.warning("The log folder was not usable. Its new name is \(aside.lastPathComponent, privacy: .public)")
                 } catch {
-                    directoryProblem = "The log folder \(redact(dir.path)) is not usable: \(error.localizedDescription)"
+                    directoryProblem = "The log folder \(redact(dir.path, volumes: [])) is not usable: \(error.localizedDescription)"
                     logger.error("\(directoryProblem!, privacy: .public)")
                     return false
                 }
@@ -63,7 +76,7 @@ public enum AppLog {
                 try fm.createDirectory(at: dir, withIntermediateDirectories: true,
                                        attributes: [.posixPermissions: 0o755])
             } catch {
-                directoryProblem = "Cannot make the log folder \(redact(dir.path)): \(error.localizedDescription)"
+                directoryProblem = "Cannot make the log folder \(redact(dir.path, volumes: [])): \(error.localizedDescription)"
                 logger.error("\(directoryProblem!, privacy: .public)")
                 return false
             }
@@ -71,6 +84,18 @@ public enum AppLog {
             return true
         }
     }
+
+    /// Records a detail for the verbose log. If the verbose log is off, the app does not make the text.
+    public static func debug(_ text: @autoclosure () -> String) {
+        if verbose { write(.debug, text()) }
+    }
+    /// Records an external program after its end: the name, the arguments, the exit status and the time.
+    public static func debugProcess(_ process: Process, since start: Date) {
+        debug("Program: \(process.executableURL?.lastPathComponent ?? "?") \((process.arguments ?? []).joined(separator: " "))"
+              + " -> status \(process.terminationStatus), \(milliseconds(since: start)) ms")
+    }
+    /// The time from `start` to now, in milliseconds.
+    public static func milliseconds(since start: Date) -> Int { Int(-start.timeIntervalSinceNow * 1000) }
 
     public static func info(_ text: String) { write(.info, text) }
     public static func warning(_ text: String) { write(.warning, text) }
@@ -99,6 +124,7 @@ public enum AppLog {
     static func write(_ level: Level, _ text: String) {
         let clean = redact(text)
         switch level {
+        case .debug: logger.debug("\(clean, privacy: .public)")
         case .info: logger.info("\(clean, privacy: .public)")
         case .warning: logger.warning("\(clean, privacy: .public)")
         case .error: logger.error("\(clean, privacy: .public)")
@@ -128,13 +154,27 @@ public enum AppLog {
         return f.string(from: Date())
     }
 
-    /// Removes personal data from a text: a home folder path becomes "~", and the short user name
-    /// becomes "<user>".
-    public static func redact(_ text: String, home: String = NSHomeDirectory(), user: String = NSUserName()) -> String {
+    /// The names of the iPod volumes, for example "Alex's iPod". `redact` changes each name to "<volume>".
+    /// The app sets the names after each search for iPods.
+    public static var volumeNames: Set<String> {
+        get { queue.sync { names } }
+        set { queue.sync { names = newValue.filter { $0.count >= 2 } } }
+    }
+    private static var names: Set<String> = []
+
+    /// Removes personal data from a text: a home folder path becomes "~", the short user name
+    /// becomes "<user>", and the name of a volume becomes "<volume>".
+    public static func redact(_ text: String, home: String = NSHomeDirectory(), user: String = NSUserName(),
+                              volumes: Set<String>? = nil) -> String {
         var t = text
+        // The longest name first: a name can contain a shorter name.
+        for name in (volumes ?? volumeNames).sorted(by: { $0.count > $1.count }) {
+            t = t.replacingOccurrences(of: name, with: "<volume>")
+        }
         if home.count > 1 { t = t.replacingOccurrences(of: home, with: "~") }
         // "[s]" keeps the text "/Users/" out of the program. The release check of build-app.sh refuses that text.
         t = t.replacingOccurrences(of: #"/U[s]ers/[^/\s"']+"#, with: "~", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"/Volumes/[^/\n"]+"#, with: "/Volumes/<volume>", options: .regularExpression)
         if user.count >= 3, user != "root" {
             t = t.replacingOccurrences(of: "\\b" + NSRegularExpression.escapedPattern(for: user) + "\\b",
                                        with: "<user>", options: [.regularExpression, .caseInsensitive])

@@ -22,6 +22,7 @@ extension AppModel {
     }
 
     func checkCode(_ patch: PatchInfo) async {
+        AppLog.debug("Action: check the code of the patch \(patch.spec.name)")
         let library = Self.patchLibrary, code = code(for: patch), osos = firmwareOSOS(for: patch)
         let result = try? await work("Checking the code…") { library.check(patch, code, osos: osos) }
         codeChecks[patch.spec.name] = result
@@ -29,6 +30,7 @@ extension AppModel {
 
     /// Check the code. If it has no problems, write it into the patch and increase the version.
     func saveCode(_ patch: PatchInfo) async {
+        AppLog.debug("Action: save the code of the patch \(patch.spec.name)")
         let library = Self.patchLibrary, code = code(for: patch), osos = firmwareOSOS(for: patch)
         do {
             let result = try await work("Checking the code…") { library.check(patch, code, osos: osos) }
@@ -45,6 +47,7 @@ extension AppModel {
     }
 
     func revertCode(_ patch: PatchInfo) {
+        AppLog.debug("Action: revert the code of the patch \(patch.spec.name)")
         codeDrafts[patch.spec.name] = nil
         codeChecks[patch.spec.name] = nil
     }

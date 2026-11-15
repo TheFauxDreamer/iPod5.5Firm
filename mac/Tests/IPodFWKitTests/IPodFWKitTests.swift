@@ -3561,10 +3561,12 @@ final class AppLogTests: XCTestCase {
     var folder: URL!
     var savedDirectory: URL?
     var savedMax = 0
+    var savedVerbose = false
 
     override func setUpWithError() throws {
         savedDirectory = AppLog.directory
         savedMax = AppLog.maxFileSize
+        savedVerbose = AppLog.verbose
         folder = FileManager.default.temporaryDirectory.appendingPathComponent("AppLogTests-\(UUID().uuidString)")
         AppLog.directory = folder
         AppLog.clearSteps()
@@ -3573,6 +3575,7 @@ final class AppLogTests: XCTestCase {
     override func tearDownWithError() throws {
         AppLog.directory = savedDirectory
         AppLog.maxFileSize = savedMax
+        AppLog.verbose = savedVerbose
         AppLog.clearSteps()
         // Remove only the folder that this test made.
         if folder.lastPathComponent.hasPrefix("AppLogTests-") { try? FileManager.default.removeItem(at: folder) }
@@ -3632,6 +3635,48 @@ final class AppLogTests: XCTestCase {
         let t = AppLog.redact("\(users)/alex/Library/x and \(users)/other/y, alex said", home: users + "/alex", user: "alex")
         XCTAssertEqual(t, "~/Library/x and ~/y, <user> said")
         XCTAssertEqual(AppLog.redact("root and app", home: "/var/root", user: "root"), "root and app")
+    }
+
+    /// A volume name can be the name of a person. The log has only "<volume>".
+    func testRedactVolume() {
+        XCTAssertEqual(AppLog.redact("/Volumes/Alex's iPod/iPod_Control and /Volumes/X", home: "/nohome", user: "nobody", volumes: []),
+                       "/Volumes/<volume>/iPod_Control and /Volumes/<volume>")
+        XCTAssertEqual(AppLog.redact("Ejecting Alex's iPod…", home: "/nohome", user: "nobody", volumes: ["Alex's iPod"]),
+                       "Ejecting <volume>…")
+    }
+
+    /// With the verbose log off, a debug line does not go to the file, and the app does not make its text.
+    func testVerboseOffWritesNoDebug() {
+        AppLog.verbose = false
+        var made = false
+        AppLog.debug({ made = true; return "hidden detail" }())
+        AppLog.info("normal line")
+        XCTAssertFalse(made)
+        XCTAssertFalse(AppLog.fullText().contains("hidden detail"))
+        XCTAssertTrue(AppLog.fullText().contains("INFO normal line"))
+    }
+
+    /// With the verbose log on, a debug line goes to the file with the level DEBUG. The change of the setting is in the log.
+    func testVerboseOnWritesDebug() {
+        AppLog.verbose = false
+        AppLog.verbose = true
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: AppLog.verboseKey))
+        AppLog.debug("shown detail")
+        let text = AppLog.fullText()
+        XCTAssertTrue(text.contains("INFO Verbose log: on"), text)
+        XCTAssertTrue(text.contains("DEBUG shown detail"), text)
+    }
+
+    /// The verbose log records an external program: the name, the arguments and the exit status.
+    func testVerboseProcessLine() throws {
+        AppLog.verbose = true
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        p.arguments = ["one"]
+        try p.run()
+        p.waitUntilExit()
+        AppLog.debugProcess(p, since: Date())
+        XCTAssertTrue(AppLog.fullText().contains("DEBUG Program: true one -> status 0"), AppLog.fullText())
     }
 
     /// The steps go to the log and stay in memory, the oldest first, to a maximum of 50.

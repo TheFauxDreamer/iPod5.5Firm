@@ -36,6 +36,7 @@ final class EmulatorManager: ObservableObject {
 
     func install() {
         guard !installing, let script = installScript else { return }
+        AppLog.debug("Emulator: start the installer \(script.lastPathComponent)")
         installing = true
         log = ""
         let p = Process()
@@ -56,6 +57,7 @@ final class EmulatorManager: ObservableObject {
             Task { @MainActor in
                 pipe.fileHandleForReading.readabilityHandler = nil
                 self.installing = false
+                AppLog.debug("Emulator: the installer stopped with the status \(proc.terminationStatus)")
                 self.append(proc.terminationStatus == 0 ? "\n✓ Done.\n" : "\n✗ Failed (exit \(proc.terminationStatus)).\n")
                 self.refresh()
             }
@@ -100,6 +102,7 @@ final class EmulatorManager: ObservableObject {
     }
 
     func prepare(firmware: [UInt8], ososLength: Int, originalIPSW: URL, library: Library) async throws {
+        AppLog.debug("Emulator: prepare the test device, firmware \(firmware.count) bytes, osos \(ososLength) bytes")
         guard toolsReady else { throw FirmwareError("Install the emulator first (Emulator pane).") }
         try await quitEmulator()
         let ipsw = Self.workDir.appendingPathComponent("iPodFirm custom.ipsw")
@@ -150,12 +153,14 @@ final class EmulatorManager: ObservableObject {
         config.arguments = ["--cold"]
         config.environment = ["IPOD_EMULATOR_DATA": Self.profile.path, "IPODFW_RESET_AFTER": Self.resetAfter]
         config.createsNewApplicationInstance = true
+        AppLog.debug("Emulator: open the emulator window")
         try await NSWorkspace.shared.openApplication(at: Self.appURL, configuration: config)
     }
 
     func quitEmulator() async throws {
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: Self.bundleID)
         guard !running.isEmpty else { return }
+        AppLog.debug("Emulator: quit \(running.count) open emulator(s)")
         running.forEach { $0.terminate() }
         for _ in 0..<50 where running.contains(where: { !$0.isTerminated }) {
             try await Task.sleep(nanoseconds: 100_000_000)
@@ -172,8 +177,10 @@ final class EmulatorManager: ObservableObject {
         let err = Pipe()
         p.standardError = err
         p.standardOutput = Pipe()
+        let began = Date()
         try p.run()
         p.waitUntilExit()
+        AppLog.debugProcess(p, since: began)
         guard p.terminationStatus == 0 else {
             let msg = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
             throw FirmwareError("\(tool.lastPathComponent) \(args.first ?? "") failed: \(msg)")

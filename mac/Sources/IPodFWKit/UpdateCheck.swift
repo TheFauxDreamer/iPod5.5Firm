@@ -57,7 +57,9 @@ public enum UpdateCheck {
     public static func fetchLatest() async throws -> Release {
         var request = URLRequest(url: latestURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        AppLog.debug("Network: GET \(latestURL.absoluteString)")
         let (data, response) = try await URLSession.shared.data(for: request)
+        AppLog.debug("Network: HTTP status \((response as? HTTPURLResponse)?.statusCode ?? 0), \(data.count) bytes")
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             throw FirmwareError("GitHub gave the HTTP status \(http.statusCode).")
         }

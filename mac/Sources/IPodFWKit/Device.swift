@@ -55,9 +55,11 @@ func runTool(_ path: String, _ args: [String]) throws -> Data {
     let out = Pipe(), err = Pipe()
     p.standardOutput = out
     p.standardError = err
+    let began = Date()
     try p.run()
     let data = out.fileHandleForReading.readDataToEndOfFile()
     p.waitUntilExit()
+    AppLog.debugProcess(p, since: began)
     guard p.terminationStatus == 0 else {
         let msg = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         throw FirmwareError("\(URL(fileURLWithPath: path).lastPathComponent) \(args.joined(separator: " ")) failed: \(msg)")
@@ -153,6 +155,7 @@ public enum Device {
                 return
             } catch {
                 guard isBusy(error.localizedDescription) else { throw error }
+                AppLog.debug("The iPod is busy: attempt \(attempt) of \(ejectAttempts) to \(action) failed")
                 if attempt < ejectAttempts { Thread.sleep(forTimeInterval: ejectRetryDelay) }
             }
         }
@@ -265,6 +268,7 @@ public struct DiskAccess {
             },
             write: { ipod, start in
                 let slice = try Device.firmwareSlice(ipod, start: start).map { "/dev/r\($0)" }
+                AppLog.debug("Disk: the firmware slice is \(slice ?? "not found")")
                 if let slice, let fd = auth.takeWrite(path: slice) {
                     return RawDisk(descriptor: fd, blockSize: ipod.blockSize, origin: start)
                 }
@@ -284,6 +288,7 @@ public final class RawDisk: BlockReader {
         self.blockSize = blockSize
         origin = 0
         fd = open(path, writable ? O_RDWR : O_RDONLY)
+        AppLog.debug("Disk: open \(path) for a \(writable ? "write" : "read") -> \(fd >= 0 ? "OK" : String(cString: strerror(errno)))")
         guard fd >= 0 else {
             if errno == EPERM {
                 throw FirmwareError("macOS blocked access to \(path). Turn on Full Disk Access for iPodFirm, then try again.")
@@ -306,6 +311,8 @@ public final class RawDisk: BlockReader {
         let end = (offset + length + blockSize - 1) / blockSize * blockSize
         var buf = [UInt8](repeating: 0, count: end - start)
         var pos = 0
+        let began = Date()
+        defer { AppLog.debug("Disk: read \(buf.count) bytes at \(start), \(pos) bytes done, \(AppLog.milliseconds(since: began)) ms") }
         while pos < buf.count {
             let n = min(4 << 20, buf.count - pos)
             let got = buf.withUnsafeMutableBytes { pread(fd, $0.baseAddress! + pos, n, off_t(start + pos - origin)) }
@@ -319,13 +326,17 @@ public final class RawDisk: BlockReader {
         guard offset % blockSize == 0, data.count % blockSize == 0 else { throw FirmwareError("Unaligned raw write.") }
         guard offset >= origin else { throw FirmwareError("A write before the firmware partition; refusing.") }
         let written = data.withUnsafeBytes { pwrite(fd, $0.baseAddress!, data.count, off_t(offset - origin)) }
+        AppLog.debug("Disk: write \(data.count) bytes at \(offset) -> \(written)")
         if written < 0, errno == EPERM {
             throw FirmwareError("macOS blocked the write to the iPod. Turn on Full Disk Access for iPodFirm, then try again.")
         }
         guard written == data.count else { throw FirmwareError("Short write at \(offset): \(String(cString: strerror(errno)))") }
     }
 
-    public func sync() { fsync(fd) }
+    public func sync() {
+        let result = fsync(fd)
+        AppLog.debug("Disk: sync -> \(result)")
+    }
 }
 
 public enum FirmwareFlasher {

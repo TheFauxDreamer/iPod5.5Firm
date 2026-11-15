@@ -33,7 +33,10 @@ public final class AuthOpen: @unchecked Sendable {
         if let kept = keptRead, kept.path == path, now().timeIntervalSince(kept.time) < keepTime,
            Self.canRead(kept.fd, blockSize: blockSize) {
             let copy = dup(kept.fd)
-            if copy >= 0 { return copy }
+            if copy >= 0 {
+                AppLog.debug("authopen: use the kept read descriptor of \(path)")
+                return copy
+            }
         }
         closeRead()
         let fd = try openNow(path, writable: false)
@@ -63,7 +66,11 @@ public final class AuthOpen: @unchecked Sendable {
     public func takeWrite(path: String) -> Int32? {
         lock.lock()
         defer { lock.unlock() }
-        guard let kept = keptWrite, kept.path == path else { return nil }
+        guard let kept = keptWrite, kept.path == path else {
+            AppLog.debug("authopen: no kept write descriptor for \(path)")
+            return nil
+        }
+        AppLog.debug("authopen: use the kept write descriptor of \(path)")
         keptWrite = nil
         return kept.fd
     }
@@ -94,12 +101,18 @@ public final class AuthOpen: @unchecked Sendable {
     }
 
     private func closeRead() {
-        if let kept = keptRead { Darwin.close(kept.fd) }
+        if let kept = keptRead {
+            Darwin.close(kept.fd)
+            AppLog.debug("authopen: close the kept read descriptor of \(kept.path)")
+        }
         keptRead = nil
     }
 
     private func closeWrite() {
-        if let kept = keptWrite { Darwin.close(kept.fd) }
+        if let kept = keptWrite {
+            Darwin.close(kept.fd)
+            AppLog.debug("authopen: close the kept write descriptor of \(kept.path)")
+        }
         keptWrite = nil
     }
 
@@ -124,9 +137,12 @@ public final class AuthOpen: @unchecked Sendable {
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle(fileDescriptor: sockets[1], closeOnDealloc: true)
         process.standardError = problems
+        let began = Date()
         try process.run()
         let received = Self.receiveDescriptor(from: sockets[0], whileOpen: process)
         process.waitUntilExit()
+        AppLog.debugProcess(process, since: began)
+        AppLog.debug("authopen: \(received.fd == nil ? "no descriptor" : "a descriptor") for \(path), \(received.note)")
         if let fd = received.fd { return fd }
         let text = String(decoding: problems.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         // authopen sends two bytes on a fault. The last byte is the errno value.

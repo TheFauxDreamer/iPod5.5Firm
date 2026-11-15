@@ -8,6 +8,12 @@ struct IPodFirmApp: App {
     @StateObject private var model = AppModel()
     @StateObject private var emulator = EmulatorManager()
     @StateObject private var session = EmulatorSession()
+    @AppStorage(AppLog.verboseKey) private var verboseLog = false
+
+    /// Help > Verbose Log. AppLog.verbose writes the key. Thus the menu item and the settings window agree.
+    private var verboseLogBinding: Binding<Bool> {
+        Binding(get: { verboseLog }, set: { AppLog.verbose = $0 })
+    }
 
     var body: some Scene {
         WindowGroup("iPodFirm") {
@@ -89,6 +95,7 @@ struct IPodFirmApp: App {
                 Divider()
                 Button("Open Log") { model.openLog() }
                 Button("Save Log…") { model.saveLog() }
+                Toggle("Verbose Log", isOn: verboseLogBinding)
                 Button("Report a Problem on GitHub…") { model.reportOnGitHub(nil) }
             }
         }
@@ -105,6 +112,7 @@ struct SettingsView: View {
     @AppStorage(ThemeImport.ososMarginKey) private var ososMargin = ThemeImport.OSOSMargin.current.rawValue
     @AppStorage("showPatchSummaries") private var showPatchSummaries = true
     @AppStorage(EQColours.settingKey) private var colourfulEQCurve = true
+    @AppStorage(AppLog.verboseKey) private var verboseLog = false
 
     var body: some View {
         TabView {
@@ -146,6 +154,17 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
+            Form {
+                Section {
+                    // AppLog.verbose writes the key. Thus the menu item and this switch agree.
+                    Toggle("Verbose Log", isOn: Binding(get: { verboseLog }, set: { AppLog.verbose = $0 }))
+                        .help("The log also records each action, each change of a setting, each external program, each read and write of the disk and each network request. Use this setting to find a fault.")
+                } header: {
+                    Text("Log")
+                }
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Log", systemImage: "doc.text.magnifyingglass") }
         }
         .frame(width: 560, height: 380)
     }
@@ -182,6 +201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let info = Bundle.main.infoDictionary ?? [:]
         AppLog.prepareDirectory()
         AppLog.info("Launch: iPodFirm \(info["CFBundleShortVersionString"] as? String ?? "dev") (\(info["CFBundleVersion"] as? String ?? "0")), \(AppLog.systemDescription)")
+        AppLog.info("Verbose log: \(AppLog.verbose ? "on" : "off")")
         NSApp.setActivationPolicy(.regular)
         UpdateNotifier.shared.register()
         OldDaemon.removeIfRegistered()
@@ -190,8 +210,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        model?.confirmQuit() == false ? .terminateCancel : .terminateNow
+        let reply: NSApplication.TerminateReply = model?.confirmQuit() == false ? .terminateCancel : .terminateNow
+        AppLog.debug("Quit: \(reply == .terminateNow ? "the app stops" : "cancelled")")
+        return reply
     }
+
+    func applicationDidBecomeActive(_ notification: Notification) { AppLog.debug("The app is active") }
+    func applicationDidResignActive(_ notification: Notification) { AppLog.debug("The app is not active") }
 }
 
 /// Connects the window to the unsaved work. The close button shows the dot of an edited document, and

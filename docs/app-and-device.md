@@ -32,7 +32,7 @@ The sidebar has two sections. The section "Device" has only the iPod row. The ro
 
 [AppModel.swift](../mac/Sources/iPodFirm/AppModel.swift) holds the state and the actions of all panes.
 
-The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has three tabs. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`). The default is 32 KB (the limit 0x7F8000). The value 16 KB (the limit 0x7FC000) gives more space for patches. The value 64 KB (the limit 0x7F0000) is the value before 9 October 2026. The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default) and "Show Descriptions in the Patch List" (`showPatchSummaries`, On by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`). A build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`). Updates: "Check for a new version at launch" (`checkForUpdates`, On by default). Refer to [The update check](#the-update-check).
+The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has four tabs. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`). The default is 32 KB (the limit 0x7F8000). The value 16 KB (the limit 0x7FC000) gives more space for patches. The value 64 KB (the limit 0x7F0000) is the value before 9 October 2026. The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default) and "Show Descriptions in the Patch List" (`showPatchSummaries`, On by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`). A build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`). Updates: "Check for a new version at launch" (`checkForUpdates`, On by default). Refer to [The update check](#the-update-check). Log: "Verbose Log" (`verboseLog`, Off by default). Refer to [The verbose log](#the-verbose-log).
 
 The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
@@ -41,7 +41,7 @@ The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 | File | Open Firmware… (⌘O), Download Apple Firmware 1.3, Save Firmware (⌘S), Save Firmware As… (⇧⌘S), Export as .ipsw…, Export Pictures & Text…, Import Pictures & Text…, Import iPodWizard Theme…, New Patch…, Install Patch… |
 | iPod | Flash to iPod… (⇧⌘F), Back Up iPod, Eject iPod (⌘E), Run in Emulator (⌘R) |
 | View | Show Sidebar, and a command for each pane: iPod (⌘1), Firmware (⌘2), Pictures (⌘3), Text (⌘4), Patches (⌘5), Games (⌘6), Emulator (⌘7) |
-| Help | iPodFirm Documentation, Show Disclaimer, Thanks…, Open Log, Save Log…, Report a Problem on GitHub… |
+| Help | iPodFirm Documentation, Show Disclaimer, Thanks…, Open Log, Save Log…, Verbose Log, Report a Problem on GitHub… |
 
 While the app downloads the Apple firmware, the busy overlay shows a progress bar and a Cancel button. A flash has no Cancel button. The app menu has Check for Updates…. Save Firmware writes to the file of the last Save As. The first save shows the panel, because the app never overwrites the file that it opened.
 
@@ -74,6 +74,25 @@ The log records these items:
 3. The steps of each operation (`AppLog.step`). Examples are each `work` label, each patch that the build applies, and the read, write and verify of a flash.
 4. The result of each operation on the iPod. On a fault, the log also gets the full error.
 5. Each fault, and each error that the app shows only as a status text.
+6. The state of the verbose log at the launch, and each change of the state.
+
+#### The verbose log
+
+The verbose log adds the level `DEBUG` to the log. Help > Verbose Log and Settings > Log > Verbose Log turn it on and off. The two controls write the same `UserDefaults` key, `verboseLog`. The default is off. The setting stays after a restart of the app.
+
+`AppLog.debug` writes a line only if `AppLog.verbose` is true. When the setting is off, the app does not make the text of the line. Thus the verbose lines use no time. With the setting on, the log also records these items:
+
+1. Each action of the user, for example each menu command, each button of a pane, an import or an export (`Action: …`).
+2. Each change of the pane, the busy text, an alert, the selected iPod, the switch of a patch, a patch option, the appearance, the layout, the dark theme and the version settings.
+3. Each status text of the games, the thumbnails, the playlist folders, the patch actions and the read of the iPod.
+4. Each external program (`AppLog.debugProcess`): the name, the arguments, the exit status and the time in milliseconds. Examples are `diskutil`, `authopen`, `clang`, `zip` and the emulator.
+5. Each open of the disk, each read and write of the disk with the offset and the length, and each `fsync`. Also each use and each close of a kept `authopen` descriptor.
+6. The position and the size of the firmware partition, the write plan of a flash, and each backup file with its SHA-256.
+7. Each network request: the address, the HTTP status and the size of the data.
+8. The emulator: the start, the stop and the exit status of the emulator programs.
+9. The start and the end of a write activity, the state of the app (active or not active), and the quit.
+
+The verbose log fills the 1 MB file faster. A flash writes many lines. Turn the verbose log on before you do the operation that has the problem. Then save the log with Help > Save Log…. The tests `testVerboseOffWritesNoDebug`, `testVerboseOnWritesDebug` and `testVerboseProcessLine` check this behaviour.
 
 The fault report and Save Log… also give the path and the signature of the app, and the state of the app folder (`appFolderReport`). For the parent folder, `iPodFirm`, `Staging` and `Backups`, the state is the owner, the mode, the flags and the ACL state. For the last three, the app also makes and deletes a small test file (`writeTest`). The report also gives the user ID of the app. A failed test with the system error shows the real cause of a write fault.
 
@@ -81,7 +100,7 @@ The fault report and Save Log… also give model data of the iPod. The data come
 
 Each read of the partition records the layout of the iPod (`Operations.layoutReport`). The layout has the name, position, length, version, checksum result and SHA-256 of each image, and the map of the areas with data and the zero areas. `hibe` has no hash. The layout has no image data, so a user can send it. A user must not send a backup: it holds Apple firmware and, in `hibe`, the RAM of the iPod with the music library. The file `.bin.json` of a backup holds the iPod name. After a read, the app writes the layout to its log. On a fault, the steps of the operation hold it. If `makeRoom` finds no area for rsrc, a step gives the size of the largest empty area.
 
-The log has no home folder path and no user name. `AppLog.redact` changes `/Users/<name>` to `~` and the short user name to `<user>`. The log has no serial number and no volume name. Only the app writes the log file. The tests and the operation write only to the unified log.
+The log has no home folder path and no user name. `AppLog.redact` changes `/Users/<name>` to `~` and the short user name to `<user>`. The log has no serial number and no volume name. `AppLog.redact` changes each volume name in `AppLog.volumeNames` to `<volume>`. `AppModel.refreshIPods` adds the volume name of each iPod that it finds. A path `/Volumes/<name>` also becomes `/Volumes/<volume>`. The test `testRedactVolume` checks this behaviour. Only the app writes the log file. The tests and the operation write only to the unified log.
 
 Each error has more data than its message. `FirmwareError` and `PatchError` record the file, the line and the function of the throw. A `FirmwareError` can also have `context` (the steps of the callers, from `adding(_:)`) and `cause` (the full description of the error that caused it). `AppLog.describe` writes all of this data. It also writes the domain, the code and the underlying errors of an `NSError`.
 
@@ -350,6 +369,7 @@ The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not ch
 | `customVersionOn`, `customVersion` | The custom version. |
 | `versionLettersOn` | The patch letters on the About screen. |
 | `checkForUpdates` | Settings > Updates > "Check for a new version at launch". The default is true. |
+| `verboseLog` | Help > Verbose Log and Settings > Log > Verbose Log. True: the log also records the `DEBUG` lines. The default is false. |
 | `skippedUpdateVersion` | The release version that the user skipped with **Skip This Version**. The check at launch shows no notification for this version. iPodFirm > Check for Updates… ignores it. |
 | `ososMargin` | The empty margin below 8 MB: `current` (32 KB, limit 0x7F8000), `compact` (16 KB, limit 0x7FC000) or `previous` (64 KB, limit 0x7F0000). |
 | `emulatorLibrary`, `emulatorMusicFolder`, `emulatorSongCount` | The music library on the emulator drive. |

@@ -25,7 +25,9 @@ enum Pane: String, CaseIterable, Identifiable {
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var section: Pane = .overview
+    @Published var section: Pane = .overview {
+        didSet { if section != oldValue { AppLog.debug("Pane: \(section.rawValue)") } }
+    }
     @Published var editor: FirmwareEditor?
     @Published var fileURL: URL?
     /// The file of the last Save As. Save writes to this file.
@@ -39,22 +41,30 @@ final class AppModel: ObservableObject {
     /// app, so the app asks only one time.
     var discardConfirmed = false
     @Published var revision = 0
-    @Published var busy: String?
+    @Published var busy: String? {
+        didSet { if busy != oldValue { AppLog.debug("Busy: \(busy ?? "complete")") } }
+    }
     /// The fraction of the firmware download that is complete.
     @Published var downloadProgress: Double?
     /// The firmware download. The busy overlay can cancel it.
     @Published var downloadTask: Task<(URL, URLResponse), Error>?
-    @Published var alert: AlertInfo?
+    @Published var alert: AlertInfo? {
+        didSet { if let a = alert, a.id != oldValue?.id { AppLog.debug("Alert: \(a.title)\n\(a.message)") } }
+    }
     /// A `.ipodeq` file that waits for the decision of the user.
     @Published var pendingEQ: SharedEQ?
     @Published var ipods: [IPodDisk] = []
-    @Published var selectedIPod: String?
+    @Published var selectedIPod: String? {
+        didSet { if selectedIPod != oldValue { AppLog.debug("iPod: the selected disk is \(selectedIPod ?? "none")") } }
+    }
     /// iPods for which an operation gave OperationResult.unsupportedIPod (for example an iPod classic).
     @Published var unsupportedIPods: Set<IPodDisk> = []
     /// The name of the connected iPod that iTunes set. Nil if the iPod has no music database.
     @Published var ipodLibraryName: String?
     @Published var backups: [BackupInfo] = []
-    @Published var flashPlan: FlashPlan?
+    @Published var flashPlan: FlashPlan? {
+        didSet { if let f = flashPlan, f.id != oldValue?.id { AppLog.debug("Flash: show the plan for the \(f.reason), \(f.result.message)") } }
+    }
     /// Not nil during a write to the iPod.
     private var writeActivity: NSObjectProtocol?
     @Published var patches: [PatchInfo] = PatchSpec.visible(AppModel.patchLibrary.list(),
@@ -70,11 +80,16 @@ final class AppModel: ObservableObject {
     @Published var showTestPatches = UserDefaults.standard.bool(forKey: "showTestPatches") {
         didSet {
             UserDefaults.standard.set(showTestPatches, forKey: "showTestPatches")
+            AppLog.debug("Setting: test patches \(showTestPatches ? "on" : "off")")
             reloadPatches()
         }
     }
     @Published var enabledPatches: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "enabledPatches") ?? []) {
-        didSet { UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches"); switchesChanged(oldValue != enabledPatches) }
+        didSet {
+            UserDefaults.standard.set(Array(enabledPatches), forKey: "enabledPatches")
+            if oldValue != enabledPatches { AppLog.debug("Patches that are on: \(enabledPatches.sorted().joined(separator: ", "))") }
+            switchesChanged(oldValue != enabledPatches)
+        }
     }
     /// The selected choice of each patch option: patch name -> option id -> value (see PatchSpec.Option).
     /// The EQs of the patch custom-eq. Keep this before `patchOptions`: the first load moves the
@@ -111,10 +126,18 @@ final class AppModel: ObservableObject {
 
     @Published var patchOptions: [String: [String: Int]] =
         (UserDefaults.standard.dictionary(forKey: "patchOptions") as? [String: [String: Int]]) ?? [:] {
-        didSet { UserDefaults.standard.set(patchOptions, forKey: "patchOptions"); switchesChanged(oldValue != patchOptions) }
+        didSet {
+            UserDefaults.standard.set(patchOptions, forKey: "patchOptions")
+            if oldValue != patchOptions { AppLog.debug("Patch options: \(patchOptions)") }
+            switchesChanged(oldValue != patchOptions)
+        }
     }
     @Published var appearance: Appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .light {
-        didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance"); switchesChanged(oldValue != appearance) }
+        didSet {
+            UserDefaults.standard.set(appearance.rawValue, forKey: "appearance")
+            if oldValue != appearance { AppLog.debug("Appearance: \(appearance.rawValue)") }
+            switchesChanged(oldValue != appearance)
+        }
     }
     /// The folder of the games that the user chooses. The folder holds the games, or the
     /// folder `iPod_Control` of an iPod.
@@ -124,7 +147,9 @@ final class AppModel: ObservableObject {
     /// The GUID of each game that the user selected. Empty: the user selects no game.
     @Published var selectedGameFolders: Set<String> = []
     /// The state of the last copy of the games.
-    @Published var gameInstallStatus = ""
+    @Published var gameInstallStatus = "" {
+        didSet { if gameInstallStatus != oldValue { AppLog.debug("Games: \(gameInstallStatus)") } }
+    }
     /// The owner's key file IC-Info.sidb, or nil. The install copies it with the games.
     @Published var gameKeyFile: URL?
     /// The GUID of each game in the folder games_RO of the connected iPod.
@@ -134,11 +159,14 @@ final class AppModel: ObservableObject {
     /// True when the confirmation sheet of the removal is open.
     @Published var showRemoveGamesSheet = false
     /// The state of the last removal of the games.
-    @Published var gameRemoveStatus = ""
+    @Published var gameRemoveStatus = "" {
+        didSet { if gameRemoveStatus != oldValue { AppLog.debug("Games: \(gameRemoveStatus)") } }
+    }
     /// The layout of the main menu.
     @Published var layout: Layout = Layout(rawValue: UserDefaults.standard.string(forKey: "layout") ?? "") ?? .stock {
         didSet {
             UserDefaults.standard.set(layout.rawValue, forKey: "layout")
+            if oldValue != layout { AppLog.debug("Layout: \(layout.rawValue)") }
             switchesChanged(oldValue != layout)
             if !oldValue.hasSplit && layout.hasSplit && !mirroring { turnOnSplitPatch() }
         }
@@ -148,6 +176,7 @@ final class AppModel: ObservableObject {
     @Published var splitText: SplitText = SplitText(rawValue: UserDefaults.standard.string(forKey: "splitText") ?? "") ?? .standard {
         didSet {
             UserDefaults.standard.set(splitText.rawValue, forKey: "splitText")
+            if oldValue != splitText { AppLog.debug("Split panel text: \(splitText.rawValue)") }
             switchesChanged(oldValue != splitText)
         }
     }
@@ -156,6 +185,7 @@ final class AppModel: ObservableObject {
     @Published var splitWidth: SplitWidth = SplitWidth(rawValue: UserDefaults.standard.string(forKey: "splitWidth") ?? "") ?? .twoThirds {
         didSet {
             UserDefaults.standard.set(splitWidth.rawValue, forKey: "splitWidth")
+            if oldValue != splitWidth { AppLog.debug("Split width: \(splitWidth.rawValue)") }
             switchesChanged(oldValue != splitWidth)
         }
     }
@@ -168,28 +198,46 @@ final class AppModel: ObservableObject {
     /// True while the app sets the switches from the iPod: this is not a change by the owner.
     var mirroring = false
     private func switchesChanged(_ changed: Bool) {
-        if changed && !mirroring && !switchesChangedSinceSync { switchesChangedSinceSync = true }
+        if changed && !mirroring && !switchesChangedSinceSync {
+            AppLog.debug("The switches are now different from the iPod")
+            switchesChangedSinceSync = true
+        }
     }
     /// The patches on the connected iPod (nil: not read).
     @Published var ipodState: IPodPatchState?
     /// The result of the last read of the iPod, for the Patches pane and the iPod pane.
-    @Published var ipodReadStatus: String?
+    @Published var ipodReadStatus: String? {
+        didSet { if ipodReadStatus != oldValue { AppLog.debug("iPod read status: \(ipodReadStatus ?? "none")") } }
+    }
     @Published var themes: [ThemeFile] = AppModel.loadThemes()
     /// The custom fonts of the app: the size of each font that is not the Apple font (FontsModel.swift).
     @Published var customFontSizes: [String: Int] = AppModel.customFontSizes()
     /// The question before a flash that would replace custom fonts on the iPod.
     @Published var fontQuestion: FontQuestion?
     @Published var selectedThemeName: String? = UserDefaults.standard.string(forKey: "darkTheme") {
-        didSet { UserDefaults.standard.set(selectedThemeName, forKey: "darkTheme"); switchesChanged(oldValue != selectedThemeName) }
+        didSet {
+            UserDefaults.standard.set(selectedThemeName, forKey: "darkTheme")
+            if oldValue != selectedThemeName { AppLog.debug("Dark theme: \(selectedThemeName ?? "none")") }
+            switchesChanged(oldValue != selectedThemeName)
+        }
     }
     @Published var customVersionOn = UserDefaults.standard.bool(forKey: "customVersionOn") {
-        didSet { UserDefaults.standard.set(customVersionOn, forKey: "customVersionOn") }
+        didSet {
+            UserDefaults.standard.set(customVersionOn, forKey: "customVersionOn")
+            if oldValue != customVersionOn { AppLog.debug("Custom version: \(customVersionOn ? "on" : "off")") }
+        }
     }
     @Published var customVersion = UserDefaults.standard.string(forKey: "customVersion") ?? "1.3.1" {
-        didSet { UserDefaults.standard.set(customVersion, forKey: "customVersion") }
+        didSet {
+            UserDefaults.standard.set(customVersion, forKey: "customVersion")
+            if oldValue != customVersion { AppLog.debug("Custom version text: \(customVersion)") }
+        }
     }
     @Published var versionLettersOn = UserDefaults.standard.bool(forKey: "versionLettersOn") {
-        didSet { UserDefaults.standard.set(versionLettersOn, forKey: "versionLettersOn") }
+        didSet {
+            UserDefaults.standard.set(versionLettersOn, forKey: "versionLettersOn")
+            if oldValue != versionLettersOn { AppLog.debug("Version letters: \(versionLettersOn ? "on" : "off")") }
+        }
     }
     @Published var themeReport: ImportedTheme?
     /// A patch that the owner opened, before the install (the install sheet shows it).
@@ -201,16 +249,24 @@ final class AppModel: ObservableObject {
     /// The result of the last Check Code, by patch name.
     @Published var codeChecks: [String: PatchCodeCheck] = [:]
     /// The result of the last action of each patch (patch.json "ui"), by patch name.
-    @Published var patchActionStatus: [String: String] = [:]
+    @Published var patchActionStatus: [String: String] = [:] {
+        didSet { if patchActionStatus != oldValue { AppLog.debug("Patch action status: \(patchActionStatus)") } }
+    }
     /// The state of the switches of the patches (patch.json "ui"), by path on the iPod.
     @Published var patchToggleStates: [String: Bool] = [:]
     /// The selected row in the Patches pane: "appearance", "version" or the name of a patch.
-    @Published var patchSelection: String? = "appearance"
+    @Published var patchSelection: String? = "appearance" {
+        didSet { if patchSelection != oldValue { AppLog.debug("Patches pane: select \(patchSelection ?? "none")") } }
+    }
     /// The Pictures pane shows the pictures of the selected dark theme.
-    @Published var picturesDark = false
+    @Published var picturesDark = false {
+        didSet { if picturesDark != oldValue { AppLog.debug("Pictures pane: show the \(picturesDark ? "dark" : "light") pictures") } }
+    }
     /// Increases when the app writes a theme file (an edit of a dark picture).
     @Published var themeRevision = 0
-    @Published var thumbnailStatus: String?
+    @Published var thumbnailStatus: String? {
+        didSet { if thumbnailStatus != oldValue { AppLog.debug("Thumbnails: \(thumbnailStatus ?? "none")") } }
+    }
     /// The decoded USB log of the probe (nil: not read).
     @Published var usbProbeLog: [USBProbeLog.Entry]?
     @Published var batteryLog: String?
@@ -231,7 +287,9 @@ final class AppModel: ObservableObject {
     /// The folders in the editor, and the folders in the file on the iPod.
     @Published var playlistFolders = PlaylistFolders()
     @Published var savedPlaylistFolders = PlaylistFolders()
-    @Published var playlistFoldersStatus: String?
+    @Published var playlistFoldersStatus: String? {
+        didSet { if playlistFoldersStatus != oldValue { AppLog.debug("Playlist folders: \(playlistFoldersStatus ?? "none")") } }
+    }
     /// Settings > Updates: ask GitHub for a newer release at each launch.
     @AppStorage("checkForUpdates") var checkForUpdates = true
     /// The release that the user skipped with "Skip This Version". The launch check ignores it.
@@ -412,6 +470,7 @@ final class AppModel: ObservableObject {
 
     /// Help > Open Log: opens the most recent log in the default app. If no app opens it, Finder shows it.
     func openLog() {
+        AppLog.debug("Action: open the log")
         AppLog.prepareDirectory()
         guard let url = AppLog.fileURL, FileManager.default.fileExists(atPath: url.path) else {
             alert = AlertInfo(title: "No log found", message: AppLog.directoryProblem
@@ -429,6 +488,7 @@ final class AppModel: ObservableObject {
         s.allowedContentTypes = [.plainText]
         s.message = "Save the log of iPodFirm as a text file. Then attach the file to a report."
         guard s.runModal() == .OK, let url = s.url else { return nil }
+        AppLog.debug("Action: save the log as \(url.lastPathComponent)")
         let text = diagnosticSnapshot() + "\n\n" + AppLog.fullText()
         do {
             try text.write(to: url, atomically: true, encoding: .utf8)
@@ -444,6 +504,7 @@ final class AppModel: ObservableObject {
     /// Report on GitHub… in the alert of a fault, and Help > Report a Problem on GitHub…. Saves the
     /// log, then opens a new issue in the browser. The user drags the file into the issue.
     func reportOnGitHub(_ fault: AlertInfo?) {
+        AppLog.debug("Action: report a problem on GitHub")
         let file = saveLog()
         NSWorkspace.shared.open(AppLog.issueURL(title: fault?.title ?? "Problem report", message: fault?.message ?? "",
                                                 details: issueSummary(fault), fileName: file?.lastPathComponent))
@@ -508,11 +569,13 @@ final class AppModel: ObservableObject {
 
     /// The app does the write itself. It must not quit, and macOS must not stop it or sleep, during a write.
     private func beginWrite() {
+        AppLog.debug("Write activity: start (no sleep, no automatic quit)")
         writeActivity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled, .suddenTerminationDisabled, .automaticTerminationDisabled],
                                                               reason: "Writing the firmware of the iPod")
     }
 
     private func endWrite() {
+        AppLog.debug("Write activity: end")
         if let writeActivity { ProcessInfo.processInfo.endActivity(writeActivity) }
         writeActivity = nil
     }
@@ -552,6 +615,7 @@ final class AppModel: ObservableObject {
         }
         guard hasUnsavedWork, !discardConfirmed else { return true }
         discardConfirmed = askDiscard("iPodFirm has changes that you did not save, apply, flash or write to the iPod.")
+        AppLog.debug("Quit: the user \(discardConfirmed ? "discards" : "keeps") the unsaved changes")
         return discardConfirmed
     }
 
@@ -567,6 +631,7 @@ final class AppModel: ObservableObject {
 
     /// `stay`: keep the current pane. The user opened the firmware from a pane to continue the work there.
     func open(_ url: URL, fromBackup: Bool = false, stay: Bool = false) async {
+        AppLog.debug("Action: open the file \(url.lastPathComponent)\(fromBackup ? " from a backup" : "")")
         guard confirmDiscard() else { return }
         do {
             let isIPSW = url.pathExtension.lowercased() == "ipsw"
@@ -576,6 +641,7 @@ final class AppModel: ObservableObject {
             }
             editor = ed
             fileURL = url
+            AppLog.debug("Opened \(url.lastPathComponent): \(ed.partition.data.count) bytes")
             if isIPSW { sourceIPSW = url }
             openedFromBackup = fromBackup
             saveURL = nil
@@ -588,6 +654,7 @@ final class AppModel: ObservableObject {
     }
 
     func openPanel(stay: Bool = false) {
+        AppLog.debug("Action: show the panel Open")
         let p = NSOpenPanel()
         p.allowedContentTypes = ["ipsw", "bin"].compactMap { UTType(filenameExtension: $0) }
         p.message = "Choose an Apple .ipsw, a firmware .bin, or an iPod backup"
@@ -598,10 +665,12 @@ final class AppModel: ObservableObject {
     /// Writes to the file of the last Save As. The first save shows the panel, because the app never
     /// overwrites the file that it opened.
     func save() {
+        AppLog.debug("Action: Save")
         if let saveURL { write(to: saveURL) } else { saveAs() }
     }
 
     func saveAs() {
+        AppLog.debug("Action: Save As")
         guard editor != nil else { return }
         let p = NSSavePanel()
         p.nameFieldStringValue = "custom-firmware.bin"
@@ -617,7 +686,9 @@ final class AppModel: ObservableObject {
     private func write(to url: URL) {
         guard let editor else { return }
         do {
-            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion, list: activeList)).write(to: url, options: .atomic)
+            let image = try Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion, list: activeList)
+            try Data(image).write(to: url, options: .atomic)
+            AppLog.debug("Saved the firmware image \(url.lastPathComponent): \(image.count) bytes")
             isDirty = false
             saveURL = url
             fileURL = url
@@ -632,6 +703,7 @@ final class AppModel: ObservableObject {
     }
 
     func downloadAppleFirmware(stay: Bool = false) async {
+        AppLog.debug("Action: get the Apple firmware")
         do { await open(try await ensureAppleIPSW(), stay: stay) } catch { fail("Download Failed", error) }
     }
 
@@ -642,7 +714,10 @@ final class AppModel: ObservableObject {
     /// Apple's 1.3 .ipsw: the one this firmware came from, else a verified cached download.
     func ensureAppleIPSW() async throws -> URL {
         // Only Apple's genuine file will do: an .ipsw opened earlier may itself be a custom export.
-        if let sourceIPSW, Self.sha256(of: sourceIPSW) == Self.appleFirmwareSHA256 { return sourceIPSW }
+        if let sourceIPSW, Self.sha256(of: sourceIPSW) == Self.appleFirmwareSHA256 {
+            AppLog.debug("Apple firmware: use the open file \(sourceIPSW.lastPathComponent)")
+            return sourceIPSW
+        }
         let dest = Self.cachedAppleIPSW
         if FileManager.default.fileExists(atPath: dest.path), Self.sha256(of: dest) != Self.appleFirmwareSHA256 {
             try? FileManager.default.removeItem(at: dest)
@@ -654,6 +729,7 @@ final class AppModel: ObservableObject {
                 let watcher = DownloadWatcher { [weak self] fraction in
                     Task { @MainActor in if self?.downloadTask != nil { self?.downloadProgress = fraction } }
                 }
+                AppLog.debug("Network: download \(IPSW.videoFirmware13.absoluteString)")
                 let task = Task { try await URLSession.shared.download(from: IPSW.videoFirmware13, delegate: watcher) }
                 downloadTask = task
                 downloadProgress = 0
@@ -661,9 +737,12 @@ final class AppModel: ObservableObject {
                 let (tmp, _) = try await task.value
                 let data = try Data(contentsOf: tmp)
                 let sha = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+                AppLog.debug("Network: the download has \(data.count) bytes, SHA-256 \(sha)")
                 guard sha == Self.appleFirmwareSHA256 else { throw FirmwareError("The download did not match Apple's published file (SHA-256 mismatch).") }
                 try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try data.write(to: dest)
+            } else {
+                AppLog.debug("Apple firmware: use the saved download")
             }
             return dest
         }
@@ -770,6 +849,7 @@ final class AppModel: ObservableObject {
     /// view must not do it. The old value stays visible until the new value is ready. The result stays
     /// on the Mac for each firmware, theme file and layout, and a new version of the app calculates again.
     func refreshSwitchOnIPodSize() async {
+        AppLog.debug("Patches: measure the size of Switch on iPod")
         measuringSwitchSize = false
         guard let key = switchSizeKey, let editor, let file = selectedTheme, let patch = Self.darkModePatch else {
             switchSizeDone = nil
@@ -832,6 +912,7 @@ final class AppModel: ObservableObject {
 
     /// Put a picture into the selected dark theme. The light pictures do not change.
     func replaceDarkPicture(_ item: PictureItem, rgba: [UInt8]) throws {
+        AppLog.debug("Action: replace the dark picture \(item.resourceID)")
         guard let editor, let file = selectedTheme, let dark = darkPictures else { return }
         var osos = dark.osos
         guard try item.picture.encode(&osos, rgba: rgba) else { return }
@@ -844,6 +925,7 @@ final class AppModel: ObservableObject {
 
     /// Use the picture of the imported theme again.
     func useThemePicture(_ item: PictureItem) {
+        AppLog.debug("Action: use the theme picture \(item.resourceID)")
         guard let file = selectedTheme else { return }
         var theme = file.theme
         theme.removeEdit(offset: item.picture.dataPos)
@@ -867,6 +949,7 @@ final class AppModel: ObservableObject {
     /// Import an iPodWizard theme: the theme file, then the Apple firmware that it came from.
     /// The target is Apple's firmware 1.3, the version of the patches.
     func importTheme() {
+        AppLog.debug("Action: import a theme")
         guard let themeURL = chooseFile("Choose the iPodWizard theme (a firmware file, for example \"Dark Gray (04_12_20)\")"),
               let baseURL = chooseFile("Choose the Apple firmware that the theme came from (for example iPod_25.1.2.1.ipsw)") else { return }
         Task {
@@ -894,6 +977,7 @@ final class AppModel: ObservableObject {
     }
 
     func deleteTheme(_ t: ThemeFile) {
+        AppLog.debug("Action: delete the theme \(t.name)")
         try? FileManager.default.removeItem(at: t.url)
         themes = Self.loadThemes()
         if themes.isEmpty, appearance != .light { appearance = .light }
@@ -908,7 +992,13 @@ final class AppModel: ObservableObject {
     /// At the launch (`manual` false), an error gives no alert, and a skipped version gives no notification.
     /// iPodFirm > Check for Updates… (`manual` true) shows each result.
     func checkForUpdate(manual: Bool) async {
-        if !manual { guard checkForUpdates, Disclaimer.accepted else { return } }
+        AppLog.debug("Update check: start (\(manual ? "from the menu" : "at the launch"))")
+        if !manual {
+            guard checkForUpdates, Disclaimer.accepted else {
+                AppLog.debug("Update check: off, or the disclaimer is not accepted")
+                return
+            }
+        }
         let release: UpdateCheck.Release
         do {
             release = try await UpdateCheck.fetchLatest()
@@ -916,6 +1006,7 @@ final class AppModel: ObservableObject {
             if manual { fail("Cannot Check for Updates", error) }
             return
         }
+        AppLog.debug("Update check: GitHub has \(release.version), this app is \(shortVersion)")
         guard UpdateCheck.isNewer(release.version, than: shortVersion) else {
             if manual {
                 alert = AlertInfo(title: "iPodFirm Is Up to Date",
@@ -931,6 +1022,7 @@ final class AppModel: ObservableObject {
 
     /// Record the size of each user patch that an earlier version installed without a size. One time at the start.
     func recordMissingPatchSizes() async {
+        AppLog.debug("Patches: record the missing sizes")
         let library = Self.patchLibrary
         let changed = await Task.detached { library.recordMissingSizes() }.value
         if !changed.isEmpty { reloadPatches() }
@@ -938,6 +1030,7 @@ final class AppModel: ObservableObject {
 
     func reloadPatches() {
         patches = PatchSpec.visible(Self.patchLibrary.list(), showTests: showTestPatches)
+        AppLog.debug("Patches: the list has \(patches.count) patch(es)")
         if let s = patchSelection, s != "appearance", s != "version", !patches.contains(where: { $0.spec.name == s }) {
             patchSelection = "appearance"
         }
@@ -959,6 +1052,7 @@ final class AppModel: ObservableObject {
     /// on the patches that it needs (`needs`), and a patch that is turned off turns off the patches
     /// that need it.
     func setPatch(_ patch: PatchInfo, on: Bool) {
+        AppLog.debug("Patch \(patch.spec.name): set \(on ? "on" : "off")")
         guard on else {
             var off = [patch.spec.name]
             while let name = off.popLast() {
@@ -993,6 +1087,7 @@ final class AppModel: ObservableObject {
 
     /// Examine a .ipodpatch file or a patch folder, then show the install sheet.
     func installPatch(from url: URL) async {
+        AppLog.debug("Action: open the patch \(url.lastPathComponent)")
         section = .patches
         let library = Self.patchLibrary, existing = patches
         do {
@@ -1001,6 +1096,7 @@ final class AppModel: ObservableObject {
     }
 
     func choosePatchToInstall() {
+        AppLog.debug("Action: choose a patch file")
         let p = NSOpenPanel()
         p.canChooseDirectories = true
         p.allowedContentTypes = [UTType(filenameExtension: PatchLibrary.fileExtension) ?? .zip, .folder]
@@ -1009,6 +1105,7 @@ final class AppModel: ObservableObject {
     }
 
     func confirmInstall(_ c: PatchCandidate) {
+        AppLog.debug("Action: install the patch \(c.spec?.name ?? c.folder.lastPathComponent)")
         pendingInstall = nil
         do {
             try Self.patchLibrary.install(c)
@@ -1024,6 +1121,7 @@ final class AppModel: ObservableObject {
     }
 
     func cancelInstall(_ c: PatchCandidate) {
+        AppLog.debug("Action: cancel the install of the patch \(c.spec?.name ?? c.folder.lastPathComponent)")
         pendingInstall = nil
         if let staging = c.staging { Self.patchLibrary.cleanStaging(staging) }
     }
@@ -1031,11 +1129,13 @@ final class AppModel: ObservableObject {
     // MARK: New Patch, Edit Patch
 
     func newPatch() {
+        AppLog.debug("Action: New Patch")
         section = .patches
         patchEditor = PatchEditorState(draft: PatchDraft(), patch: nil)
     }
 
     func editPatch(_ patch: PatchInfo) {
+        AppLog.debug("Action: edit the patch \(patch.spec.name)")
         guard patch.source == .user else { return }
         section = .patches
         patchEditor = PatchEditorState(draft: PatchDraft(spec: patch.spec), patch: patch)
@@ -1043,6 +1143,7 @@ final class AppModel: ObservableObject {
 
     /// Make the new patch, or write the edit. Then select the patch.
     func savePatchEditor(_ state: PatchEditorState, _ draft: PatchDraft) {
+        AppLog.debug("Action: save the patch editor (\(draft.name))")
         let library = Self.patchLibrary
         if let patch = state.patch {
             do {
@@ -1079,6 +1180,7 @@ final class AppModel: ObservableObject {
     }
 
     func removePatch(_ patch: PatchInfo) {
+        AppLog.debug("Action: remove the patch \(patch.spec.name)")
         do {
             try Self.patchLibrary.remove(patch)
             enabledPatches.remove(patch.spec.name)
@@ -1087,6 +1189,7 @@ final class AppModel: ObservableObject {
     }
 
     func exportPatch(_ patch: PatchInfo) {
+        AppLog.debug("Action: export the patch \(patch.spec.name)")
         let s = NSSavePanel()
         s.nameFieldStringValue = "\(patch.spec.name).\(PatchLibrary.fileExtension)"
         s.message = "iPodFirm adds the compiled code (patch.o), so that other people do not need Xcode."
@@ -1101,12 +1204,14 @@ final class AppModel: ObservableObject {
     }
 
     func showPatchesFolder() {
+        AppLog.debug("Action: show the folder Patches")
         try? FileManager.default.createDirectory(at: Self.patchLibrary.userDir, withIntermediateDirectories: true)
         NSWorkspace.shared.open(Self.patchLibrary.userDir)
     }
 
     /// Write the files of an action (patch.json "ui") on the mounted iPod.
     func runPatchAction(_ patch: PatchInfo, _ action: PatchUI.Action) {
+        AppLog.debug("Action: patch \(patch.spec.name), \(action.title)")
         guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
             return
@@ -1136,6 +1241,7 @@ final class AppModel: ObservableObject {
     }
 
     func setPatchToggle(_ t: PatchUI.Toggle, on: Bool) {
+        AppLog.debug("Action: set the switch \(t.title) \(on ? "on" : "off")")
         guard PatchUI.isSafePath(t.path), let volume = ipodMusicVolume() else { return }
         do {
             let url = volume.appendingPathComponent(t.path)
@@ -1153,6 +1259,7 @@ final class AppModel: ObservableObject {
     /// Measure the space of the current selection: build the appearance, and add the code sizes and
     /// the menus of the switched-on patches. The Patches pane calls this after each change.
     func refreshSpaceUse() async {
+        AppLog.debug("Patches: measure the space in the firmware")
         guard let editor else { spaceUse = nil; return }
         let patches = activePatches, appearance = activeAppearance, known = codeSizes
         let listSize = (try? activeList.encoded().count) ?? 0
@@ -1203,6 +1310,7 @@ final class AppModel: ObservableObject {
     }
 
     func setOptionValue(_ patch: PatchInfo, _ option: PatchSpec.Option, _ value: Int) {
+        AppLog.debug("Patch \(patch.spec.name): set the option \(option.id) to \(value)")
         patchOptions[patch.spec.name, default: [:]][option.id] = value
     }
 
@@ -1215,6 +1323,7 @@ final class AppModel: ObservableObject {
     }
 
     func addEQ(named name: String) {
+        AppLog.debug("Action: add an EQ")
         if let problem = CustomEQ.nameProblem(name, in: customEQs, excluding: nil) {
             alert = AlertInfo(title: "Cannot Add the EQ", message: problem)
         } else if customEQs.count >= CustomEQ.maxEQs {
@@ -1226,6 +1335,7 @@ final class AppModel: ObservableObject {
     }
 
     func renameSelectedEQ(to name: String) {
+        AppLog.debug("Action: give the EQ a new name")
         if let problem = CustomEQ.nameProblem(name, in: customEQs, excluding: selectedEQ.name) {
             alert = AlertInfo(title: "Cannot Rename the EQ", message: problem)
             return
@@ -1235,6 +1345,7 @@ final class AppModel: ObservableObject {
     }
 
     func deleteSelectedEQ() {
+        AppLog.debug("Action: delete the EQ")
         guard customEQs.count > 1 else { return }
         customEQs.removeAll { $0.name == selectedEQ.name }
         selectedEQName = customEQs[0].name
@@ -1262,6 +1373,7 @@ final class AppModel: ObservableObject {
 
     /// Start from an Apple preset. The Simple view has fixed bands, so the view changes to Advanced.
     func applyEQPreset(_ patch: PatchInfo, _ preset: CustomEQ.Preset) {
+        AppLog.debug("Action: apply the EQ preset \(preset.name)")
         updateSelectedEQ {
             $0.bands = CustomEQ.bands(forPreset: preset)
             $0.advanced = true
@@ -1282,6 +1394,7 @@ final class AppModel: ObservableObject {
 
     /// Write the EQ of the patch to a `.ipodeq` file. The name of the file is the name of the EQ.
     func exportEQ(_ patch: PatchInfo) {
+        AppLog.debug("Action: export the EQ")
         let s = NSSavePanel()
         s.nameFieldStringValue = "\(selectedEQ.name).\(SharedEQ.fileExtension)"
         s.allowedContentTypes = [UTType(filenameExtension: SharedEQ.fileExtension) ?? .json]
@@ -1296,6 +1409,7 @@ final class AppModel: ObservableObject {
     }
 
     func chooseEQToImport() {
+        AppLog.debug("Action: choose an EQ file")
         let p = NSOpenPanel()
         p.allowedContentTypes = [UTType(filenameExtension: SharedEQ.fileExtension) ?? .json]
         p.message = "Select a .\(SharedEQ.fileExtension) file."
@@ -1304,6 +1418,7 @@ final class AppModel: ObservableObject {
 
     /// Examine a `.ipodeq` file. The sheet asks the user before the bands change.
     func importEQ(from url: URL) {
+        AppLog.debug("Action: import the EQ file \(url.lastPathComponent)")
         do {
             let fh = try FileHandle(forReadingFrom: url)
             defer { try? fh.close() }
@@ -1316,6 +1431,7 @@ final class AppModel: ObservableObject {
 
     /// Replace the bands with a file that the user accepted. The iPod changes only at the next flash.
     func applyEQ(_ eq: SharedEQ) {
+        AppLog.debug("Action: apply the shared EQ")
         pendingEQ = nil
         guard let patch = eqPatch else {
             alert = AlertInfo(title: "Cannot Open the EQ", message: "The Custom EQ patch is not in this version of iPodFirm.")
@@ -1426,6 +1542,7 @@ final class AppModel: ObservableObject {
 
     /// Copy the games to the connected iPod. The pane of the games shows the result.
     func installGames() async {
+        AppLog.debug("Action: copy \(selectedGameFolders.count) game(s) to the iPod")
         guard currentIPod != nil else {
             alert = AlertInfo(title: "No iPod Is Connected", message: "Connect the iPod. The pane of the games copies the games to the iPod.")
             return
@@ -1468,6 +1585,7 @@ final class AppModel: ObservableObject {
     /// Let the user choose the folder with the games. The folder holds the games, or the
     /// folder `iPod_Control` of an iPod. The app reads the games of the folder.
     func chooseGamesFolder() {
+        AppLog.debug("Action: choose the games folder")
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -1484,6 +1602,7 @@ final class AppModel: ObservableObject {
     /// Let the owner choose their own key file IC-Info.sidb. The app checks the name and the
     /// size. It does not read the bytes of the file.
     func chooseGameKeyFile() {
+        AppLog.debug("Action: choose the game key file")
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
@@ -1507,6 +1626,7 @@ final class AppModel: ObservableObject {
     /// Read the games in the folder games_RO of the connected iPod.
     /// The pane of the games shows the list for the removal.
     func readIPodGames() async {
+        AppLog.debug("Games: read the games on the iPod")
         guard currentIPod != nil else {
             alert = AlertInfo(title: "No iPod Is Connected", message: "Connect the iPod. The pane of the games reads the games of the iPod.")
             return
@@ -1525,6 +1645,7 @@ final class AppModel: ObservableObject {
     /// Remove the selected games from the connected iPod. The owner confirms
     /// the removal first. The removal deletes the folder of the game only.
     func removeGames(_ guids: Set<String>) async {
+        AppLog.debug("Action: remove \(guids.count) game(s) from the iPod")
         guard currentIPod != nil else {
             alert = AlertInfo(title: "No iPod Is Connected", message: "Connect the iPod. The pane of the games removes the games from the iPod.")
             return
@@ -1559,6 +1680,7 @@ final class AppModel: ObservableObject {
 
     /// iPod_Control/iTunes/iPodFirmAlbumArt on the mounted iPod, from its own library.
     func writeThumbnails() async {
+        AppLog.debug("Action: write the thumbnails to the iPod")
         guard currentIPod != nil else { return }
         guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder, then try again.")
@@ -1577,6 +1699,7 @@ final class AppModel: ObservableObject {
 
     /// Finds the log files on the iPod. A file with no data gets no row.
     func refreshIPodLogs() {
+        AppLog.debug("iPod logs: find the log files on the iPod")
         guard let volume = ipodMusicVolume() else { ipodLogs = []; return }
         ipodLogs = IPodLogFile.Kind.allCases.compactMap { kind in
             let path = volume.appendingPathComponent(Self.logFile(kind)).path
@@ -1587,6 +1710,7 @@ final class AppModel: ObservableObject {
     }
 
     func readUSBProbeLog() {
+        AppLog.debug("Action: read the USB log")
         guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder, then try again.")
             return
@@ -1607,6 +1731,7 @@ final class AppModel: ObservableObject {
 
     /// Read the text of the battery log.
     func readBatteryLog() {
+        AppLog.debug("Action: read the battery log")
         guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
             return
@@ -1620,12 +1745,14 @@ final class AppModel: ObservableObject {
 
     /// Makes the battery curve from the battery log on the iPod.
     func importBatteryCurveFromIPod() {
+        AppLog.debug("Action: import the battery curve from the iPod")
         readBatteryLog()
         if let log = batteryLog { importBatteryCurve(log) }
     }
 
     /// Makes the battery curve from a saved battery log.
     func chooseBatteryLogFile() {
+        AppLog.debug("Action: choose a battery log file")
         let p = NSOpenPanel()
         p.allowedContentTypes = [.plainText, .data]
         p.message = "Choose a battery log from a full charge until the iPod stopped."
@@ -1660,6 +1787,7 @@ final class AppModel: ObservableObject {
     }
 
     func readSongLog(_ kind: IPodLogFile.Kind) {
+        AppLog.debug("Action: read the \(kind) log")
         let name = kind == .diagnostic ? "Diagnostic Log" : "Playback Log"
         guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
@@ -1679,6 +1807,7 @@ final class AppModel: ObservableObject {
     /// Save a log as a text file, then show the file in Finder. Returns the file, or nil.
     @discardableResult
     func saveSongLog(_ kind: IPodLogFile.Kind) -> URL? {
+        AppLog.debug("Action: save the \(kind) log")
         let name = kind == .diagnostic ? "Diagnostic Log" : "Playback Log"
         guard let log = songLog(kind), !log.isEmpty else { return nil }
         let s = NSSavePanel()
@@ -1698,17 +1827,20 @@ final class AppModel: ObservableObject {
 
     /// Save a log, then open a new issue on GitHub. The owner of the log drags the file into the issue.
     func reportSongLog(_ kind: IPodLogFile.Kind) {
+        AppLog.debug("Action: report the \(kind) log on GitHub")
         guard let log = songLog(kind), let url = saveSongLog(kind) else { return }
         NSWorkspace.shared.open(PlaybackLog.issueURL(log: log, appVersion: version, fileName: url.lastPathComponent, diagnostic: kind == .diagnostic))
     }
 
     /// Read the playlists of the connected iPod and their images.
     func loadPlaylists() async {
+        AppLog.debug("Playlists: read the playlist images")
         guard let volume = ipodMusicVolume() else { playlistArt = []; return }
         playlistArt = (try? await Task.detached(priority: .userInitiated) { try MusicImport.playlists(volume: volume) }.value) ?? []
     }
 
     func choosePlaylistArt(_ name: String) {
+        AppLog.debug("Action: choose a playlist image")
         let p = NSOpenPanel()
         p.allowedContentTypes = [.image]
         p.message = "Choose an image for the playlist “\(name)”. iPodFirm uses the centre square."
@@ -1716,6 +1848,7 @@ final class AppModel: ObservableObject {
     }
 
     func setPlaylistArt(_ name: String, from url: URL) async {
+        AppLog.debug("Action: set a playlist image from \(url.lastPathComponent)")
         guard let volume = ipodMusicVolume() else { return }
         do {
             try await work("Saving the image for “\(name)” on the iPod…") { try MusicImport.setPlaylistArt(volume: volume, name: name, image: url) }
@@ -1725,6 +1858,7 @@ final class AppModel: ObservableObject {
     }
 
     func resetPlaylistArt(_ name: String) async {
+        AppLog.debug("Action: reset a playlist image")
         guard let volume = ipodMusicVolume() else { return }
         do {
             try MusicImport.removePlaylistArt(volume: volume, name: name)
@@ -1737,6 +1871,7 @@ final class AppModel: ObservableObject {
 
     /// Read the playlists and the folder file of the connected iPod.
     func loadPlaylistFolders() async {
+        AppLog.debug("Playlist folders: read the playlists and the folders")
         guard let volume = ipodMusicVolume() else {
             folderPlaylists = []
             playlistFolders = PlaylistFolders()
@@ -1763,6 +1898,7 @@ final class AppModel: ObservableObject {
     /// Replace the folders in the editor with the folders of an iTunes library. The iPod does not
     /// change until "Write Folders to iPod".
     func importITunesFolders() {
+        AppLog.debug("Action: import the folders from iTunes")
         let p = NSOpenPanel()
         p.allowedContentTypes = ["itl"].compactMap { UTType(filenameExtension: $0) }
         p.message = "Choose the file iTunes Library.itl"
@@ -1777,6 +1913,7 @@ final class AppModel: ObservableObject {
     /// Replace the folders in the editor with the folders of the Music app. The iPod does not
     /// change until "Write Folders to iPod".
     func importMusicFolders() async {
+        AppLog.debug("Action: import the folders from Music")
         do {
             let library = try await Task.detached { try MusicLibrary.playlists() }.value
             useImportedFolders(library, note: "")
@@ -1795,6 +1932,7 @@ final class AppModel: ObservableObject {
 
     /// Write the folder file to the iPod.
     func writePlaylistFolders() async {
+        AppLog.debug("Action: write the playlist folders to the iPod")
         guard let volume = ipodMusicVolume() else {
             alert = AlertInfo(title: "iPod Volume Not Found", message: "Connect the iPod so that it shows in Finder. Then try again.")
             return
@@ -1822,6 +1960,7 @@ final class AppModel: ObservableObject {
     // MARK: pictures
 
     func exportPicture(_ item: PictureItem) {
+        AppLog.debug("Action: export the picture \(item.resourceID)")
         guard let osos = shownPictures?.osos, let data = ImageCodec.png(for: item.picture, osos: osos) else { return }
         let p = NSSavePanel()
         p.allowedContentTypes = [.png]
@@ -1832,6 +1971,7 @@ final class AppModel: ObservableObject {
     }
 
     func replacePicture(_ item: PictureItem, from url: URL) {
+        AppLog.debug("Action: replace the picture \(item.resourceID) with \(url.lastPathComponent)")
         guard let editor else { return }
         do {
             let img = try ImageCodec.load(url)
@@ -1854,6 +1994,7 @@ final class AppModel: ObservableObject {
     }
 
     func exportFolder() {
+        AppLog.debug("Action: export all pictures to a folder")
         guard let editor else { return }
         let p = NSOpenPanel()
         p.canChooseDirectories = true
@@ -1871,6 +2012,7 @@ final class AppModel: ObservableObject {
     }
 
     func importFolder() {
+        AppLog.debug("Action: import pictures from a folder")
         guard let editor else { return }
         let p = NSOpenPanel()
         p.canChooseDirectories = true
@@ -1890,6 +2032,7 @@ final class AppModel: ObservableObject {
     // MARK: strings
 
     func applyStrings(blockIndex: Int, _ values: [String: String]) -> Bool {
+        AppLog.debug("Action: apply \(values.count) text change(s) to the block \(blockIndex)")
         guard let editor else { return false }
         do {
             if try editor.setStrings(blockIndex: blockIndex, values) { edited() }
@@ -1905,6 +2048,7 @@ final class AppModel: ObservableObject {
     func refreshIPods() async {
         do {
             ipods = try await Task.detached { try Device.findIPods() }.value
+            AppLog.volumeNames.formUnion(ipods.compactMap(\.volumeName))
             let found = ipods.map { "\($0.disk) \($0.mediaName) \($0.size) bytes" }
             AppLog.info("iPods found: \(found.isEmpty ? "none" : found.joined(separator: ", "))")
             if selectedIPod == nil || !ipods.contains(where: { $0.disk == selectedIPod }) { selectedIPod = ipods.first?.disk }
@@ -1924,6 +2068,7 @@ final class AppModel: ObservableObject {
 
     /// Read the name of the iPod from its music database.
     func readIPodLibraryName() async {
+        AppLog.debug("iPod: read the name of the library")
         let volume = ipodMusicVolume()
         ipodLibraryName = await Task.detached(priority: .userInitiated) { () -> String? in
             guard let volume,
@@ -1933,6 +2078,7 @@ final class AppModel: ObservableObject {
     }
 
     func ejectIPod() async {
+        AppLog.debug("Action: eject the iPod")
         guard busy == nil, let ipod = currentIPod else { return }
         do {
             try await work("Ejecting \(ipod.volumeName ?? ipod.mediaName)…") { try Device.eject(ipod) }
@@ -1948,6 +2094,7 @@ final class AppModel: ObservableObject {
     func backupURL(_ b: BackupInfo) -> URL { Self.backupDir.appendingPathComponent(b.file) }
 
     func backupNow() async {
+        AppLog.debug("Action: back up the iPod")
         guard busy == nil, let ipod = currentIPod else { return }
         busy = "Backing up the iPod's firmware partition…"
         defer { busy = nil; refreshBackups() }
@@ -1960,6 +2107,7 @@ final class AppModel: ObservableObject {
 
     /// Step 1 of flashing: dry run (no writes) to show exactly what would change.
     func prepareFlash(image: URL, reason: String) async {
+        AppLog.debug("Flash: prepare the \(reason) of \(image.lastPathComponent)")
         guard busy == nil else { return }
         guard let ipod = currentIPod else {
             alert = AlertInfo(title: "No iPod Is Connected", message: "Connect the iPod. Then try again.")
@@ -2009,6 +2157,7 @@ final class AppModel: ObservableObject {
 
     /// Step 2: the app backs up the current partition, writes only changed blocks, and verifies.
     func performFlash(_ plan: FlashPlan) async {
+        AppLog.debug("Flash: start the \(plan.reason) of \(plan.image.lastPathComponent) on \(plan.ipod.disk)")
         flashPlan = nil
         busy = "Backup, write and check in progress… Do not disconnect the iPod."
         defer { busy = nil; refreshBackups() }
@@ -2039,6 +2188,7 @@ final class AppModel: ObservableObject {
     }
 
     func flashEdited() async {
+        AppLog.debug("Action: flash the open firmware")
         guard busy == nil, let editor else { return }
         let staging = Self.patchLibrary.stagingDir.appendingPathComponent("flash.bin")
         do {
@@ -2053,6 +2203,7 @@ final class AppModel: ObservableObject {
 
     /// Last resort, e.g. for a damaged partition table: Finder rewrites the whole iPod from Apple's .ipsw.
     func restoreWithFinder() async {
+        AppLog.debug("Action: restore with Finder")
         do {
             let ipsw = try await ensureAppleIPSW()
             NSWorkspace.shared.activateFileViewerSelecting([ipsw])
@@ -2063,6 +2214,7 @@ final class AppModel: ObservableObject {
     // MARK: emulator
 
     func exportIPSW() {
+        AppLog.debug("Action: export an .ipsw file")
         guard let editor else { return }
         let s = NSSavePanel()
         s.nameFieldStringValue = "custom-iPod_25.1.3.ipsw"
@@ -2082,6 +2234,7 @@ final class AppModel: ObservableObject {
 
     /// Build the emulator drive from the current edits and boot it in the in-app preview.
     func runInEmulator(_ emu: EmulatorManager, _ session: EmulatorSession) {
+        AppLog.debug("Action: run the firmware in the emulator")
         guard let editor else { return }
         let patches = activePatches, appearance = activeAppearance, version = activeVersion, list = activeList
         let library = EmulatorManager.Library.current

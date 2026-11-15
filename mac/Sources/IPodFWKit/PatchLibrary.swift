@@ -555,9 +555,11 @@ public struct PatchLibrary {
         let out = Pipe(), err = Pipe()
         p.standardOutput = out
         p.standardError = err
+        let began = Date()
         try p.run()
         let data = out.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
+        AppLog.debugProcess(p, since: began)
         guard p.terminationStatus == 0 else {
             throw PatchError(String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self))
         }

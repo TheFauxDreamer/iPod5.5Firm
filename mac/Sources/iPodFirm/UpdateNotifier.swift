@@ -26,6 +26,7 @@ final class UpdateNotifier: NSObject, UNUserNotificationCenterDelegate {
     /// Posts the notification. Returns false if the user does not allow notifications from iPodFirm.
     /// Then the caller shows an alert in the app.
     func notify(_ release: UpdateCheck.Release, local: String) async -> Bool {
+        AppLog.debug("Update check: post a notification for the version \(release.version)")
         let center = UNUserNotificationCenter.current()
         guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return false }
         let content = UNMutableNotificationContent()

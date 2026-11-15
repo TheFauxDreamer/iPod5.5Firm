@@ -42,6 +42,7 @@ extension AppModel {
     /// already has, they must fit in rsrc. Returns the names of the fonts that the app keeps.
     @discardableResult
     func saveFonts(_ fonts: [String: [UInt8]], apple base: AppleFonts) throws -> [String] {
+        AppLog.debug("Fonts: save \(fonts.count) font(s) in the app")
         let apple = base.fonts
         let custom = IPodFonts.custom(fonts, apple: apple)
         for (name, data) in custom { try IPodFonts.check(name, data, apple: apple) }
@@ -64,6 +65,7 @@ extension AppModel {
 
     /// Import the fonts from an iPodFirm backup, a firmware file, an .ipsw or .ttf files.
     func importFontsFromFile() {
+        AppLog.debug("Action: import the fonts from a file")
         let panel = NSOpenPanel()
         panel.message = "Select a backup, a firmware file or font files from iPodWizard."
         panel.allowedContentTypes = ["bin", "ipsw", "ttf"].compactMap { UTType(filenameExtension: $0) }
@@ -99,6 +101,7 @@ extension AppModel {
 
     /// Import the fonts that are on the iPod now, for example fonts from iPodWizard.
     func importFontsFromIPod() async {
+        AppLog.debug("Action: import the fonts from the iPod")
         guard busy == nil else { return }
         guard let ipod = currentIPod else {
             alert = AlertInfo(title: "No iPod Is Connected", message: "Connect the iPod. Then try again.")
@@ -118,6 +121,7 @@ extension AppModel {
 
     /// Remove the custom fonts of the app. The next flash writes the Apple fonts.
     func useAppleFonts() {
+        AppLog.debug("Action: use the Apple fonts")
         for name in IPodFonts.names {
             let url = Self.fontsDir.appendingPathComponent(name)
             if FileManager.default.fileExists(atPath: url.path) { try? FileManager.default.removeItem(at: url) }
@@ -139,6 +143,7 @@ extension AppModel {
 
     /// Keep the fonts of the iPod: import them, then build the flash image again.
     func keepIPodFonts(_ q: FontQuestion) async {
+        AppLog.debug("Action: keep the fonts of the iPod")
         fontQuestion = nil
         do {
             try saveFonts(q.fonts, apple: try await appleFonts())

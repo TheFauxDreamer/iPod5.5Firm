@@ -110,6 +110,7 @@ public enum Backups {
                                   ipodName: ipod.volumeName, patches: patches)
             let meta = dir.appendingPathComponent(name + ".json")
             try enc.encode(info).write(to: meta, options: .atomic)
+            AppLog.debug("Backup: wrote \(name), \(data.count) bytes, SHA-256 \(sha)")
             last = info
         }
         return last!
@@ -181,9 +182,15 @@ public enum Operations {
         AppLog.step("Read the firmware partition of \(ipod.disk) (\(ipod.mediaName), \(ipod.size) bytes, block size \(ipod.blockSize))")
         let disk = try access.read(ipod)
         let (start, size) = try FirmwareFlasher.locatePartition(disk)
+        AppLog.debug("Disk: the firmware partition starts at \(start) and has \(size) bytes")
         let bytes = try disk.read(start, size)
         AppLog.step("Layout of the iPod:\n\(layoutReport(bytes))")
         return (bytes, start)
+    }
+
+    /// The write plan for the verbose log: the offset in the partition and the length of each range.
+    static func describe(_ ranges: [FirmwareFlasher.WriteRange]) -> String {
+        ranges.isEmpty ? "empty" : ranges.map { "0x\(String($0.offset, radix: 16))+0x\(String($0.length, radix: 16))" }.joined(separator: ", ")
     }
 
     /// The directory and the map of the partition for a report. A damaged partition gives only a note.
@@ -248,6 +255,7 @@ public enum Operations {
         let protected = current.has("aupd") ? try current.imageRange("aupd") : 0..<0
         AppLog.step("Flash: compare the new image with the iPod")
         let ranges = try FirmwareFlasher.planWrites(current: currentBytes, new: newBytes, blockSize: bs, protected: protected)
+        AppLog.debug("Flash: the protected area is \(protected), the write plan is \(describe(ranges))")
         if ranges.isEmpty { return OperationResult(ok: true, message: "The iPod already has this firmware; nothing to write.", ranges: []) }
         let total = ranges.reduce(0) { $0 + $1.length }
         if dryRun {
@@ -331,6 +339,7 @@ public enum Operations {
         do { ranges = try FirmwareFlasher.planWrites(current: currentBytes, new: newBytes, blockSize: bs, protected: protected) } catch {
             throw FirmwareError("The damage includes the aupd area, which iPodFirm never writes. Restore the iPod with Finder.")
         }
+        AppLog.debug("Rescue: the protected area is \(protected), the write plan is \(describe(ranges))")
         if ranges.isEmpty { return OperationResult(ok: true, message: "The iPod already has this firmware; nothing to write.", ranges: []) }
         let total = ranges.reduce(0) { $0 + $1.length }
         if dryRun { return OperationResult(ok: true, message: "Would write \(total) bytes in \(ranges.count) range(s).", ranges: ranges) }
