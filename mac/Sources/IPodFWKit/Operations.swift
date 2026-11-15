@@ -133,6 +133,9 @@ public struct OperationResult {
     /// The dry run of a flash: the fonts on the iPod that are different from the fonts of the new
     /// image, by name. The app asks the user before it replaces them. Empty: no font changes.
     public var fontsOnIPod: [String: [UInt8]]?
+    /// True if the flash removes a boot loader that is not from Apple, for example Rockbox. The owner
+    /// allowed this in Settings > Flash. The confirmation sheet shows a warning.
+    public var removesBootLoader = false
     /// On a fault: the error of the operation.
     public var fault: Error?
     public init(ok: Bool, message: String, code: String? = nil, ranges: [FirmwareFlasher.WriteRange]? = nil, backup: BackupInfo? = nil) {
@@ -225,8 +228,9 @@ public enum Operations {
     }
 
     /// Flash `imageURL` onto the iPod. Always backs up the current partition first (unless dryRun).
+    /// `allowAddedBootLoader`: the owner allows a flash that removes a boot loader that is not from Apple (Rockbox).
     public static func flash(_ ipod: IPodDisk, image imageURL: URL, backupDir: URL, reason: String,
-                             dryRun: Bool, access: DiskAccess = .direct) throws -> OperationResult {
+                             dryRun: Bool, allowAddedBootLoader: Bool = false, access: DiskAccess = .direct) throws -> OperationResult {
         let (currentBytes, partStart) = try readCurrent(ipod, access)
         try checkModel(onIPod: currentBytes)
         let current: FirmwarePartition
@@ -234,7 +238,8 @@ public enum Operations {
             throw FirmwareError("The firmware on the iPod is damaged (\(error.localizedDescription)). Use the rescue restore.",
                                 code: OperationResult.firmwareUnreadable, cause: error)
         }
-        try FirmwareFlasher.refuseRockbox(current: current, reason: reason)
+        try FirmwareFlasher.refuseRockbox(current: current, reason: reason, allow: allowAddedBootLoader)
+        let removesBootLoader = reason == "flash" && current.hasAddedBootLoader
         AppLog.step("Flash (\(reason)): read the new image \(imageURL.lastPathComponent)")
         var newBytes = [UInt8](try Data(contentsOf: imageURL))
         guard newBytes.count <= currentBytes.count else {
@@ -260,6 +265,7 @@ public enum Operations {
         let total = ranges.reduce(0) { $0 + $1.length }
         if dryRun {
             var r = OperationResult(ok: true, message: "Would write \(total) bytes in \(ranges.count) range(s).", ranges: ranges)
+            r.removesBootLoader = removesBootLoader
             if reason == "flash", let mine = try? IPodFonts.fonts(in: current), let theirs = try? IPodFonts.fonts(in: new) {
                 r.fontsOnIPod = mine.filter { theirs[$0.key] != $0.value }
             }
@@ -284,7 +290,9 @@ public enum Operations {
         for r in ranges where try disk.read(partStart + r.offset, r.length) != Array(newBytes[r.offset..<r.offset + r.length]) {
             throw FirmwareError("Verification failed at partition offset 0x\(String(r.offset, radix: 16)). Restore the backup \"\(info.file)\".")
         }
-        return OperationResult(ok: true, message: "Wrote and verified \(total) bytes in \(ranges.count) range(s).", ranges: ranges, backup: info)
+        var done = OperationResult(ok: true, message: "Wrote and verified \(total) bytes in \(ranges.count) range(s).", ranges: ranges, backup: info)
+        done.removesBootLoader = removesBootLoader
+        return done
     }
 
     /// Restore a backup to an iPod whose firmware partition no longer parses (an interrupted write).

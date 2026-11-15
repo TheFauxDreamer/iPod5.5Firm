@@ -1593,6 +1593,7 @@ final class ThemeTests: XCTestCase {
 
     /// The file has a hibe image, the restored iPod has none: the result follows the iPod.
     /// A flash stops on an iPod with a Rockbox boot loader. A restore of a backup does not stop.
+    /// If the owner allows it (Settings > Flash > Allow a Flash with Rockbox), the flash continues.
     func testFlashRefusesRockbox() throws {
         var data = ipodLayout()
         let fw = try FirmwarePartition(data: data)
@@ -1611,7 +1612,9 @@ final class ThemeTests: XCTestCase {
         XCTAssertThrowsError(try FirmwareFlasher.refuseRockbox(current: other, reason: "flash")) { e in
             XCTAssertEqual((e as? FirmwareError)?.code, OperationResult.rockbox)
             XCTAssertTrue(e.localizedDescription.contains("not from Apple"), e.localizedDescription)
+            XCTAssertTrue(e.localizedDescription.contains("Allow a Flash with Rockbox"), e.localizedDescription)
         }
+        XCTAssertNoThrow(try FirmwareFlasher.refuseRockbox(current: other, reason: "flash", allow: true))
         // The Rockbox boot loader has the path of its program.
         let text = Array("/.rockbox/rockbox.ipod".utf8)
         data.replaceSubrange((range.upperBound - 0x80)..<(range.upperBound - 0x80 + text.count), with: text)
@@ -1624,7 +1627,9 @@ final class ThemeTests: XCTestCase {
             XCTAssertEqual((e as? FirmwareError)?.code, OperationResult.rockbox)
             XCTAssertTrue(e.localizedDescription.contains("because the iPod has Rockbox"), e.localizedDescription)
             XCTAssertTrue(e.localizedDescription.contains("can then fail to start"), e.localizedDescription)
+            XCTAssertTrue(e.localizedDescription.contains("Settings > Flash > Allow a Flash with Rockbox"), e.localizedDescription)
         }
+        XCTAssertNoThrow(try FirmwareFlasher.refuseRockbox(current: current, reason: "flash", allow: true))
         XCTAssertNoThrow(try FirmwareFlasher.refuseRockbox(current: current, reason: "restore"))
     }
 

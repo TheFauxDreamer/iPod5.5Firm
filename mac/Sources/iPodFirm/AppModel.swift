@@ -292,6 +292,9 @@ final class AppModel: ObservableObject {
     }
     /// Settings > Updates: ask GitHub for a newer release at each launch.
     @AppStorage("checkForUpdates") var checkForUpdates = true
+    /// Settings > Flash > Allow a Flash with Rockbox. The owner accepted the warning (`RockboxWarning`). The default is false.
+    @AppStorage(AppModel.allowRockboxFlashKey) var allowRockboxFlash = false
+    static let allowRockboxFlashKey = "allowRockboxFlash"
     /// The release that the user skipped with "Skip This Version". The launch check ignores it.
     @AppStorage(UpdateNotifier.skippedKey) var skippedUpdateVersion = ""
     /// A newer release, if macOS does not allow the notification. The app shows an alert instead.
@@ -544,6 +547,7 @@ final class AppModel: ObservableObject {
         AppLog.step("\(reason) of \(image.lastPathComponent) on \(ipod.disk)\(dryRun ? " (dry run)" : "")")
         let dir = Self.backupDir
         let start = Date()
+        let allowBootLoader = allowRockboxFlash
         if !dryRun { beginWrite() }
         defer {
             if !dryRun {
@@ -553,7 +557,8 @@ final class AppModel: ObservableObject {
         }
         return await operation {
             if reason == "rescue" { return try Operations.rescueRestore(ipod, image: image, backupDir: dir, dryRun: dryRun, access: .authOpen()) }
-            return try Operations.flash(ipod, image: image, backupDir: dir, reason: reason, dryRun: dryRun, access: .authOpen())
+            return try Operations.flash(ipod, image: image, backupDir: dir, reason: reason, dryRun: dryRun,
+                                        allowAddedBootLoader: allowBootLoader, access: .authOpen())
         }
     }
 

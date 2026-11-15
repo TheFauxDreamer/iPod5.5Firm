@@ -106,6 +106,20 @@ struct IPodFirmApp: App {
     }
 }
 
+/// The warning texts for a flash to an iPod with Rockbox or another boot loader that is not from Apple.
+enum RockboxWarning {
+    static let title = "Allow a Flash with Rockbox?"
+    static let text = """
+        A flash removes Rockbox and each other boot loader that is not from Apple. After the flash, Rockbox does not start.         To use Rockbox again, install it again with Rockbox Utility.
+
+        iPodFirm is not tested on an iPod with Rockbox. The iPod can fail to start after the flash.         If this occurs, put the iPod in disk mode. Then restore a backup in iPodFirm, or restore the iPod with Finder.
+
+        iPodFirm makes a backup before each flash. Allow the flash only if you accept this risk.
+        """
+    static let flashText = "The iPod has Rockbox or another boot loader that is not from Apple. This flash removes the boot loader. "
+        + "iPodFirm is not tested on an iPod with Rockbox, and the iPod can fail to start. You allowed this in Settings > Flash."
+}
+
 /// The settings window (⌘,): the firmware layout (the empty margin below 8 MB).
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
@@ -113,6 +127,9 @@ struct SettingsView: View {
     @AppStorage("showPatchSummaries") private var showPatchSummaries = true
     @AppStorage(EQColours.settingKey) private var colourfulEQCurve = true
     @AppStorage(AppLog.verboseKey) private var verboseLog = false
+    @AppStorage(AppModel.allowRockboxFlashKey) private var allowRockboxFlash = false
+    /// The warning before the owner allows a flash with Rockbox.
+    @State private var showRockboxWarning = false
 
     var body: some View {
         TabView {
@@ -154,6 +171,33 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
+            Form {
+                Section {
+                    // The switch turns on only after the owner accepts the warning. It turns off at once.
+                    Toggle("Allow a Flash with Rockbox", isOn: Binding(get: { allowRockboxFlash }, set: { on in
+                        if on {
+                            showRockboxWarning = true
+                        } else {
+                            allowRockboxFlash = false
+                            AppLog.info("Setting: a flash with Rockbox is not allowed")
+                        }
+                    }))
+                    .help("iPodFirm usually does not flash an iPod that has Rockbox or another boot loader that is not from Apple. A flash removes the boot loader.")
+                } header: {
+                    Text("Rockbox")
+                }
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Flash", systemImage: "bolt.horizontal.circle") }
+            .alert(RockboxWarning.title, isPresented: $showRockboxWarning) {
+                Button("Cancel", role: .cancel) {}
+                Button("Allow the Flash", role: .destructive) {
+                    allowRockboxFlash = true
+                    AppLog.info("Setting: the owner accepted the warning. A flash with Rockbox is allowed.")
+                }
+            } message: {
+                Text(RockboxWarning.text)
+            }
             Form {
                 Section {
                     // AppLog.verbose writes the key. Thus the menu item and this switch agree.

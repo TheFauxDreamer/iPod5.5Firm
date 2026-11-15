@@ -307,6 +307,11 @@ struct FlashConfirmSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            if plan.result.removesBootLoader {
+                Label(RockboxWarning.flashText, systemImage: "exclamationmark.triangle.fill")
+                    .labelStyle(StatusLabelStyle(tint: .red))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if plan.musicAppRunning {
                 Label("MiMusic is open. iPodFirm disconnects the iPod volume during the write. Let each MiMusic sync finish, or quit MiMusic, before you continue.",
                       systemImage: "exclamationmark.triangle.fill")

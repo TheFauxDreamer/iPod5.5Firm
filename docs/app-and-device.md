@@ -32,7 +32,7 @@ The sidebar has two sections. The section "Device" has only the iPod row. The ro
 
 [AppModel.swift](../mac/Sources/iPodFirm/AppModel.swift) holds the state and the actions of all panes.
 
-The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has four tabs. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`). The default is 32 KB (the limit 0x7F8000). The value 16 KB (the limit 0x7FC000) gives more space for patches. The value 64 KB (the limit 0x7F0000) is the value before 9 October 2026. The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default) and "Show Descriptions in the Patch List" (`showPatchSummaries`, On by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`). A build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`). Updates: "Check for a new version at launch" (`checkForUpdates`, On by default). Refer to [The update check](#the-update-check). Log: "Verbose Log" (`verboseLog`, Off by default). Refer to [The verbose log](#the-verbose-log).
+The Settings window (iPodFirm > Settings…, `SettingsView` in [App.swift](../mac/Sources/iPodFirm/App.swift)) has five tabs. Layout: the empty margin below 8 MB (`ososMargin`, `ThemeImport.OSOSMargin`). The default is 32 KB (the limit 0x7F8000). The value 16 KB (the limit 0x7FC000) gives more space for patches. The value 64 KB (the limit 0x7F0000) is the value before 9 October 2026. The setting applies to the next build and to the space bar of the Patches pane. Patches: "Enable Test Patches" (`showTestPatches`, Off by default) and "Show Descriptions in the Patch List" (`showPatchSummaries`, On by default). Off: the Patches pane does not show the patches of the category `test` (`PatchSpec.visible`). A build does not include them, also if they are switched on. On: the pane shows them, with a red warning at the top of the details (`TestPatchWarning`). Updates: "Check for a new version at launch" (`checkForUpdates`, On by default). Refer to [The update check](#the-update-check). Flash: "Allow a Flash with Rockbox" (`allowRockboxFlash`, Off by default). Before the switch turns on, an alert shows the warning `RockboxWarning.text`. The switch turns on only with **Allow the Flash**. The switch turns off with no alert. Refer to [the Rockbox check](#the-rockbox-check). Log: "Verbose Log" (`verboseLog`, Off by default). Refer to [The verbose log](#the-verbose-log).
 
 The menus ([App.swift](../mac/Sources/iPodFirm/App.swift)):
 
@@ -179,6 +179,10 @@ The app reads the disk size to identify a probable original hard drive. Refer to
 2. It reads the model code in the osos directory entry (`vers >> 8`). The iPod Video has 0xB0.
 
 `Operations.flash` also refuses a flash to an iPod that has a Rockbox boot loader (`FirmwareFlasher.refuseRockbox`). It returns the code `rockbox`, and the app shows the alert "Cannot Flash" before it writes a byte. The test is `FirmwarePartition.hasAddedBootLoader`: the entryOffset of osos is not 0. Rockbox `ipodpatcher` uses the same test to find its boot loader. This value is 0 in the Apple firmware 1.3, in a firmware file from iPodFirm and in the backup of the iPod of the author (measured on 15 November 2026). iPodFirm never changes the value. Thus the check has no effect on an iPod without an added boot loader. The alert tells the user the cause, the reason and the correction. If the boot loader contains the text "rockbox" (`addedBootLoaderIsRockbox`), the alert names Rockbox. If not, the alert names a boot loader that is not from Apple. A restore of a backup and the rescue restore continue.
+
+### The Rockbox check
+
+Settings > Flash > Allow a Flash with Rockbox (`allowRockboxFlash`) stops the refusal. `AppModel.runFlash` gives the value to `Operations.flash` as `allowAddedBootLoader`. Then `refuseRockbox` writes a step to the log and does not stop. The flash replaces osos and thus removes the boot loader. The dry run sets `OperationResult.removesBootLoader`. Then `FlashConfirmSheet` shows a red warning before the buttons. iPodFirm makes the usual backup before the write. The backup holds the boot loader. A restore of this backup puts Rockbox back. A flash with this setting is not tested on a real iPod with Rockbox.
 
 ## Privileged access
 
@@ -371,6 +375,7 @@ The app reads `iPod_Control/iTunes/iTunesDB` and the music files. It does not ch
 | `customVersionOn`, `customVersion` | The custom version. |
 | `versionLettersOn` | The patch letters on the About screen. |
 | `checkForUpdates` | Settings > Updates > "Check for a new version at launch". The default is true. |
+| `allowRockboxFlash` | Settings > Flash > Allow a Flash with Rockbox. True: a flash continues on an iPod with a boot loader that is not from Apple. The owner must accept a warning first. The default is false. |
 | `verboseLog` | Help > Verbose Log and Settings > Log > Verbose Log. True: the log also records the `DEBUG` lines. The default is false. |
 | `skippedUpdateVersion` | The release version that the user skipped with **Skip This Version**. The check at launch shows no notification for this version. iPodFirm > Check for Updates… ignores it. |
 | `ososMargin` | The empty margin below 8 MB: `current` (32 KB, limit 0x7F8000), `compact` (16 KB, limit 0x7FC000) or `previous` (64 KB, limit 0x7F0000). |
