@@ -3562,11 +3562,13 @@ final class AppLogTests: XCTestCase {
     var savedDirectory: URL?
     var savedMax = 0
     var savedVerbose = false
+    var savedVerboseMax = 0
 
     override func setUpWithError() throws {
         savedDirectory = AppLog.directory
         savedMax = AppLog.maxFileSize
         savedVerbose = AppLog.verbose
+        savedVerboseMax = AppLog.verboseMaxFileSize
         folder = FileManager.default.temporaryDirectory.appendingPathComponent("AppLogTests-\(UUID().uuidString)")
         AppLog.directory = folder
         AppLog.clearSteps()
@@ -3576,6 +3578,7 @@ final class AppLogTests: XCTestCase {
         AppLog.directory = savedDirectory
         AppLog.maxFileSize = savedMax
         AppLog.verbose = savedVerbose
+        AppLog.verboseMaxFileSize = savedVerboseMax
         AppLog.clearSteps()
         // Remove only the folder that this test made.
         if folder.lastPathComponent.hasPrefix("AppLogTests-") { try? FileManager.default.removeItem(at: folder) }
@@ -3618,6 +3621,7 @@ final class AppLogTests: XCTestCase {
 
     /// At the size limit, the log keeps one old file. The full text has both files, the old file first.
     func testRotation() {
+        AppLog.verbose = false
         AppLog.maxFileSize = 200
         for i in 0..<20 { AppLog.info("line \(i) " + String(repeating: "x", count: 20)) }
         let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?.sorted() ?? []
@@ -3626,6 +3630,19 @@ final class AppLogTests: XCTestCase {
         XCTAssertTrue(full.contains("line 19"))
         let old = (try? String(contentsOf: folder.appendingPathComponent("iPodFirm.1.log"), encoding: .utf8)) ?? ""
         XCTAssertTrue(full.hasPrefix(old))
+    }
+
+    /// With the verbose log on, the larger limit applies. The normal limit does not rotate the file.
+    func testVerboseFileLimit() {
+        AppLog.verbose = false
+        XCTAssertEqual(AppLog.fileLimit, AppLog.maxFileSize)
+        AppLog.maxFileSize = 200
+        AppLog.verboseMaxFileSize = 100_000
+        AppLog.verbose = true
+        XCTAssertEqual(AppLog.fileLimit, 100_000)
+        for i in 0..<20 { AppLog.debug("line \(i) " + String(repeating: "x", count: 20)) }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?.sorted() ?? []
+        XCTAssertEqual(names, ["iPodFirm.log"])
     }
 
     /// The log has no home folder path and no user name.

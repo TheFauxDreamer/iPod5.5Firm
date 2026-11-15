@@ -35,6 +35,11 @@ public enum AppLog {
         : nil
     /// At this size, the log file becomes the old file, and a new log file starts.
     public static var maxFileSize = 1_000_000
+    /// The limit when the verbose log is on. A flash writes many verbose lines. With the 1 MB limit,
+    /// the two files can lose the start of the operation.
+    public static var verboseMaxFileSize = 5_000_000
+    /// The limit that applies now.
+    public static var fileLimit: Int { verbose ? verboseMaxFileSize : maxFileSize }
     /// The number of steps that the log keeps in memory for a fault report.
     static let maxSteps = 50
 
@@ -134,7 +139,7 @@ public enum AppLog {
         queue.sync {
             let fm = FileManager.default
             try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if let size = (try? fm.attributesOfItem(atPath: url.path))?[.size] as? Int, size >= maxFileSize {
+            if let size = (try? fm.attributesOfItem(atPath: url.path))?[.size] as? Int, size >= fileLimit {
                 try? fm.removeItem(at: old)
                 try? fm.moveItem(at: url, to: old)
             }

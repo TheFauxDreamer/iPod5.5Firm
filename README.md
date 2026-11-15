@@ -311,7 +311,7 @@ Usually, the log records only the steps and the faults. To record each action of
 3. Select Help > Save Log….
 4. Select Help > Verbose Log again to turn it off.
 
-The verbose log also records each program that the app starts, each read and write of the disk and each network request.
+The verbose log also records each program that the app starts, each read and write of the disk and each network request. With the verbose log on, each log file can grow to 5 MB, not 1 MB.
 
 ### How the app protects the iPod
 

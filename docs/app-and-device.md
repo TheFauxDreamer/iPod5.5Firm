@@ -63,7 +63,7 @@ If the user does not allow notifications, the app shows an alert with the same b
 
 #### The log and the fault report
 
-The app keeps a log. [AppLog.swift](../mac/Sources/IPodFWKit/AppLog.swift) writes each line to `~/Library/Logs/iPodFirm/iPodFirm.log` and to the unified log of macOS. Console.app shows the lines with the subsystem `com.thefauxdreamer.ipodfirm`. At 1 MB, the file becomes `iPodFirm.1.log`, and a new file starts. The app keeps only these two files.
+The app keeps a log. [AppLog.swift](../mac/Sources/IPodFWKit/AppLog.swift) writes each line to `~/Library/Logs/iPodFirm/iPodFirm.log` and to the unified log of macOS. Console.app shows the lines with the subsystem `com.thefauxdreamer.ipodfirm`. At 1 MB, the file becomes `iPodFirm.1.log`, and a new file starts. With the verbose log on, the limit is 5 MB (`AppLog.verboseMaxFileSize`). The app keeps only these two files.
 
 At the launch, `AppLog.prepareDirectory()` makes the folder `~/Library/Logs/iPodFirm/` with the permissions 755. A new installation has no folder. If a file has the name of the folder, or the user cannot write in the folder, the bad item gets the name `iPodFirm.old-<time>`. Then the app makes a new folder. The app deletes nothing. If the app cannot make the folder, Help > Open Log shows the cause. The tests `testPrepareDirectoryMakesFolder` and `testPrepareDirectoryMovesFileAside` check this behaviour.
 
@@ -92,7 +92,9 @@ The verbose log adds the level `DEBUG` to the log. Help > Verbose Log and Settin
 8. The emulator: the start, the stop and the exit status of the emulator programs.
 9. The start and the end of a write activity, the state of the app (active or not active), and the quit.
 
-The verbose log fills the 1 MB file faster. A flash writes many lines. Turn the verbose log on before you do the operation that has the problem. Then save the log with Help > Save Log…. The tests `testVerboseOffWritesNoDebug`, `testVerboseOnWritesDebug` and `testVerboseProcessLine` check this behaviour.
+A flash writes many verbose lines. Thus the limit of the log file is 5 MB when the verbose log is on (`AppLog.fileLimit`). The two files then hold a maximum of approximately 10 MB. When the verbose log is off, the limit is 1 MB again. A file that is larger than 1 MB then becomes `iPodFirm.1.log` at the next line.
+
+Turn the verbose log on before you do the operation that has the problem. Then save the log with Help > Save Log…. The tests `testVerboseOffWritesNoDebug`, `testVerboseOnWritesDebug`, `testVerboseProcessLine` and `testVerboseFileLimit` check this behaviour.
 
 The fault report and Save Log… also give the path and the signature of the app, and the state of the app folder (`appFolderReport`). For the parent folder, `iPodFirm`, `Staging` and `Backups`, the state is the owner, the mode, the flags and the ACL state. For the last three, the app also makes and deletes a small test file (`writeTest`). The report also gives the user ID of the app. A failed test with the system error shows the real cause of a write fault.
 
