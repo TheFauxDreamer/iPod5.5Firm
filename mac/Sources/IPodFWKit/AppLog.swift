@@ -33,6 +33,45 @@ public enum AppLog {
     public static var fileURL: URL? { directory?.appendingPathComponent("iPodFirm.log") }
     static var oldFileURL: URL? { directory?.appendingPathComponent("iPodFirm.1.log") }
 
+    /// The problem of the last folder check, or nil. Help > Open Log shows it.
+    public private(set) static var directoryProblem: String?
+
+    /// Makes the log folder at the launch, before the first line. A new installation has no folder.
+    /// If a file has the name of the folder, or the user cannot write in the folder, the bad item gets
+    /// a new name ("iPodFirm.old-…"). Then the app makes a new folder. The app deletes nothing.
+    /// Returns true if the folder is ready.
+    @discardableResult
+    public static func prepareDirectory() -> Bool {
+        guard let dir = directory else { return false }
+        return queue.sync {
+            let fm = FileManager.default
+            var isDir: ObjCBool = false
+            let exists = fm.fileExists(atPath: dir.path, isDirectory: &isDir)
+            if exists, !(isDir.boolValue && fm.isWritableFile(atPath: dir.path)) {
+                let aside = dir.deletingLastPathComponent()
+                    .appendingPathComponent("\(dir.lastPathComponent).old-\(Int(Date().timeIntervalSince1970))")
+                do {
+                    try fm.moveItem(at: dir, to: aside)
+                    logger.warning("The log folder was not usable. Its new name is \(aside.lastPathComponent, privacy: .public)")
+                } catch {
+                    directoryProblem = "The log folder \(redact(dir.path)) is not usable: \(error.localizedDescription)"
+                    logger.error("\(directoryProblem!, privacy: .public)")
+                    return false
+                }
+            }
+            do {
+                try fm.createDirectory(at: dir, withIntermediateDirectories: true,
+                                       attributes: [.posixPermissions: 0o755])
+            } catch {
+                directoryProblem = "Cannot make the log folder \(redact(dir.path)): \(error.localizedDescription)"
+                logger.error("\(directoryProblem!, privacy: .public)")
+                return false
+            }
+            directoryProblem = nil
+            return true
+        }
+    }
+
     public static func info(_ text: String) { write(.info, text) }
     public static func warning(_ text: String) { write(.warning, text) }
     public static func error(_ text: String) { write(.error, text) }

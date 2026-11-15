@@ -412,8 +412,10 @@ final class AppModel: ObservableObject {
 
     /// Help > Open Log: opens the most recent log in the default app. If no app opens it, Finder shows it.
     func openLog() {
+        AppLog.prepareDirectory()
         guard let url = AppLog.fileURL, FileManager.default.fileExists(atPath: url.path) else {
-            alert = AlertInfo(title: "No log found", message: "iPodFirm has no log file. Restart iPodFirm. Then try again.")
+            alert = AlertInfo(title: "No log found", message: AppLog.directoryProblem
+                              ?? "iPodFirm has no log file. Restart iPodFirm. Then try again.")
             return
         }
         if !NSWorkspace.shared.open(url) { NSWorkspace.shared.activateFileViewerSelecting([url]) }

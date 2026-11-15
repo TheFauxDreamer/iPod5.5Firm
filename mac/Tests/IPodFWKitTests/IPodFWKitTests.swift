@@ -3578,6 +3578,31 @@ final class AppLogTests: XCTestCase {
         if folder.lastPathComponent.hasPrefix("AppLogTests-") { try? FileManager.default.removeItem(at: folder) }
     }
 
+    /// A new installation has no log folder. The check at the launch makes it.
+    func testPrepareDirectoryMakesFolder() throws {
+        let dir = folder.appendingPathComponent("Logs/iPodFirm")
+        AppLog.directory = dir
+        XCTAssertTrue(AppLog.prepareDirectory())
+        var isDir: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir) && isDir.boolValue)
+        XCTAssertNil(AppLog.directoryProblem)
+        AppLog.info("after the check")
+        XCTAssertTrue(AppLog.fullText().contains("after the check"))
+    }
+
+    /// A file with the name of the folder gets a new name. The app keeps the file and makes the folder.
+    func testPrepareDirectoryMovesFileAside() throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let dir = folder.appendingPathComponent("iPodFirm")
+        try Data("old".utf8).write(to: dir)
+        AppLog.directory = dir
+        XCTAssertTrue(AppLog.prepareDirectory())
+        var isDir: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir) && isDir.boolValue)
+        let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+        XCTAssertTrue(names.contains { $0.hasPrefix("iPodFirm.old-") }, "\(names)")
+    }
+
     /// A line goes to the file, with the level and the time.
     func testWriteAndRead() {
         AppLog.info("first line")

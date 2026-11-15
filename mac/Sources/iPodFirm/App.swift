@@ -180,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let info = Bundle.main.infoDictionary ?? [:]
+        AppLog.prepareDirectory()
         AppLog.info("Launch: iPodFirm \(info["CFBundleShortVersionString"] as? String ?? "dev") (\(info["CFBundleVersion"] as? String ?? "0")), \(AppLog.systemDescription)")
         NSApp.setActivationPolicy(.regular)
         UpdateNotifier.shared.register()

@@ -65,6 +65,8 @@ If the user does not allow notifications, the app shows an alert with the same b
 
 The app keeps a log. [AppLog.swift](../mac/Sources/IPodFWKit/AppLog.swift) writes each line to `~/Library/Logs/iPodFirm/iPodFirm.log` and to the unified log of macOS. Console.app shows the lines with the subsystem `com.thefauxdreamer.ipodfirm`. At 1 MB, the file becomes `iPodFirm.1.log`, and a new file starts. The app keeps only these two files.
 
+At the launch, `AppLog.prepareDirectory()` makes the folder `~/Library/Logs/iPodFirm/` with the permissions 755. A new installation has no folder. If a file has the name of the folder, or the user cannot write in the folder, the bad item gets the name `iPodFirm.old-<time>`. Then the app makes a new folder. The app deletes nothing. If the app cannot make the folder, Help > Open Log shows the cause. The tests `testPrepareDirectoryMakesFolder` and `testPrepareDirectoryMovesFileAside` check this behaviour.
+
 The log records these items:
 
 1. The launch: the app version, the macOS version and the Mac model.
