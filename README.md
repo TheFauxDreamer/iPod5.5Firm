@@ -544,7 +544,7 @@ The idea of SSD Mode comes from [rockpod](https://github.com/nuxcodes/rockpod). 
 
 The idea of Search on the 5G and the byte to change come from [RetroCux](https://github.com/RetroCux/Enable-the-Search-function-on-iPod-Video-5th-Gen).
 
-The idea of Playlist Folders and of the import from the Music app comes from the Reddit user [u/Linusssk](https://www.reddit.com/user/Linusssk/) (Folders4Playlist).
+The idea of Playlist Folders and of the import from the Music app comes from the Reddit user [u/Linusssk](https://www.reddit.com/user/Linusssk/) (Folders4Playlist). Linusssk also found that a flash removed the fonts from iPodWizard (GitHub issue 5).
 
 The user braniak87 found the cause of a crash when the Patches pane opened (GitHub issue 1). braniak87 also gave the fix and tested it.
 
