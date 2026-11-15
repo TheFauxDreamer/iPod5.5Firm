@@ -1615,6 +1615,9 @@ final class ThemeTests: XCTestCase {
         // The Rockbox boot loader has the path of its program.
         let text = Array("/.rockbox/rockbox.ipod".utf8)
         data.replaceSubrange((range.upperBound - 0x80)..<(range.upperBound - 0x80 + text.count), with: text)
+        // The text changes osos. Write the new checksum at +28 in the directory entry.
+        let sum = data[range].reduce(UInt32(0)) { $0 &+ UInt32($1) }
+        data.replaceSubrange(at + 4..<at + 8, with: (0..<4).map { UInt8(truncatingIfNeeded: sum >> (8 * $0)) })
         let current = try FirmwarePartition(data: data)
         XCTAssertTrue(current.addedBootLoaderIsRockbox)
         XCTAssertThrowsError(try FirmwareFlasher.refuseRockbox(current: current, reason: "flash")) { e in
