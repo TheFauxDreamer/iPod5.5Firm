@@ -220,3 +220,17 @@ def test_video_is_not_samsung(partition_bytes):
     from ipodfw.partition import samsung_image_header
     assert samsung_image_header(partition_bytes) is None
     assert samsung_image_header(bytes(0x8000)) is None
+
+
+def test_fat_type_comes_from_the_cluster_count():
+    # The label says FAT16, but 2546 clusters make a FAT12 volume (the rsrc volume of the iPod).
+    from ipodfw.fat16 import Fat16
+    boot = bytearray(0x6a00 + 2546 * 2048)
+    struct.pack_into("<HBHBHHBH", boot, 11, 512, 4, 1, 2, 512, 10240, 0xF0, 10)
+    boot[0x36:0x3E] = b"FAT16   "
+    boot[510:512] = b"\x55\xaa"
+    # FAT12: cluster 2 -> 3, cluster 3 -> end
+    boot[0x200:0x206] = bytes([0xF0, 0xFF, 0xFF, 0x03, 0xF0, 0xFF])
+    v = Fat16(bytes(boot))
+    assert v.fat12 and v.clusters == 2546
+    assert v._chain(2) == [2, 3]

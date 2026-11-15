@@ -175,6 +175,10 @@ final class AppModel: ObservableObject {
     /// The result of the last read of the iPod, for the Patches pane and the iPod pane.
     @Published var ipodReadStatus: String?
     @Published var themes: [ThemeFile] = AppModel.loadThemes()
+    /// The custom fonts of the app: the size of each font that is not the Apple font (FontsModel.swift).
+    @Published var customFontSizes: [String: Int] = AppModel.customFontSizes()
+    /// The question before a flash that would replace custom fonts on the iPod.
+    @Published var fontQuestion: FontQuestion?
     @Published var selectedThemeName: String? = UserDefaults.standard.string(forKey: "darkTheme") {
         didSet { UserDefaults.standard.set(selectedThemeName, forKey: "darkTheme"); switchesChanged(oldValue != selectedThemeName) }
     }
@@ -1385,13 +1389,18 @@ final class AppModel: ObservableObject {
     /// The firmware partition to save or flash: the edits plus the theme and the switched-on patches.
     /// A larger osos moves rsrc (see FirmwarePartition.makeRoom).
     nonisolated static func outputPartition(_ editor: FirmwareEditor, _ patches: [PatchInfo], appearance: AppearanceBuild?,
-                                            version: FirmwareVersion?, list: FirmwareManifest? = nil) throws -> [UInt8] {
+                                            version: FirmwareVersion?, list: FirmwareManifest? = nil,
+                                            fonts: [String: [UInt8]] = [:]) throws -> [UInt8] {
         let fw = try FirmwarePartition(data: editor.partition.data)
         AppLog.step("Build: start with \(patches.count) patch(es): " + patches.map { "\($0.spec.name) \($0.spec.versionText)" }.joined(separator: ", "))
         let osos = try outputOSOS(editor, patches, appearance: appearance, version: version, list: list)
         AppLog.step("Build: make room for an osos of \(osos.count) bytes, then put it in the partition")
         try fw.makeRoom(ososLength: osos.count)
         try fw.replaceImage("osos", with: osos)
+        if !fonts.isEmpty {
+            AppLog.step("Build: put \(fonts.count) custom font(s) into rsrc: " + fonts.keys.sorted().joined(separator: ", "))
+            try IPodFonts.apply(fonts, to: fw)
+        }
         return fw.data
     }
 
@@ -1969,8 +1978,9 @@ final class AppModel: ObservableObject {
             if r.ranges?.isEmpty ?? true {
                 alert = AlertInfo(title: "Nothing to Do", message: r.message)
             } else {
-                flashPlan = FlashPlan(ipod: ipod, image: image, reason: reason, result: r,
-                                      musicAppRunning: !NSRunningApplication.runningApplications(withBundleIdentifier: MusicAppCheck.miMusicBundleID).isEmpty)
+                let plan = FlashPlan(ipod: ipod, image: image, reason: reason, result: r,
+                                     musicAppRunning: !NSRunningApplication.runningApplications(withBundleIdentifier: MusicAppCheck.miMusicBundleID).isEmpty)
+                if await !askAboutIPodFonts(plan) { flashPlan = plan }
             }
         } catch { fail("Cannot Flash", error) }
     }
@@ -2031,7 +2041,8 @@ final class AppModel: ObservableObject {
         let staging = Self.patchLibrary.stagingDir.appendingPathComponent("flash.bin")
         do {
             try Self.patchLibrary.prepareStagingFolder()
-            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion, list: activeList)).write(to: staging, options: .atomic)
+            try Data(Self.outputPartition(editor, activePatches, appearance: activeAppearance, version: activeVersion, list: activeList,
+                                          fonts: Self.loadCustomFonts())).write(to: staging, options: .atomic)
             await prepareFlash(image: staging, reason: "flash")
         } catch { fail("Cannot Flash", error) }
     }
@@ -2060,7 +2071,7 @@ final class AppModel: ObservableObject {
                 let original = try await ensureAppleIPSW()
                 try await work("Writing .ipsw…") {
                     let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version, list: list)
-                    try IPSW.repack(original: original, firmware: IPSW.firmware(original: original, withOSOS: osos), to: out)
+                    try IPSW.repack(original: original, firmware: IPSW.firmware(original: original, withOSOS: osos, fonts: Self.loadCustomFonts()), to: out)
                 }
                 NSWorkspace.shared.activateFileViewerSelecting([out])
             } catch { fail("Cannot Write the .ipsw", error) }
@@ -2077,7 +2088,7 @@ final class AppModel: ObservableObject {
             let original = try await self.ensureAppleIPSW()
             let (fw, ososLength) = try await Task.detached { () -> ([UInt8], Int) in
                 let osos = try Self.outputOSOS(editor, patches, appearance: appearance, version: version, list: list)
-                return (try IPSW.firmware(original: original, withOSOS: osos), osos.count)
+                return (try IPSW.firmware(original: original, withOSOS: osos, fonts: Self.loadCustomFonts()), osos.count)
             }.value
             try await emu.prepare(firmware: fw, ososLength: ososLength, originalIPSW: original, library: library)
         }

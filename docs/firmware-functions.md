@@ -169,6 +169,8 @@ method, the limits and the whole table.
 | 0x1528cc, 0x1ae9d4 | Method + 0x5c of the language manager: the lookup. It asks the current provider (+ 0x40). If the provider has no resource, the lookup continues in the main block. ID 0xa9 is the 24-hour clock flag. | Static |
 | 0xc60ec | Finds an image in the firmware directory by type and ID. Reads the sector with `]ih[`, then the directory. | Static |
 | 0xfc3bc | Calls 0xc60ec. Called with `crsr` at 0xaf548 and 0x1afe44. | Static |
+| 0x242e50 | Opens the font file of a font object: `Resources/Fonts` + the name at object + 0x58. Calls 0x226000 with `(object, path, 1, 4, 0x2000, 3, 0)` and keeps the file at object + 0x8c. Refer to [../re/fonts.md](../re/fonts.md). | Static |
+| 0x226000 | Makes a file object with a block cache (probably 4 blocks of 8 KB). The fonts use it with the disk channel "FontFileAccess". | Static |
 
 ### The user interface: views and labels
 

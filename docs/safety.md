@@ -66,7 +66,7 @@ Before the write, while the volume is still mounted, the app also does this step
 
 If a check stops the flash, the operation gives the error to the app. The error has the file and the line of the failed check, and the last steps of the operation. The app writes the detail to its log, and a fault report contains it (refer to [app-and-device.md](app-and-device.md#the-log-and-the-fault-report)).
 
-With `dryRun`, the operation stops here and returns the list.
+With `dryRun`, the operation stops here and returns the list. For a flash, the result also has the fonts of the iPod that are different from the fonts of the new image (`fontsOnIPod`). If some of them are not Apple fonts, the app asks before the flash: Keep iPod Fonts or Use App Fonts. Refer to [modifications.md](modifications.md#custom-fonts).
 
 ## The write
 
@@ -166,6 +166,7 @@ A test in the emulator is strong evidence, but not proof:
 | Flash and backup | No (no USB) | Yes |
 | Restore of a backup | No (no USB) | Not recorded. Tested on a disk image (`IPODFW_DISK_TEST=1`). |
 | Rescue restore | No | Not recorded |
+| Custom fonts in rsrc | Not tested | Not tested. Swift tests and `fsck_msdos` only (6 November 2026). Refer to [../re/fonts.md](../re/fonts.md) |
 | Dark theme and moved rsrc | Yes | Yes (2 October 2026). The empty-area scan on a partition without the `hibe` entry (25 October 2026): two flashes, both started the iPod; the hibernation area stayed untouched. The move to the end of a partition with no empty area is not tested on a real iPod. Refer to [../re/hibernation-restore.md](../re/hibernation-restore.md). |
 | The patches on the iPod: the read, the iPodFirm list and the mirror of the switches | A firmware with the list starts (22 October 2026) | Yes (22 October 2026): the owner flashed, connected the iPod again, and the switches agreed with the iPod. A changed switch showed in the banner |
 | `album-art` | Versions 2.2–2.4: yes (9 and 10 October 2026). Version 2.8 (27 October 2026): the first start writes the cache with one file open; the second start uses the cache with no fill; a changed `ArtworkDB` gives a new cache. Version 3.0 (27 October 2026): the collages of 2 playlists and of On-The-Go are correct | Version 1.0: yes. Version 2.1: installed, the scroll is slow (9 October 2026). Version 2.2: measured (9 October 2026). Version 2.3, file mode: the scroll is much better (10 October 2026). Version 2.4, file mode with `cover-flow` 0.6.1: yes (10 October 2026); artwork mode with the file present: yes (10 October 2026); artwork mode without the file: yes, most rows are grey until a stop (10 October 2026). Version 2.5: the covers did not load (10 October 2026). Version 2.6: yes (14 October 2026). Version 2.8 (27 October 2026): the cache operates: rows from the cache are as fast as the original draw; a sync makes a new cache; the open of the 104 MB `F1028_1.ithmb` takes 0.93 s, and the 2 s close gives 7 more opens during a fill. Version 2.9 (the file first, the close after 30 s): works great (27 October 2026). Version 3.0 (the playlist collages): the collages showed, but the Albums list loaded the covers only after each stop (27 October 2026). Version 3.1: works well (27 October 2026). Version 3.2 (the measurement off): operates (28 October 2026). Versions 3.4 to 3.6 (the folder icon): not tested |
