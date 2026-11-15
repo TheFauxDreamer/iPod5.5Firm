@@ -127,6 +127,9 @@ public struct OperationResult {
     public var code: String?
     public var ranges: [FirmwareFlasher.WriteRange]?
     public var backup: BackupInfo?
+    /// The dry run of a flash: the fonts on the iPod that are different from the fonts of the new
+    /// image, by name. The app asks the user before it replaces them. Empty: no font changes.
+    public var fontsOnIPod: [String: [UInt8]]?
     /// On a fault: the error of the operation.
     public var fault: Error?
     public init(ok: Bool, message: String, code: String? = nil, ranges: [FirmwareFlasher.WriteRange]? = nil, backup: BackupInfo? = nil) {
@@ -194,6 +197,13 @@ public enum Operations {
         return OperationResult(ok: true, message: "Backed up \(bytes.count / 1_048_576) MB firmware partition.", backup: info)
     }
 
+    /// Read the 8 fonts of the iPod from its rsrc image. Nothing is written to the iPod.
+    public static func readFonts(_ ipod: IPodDisk, access: DiskAccess = .direct) throws -> [String: [UInt8]] {
+        let (bytes, _) = try readCurrent(ipod, access)
+        try checkModel(onIPod: bytes)
+        return try IPodFonts.fonts(in: FirmwarePartition(data: bytes))
+    }
+
     /// Read the osos image of the iPod. Nothing is written to the iPod. The app reads the iPodFirm list and
     /// the patches from the image. `layout` is the directory and the map of the partition.
     public static func readOSOS(_ ipod: IPodDisk, access: DiskAccess = .direct) throws -> (osos: [UInt8], layout: String) {
@@ -237,7 +247,13 @@ public enum Operations {
         let ranges = try FirmwareFlasher.planWrites(current: currentBytes, new: newBytes, blockSize: bs, protected: protected)
         if ranges.isEmpty { return OperationResult(ok: true, message: "The iPod already has this firmware; nothing to write.", ranges: []) }
         let total = ranges.reduce(0) { $0 + $1.length }
-        if dryRun { return OperationResult(ok: true, message: "Would write \(total) bytes in \(ranges.count) range(s).", ranges: ranges) }
+        if dryRun {
+            var r = OperationResult(ok: true, message: "Would write \(total) bytes in \(ranges.count) range(s).", ranges: ranges)
+            if reason == "flash", let mine = try? IPodFonts.fonts(in: current), let theirs = try? IPodFonts.fonts(in: new) {
+                r.fontsOnIPod = mine.filter { theirs[$0.key] != $0.value }
+            }
+            return r
+        }
 
         // Ask first: if the user clicks Cancel, the iPod stays mounted.
         try access.authorizeWrite(ipod, partStart)

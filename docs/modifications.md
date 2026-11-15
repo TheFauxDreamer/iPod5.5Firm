@@ -1384,6 +1384,22 @@ Version 1.3 (IFD2 dark switch table, code 2,003 bytes): the Swift build and the 
 
 Version 1.2 (Split View item, code 1,299 bytes): the Swift build and the Python build give the same osos for Light, Dark and Switch on iPod (`testLayoutSwitchBuilds`). The owner tested a prototype of the same code in the emulator on 3 November 2026 (Switch on iPod): the 2 items operate in each direction. The prototype used the key 0x600060ec. The owner tested the app build of version 1.2 (app 0.1.256, key 0x60007e15) in the emulator on 3 November 2026: the switch operates. Not tested on a real iPod. The research is in [../re/home-screen.md](../re/home-screen.md#layout-switch-on-the-ipod).
 
+## Custom fonts
+
+**User interface.** Patches pane > Fonts. It is not a patch: it changes rsrc, not osos. Refer to [app-and-device.md](app-and-device.md) for the buttons.
+
+**Effect.** The iPod shows the custom fonts, for example Korean bitmap fonts from iPodWizard. The Korean characters are in `CJK.ttf`.
+
+**Method.** The fonts are 8 TrueType files with 4-bit bitmaps in the FAT12 volume of rsrc (`/Resources/Fonts/`). `ResourceVolume` ([ResourceVolume.swift](../mac/Sources/IPodFWKit/ResourceVolume.swift)) replaces the content of a font file. The file stays contiguous. The boot sector, the geometry, the label and the directories do not change. The rsrc image keeps its length and its entryOffset. `IPodFonts.check` accepts only the 8 file names, and only a font with the same strikes as the Apple font. The build of a flash, of Export .ipsw and of the emulator puts the custom fonts into rsrc after osos. With no custom fonts, rsrc stays byte for byte the Apple rsrc.
+
+**Size.** The volume has 632,832 free bytes. All custom fonts together can be this much larger than the Apple fonts. The app checks this at the import. The Fonts detail shows the size of each custom font.
+
+**Before a flash.** If the flash would replace fonts on the iPod that are not Apple fonts, the app asks: Keep iPod Fonts or Use App Fonts.
+
+**Research.** [../re/fonts.md](../re/fonts.md). RetailOS opens a font by name (0x242e50) and reads it through a block cache (0x226000).
+
+**Test status.** Swift tests with the Apple file, and `fsck_msdos` on a changed volume (6 November 2026). Not tested in the emulator or on a real iPod.
+
 ## Move of rsrc
 
 **When.** The dark theme and the Dark Mode switch make osos larger than 0x736800. In Apple's layout, rsrc starts there.

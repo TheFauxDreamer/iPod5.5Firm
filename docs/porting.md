@@ -24,6 +24,7 @@ Thus, about 12,600 lines of the app are in Swift. The UI and the helper (about 6
 |---|---|
 | `Partition.swift` | `partition.py` |
 | `Resources.swift` | `resources.py`, `fat16.py` |
+| `ResourceVolume.swift` (the FAT volume in rsrc and the custom fonts) | `fat16.py` (read only; no font change) |
 | `Pictures.swift` | `pictures.py` |
 | `Editor.swift` | `theme.py` (`ipodfw unpack` and `ipodfw repack`) |
 | `DarkMode.swift` | `darkmode.py` |

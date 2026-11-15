@@ -24,13 +24,17 @@ class Fat16:
         bps, spc, reserved, nfats, root_entries, total16, _media, spf = struct.unpack_from("<HBHBHHBH", data, 11)
         if data[0x36:0x3B] not in (b"FAT16", b"FAT12"):
             raise ValueError("no FAT12/FAT16 boot sector")
-        self.fat12 = data[0x36:0x3B] == b"FAT12"
+        total = total16 or struct.unpack_from("<I", data, 32)[0]
         self.bps, self.spc = bps, spc
         self.fat_off = reserved * bps
         self.root_off = self.fat_off + nfats * spf * bps
         self.root_entries = root_entries
         self.data_off = self.root_off + root_entries * 32
         self.cluster_size = bps * spc
+        # The cluster count gives the type, not the label: the rsrc volume of the iPod has the label
+        # "FAT16" and 2546 clusters, thus it is FAT12.
+        self.clusters = (total * bps - self.data_off) // self.cluster_size
+        self.fat12 = self.clusters < 4085
 
     def _next(self, c: int) -> int:
         if self.fat12:

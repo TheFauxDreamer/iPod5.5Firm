@@ -64,6 +64,8 @@ The check sends no data about you or your iPod.
 
 To remove the changes, switch off all the patches. Then flash the firmware again.
 
+To keep fonts from iPodWizard, select **Patches** > **Fonts** before the flash. Click **Import from iPod**, or click **Import from File…** and select a backup from the time before the last flash. iPodFirm then puts the fonts into each flash.
+
 You can also try the changed firmware in the **Emulator** pane before you flash it. The emulator has no sound and no USB.
 
 ## The patches

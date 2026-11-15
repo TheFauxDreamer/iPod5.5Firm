@@ -328,6 +328,21 @@ struct ContentView: View {
         }
         .task { await model.recordMissingPatchSizes() }
         .task { await model.checkForUpdate(manual: false) }
+        .alert("Keep the Fonts of the iPod?",
+               isPresented: Binding(get: { model.fontQuestion != nil }, set: { if !$0 { model.fontQuestion = nil } }),
+               presenting: model.fontQuestion) { q in
+            Button("Keep iPod Fonts") { Task { await model.keepIPodFonts(q) } }.keyboardShortcut(.defaultAction)
+            Button("Use App Fonts") {
+                // Open the flash sheet after the alert closes.
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    model.flashPlan = q.plan
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { q in
+            Text("The iPod has custom fonts: \(q.fonts.keys.sorted().joined(separator: ", ")). The flash replaces them with the fonts of iPodFirm. Keep iPod Fonts imports them first.")
+        }
         // The fallback if macOS does not allow notifications from iPodFirm.
         .alert("A New Version of iPodFirm Is Available",
                isPresented: Binding(get: { model.availableUpdate != nil }, set: { if !$0 { model.availableUpdate = nil } }),

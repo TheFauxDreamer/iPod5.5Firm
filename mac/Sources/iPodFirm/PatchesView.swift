@@ -20,6 +20,8 @@ struct PatchesView: View {
     @ViewBuilder var detail: some View {
         if model.patchSelection == "version" {
             VersionDetail()
+        } else if model.patchSelection == "fonts" {
+            FontsDetail()
         } else if let name = model.patchSelection, let patch = model.patches.first(where: { $0.spec.name == name }) {
             PatchDetail(patch: patch)
         } else {
@@ -159,6 +161,8 @@ struct PatchList: View {
                         .tag("appearance")
                     OptionRow(title: "Software Version", symbol: "number", tint: .teal)
                         .tag("version")
+                    OptionRow(title: "Fonts", symbol: "textformat", tint: .brown)
+                        .tag("fonts")
                 }
                 ForEach(groups, id: \.title) { group in
                     Section(group.title) {
@@ -238,7 +242,7 @@ struct PatchList: View {
     var selectedPatch: PatchInfo? { model.patches.first { $0.spec.name == model.patchSelection } }
 }
 
-/// A row for iPod Appearance or Software Version. It has no switch.
+/// A row for iPod Appearance, Software Version or Fonts. It has no switch.
 struct OptionRow: View {
     let title: String
     let symbol: String
@@ -857,6 +861,48 @@ struct AppearanceDetail: View {
         } message: { _ in
             Text("iPodFirm removes the imported theme from this Mac. You can import it again.")
         }
+    }
+}
+
+// MARK: Fonts
+
+/// The fonts of the iPod: the Apple fonts, or custom fonts, for example from iPodWizard. Each build
+/// puts the custom fonts into rsrc (FontsModel.swift).
+struct FontsDetail: View {
+    @EnvironmentObject var model: AppModel
+
+    var custom: [String] { IPodFonts.names.filter { model.customFontSizes[$0] != nil } }
+
+    var body: some View {
+        Form {
+            Section {
+                DetailHeader(title: "Fonts", symbol: "textformat", tint: .brown)
+            }
+            Section {
+                if custom.isEmpty {
+                    LabeledContent("Fonts", value: "Apple")
+                } else {
+                    ForEach(custom, id: \.self) { name in
+                        LabeledContent(name, value: PatchSpec.byteText(model.customFontSizes[name] ?? 0))
+                    }
+                    LabeledContent("Size on iPod (Custom Fonts)",
+                                   value: PatchSpec.byteText(model.customFontSizes.values.reduce(0, +)))
+                }
+            }
+            Section {
+                HStack {
+                    Button("Import from iPod") { Task { await model.importFontsFromIPod() } }
+                        .disabled(model.currentIPod == nil || model.busy != nil)
+                    Button("Import from File…") { model.importFontsFromFile() }
+                    Spacer()
+                    Button("Use Apple Fonts") { model.useAppleFonts() }
+                        .disabled(custom.isEmpty)
+                }
+            } header: {
+                Text("Import")
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 
