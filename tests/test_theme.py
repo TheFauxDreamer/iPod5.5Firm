@@ -212,6 +212,27 @@ def test_fit_layout_drops_the_files_hibe_when_the_ipod_has_none(partition_bytes)
     device.check_compatible(current, fitted, "new firmware")
 
 
+def test_flash_refuses_rockbox(partition_bytes):
+    data = ipod_layout(partition_bytes)
+    fw = FirmwarePartition(data)
+    assert not fw.has_added_boot_loader()
+    device.refuse_rockbox(fw, restore=False)
+    out = bytearray(data)
+    start, end = fw.image_range("osos")
+    struct.pack_into("<I", out, fw.dir_offset + fw.entry("osos").index * ENTRY_SIZE + 24, end - start - 0x100)
+    other = FirmwarePartition(bytes(out))
+    assert other.has_added_boot_loader() and not other.added_boot_loader_is_rockbox()
+    with pytest.raises(FirmwareError, match="not from Apple"):
+        device.refuse_rockbox(other, restore=False)
+    out[end - 0x80:end - 0x80 + 22] = b"/.rockbox/rockbox.ipod"
+    struct.pack_into("<I", out, fw.dir_offset + fw.entry("osos").index * ENTRY_SIZE + 28, checksum(out[start:end]))
+    current = FirmwarePartition(bytes(out))
+    assert current.added_boot_loader_is_rockbox()
+    with pytest.raises(FirmwareError, match="the iPod has Rockbox"):
+        device.refuse_rockbox(current, restore=False)
+    device.refuse_rockbox(current, restore=True)
+
+
 def test_merge_words_changes_only_agreeing_words():
     base = struct.pack("<4I", 1, 2, 3, 4)
     theme = struct.pack("<4I", 1, 9, 3, 8)

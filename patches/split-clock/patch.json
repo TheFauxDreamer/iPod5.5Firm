@@ -5,11 +5,12 @@
   "symbol": "clock",
   "category": "display",
   "version_letter": "z",
-  "version": "1.4",
-  "size": 1444,
-  "description": "The right panel of the Split main menu shows the time, the day of the week and the date when there is no current song. When a song starts, the panel shows the cover and the song again.",
+  "version": "1.5",
+  "size": 4520,
+  "description": "The right panel of the Split main menu shows the time, the day of the week and the date when there is no current song. The time can be text or the clock face of the Clock app. When a song starts, the panel shows the cover and the song again.",
   "details": [
     "The time changes at each new minute. The panel checks the time each 30 seconds.",
+    "Clock Face: Analogue shows the clock face of Extras > Clock in place of the time text. The patch draws the face at 90 × 90 with the colours of the Apple face, so that it is sharp. The minute hand moves in steps of 6°, the hour hand in steps of 1°. The face is white from 6:00 to 17:59 and black at other times, as in the Clock app.",
     "The time obeys Settings > Date & Time > Time (12-hour or 24-hour).",
     "The names of the day and the month use the language of the iPod.",
     "Date gives a short month (\"Nov 4 2026\") or a long month (\"4 November 2026\").",
@@ -36,9 +37,35 @@
     "timer_period": "0x151c24",
     "timer_start": "0x151694",
     "play_state": "0x09ba00",
-    "lookup_continue": "0x21f258"
+    "lookup_continue": "0x21f258",
+    "clock_row_draw": "0x1ab064",
+    "picture_rect": "0x250714",
+    "picture_draw": "0x2506bc",
+    "gc_colour": "0x2551dc",
+    "gc_mode": "0x2551d4",
+    "gc_set_colour": "0x2106dc",
+    "gc_set_mode": "0x210290",
+    "view_invalidate": "0x21ac04",
+    "binding_free": "0x149e8c",
+    "heap_free": "0x25a8f4",
+    "surface_make": "0x13b91c",
+    "surface_free": "0x13ba74",
+    "gc_make": "0x211ac8",
+    "gc_free": "0x211c04",
+    "blit": "0x210114",
+    "display_info": "0x10883614"
   },
   "options": [
+    {
+      "id": "face",
+      "title": "Clock Face",
+      "symbol": "clock_face",
+      "default": 0,
+      "choices": [
+        { "value": 0, "title": "Digital", "description": "The time as text, then the day and the date." },
+        { "value": 1, "title": "Analogue", "description": "The clock face of the Clock app, then the day and the date." }
+      ]
+    },
     {
       "id": "date",
       "title": "Date",
@@ -66,6 +93,8 @@
   "hooks": [
     { "kind": "b", "at": "0x21f254", "expect": "0xe92d40f8", "to": "hook_lookup", "chain": "lookup_next", "chain_default": "lookup_original" },
     { "kind": "word", "at": "0x670fa8", "expect": "0x0021f37c", "to": "hook_notify", "chain": "notify_next" },
-    { "kind": "word", "at": "0x6701ec", "expect": "0x001d93c4", "to": "hook_event", "chain": "event_next" }
+    { "kind": "word", "at": "0x6701ec", "expect": "0x001d93c4", "to": "hook_event", "chain": "event_next" },
+    { "kind": "bl", "at": "0x1ab498", "expect": "0xebfffef1", "to": "hook_face_draw" },
+    { "kind": "word", "at": "0x66d774", "expect": "0x001ab664", "to": "hook_face_delete", "chain": "face_delete_next" }
   ]
 }

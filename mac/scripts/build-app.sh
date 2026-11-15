@@ -58,6 +58,13 @@ for t in ../themes/*.ipodtheme; do
 done
 mkdir -p "$APP/Contents/Resources/Layouts"
 cp ../themes/layouts/*.ipodtheme "$APP/Contents/Resources/Layouts/"
+# A fresh install needs the dark theme and the Split layout. Stop if the app does not have them.
+for f in "Themes/Dark Gray.ipodtheme" "Layouts/Split.ipodtheme"; do
+    if [ ! -s "$APP/Contents/Resources/$f" ]; then
+        echo "error: the app does not have $f" >&2
+        exit 1
+    fi
+done
 mkdir -p "$APP/Contents/Resources/patches"
 for p in ../patches/*/; do
     n=$(basename "$p")

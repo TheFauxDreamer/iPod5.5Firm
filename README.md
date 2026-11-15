@@ -192,7 +192,7 @@ A folder cannot have the name of a playlist. A folder has no colour square at th
 
 CAUTION: Use only a theme for firmware 1.2.1 and import it with iPodFirm. An old theme that you apply directly can damage the firmware.
 
-The app comes with the theme "Dark Gray". The app copies it to `~/Library/Application Support/iPodFirm/Themes/` at the first start. You can also import your own theme:
+The app comes with the theme "Dark Gray". The app copies it to `~/Library/Application Support/iPodFirm/Themes/` at the first start. If the copy fails, the app uses the theme from the app. The app also comes with the Split layout. You can also import your own theme:
 
 1. Get the theme file and the Apple firmware 1.2.1 (`iPod_25.1.2.1.ipsw`). The [iPod Wizard Themes](https://archive.org/details/b5ad5489368ba5f0fe19935e983faf2b) collection on the Internet Archive has both.
 2. In iPodFirm, select File > Import iPodWizard Theme….
@@ -368,6 +368,15 @@ The author has only an iPod 5.5G. Thus the author does not add support for other
 To add a model, make a fork of the project. Each model and each firmware version needs new research in Ghidra: the functions, the addresses and the hooks. Use this repository as a reference, and use a real iPod for the tests. For the steps, refer to [docs/porting.md](docs/porting.md).
 
 For the iPod Classic (6th generation and 7th generation), refer to RepriseOS by osos-lab.
+
+## Rockbox
+
+iPodFirm does not support an iPod that has Rockbox or a version of Rockbox, for example RockWheel. The app does not flash such an iPod, and an alert tells you the reason. A flash removes the Rockbox boot loader, and the iPod can then fail to start.
+
+1. Remove the Rockbox boot loader with Rockbox Utility.
+2. Flash the iPod with iPodFirm.
+
+A restore of a backup continues to operate on an iPod with Rockbox.
 
 ## AI disclosure
 

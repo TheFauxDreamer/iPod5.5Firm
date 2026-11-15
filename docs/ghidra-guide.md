@@ -560,6 +560,7 @@ CAUTION: iPodFirm supports one osos per patch folder. The app downloads and uses
 | 0x191eb0 | `shuffle-album-mix` | `ff0000e2 020050e3 1c00c4e5 1c80c485 1c10d4e5 980094e5 ??????eb 000094e5 0720a0e1 543090e5 0400a0e1 0b10a0e1 0fe0a0e1` |
 | 0x946d8 | `shuffle-fixes` | `01005013 ??????da 0a70a0e1 ??????ea 080047e0 010080e2 ??????eb 072186e0 103092e5 001186e0 100091e5 103081e5 017047e2` |
 | 0x21f254 | `dark-mode`, `something-comforting`, `album-artists`, `shuffle-album-mix`, `up-next` | `050051e3 04005113 03005113 01005113 0000a013 1eff2fe1 f8402de9 0150a0e1 0010a0e3 0260a0e1 0040a0e1 00108de5 ??????ea` |
+| 0x1ab498 | `split-clock` | `04108de2 0400a0e1 ??????eb 04208de2 14108de2 0400a0e1 ??????eb 14008de2 ??????eb 58d08de2 1080bde8 f8402de9 18509de5` |
 | 0x1eb5b4 | `up-next` | `???????? 65050000 10402de9 0040a0e1 0200b0e1 1c009405 ??????eb 000050e3 0000a013 1080bd18 0400a0e1 ??????eb 0100a0e3` |
 | 0x1ea66c | `playlist-folders` | `7080bd08 0000a0e3 7080bde8 10402de9 0040a0e1 1c0090e5 ??????eb 000050e3 d41094e5 0100a003 010040e2 000051e1 1080bd08` |
 | 0x1ec914 | `playlist-folders` | `??????ea 6a0f8fe2 000084e5 1c0095e5 14208de2 011086e2 ??????eb ??????ea 1c0095e5 14208de2 0610a0e1 ??????eb ??????ea` |

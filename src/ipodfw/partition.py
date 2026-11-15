@@ -172,6 +172,17 @@ class FirmwarePartition:
         e = self.entry("osos")
         return e.entry_offset or e.length
 
+    def has_added_boot_loader(self) -> bool:
+        """True if osos has a boot loader that is not from Apple (entryOffset is not 0 after ipodpatcher)."""
+        return self.has("osos") and self.entry("osos").entry_offset != 0
+
+    def added_boot_loader_is_rockbox(self) -> bool:
+        """True if the added boot loader contains the text "rockbox"."""
+        if not self.has_added_boot_loader():
+            return False
+        start, end = self.image_range("osos")
+        return b"rockbox" in bytes(self.data[start + self.entry("osos").entry_offset:end]).lower()
+
     def checksum_ok(self, name: str) -> bool:
         start, end = self.image_range(name)
         return checksum(self.data[start:end]) == self.entry(name).chksum

@@ -238,20 +238,56 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
     static let clockLine = (at: 416, size: 96)
     static let clockLines: [(id: UInt32, top: Int32)] = [(0x7E41, 72), (0x7E42, 96), (0x7E43, 118)]
 
-    /// The layout with the 3 lines of the split-clock patch after the other elements, and the new size
-    /// in the table entry. Use it after `withHalfWidth` and `withSmallText`.
-    public func withClock() -> ImportedTheme {
+    /// The option Analogue of split-clock: the clock face of the Clock app, then the day and the date.
+    /// The face is a copy of the artist line with the class of the analogue clock (0x5a80, View -568),
+    /// the tag 'DtTm', the ID 0x7e44 and a size of 90 × 90: the patch draws the face with the colours of
+    /// the 45 × 45 Apple face. The owner word 0x2b00 of the line stays, so the panel data object is the owner.
+    /// The 5 picture IDs at offset 84 are the day face, the night face, the "New Clock" face, and 0 for
+    /// the minute and the hour hands, so that 0x1ab4ac makes no hand bindings. Refer to
+    /// re/split-clock.md.
+    static let analogueLines: [(id: UInt32, top: Int32)] = [(0x7E42, 128), (0x7E43, 150)]
+    static let face = (id: UInt32(0x7E44), top: UInt32(34), size: UInt32(90))
+    static let facePictures: [UInt16] = [24403, 24405, 24407, 0, 0, 0]
+    /// The left edge of the face for the left edge of the text (offset 464): 2/3 and 1/2.
+    static let faceLeft: [Int32: UInt32] = [219: 222, 164: 194]
+
+    /// The face element of the option Analogue, from the template of a text line.
+    static func clockFace(_ template: [UInt8], left: UInt32) -> [UInt8] {
+        var face = template
+        for (at, value) in [(4, 0x5A80), (8, 0x4474546D), (12, Self.face.id), (20, 0), (24, 0xA00),
+                            (28, 0), (32, 0x8000_0002), (36, Self.face.top),
+                            (40, 0), (44, 0x8000_0002), (48, left),
+                            (52, 0), (56, 0x8000_0008), (60, Self.face.size),
+                            (64, 0), (68, 0x8000_0004), (72, Self.face.size)] as [(Int, UInt32)] {
+            put32(&face, at, value)
+        }
+        for (i, picture) in facePictures.enumerated() {
+            face[84 + 2 * i] = UInt8(picture & 0xFF)
+            face[85 + 2 * i] = UInt8(picture >> 8)
+        }
+        return face
+    }
+
+    /// The layout with the 3 elements of the split-clock patch after the other elements, and the new
+    /// size in the table entry. Digital gives the lines of the time, the day and the date. Analogue gives
+    /// the face, the day and the date. Use it after `withHalfWidth` and `withSmallText`.
+    public func withClock(analogue: Bool = false) -> ImportedTheme {
         guard changes.count >= 2 else { return self }
         var view = [UInt8](changes[0].new)
         guard view.count == 704, le32(view, 0) == 7 else { return self }
         let template = Array(view[Self.clockLine.at..<Self.clockLine.at + Self.clockLine.size])
-        for line in Self.clockLines {
+        let lines = analogue ? Self.analogueLines : Self.clockLines
+        if analogue {
+            guard let left = Self.faceLeft[Int32(bitPattern: le32(view, 464))] else { return self }
+            view += Self.clockFace(template, left: left)
+        }
+        for line in lines {
             var element = template
             put32(&element, 12, line.id)
             put32(&element, 36, UInt32(bitPattern: line.top))
             view += element
         }
-        put32(&view, 0, UInt32(7 + Self.clockLines.count))
+        put32(&view, 0, UInt32(7 + lines.count + (analogue ? 1 : 0)))
         var entry = [UInt8](changes[1].new)
         put32(&entry, 4, UInt32(view.count))
         var out = self
@@ -403,6 +439,65 @@ public struct ImportedTheme: Codable, Equatable, Identifiable {
         var out = c
         out.new = Data(new)
         return out
+    }
+}
+
+/// The list of the dark themes: the themes in the folder of the owner and the themes that come
+/// with the app.
+public enum ThemeLibrary {
+    /// A theme and the file that a save writes to. The file is always in the folder of the owner.
+    public struct File: Identifiable {
+        public var id: String { name }
+        public var name: String
+        public var url: URL
+        public var theme: ImportedTheme
+
+        public init(name: String, url: URL, theme: ImportedTheme) {
+            self.name = name
+            self.url = url
+            self.theme = theme
+        }
+    }
+
+    /// The themes in `userDir`, then each theme in `builtInDir` that `userDir` does not have.
+    /// The function copies a built-in theme into `userDir`, so the owner can change it like an
+    /// imported theme. If the copy fails, the theme comes from `builtInDir`. Its `url` stays in
+    /// `userDir`, thus a save never writes into the app.
+    public static func load(userDir: URL, builtInDir: URL?) -> [File] {
+        let fm = FileManager.default
+        func themeFiles(_ dir: URL) -> [URL] {
+            ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+                .filter { $0.pathExtension == "ipodtheme" }
+        }
+        var out = themeFiles(userDir).compactMap { url in
+            (try? ImportedTheme.load(url)).map { File(name: $0.name, url: url, theme: $0) }
+        }
+        for url in builtInDir.map(themeFiles) ?? [] {
+            guard let theme = try? ImportedTheme.load(url) else {
+                AppLog.error("The built-in theme \(url.lastPathComponent) does not load.")
+                continue
+            }
+            if out.contains(where: { $0.name == theme.name }) { continue }
+            let dest = userDir.appendingPathComponent(url.lastPathComponent)
+            if !fm.fileExists(atPath: dest.path) {
+                do {
+                    // At the first start, the folder is not there. Without it, the copy fails (issue 1).
+                    try fm.createDirectory(at: userDir, withIntermediateDirectories: true)
+                    try fm.copyItem(at: url, to: dest)
+                } catch {
+                    AppLog.warning("The copy of the built-in theme \(theme.name) failed. The app uses the theme from the app. \(AppLog.describe(error))")
+                }
+            }
+            if let copied = try? ImportedTheme.load(dest) {
+                out.append(File(name: copied.name, url: dest, theme: copied))
+            } else {
+                if fm.fileExists(atPath: dest.path) {
+                    AppLog.warning("The file \(dest.lastPathComponent) in the folder Themes does not load. The app uses the theme from the app.")
+                }
+                out.append(File(name: theme.name, url: dest, theme: theme))
+            }
+        }
+        return out.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 }
 

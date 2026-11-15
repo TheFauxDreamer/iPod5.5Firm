@@ -589,21 +589,54 @@ def half_width(theme: Theme) -> Theme:
 LAYOUT_CLOCK_LINE = (416, 96)
 LAYOUT_CLOCK_LINES = ((0x7E41, 72), (0x7E42, 96), (0x7E43, 118))
 
+# The option Analogue of split-clock: the clock face of the Clock app, then the day and the date.
+# The face is a copy of the artist line with the class of the analogue clock (0x5a80, View -568),
+# the tag 'DtTm', the ID 0x7e44 and a size of 90 x 90: the patch draws the face with the colours of
+# the 45 x 45 Apple face. The owner word 0x2b00 of the line stays, so the panel data object is the owner.
+# The 5 picture IDs at offset 84 are the day face, the night face, the "New Clock" face, and 0 for
+# the minute and the hour hands, so that 0x1ab4ac makes no hand bindings. Refer to
+# re/split-clock.md.
+LAYOUT_ANALOGUE_LINES = ((0x7E42, 128), (0x7E43, 150))
+LAYOUT_FACE_ID, LAYOUT_FACE_TOP, LAYOUT_FACE_SIZE = 0x7E44, 34, 90
+LAYOUT_FACE_PICTURES = (24403, 24405, 24407, 0, 0)
+# The left edge of the face for the left edge of the text (offset 464): 2/3 and 1/2.
+LAYOUT_FACE_LEFT = {219: 222, 164: 194}
 
-def with_clock(theme: Theme) -> Theme:
-    """The layout with the 3 lines of the split-clock patch after the other elements, and the new
-    size in the table entry. Use it after half_width and small_text."""
+
+def _clock_face(template: bytes, left: int) -> bytes:
+    """The face element of the option Analogue, from the template of a text line."""
+    face = bytearray(template)
+    struct.pack_into("<III", face, 4, 0x5A80, 0x4474546D, LAYOUT_FACE_ID)
+    struct.pack_into("<II", face, 20, 0, 0xA00)
+    struct.pack_into("<3I", face, 28, 0, 0x80000002, LAYOUT_FACE_TOP)
+    struct.pack_into("<3I", face, 40, 0, 0x80000002, left)
+    struct.pack_into("<3I", face, 52, 0, 0x80000008, LAYOUT_FACE_SIZE)
+    struct.pack_into("<3I", face, 64, 0, 0x80000004, LAYOUT_FACE_SIZE)
+    struct.pack_into("<6H", face, 84, *LAYOUT_FACE_PICTURES, 0)
+    return bytes(face)
+
+
+def with_clock(theme: Theme, analogue: bool = False) -> Theme:
+    """The layout with the 3 elements of the split-clock patch after the other elements, and the new
+    size in the table entry. Digital gives the lines of the time, the day and the date. Analogue gives
+    the face, the day and the date. Use it after half_width and small_text."""
     view, entry = theme.changes[:2]
     new = bytearray(view.new)
     if len(new) != 704 or struct.unpack_from("<I", new)[0] != 7:
         return theme
     at, size = LAYOUT_CLOCK_LINE
-    for ident, top in LAYOUT_CLOCK_LINES:
+    lines = LAYOUT_ANALOGUE_LINES if analogue else LAYOUT_CLOCK_LINES
+    if analogue:
+        left = LAYOUT_FACE_LEFT.get(struct.unpack_from("<i", new, 464)[0])
+        if left is None:
+            return theme
+        new += _clock_face(new[at:at + size], left)
+    for ident, top in lines:
         line = bytearray(new[at:at + size])
         struct.pack_into("<I", line, 12, ident)
         struct.pack_into("<i", line, 36, top)
         new += line
-    struct.pack_into("<I", new, 0, 7 + len(LAYOUT_CLOCK_LINES))
+    struct.pack_into("<I", new, 0, 7 + len(lines) + int(analogue))
     return replace(theme, changes=[replace(view, new=bytes(new)),
                                    replace(entry, new=entry.new[:4] + struct.pack("<I", len(new))),
                                    *theme.changes[2:]])

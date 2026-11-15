@@ -110,15 +110,67 @@ In the recommended order:
 1. **Measure on the real iPod**: the free heap, and the load times (the debug log of cover-flow.md, "How to add the debug log again"). Compare with the 0.6.7 log (a load 31 ms: read 16.2 ms, scale 14.8 ms).
 2. **Keep the list tick from `album-art` while Cover Flow shows.** One line. Removes the possible disk reads of `album-art` during Cover Flow.
 3. **A disk cache of scaled textures (the method of PictureFlow and of 0.2–0.3, without iPodFirm).** A file with one 128 × 128 texture (32 KB) for each album, 10.8 MB for 336 albums, made by the patch as covers load (as the `album-art` cache). A load reads 32 KB with no scale: approximately 7 ms in place of 31 ms (an estimate from 16 ms for 80 KB). Open questions:
-   - Does the firmware file system allow a seek past the end of a file, to put a texture at its place?
+   - Does the firmware file system allow a seek past the end of a file, to put a texture at its place? No: the seek 0x2258a4 refuses it (refer to "The block cache of the file class"). The patch must write the file to its full length first, or add each texture at the end.
    - Is the open of an 11 MB file faster than the 1.1 s of the 416 MB `F1029_1.ithmb`? (`ArtworkDB`, 3 MB, opens in a few ms.)
 4. **A background task for the loads (the method of PictureFlow).** ThreadX tasks are made with `bl 0x11c808` and a priority (re/usb-host.md, re/firmware-task-system.md). A patch task needs a task class, a stack, and a lock for the cache and the file handle. Needs its own research.
 5. **Keep the textures between two opens, or a few more slots.** Only after the measurement of item 1. For example 16 slots (+160 KB).
 6. **Optional: load more than one cover in a frame while the wheel is slow.** Version 0.4 loaded all visible covers. A limit of 2–3 loads in a frame when no wheel event waits gives fewer grey squares. With item 3, a load is cheap enough for this.
 
+## The block cache of the file class (6 November 2026)
+
+The font research found that RetailOS opens `Resources/Fonts/<name>` with `FUN_10226000(obj, path, 1, 4, 0x2000, 3, 0)` (0x242e50). This is a file object with a block cache. The owner asked if this cache can make the cover loads faster. This section is research only (Ghidra decompile of RetailOS 1.3, Static). No code changed.
+
+### The result
+
+1. **Cover Flow already uses this file class.** 0x226000 and its twin 0x225f38 are the constructors of the general C++ file class of RetailOS. The open 0x08f38c of the patch makes the same object, with one block of 0x400 bytes.
+2. **A larger block cache does not make a cover read faster.** The cache gives only the parts of a read that are not aligned to a block. A cover read of 80,000 bytes goes almost fully past the cache.
+3. **The real gain is the open file.** The firmware artwork task keeps each `.ithmb` file open permanently. Cover Flow closes `F1029_1.ithmb` at each close, and the next open of Cover Flow takes 1.1 s again.
+
+### The call chains
+
+| Patch symbol | Chain | End |
+|---|---|---|
+| `file_open` 0x08f38c | 0xa582c → 0xa449c → 0x120ee0 | 0x225f38(obj, path, read-only, channel, 0x400, 1, 0), then the open 0x225450 |
+| `file_read` 0x08f464 | 0xa5894 → 0xa4504 → 0x120f9c → 0x225594 | 0x2255b0, the read with the block cache |
+| `file_seek` 0x08f5c4 | 0xa58cc → 0x121004 | 0x2258a4, the seek |
+
+0x08f464 also has a buffer of its own in the 0x30-byte handle. A read that is larger than this buffer goes directly to 0xa5894.
+
+### The arguments of the constructor
+
+| Argument | Meaning | Evidence |
+|---|---|---|
+| 3 | 1: read only | 0x1019f794 gets `flag ^ 1` |
+| 4 | The disk channel | Fonts: 4. The channel names are at 0x211ddc, for example "Channel FontFileAccess" and "Channel AlbumArtReading". |
+| 5 | The block size. 0x224d88 makes it a multiple of the sector size, with a maximum of 0x40000. | Static |
+| 6 | The block count. 0x224df4 accepts 1–16, else 1. 0x225304 makes one entry of 0x18 bytes for each block. | Static |
+
+22 functions call 0x226000. Most use one block of 0x400 bytes. The fonts use 3 blocks of 0x2000 (24 KB). One caller of the resources (0x287dd4) uses one block of 0x8000.
+
+### Why the block cache does not help a cover load
+
+- In 0x2255b0, the cache (0x225108) reads only the start of a read up to a block boundary, and the end after the last full block. The aligned middle goes directly to the volume read (vtable + 0x1c).
+- A cache helps only when the same bytes are read again. Each cover has its own offset (k × 80,000 in `F1029_1.ithmb`), and Cover Flow reads it one time. A cover that comes back is in the 11 texture slots: 32 KB for each cover, not 80 KB.
+- The read of 16 ms is disk time. The scale of 15 ms is CPU time. A cache changes neither.
+- With blocks of 8 KB, a cover at an offset that is not aligned needs 2 more block reads: the start block and the end block. Thus a larger block cache can make a load slower.
+
+### The open files of ArtworkLoadTask
+
+The task function 0x205db4 finds the file object of a path in a map at task + 0x7c (the header at + 0x8c, the count at + 0x90). If the path is not in the map, it calls 0x226000 and adds the object to the map (0x2912c8). Then it seeks (0x2258a4) and reads (0x225594). 0x206a38 closes one random file only when the map has more than 32 files. Thus the firmware keeps the large artwork files open permanently.
+
+A patch must not use these file objects. The task seeks and reads without its lock at task + 0x40, and the seek and the read share the position at file + 0x34. A second user can read from a wrong position.
+
+### What this means for Cover Flow
+
+- Keep `F1029_1.ithmb` open after the close of Cover Flow. Close it when the album table is made again (a new database after a sync), or after a failed read. Then only the first open after a start or a sync takes 1.1 s.
+- In the log of 0.6.6, the first frame took 1.31 s, and the file open was 1.14 s of it. Without the open, the first frame takes approximately 0.17 s.
+- An open file object uses approximately 1.2 KB: the object of 0x54 bytes, one block of 0x400 bytes, and the handle of 0x30 bytes in the patch.
+- If the disk sleeps, the first read still waits for the spin-up. The 1.1 s is not the spin-up: in the 0.6.5 log, 25 opens in a row each took 1.1 s.
+- The seek 0x2258a4 refuses a position past the end of the file. A cache file of textures must be written to its full length first, or get each texture at its end.
+
 ## Sources
 
 - `patches/cover-flow/cover_flow.c` in each commit: 3180488 (0.2), c6fc89f (0.3), 3a8dbb8 (0.4), c8234d0 (0.6), 65f0438 (0.6.1), 6d4778e (0.6.2), c4c9180 (0.6.3), 573436f (0.6.4), f30c897 (0.6.8).
 - [cover-flow.md](cover-flow.md): the logs of 0.6.5–0.6.7 and the times of the real iPod.
-- Ghidra (read-only): 0x25a974, 0x11ca20, 0x1ac4ec.
+- Ghidra (read-only): 0x25a974, 0x11ca20, 0x1ac4ec. On 6 November 2026: 0x226000, 0x225f38, 0x2255b0, 0x2258a4, 0x120ee0, 0x205db4, 0x206a38.
 - Emulator: `peek` of the heap object, 27 October 2026.

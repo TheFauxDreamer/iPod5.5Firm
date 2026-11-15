@@ -1338,6 +1338,26 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(clock.withClock().changes[0].new, clock.changes[0].new)
         XCTAssertEqual(clock.withHalfWidth().changes[0].new, clock.changes[0].new)
         XCTAssertEqual(words(theme.withClock().movedLayout(after: [], dark: true).changes[0].new, 0x9F), 7)
+        // The option Analogue of split-clock: the face (class 0x5a80, ID 0x7e44, 90 × 90) and the lines of
+        // the day and the date. Python gives the same Views.
+        let analogue = theme.withClock(analogue: true)
+        let av = [UInt8](analogue.changes[0].new)
+        XCTAssertEqual(av.count, 704 + 3 * 96)
+        XCTAssertEqual(le32(av, 0), 10)
+        XCTAssertEqual((0..<7).map { le32(av, 704 + 4 * $0) }, [92, 0x5A80, 0x4474546D, 0x7E44, 0x2B00, 0, 0xA00])
+        XCTAssertEqual((0..<12).map { le32(av, 732 + 4 * $0) },
+                       [0, 0x8000_0002, 34, 0, 0x8000_0002, 222, 0, 0x8000_0008, 90, 0, 0x8000_0004, 90])
+        XCTAssertEqual((0..<6).map { UInt16(av[788 + 2 * $0]) | UInt16(av[789 + 2 * $0]) << 8 },
+                       [24403, 24405, 24407, 0, 0, 0])
+        XCTAssertEqual([800, 896].map { le32(av, $0 + 12) }, [0x7E42, 0x7E43])
+        XCTAssertEqual([800, 896].map { Int32(bitPattern: le32(av, $0 + 36)) }, [128, 150])
+        XCTAssertEqual(le32([UInt8](analogue.changes[1].new), 4), UInt32(av.count))
+        XCTAssertEqual(ThemeImport.sha256(av), "626bbc271c6164f6f56ff64a467f7c18ad93d109c1e38e47086c72f1e09971db")
+        let halfAnalogue = [UInt8](half.withClock(analogue: true).changes[0].new)
+        XCTAssertEqual(Int32(bitPattern: le32(halfAnalogue, 704 + 48)), 194)
+        XCTAssertEqual(ThemeImport.sha256(halfAnalogue), "4b2c49a78927a544d07fbf7e4136255a37bb69e51674d39a7787909f5a7f6095")
+        XCTAssertEqual(analogue.withClock(analogue: true).changes[0].new, analogue.changes[0].new)
+        XCTAssertEqual(words(analogue.movedLayout(after: [], dark: true).changes[0].new, 0x9F), 6)
         var wrong = [UInt8](repeating: 0, count: 0x736000)
         XCTAssertThrowsError(try theme.apply(to: &wrong, originalSHA256: theme.osos_sha256))
         let env = ProcessInfo.processInfo.environment
@@ -1572,6 +1592,39 @@ final class ThemeTests: XCTestCase {
     }
 
     /// The file has a hibe image, the restored iPod has none: the result follows the iPod.
+    /// A flash stops on an iPod with a Rockbox boot loader. A restore of a backup does not stop.
+    func testFlashRefusesRockbox() throws {
+        var data = ipodLayout()
+        let fw = try FirmwarePartition(data: data)
+        XCTAssertFalse(fw.hasAddedBootLoader)
+        XCTAssertFalse(fw.addedBootLoaderIsRockbox)
+        XCTAssertNoThrow(try FirmwareFlasher.refuseRockbox(current: fw, reason: "flash"))
+        // entryOffset of osos is at +24 in its directory entry.
+        let at = fw.dirOffset + (try fw.entry("osos")).index * 40 + 24
+        let range = try fw.imageRange("osos")
+        let loaderAt = UInt32(range.count - 0x100)
+        data.replaceSubrange(at..<at + 4, with: (0..<4).map { UInt8(truncatingIfNeeded: loaderAt >> (8 * $0)) })
+        // A boot loader that is not from Apple, without the text "rockbox".
+        let other = try FirmwarePartition(data: data)
+        XCTAssertTrue(other.hasAddedBootLoader)
+        XCTAssertFalse(other.addedBootLoaderIsRockbox)
+        XCTAssertThrowsError(try FirmwareFlasher.refuseRockbox(current: other, reason: "flash")) { e in
+            XCTAssertEqual((e as? FirmwareError)?.code, OperationResult.rockbox)
+            XCTAssertTrue(e.localizedDescription.contains("not from Apple"), e.localizedDescription)
+        }
+        // The Rockbox boot loader has the path of its program.
+        let text = Array("/.rockbox/rockbox.ipod".utf8)
+        data.replaceSubrange((range.upperBound - 0x80)..<(range.upperBound - 0x80 + text.count), with: text)
+        let current = try FirmwarePartition(data: data)
+        XCTAssertTrue(current.addedBootLoaderIsRockbox)
+        XCTAssertThrowsError(try FirmwareFlasher.refuseRockbox(current: current, reason: "flash")) { e in
+            XCTAssertEqual((e as? FirmwareError)?.code, OperationResult.rockbox)
+            XCTAssertTrue(e.localizedDescription.contains("because the iPod has Rockbox"), e.localizedDescription)
+            XCTAssertTrue(e.localizedDescription.contains("can then fail to start"), e.localizedDescription)
+        }
+        XCTAssertNoThrow(try FirmwareFlasher.refuseRockbox(current: current, reason: "restore"))
+    }
+
     func testFitLayoutDropsTheFilesHibeWhenTheIPodHasNone() throws {
         let current = try FirmwarePartition(data: restoredLayout())
         let file = try FirmwarePartition(data: ipodLayout())
@@ -3341,6 +3394,56 @@ final class StrippedThemeTests: XCTestCase {
         let text = try String(data: enc.encode(Self.miniTheme()), encoding: .utf8)!
         XCTAssertFalse(text.contains("\"old\""))
         XCTAssertTrue(text.contains("old_sha256"))
+    }
+
+    /// The folder `themes` of the repository. The build copies it into the app.
+    private static var builtInThemes: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("themes")
+    }
+
+    /// A fresh install: the folder of the owner is not there. The list has Dark Gray, and the file is a copy.
+    func testBuiltInThemeCopiesAtFirstStart() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let user = home.appendingPathComponent("Themes")
+        let list = ThemeLibrary.load(userDir: user, builtInDir: Self.builtInThemes)
+        XCTAssertEqual(list.map(\.name), ["Dark Gray"])
+        XCTAssertEqual(list[0].url, user.appendingPathComponent("Dark Gray.ipodtheme"))
+        XCTAssertEqual(try Data(contentsOf: list[0].url),
+                       try Data(contentsOf: Self.builtInThemes.appendingPathComponent("Dark Gray.ipodtheme")))
+        // The second start uses the copy.
+        XCTAssertEqual(ThemeLibrary.load(userDir: user, builtInDir: Self.builtInThemes).map(\.name), ["Dark Gray"])
+    }
+
+    /// The app cannot write the folder of the owner. The list has Dark Gray from the app, and a save goes to the folder of the owner.
+    func testBuiltInThemeLoadsIfTheCopyFails() throws {
+        let fm = FileManager.default
+        let home = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: home, withIntermediateDirectories: true)
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: home.path)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: home.path)
+            try? fm.removeItem(at: home)
+        }
+        let user = home.appendingPathComponent("Themes")
+        let list = ThemeLibrary.load(userDir: user, builtInDir: Self.builtInThemes)
+        XCTAssertEqual(list.map(\.name), ["Dark Gray"])
+        XCTAssertFalse(fm.fileExists(atPath: user.path))
+        XCTAssertEqual(list[0].url, user.appendingPathComponent("Dark Gray.ipodtheme"))
+        XCTAssertFalse(list[0].theme.changes.isEmpty)
+    }
+
+    /// The dark theme and the Split layout that come with the app: format 2, for the osos of Apple 1.3.
+    func testBuiltInThemesAgreeWithApple13() throws {
+        let apple13 = "784ae3d5540fd2f89e8c947b93629e97f62a06dc311d9745aab143e4db6bb251"
+        for (path, name) in [("Dark Gray.ipodtheme", "Dark Gray"), ("layouts/Split.ipodtheme", "Split")] {
+            let theme = try ImportedTheme.load(Self.builtInThemes.appendingPathComponent(path))
+            XCTAssertEqual(theme.name, name)
+            XCTAssertEqual(theme.format, ThemeImport.formatStripped)
+            XCTAssertEqual(theme.osos_sha256, apple13)
+            XCTAssertFalse(theme.changes.isEmpty)
+        }
     }
 
     func testStrippedThemeAppliesLikeTheOriginal() throws {

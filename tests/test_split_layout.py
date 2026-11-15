@@ -140,6 +140,46 @@ def test_clock_adds_three_lines_after_the_panel():
     assert hashlib.sha256(half).hexdigest() == HALF_WIDTH_CLOCK_VIEW_SHA256
 
 
+# The SHA-256 of the Views with the option Analogue, at 2/3 and 1/2. testSplitLayoutFile in Swift checks
+# the same values.
+ANALOGUE_VIEW_SHA256 = "626bbc271c6164f6f56ff64a467f7c18ad93d109c1e38e47086c72f1e09971db"
+HALF_WIDTH_ANALOGUE_VIEW_SHA256 = "4b2c49a78927a544d07fbf7e4136255a37bb69e51674d39a7787909f5a7f6095"
+
+
+def test_analogue_clock_adds_the_face_and_two_lines():
+    theme = Theme.from_json(THEME.read_text())
+    clock = with_clock(theme, analogue=True)
+    view = clock.changes[0].new
+    assert len(view) == 704 + 3 * 96
+    assert view[:4] == struct.pack("<I", 10) and view[4:704] == theme.changes[0].new[4:704]
+    assert clock.changes[1].new == theme.changes[1].new[:4] + struct.pack("<I", len(view))
+    # The face: the class, the tag, the ID and the owner word of element 0 of View -568, but with the
+    # owner word 0x2b00 of the panel, the flags 0xa00, 90 x 90, and the 5 picture IDs.
+    face = view[704:800]
+    assert struct.unpack_from("<7I", face) == (92, 0x5A80, 0x4474546D, 0x7E44, 0x2B00, 0, 0xA00)
+    assert struct.unpack_from("<12I", face, 28) == (0, 0x80000002, 34, 0, 0x80000002, 222,
+                                                     0, 0x80000008, 90, 0, 0x80000004, 90)
+    assert face[76:84] == view[492:500]
+    assert struct.unpack_from("<6H", face, 84) == (24403, 24405, 24407, 0, 0, 0)
+    for i, (ident, top) in enumerate(((0x7E42, 128), (0x7E43, 150))):
+        line = view[800 + 96 * i:896 + 96 * i]
+        assert struct.unpack_from("<II", line, 8) == (0x53747220, ident)
+        assert struct.unpack_from("<i", line, 36)[0] == top
+        assert line[40:] == view[456:512]
+    assert hashlib.sha256(view).hexdigest() == ANALOGUE_VIEW_SHA256
+    assert with_clock(clock, analogue=True).changes[0].new == view
+    assert half_width(clock).changes[0].new == view
+    half = with_clock(half_width(theme), analogue=True).changes[0].new
+    assert struct.unpack_from("<i", half, 704 + 48)[0] == 194
+    assert hashlib.sha256(half).hexdigest() == HALF_WIDTH_ANALOGUE_VIEW_SHA256
+    # Digital does not change.
+    assert hashlib.sha256(with_clock(half_width(theme)).changes[0].new).hexdigest() == HALF_WIDTH_CLOCK_VIEW_SHA256
+    # The face has no text style, so the dark theme and the small text change only the 6 lines.
+    assert moved_layout(clock, b"", True).changes[0].new.count(struct.pack("<I", 0x5E9F0000)) == 6
+    small = with_clock(small_text(theme), analogue=True).changes[0].new
+    assert small.count(struct.pack("<I", 0x5E980000)) == 6 and small[704:800] == face
+
+
 def test_clock_lines_get_the_dark_and_small_text():
     theme = with_clock(Theme.from_json(THEME.read_text()))
     assert moved_layout(theme, b"", True).changes[0].new.count(struct.pack("<I", 0x5E9F0000)) == 7

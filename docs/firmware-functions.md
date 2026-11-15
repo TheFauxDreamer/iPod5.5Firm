@@ -198,7 +198,11 @@ method, the limits and the whole table.
 | 0x211a00 | Fills a rectangle. Adds the gc origin and calls 0xc01a4 with the bitmap of the gc. | Patch, Static |
 | 0xc01a4 | (bitmap descriptor, rect, colour, mode): fills a rectangle in a bitmap. Clips with the bounds of the bitmap, then marks the damage (0xe944c). | Static |
 | 0x210114 | Blit (gc, source gc, source rect, target rect). Adds the origins of the two gcs and calls 0x1216a0 with the clip at gc + 0x34. The row label draws its cached text images with it. | Static, Patch (`album-art`) |
-| 0x1216a0 | The blit core (source descriptor, target descriptor, source rect, target rect, colour, colour 2, mode, clip). If the two formats agree (mask 0xdfff) and the mode is 0, it copies the pixels. | Static |
+| 0x1216a0 | The blit core (source descriptor, target descriptor, source rect, target rect, colour, colour 2, mode, clip). If the two formats agree (mask 0xdfff) and the mode is 0, it copies the pixels. It clips and copies 1:1: it cannot scale. Its only callers are 0x210114, 0xbff74 and 0xdcb9c. Refer to [../re/split-clock.md](../re/split-clock.md#the-scale-static-6-november-2026). | Static |
+| 0x13b91c, 0x13b6c8 | Makes a work surface (0xb4 bytes) for a rectangle and a format. A rectangle is (top, left, bottom, right). The pixels are in rows: surface + 4 the pixels, + 8 the bytes of one row, + 0xc the bits of one pixel, + 0x14 the format. 0x13ba74 frees it. | Static, Patch (`split-clock`) |
+| 0x211ac8, 0x211c04 | Makes and frees a graphics context (0x44 bytes) on a work surface. gc + 0x1c is the surface. | Static, Patch (`split-clock`) |
+| 0x21190c, 0x2118b4 | Turn a square surface of 16 bits in place: a swap across the diagonal, and a mirror (0x121eb4). The Clock app turns its hand pictures with them. | Static |
+| RAM 0x10883614 + 0x1a | The format of the work surfaces of the Clock app (0x1ab270). | Static, Patch (`split-clock`) |
 | 0x210638 | Sets a new gc to its start values (0x44 bytes). | Static |
 | 0x211a70 | (gc, bitmap): sets gc + 0x1c to the bitmap and the clip (gc + 0x34) to the bounds at bitmap + 0x98. | Static |
 | 0xe442c, 0xe944c | Before and after a draw into a bitmap: call the listeners at descriptor + 0x24, and add the rectangle to the damaged area. | Static |
@@ -250,7 +254,8 @@ A label draws in the rectangle at view + 0x58 (top, left, bottom, right in its p
 | Address | Function | Evidence |
 |---|---|---|
 | 0xa1ff0 | Opens `iPod_Control\Artwork\ArtworkDB` when the music database loads (0xb4a64). | Static |
-| 0x205cfc, 0x205db4 | Starts the task `ArtworkLoadTask`, and its task function: a request queue, an image cache and reference-counted image objects. | Static |
+| 0x205cfc, 0x205db4 | Starts the task `ArtworkLoadTask`, and its task function: a request queue, an image cache and reference-counted image objects. The task keeps a map from a path to an open file object (0x226000) at task + 0x7c (header + 0x8c, count + 0x90). It opens each `.ithmb` file one time and keeps it open. It seeks (0x2258a4) and reads (0x225594) without the lock at task + 0x40. Refer to [../re/cover-flow-loads.md](../re/cover-flow-loads.md#the-block-cache-of-the-file-class-6-november-2026). | Static |
+| 0x206a38 | Closes one random file of the `ArtworkLoadTask` map when the map has more than 32 files (count at task + 0x90). | Static |
 | 0x88094 | Writes `Thumbs\F%d_%d.ithmb` of the Photos database. | Static |
 
 ### The display
@@ -309,6 +314,10 @@ The firmware draws into a CPU framebuffer and sends the dirty rows to the BCM co
 | 0x08f6f4 | Writes to a file (handle, pointer to length, buffer). | Patch |
 | 0x08f5c4 | Sets the file position. The 64-bit position is in r2:r3. | Patch |
 | 0x08f184 | Closes a file. Writes the buffer to the disk. | Patch |
+| 0x226000, 0x225f38 | (object of 0x54 bytes, path, read-only flag, disk channel, block size, block count, 0): the two constructors of the C++ file class of RetailOS. They open the file (0x225450, through the volume vtable + 0x14). The block size goes through 0x224d88 (a multiple of the sector size, a maximum of 0x40000). The block count goes through 0x224df4 (1–16, else 1). 0x225304 makes one cache entry of 0x18 bytes for each block. Most callers use one block of 0x400 bytes. The fonts (0x242e50) use 3 blocks of 0x2000. Object: + 0x18 the handle (−1: closed), + 0x1c the last error, + 0x20 the file size, + 0x2c the block size, + 0x30 the block count, + 0x34 the position. | Static |
+| 0x120ee0 | (path, flags, block size): the open of the C file functions (0x08f38c → 0xa582c → 0xa449c → 0x120ee0). Calls 0x225f38 with 1 block of 0x400 bytes. Thus 0x08f38c makes a file object of the C++ file class. | Static |
+| 0x2255b0 | The read of the C++ file class (0x225594 jumps to it). The block cache gives only the start and the end of a read that are not aligned to a block. The aligned middle goes directly to the volume read (vtable + 0x1c). 0x08f464 → 0xa5894 → 0xa4504 → 0x120f9c → 0x225594. | Static |
+| 0x2258a4 | (file, −, position, position high, origin): the seek of the C++ file class. Origin 0: from the start, 1: from the position, 2: from the end. It refuses a position past the end of the file (returns 5). 0x08f5c4 → 0xa58cc → 0x121004 → 0x2258a4. | Static |
 | 0x0e468c | (path record, type, folder, name): joins the folder and the name into the path record (0xc6994), deletes an old file (0xa4770) and makes an empty file (0xa449c with mode 2, then 0xa4400). The firmware uses it for `OTGPlaylistInfo` (type `'itun'`). The `up-next` patch uses it for its file; after a restart in the emulator, the value was still there. | Static, Emulator, Patch |
 | 0xb4a64 | Loads the music database from `iPod_Control\iTunes\iTunesDB`. Runs at the start and after each USB session. At 0xb4ad4 it adds the usage-log event 0xf ("Exit Disk Mode"). It measures the free heap before and after each load and writes the events 0x16 "Music Database Size", 0x17 "Photo Database Size" and 0x18 "Artwork Database Size". If the load fails, it tries `System\Control\iTunes\iTunesDB`, then makes an empty database (0xa9348). Refer to [../re/ram-limit.md](../re/ram-limit.md). | Static, Patch (`album-art`) |
 | 0xa2310 | Makes the music database object and calls 0xb4a64 (at 0xa23fc). | Static |
@@ -1031,6 +1040,12 @@ the power chip of the PP5020 of Apple. The facts are Static.
 | 0x105dc8 | Copies the names and the formats of `LDTm` 128 into the locale at manager + 0x44. |
 | 0x1d9430 | Makes the status object (vtable 0x6701bc). It makes 6 timers with 0x13d7c8. The timer at + 0xa0 has 30 000 ms, the timer at + 0xc8 has 300 000 ms. |
 | 0x1d93c4 | The event method of the status object (word 0x6701ec, slot + 0x30). Type 9 goes to 0x1d8e68, which compares the timer with its 6 timers. The patch `split-clock` hooks the word. |
+| 0x1aaeec, 0x1ab4ac | The class 0x5a80: the analogue clock of a row in the Clock list (View −568). It reads 5 picture IDs at class word + 0x50 and makes picture bindings (0x149e64) at + 0x80 to + 0x144. A hand ID 0 gives no hand bindings. + 0x148 = owner slot + 0x14 with 0x6180 (the Clock provider). Refer to [re/split-clock.md](../re/split-clock.md#version-15-the-analogue-clock). |
+| 0x1ab460, 0x1ab064 | The draw method of the class 0x5a80 (vtable 0x66d770 + 0x70), and the row draw that it calls at 0x1ab498. 0x1ab064 reads the time of the row (0x236f58). Hours 6–17 give the day face (+ 0x80), else the night face (+ 0x88). The patch `split-clock` hooks the call. |
+| 0x1ab1e4, 0x1aafa4, 0x1ab270, 0x1aaf38 | The minute hand (minutes × 6°, 15 pictures for each quadrant), the hour hand (steps of 15°, 6 pictures), the turn and blit of one hand, and the centre dot. |
+| 0x1ab664 | The delete method of the class 0x5a80 (vtable + 4): 0x21b064, then `free`. It does not free the picture bindings. The patch `split-clock` hooks the word 0x66d774. |
+| 0x149e64, 0x149e8c, 0x250760 | Makes a picture binding (owner, ID), frees it (it gives the binding, then `free`), and resolves it at the first draw with `lookup(owner, 'BMap', ID)`. |
+| Slot + 0x14 | A type test: gives the object if the class ID agrees, else asks the base class. The panel data object (0x206ec8) accepts 0x2b00; the Clock provider (0x236f04) accepts 0x6180. |
 | 0x13d7c8, 0x151c24, 0x151694 | Make a timer of 0x28 bytes for an owner, set its period in ms, and start it one time. The owner gets event type 9 with the timer at event + 8. |
 | 0xb0038, 0xbc63c | Read and write the clock chip: 7 BCD bytes. Year = 2000 + 2 digits, so the last year is 2099. |
 | 0xc8f3c, 0xc8fd0 | Change a calendar structure to a day number, and a day number to a structure. The year is unsigned 16 bits. |

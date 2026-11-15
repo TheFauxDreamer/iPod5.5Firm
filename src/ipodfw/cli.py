@@ -248,7 +248,8 @@ def _flash(image_path: str, backup_path: str, disk: str | None, dry_run: bool, w
     if not Path(backup_path).exists():
         sys.exit(f"Backup {backup_path} not found. Run 'ipodfw backup' first.")
     ipod = device.pick_ipod(disk)
-    ranges = device.flash(ipod, Path(image_path).read_bytes(), Path(backup_path).read_bytes(), dry_run)
+    ranges = device.flash(ipod, Path(image_path).read_bytes(), Path(backup_path).read_bytes(), dry_run,
+                          restore=what == "Restored")
     total = sum(n for _o, n in ranges)
     if not ranges:
         print("The iPod already has this firmware; nothing to write.")

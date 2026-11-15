@@ -6,7 +6,8 @@ Research only. Refer to re/split-clock.md.
 Usage: uv run python re/split-clock/build-test.py iPod_25.1.3.ipsw OUTPUT.ipsw [--half] [--dark THEME] [--patch DIR] [--option ID=VALUE]...
 
 --patch uses a test copy of the patch, for example a copy with counters.
---option sets an option of patch.json, for example --option pause=1.
+--option sets an option of patch.json, for example --option pause_time=30. --option face=1 also adds the
+clock face to the layout (the option Analogue).
 """
 import json
 import sys
@@ -31,7 +32,7 @@ def main() -> None:
     split = Theme.from_json((repo / "themes/layouts/Split.ipodtheme").read_text())
     if "--half" in args:
         split = half_width(split)
-    split = with_clock(split)
+    split = with_clock(split, analogue=options.get("face") == 1)
     _, data = extract_firmware(ipsw)
     fw = FirmwarePartition(data)
     stock = bytes(fw.image("osos"))
